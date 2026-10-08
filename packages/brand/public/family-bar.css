@@ -250,30 +250,30 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .family-bar::after {
-    transition: background-color .5s ease;
+    transition: background-color .5s var(--ease);
   }
   .family-bar__fan rect,
   .family-bar__chevron {
     transition: transform .45s var(--ease);
   }
   .family-bar__links a {
-    transition: color .2s ease;
+    transition: color .2s var(--ease);
   }
   .family-bar__decks a {
-    transition: background-color .2s ease;
+    transition: background-color .2s var(--ease);
   }
   /* The name rolls in once, on page load. */
   .family-bar__name > span {
     animation: family-bar-roll .55s var(--ease) both;
   }
   .family-bar__switch[open] .family-bar__shade {
-    animation: family-bar-fade .3s ease;
+    animation: family-bar-fade .3s var(--ease);
   }
   .family-bar__switch[open] .family-bar__sheet {
     animation: family-bar-sheet .45s var(--ease);
   }
   .family-bar__switch[open] .family-bar__decks li {
-    animation: family-bar-fade .3s ease 60ms both, family-bar-drop .45s var(--ease) 60ms both;
+    animation: family-bar-fade .3s var(--ease) 60ms both, family-bar-drop .45s var(--ease) 60ms both;
   }
   .family-bar__switch[open] .family-bar__decks li:nth-child(2) {
     animation-delay: 110ms;
