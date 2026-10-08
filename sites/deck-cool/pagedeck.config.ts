@@ -14,6 +14,8 @@ export default defineConfig({
   build: {
     pages: [fromCollection(pages, { layout: "layout" })],
     components: { layout: "./components/layout.tsx" },
+    // brand.css and every icon, served from the site's root.
+    passthrough: { root: "./node_modules/@deck-cool/brand/public" },
     routing: { headers: [{ prefix: "/", set: [...SECURITY_HEADERS] }] },
     // No page ships JavaScript.
     budget: { "/**": "0b" },

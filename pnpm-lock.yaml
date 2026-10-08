@@ -26,6 +26,9 @@ importers:
 
   sites/deck-cool:
     dependencies:
+      '@deck-cool/brand':
+        specifier: workspace:*
+        version: link:../../packages/brand
       '@pagedeck/adapter-cloudflare-pages':
         specifier: 0.2.1
         version: 0.2.1(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)

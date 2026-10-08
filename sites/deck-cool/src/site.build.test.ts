@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
 const SITE = fileURLToPath(new URL("..", import.meta.url));
+const BRAND = fileURLToPath(new URL("../../../packages/brand/public/", import.meta.url));
 
 interface BudgetReport {
   pages: { path: string; actual: number }[];
@@ -21,5 +22,25 @@ test("every page ships 0 B of JavaScript", { timeout: 120_000 }, () => {
   expect(report.pages.map((page) => page.path)).toContain("/");
   for (const page of report.pages) {
     expect(page, page.path).toMatchObject({ actual: 0 });
+  }
+});
+
+// Runs on the build the test above wrote.
+test("the home page links brand.css and the deck-cool icons, and serves them", () => {
+  const html = readFileSync(`${SITE}site/index.html`, "utf8");
+  for (const link of [
+    '<link rel="stylesheet" href="/brand.css"/>',
+    '<link rel="icon" type="image/svg+xml" href="/icons/deck-cool/still.svg"/>',
+    '<link rel="apple-touch-icon" href="/icons/deck-cool/apple-touch-icon.png"/>',
+  ]) {
+    expect(html).toContain(link);
+  }
+  for (const path of [
+    "brand.css",
+    "icons/deck-cool/still.svg",
+    "icons/deck-cool/apple-touch-icon.png",
+  ]) {
+    const served = readFileSync(`${SITE}site/${path}`);
+    expect(served.equals(readFileSync(`${BRAND}${path}`)), path).toBe(true);
   }
 });

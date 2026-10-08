@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@deck-cool/brand": "workspace:*",
     "@pagedeck/adapter-cloudflare-pages": "0.2.1",
     "@pagedeck/content": "0.2.1",
     "@pagedeck/core": "0.2.1",
