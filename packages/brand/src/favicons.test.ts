@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
-import { ICON_NAMES } from "./touch-icon.ts";
+import { ICON_NAMES } from "./icons.ts";
 
 const DESIGN = new URL("../../../design/favicons/", import.meta.url);
 const ICONS = new URL("../public/icons/", import.meta.url);

@@ -1,3 +1,5 @@
+import type { IconName } from "./icons.ts";
+
 /** Paths each site serves, from the brand package's `public/` directory. */
 export interface Icons {
   /** The favicon. */
@@ -22,7 +24,7 @@ export interface Deck {
   readonly icons: Icons;
 }
 
-function icons(name: string): Icons {
+function icons(name: IconName): Icons {
   return {
     still: `/icons/${name}/still.svg`,
     animated: `/icons/${name}/animated.svg`,

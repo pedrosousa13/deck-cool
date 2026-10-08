@@ -1,12 +1,9 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
-import { ICON_NAMES, renderTouchIcon } from "./touch-icon.ts";
+import { ICON_NAMES } from "./icons.ts";
+import { renderTouchIcon } from "./touch-icon.ts";
 
 const ICONS = new URL("../public/icons/", import.meta.url);
-
-test("every site's icon has an apple-touch-icon", () => {
-  expect(ICON_NAMES).toEqual(["deck-cool", "slidedeck", "playdeck", "pagedeck"]);
-});
 
 test.each(ICON_NAMES)("%s's apple-touch-icon is a 180×180 PNG", (name) => {
   const png = readFileSync(new URL(`${name}/apple-touch-icon.png`, ICONS));
