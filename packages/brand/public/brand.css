@@ -33,6 +33,7 @@
 }
 
 body {
+  margin: 0;
   background: var(--ground-page);
   color: var(--text);
   font-family: var(--font);

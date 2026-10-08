@@ -13,8 +13,13 @@ export default defineConfig({
   collections: [pages],
   build: {
     pages: [fromCollection(pages, { layout: "layout" })],
-    components: { layout: "./components/layout.tsx" },
-    // brand.css and every icon, served from the site's root.
+    components: {
+      layout: "./components/layout.tsx",
+      familyBar: "./components/family-bar.tsx",
+    },
+    // The Family bar, before <main>, so it is the page's banner landmark.
+    chrome: () => ({ before: [{ component: "familyBar" }] }),
+    // brand.css, family-bar.css and every icon, served from the site's root.
     passthrough: { root: "./node_modules/@deck-cool/brand/public" },
     routing: { headers: [{ prefix: "/", set: [...SECURITY_HEADERS] }] },
     // No page ships JavaScript.

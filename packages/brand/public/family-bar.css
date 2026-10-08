@@ -1,0 +1,297 @@
+/*
+ * The Family bar, design direction C (design/canvas/NavFamily.dc.html).
+ * Uses the tokens in brand.css. The switcher is a <details>: every motion
+ * is CSS, and every motion is under prefers-reduced-motion: no-preference.
+ */
+.family-bar {
+  --bar-fill: var(--text);
+  --bar-fill-text: var(--ground-page);
+  --bar-hairline: rgba(255, 255, 255, .08);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 52px;
+  -webkit-font-smoothing: antialiased;
+}
+.family-bar[data-deck] {
+  --bar-fill-text: var(--fill-text);
+  --bar-hairline: var(--bar-fill);
+}
+.family-bar[data-deck="slidedeck"] { --bar-fill: var(--slidedeck-fill); }
+.family-bar[data-deck="playdeck"] { --bar-fill: var(--playdeck-fill); }
+.family-bar[data-deck="pagedeck"] { --bar-fill: var(--pagedeck-fill); }
+
+/* The bar's ground is a layer of its own, so the open panel's blur sees the
+   page and not only the bar. */
+.family-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(22, 22, 23, .8);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+.family-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--bar-hairline);
+}
+.family-bar:has(.family-bar__switch[open])::before {
+  background: transparent;
+}
+.family-bar:has(.family-bar__switch[open])::after {
+  background: transparent;
+}
+
+.family-bar__row {
+  box-sizing: border-box;
+  max-width: 980px;
+  height: 52px;
+  margin: 0 auto;
+  padding: 0 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.family-bar :is(summary, a):focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+}
+
+/* The switcher's button: the fanned cards and a chevron. */
+.family-bar__switch > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px 0 4px;
+  border-radius: 999px;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+}
+.family-bar__switch > summary::-webkit-details-marker {
+  display: none;
+}
+.family-bar__switch[open] > summary {
+  background: var(--rule);
+}
+.family-bar__fan rect {
+  transform-origin: 32px 52px;
+}
+.family-bar__fan-left {
+  fill: var(--slidedeck-fill);
+  transform: rotate(-14deg);
+}
+.family-bar__fan-right {
+  fill: var(--pagedeck-fill);
+  transform: rotate(14deg);
+}
+.family-bar__fan-front {
+  fill: var(--playdeck-fill);
+}
+.family-bar__switch[open] .family-bar__fan-left {
+  transform: rotate(-26deg);
+}
+.family-bar__switch[open] .family-bar__fan-right {
+  transform: rotate(26deg);
+}
+.family-bar__chevron path {
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.family-bar__switch[open] .family-bar__chevron {
+  transform: rotate(180deg);
+}
+
+/* The open panel: a sheet from the top of the page, over a shade. Without
+   script, clicks on the shade reach the page. */
+.family-bar__shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: -1;
+  height: 100vh;
+  background: rgba(0, 0, 0, .55);
+  pointer-events: none;
+}
+.family-bar__sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: -1;
+  background: rgba(22, 22, 23, .94);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+.family-bar__decks {
+  box-sizing: border-box;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 76px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.family-bar__decks p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.family-bar__decks ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.family-bar__decks a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 18px;
+  background: var(--ground-raised);
+  color: var(--text);
+  text-decoration: none;
+}
+.family-bar__decks a:hover {
+  background: var(--rule);
+}
+.family-bar__decks a[aria-current="page"] {
+  border-color: var(--bar-fill);
+}
+.family-bar__decks a > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.family-bar__decks strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+.family-bar__decks strong + span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+@media (max-width: 734px) {
+  .family-bar__decks ul {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The current deck's name, after a slash. */
+.family-bar__slash {
+  color: #424245;
+  font-size: 20px;
+  font-weight: 300;
+}
+.family-bar__name {
+  display: block;
+  flex: none;
+  height: 22px;
+  margin-right: auto;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  line-height: 22px;
+  text-decoration: none;
+}
+.family-bar__name > span {
+  display: block;
+}
+
+/* The site's own links, and the Install pill. On a narrow screen the links
+   scroll sideways, and the padding keeps room for their focus rings. */
+.family-bar__links {
+  min-width: 0;
+  margin: -4px;
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  list-style: none;
+  display: flex;
+  gap: 22px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.family-bar__links a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.family-bar__links a:hover {
+  color: var(--text);
+}
+.family-bar__install {
+  flex: none;
+  margin-left: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--bar-fill);
+  color: var(--bar-fill-text);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .family-bar::after {
+    transition: background-color .5s ease;
+  }
+  .family-bar__fan rect,
+  .family-bar__chevron {
+    transition: transform .45s var(--ease);
+  }
+  .family-bar__links a {
+    transition: color .2s ease;
+  }
+  .family-bar__decks a {
+    transition: background-color .2s ease;
+  }
+  /* The name rolls in once, on page load. */
+  .family-bar__name > span {
+    animation: family-bar-roll .55s var(--ease) both;
+  }
+  .family-bar__switch[open] .family-bar__shade {
+    animation: family-bar-fade .3s ease;
+  }
+  .family-bar__switch[open] .family-bar__sheet {
+    animation: family-bar-sheet .45s var(--ease);
+  }
+  .family-bar__switch[open] .family-bar__decks li {
+    animation: family-bar-fade .3s ease 60ms both, family-bar-drop .45s var(--ease) 60ms both;
+  }
+  .family-bar__switch[open] .family-bar__decks li:nth-child(2) {
+    animation-delay: 110ms;
+  }
+  .family-bar__switch[open] .family-bar__decks li:nth-child(3) {
+    animation-delay: 160ms;
+  }
+}
+
+@keyframes family-bar-roll {
+  from { transform: translateY(22px); }
+}
+@keyframes family-bar-fade {
+  from { opacity: 0; }
+}
+@keyframes family-bar-sheet {
+  from { clip-path: inset(0 0 100% 0); }
+}
+@keyframes family-bar-drop {
+  from { transform: translateY(-10px); }
+}

@@ -45,3 +45,20 @@ test("the home page links brand.css and the deck-cool icons, and serves them", (
     expect(served.equals(readFileSync(`${BRAND}${path}`)), path).toBe(true);
   }
 });
+
+test("the home page opens with the Family bar, after the stylesheets it needs", () => {
+  const html = readFileSync(`${SITE}site/index.html`, "utf8");
+  const at = (needle: string) => {
+    const index = html.indexOf(needle);
+    expect(index, needle).toBeGreaterThanOrEqual(0);
+    return index;
+  };
+  const header = at('<header class="family-bar"');
+  expect(at('<link rel="stylesheet" href="/brand.css"/>')).toBeLessThan(header);
+  expect(at('<link rel="stylesheet" href="/family-bar.css"/>')).toBeLessThan(header);
+  // Outside <main>, so the header is the page's banner landmark.
+  expect(header).toBeLessThan(at("<main>"));
+
+  const served = readFileSync(`${SITE}site/family-bar.css`);
+  expect(served.equals(readFileSync(`${BRAND}family-bar.css`))).toBe(true);
+});
