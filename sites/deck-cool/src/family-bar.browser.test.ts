@@ -101,9 +101,18 @@ describe("the Family bar in a browser", () => {
     expect(await page.evaluate(() => document.getAnimations().length)).toBeGreaterThan(0);
     await page.locator("header summary").click();
     const names = await page.evaluate(() =>
-      document.getAnimations().map((animation) => (animation as CSSAnimation).animationName ?? "transition"),
+      document
+        .getAnimations()
+        .map((animation) => (animation instanceof CSSAnimation ? animation.animationName : "transition")),
     );
     expect(names).toEqual(expect.arrayContaining(["family-bar-sheet", "family-bar-fade", "family-bar-drop"]));
+
+    // The fan and the chevron move by transition, both ways.
+    const durations = await page
+      .locator(".family-bar__fan rect, .family-bar__chevron")
+      .evaluateAll((elements) => elements.map((element) => getComputedStyle(element).transitionDuration));
+    expect(durations).toHaveLength(4);
+    for (const duration of durations) expect(duration).not.toBe("0s");
   });
 
   test("with prefers-reduced-motion: reduce, nothing animates", async () => {

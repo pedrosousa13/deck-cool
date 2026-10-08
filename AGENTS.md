@@ -25,6 +25,8 @@ pnpm typecheck   # tsc in every site and package
 pnpm test        # vitest across the workspace
 ```
 
+`pnpm test` builds deck-cool once, in a global setup, and drives the built site in Playwright's Chromium. Install it once with `pnpm exec playwright install chromium`.
+
 `pnpm build` writes each site to `sites/<name>/site/`, and its budget report to `sites/<name>/.pagedeck/budget-report.json`. Every `@pagedeck/*` package is pinned to one exact version; upgrade them together. CI runs them on every push, installing with `pnpm install --frozen-lockfile`.
 
-`packages/brand` is the brand kit every site shares: `public/brand.css`, the icons in `public/icons/`, and the decks module (`@deck-cool/brand/decks`). A site serves `public/` from its root through `build.passthrough`. Each icon's `apple-touch-icon.png` is rendered from its `still.svg` and checked in. After you change a still icon, run `pnpm --filter @deck-cool/brand render-touch-icons`. `pnpm test` fails while a PNG is stale.
+`packages/brand` is the brand kit every site shares: `public/brand.css`, the icons in `public/icons/`, the decks module (`@deck-cool/brand/decks`), and the Family bar (`@deck-cool/brand/family-bar`), styled by `public/family-bar.css`. A site serves `public/` from its root through `build.passthrough`. Each icon's `apple-touch-icon.png` is rendered from its `still.svg` and checked in. After you change a still icon, run `pnpm --filter @deck-cool/brand render-touch-icons`. `pnpm test` fails while a PNG is stale.

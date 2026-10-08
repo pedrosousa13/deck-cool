@@ -45,7 +45,7 @@ export function FamilyBar({ current, links, install }: FamilyBarProps) {
                   {decks.map((each) => (
                     <li key={each.name}>
                       <a href={each.url} aria-current={each === deck ? "page" : undefined}>
-                        <img src={each.icons.still} alt="" width="44" height="44" />
+                        <img src={each.icons.still} alt="" width="44" height="44" loading="lazy" />
                         <span>
                           <strong>{each.name}</strong>
                           <span>{each.kind}</span>

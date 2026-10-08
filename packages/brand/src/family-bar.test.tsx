@@ -1,10 +1,16 @@
 // @vitest-environment happy-dom
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { decks, umbrella, type Deck } from "./decks.ts";
+import { decks, umbrella } from "./decks.ts";
 import { FamilyBar } from "./family-bar.tsx";
 
-const slidedeck = decks[0] as Deck;
+/** Narrows away `undefined` and `null`, failing the test when the value is missing. */
+function present<T>(value: T | null | undefined, what: string): T {
+  if (value == null) throw new Error(`${what} is missing`);
+  return value;
+}
+
+const slidedeck = present(decks.find((deck) => deck.name === "slidedeck"), "slidedeck");
 const links = [
   { label: "Docs", href: "/docs" },
   { label: "GitHub", href: "https://github.com/example/slidedeck" },
@@ -20,11 +26,9 @@ function render(element: React.ReactElement): DocumentFragment {
 describe("the Family bar", () => {
   test("links its stylesheet before the bar", () => {
     const doc = render(<FamilyBar current={slidedeck} links={links} />);
-    const sheet = doc.querySelector('link[rel="stylesheet"][href="/family-bar.css"]');
-    const header = doc.querySelector("header");
-    expect(sheet).not.toBeNull();
-    expect(header).not.toBeNull();
-    expect(sheet!.compareDocumentPosition(header!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const sheet = present(doc.querySelector('link[rel="stylesheet"][href="/family-bar.css"]'), "the stylesheet link");
+    const header = present(doc.querySelector("header"), "the header");
+    expect(sheet.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   test("the switcher is a details whose summary is labelled Switch deck", () => {
@@ -39,7 +43,7 @@ describe("the Family bar", () => {
     const tiles = [...doc.querySelectorAll("header details a")];
     expect(tiles.map((a) => a.getAttribute("href"))).toEqual(decks.map((deck) => deck.url));
     tiles.forEach((tile, at) => {
-      const deck = decks[at] as Deck;
+      const deck = present(decks[at], `deck ${at}`);
       expect(tile.querySelector("img")?.getAttribute("src")).toBe(deck.icons.still);
       expect(tile.textContent).toContain(deck.name);
       expect(tile.textContent).toContain(deck.kind);

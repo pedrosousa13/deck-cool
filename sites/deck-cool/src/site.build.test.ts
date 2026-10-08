@@ -9,8 +9,6 @@ interface BudgetReport {
   pages: { path: string; actual: number }[];
 }
 
-// The site is built once, by build.global-setup.ts.
-
 test("every page ships 0 B of JavaScript", () => {
   const report = JSON.parse(
     readFileSync(`${SITE}.pagedeck/budget-report.json`, "utf8"),
@@ -53,6 +51,8 @@ test("the home page opens with the Family bar, after the stylesheets it needs", 
   expect(at('<link rel="stylesheet" href="/family-bar.css"/>')).toBeLessThan(header);
   // Outside <main>, so the header is the page's banner landmark.
   expect(header).toBeLessThan(at("<main>"));
+  // The deck icons sit in a closed <details>, so nothing fetches them early.
+  expect(html).not.toContain('rel="preload"');
 
   const served = readFileSync(`${SITE}site/family-bar.css`);
   expect(served.equals(readFileSync(`${BRAND}family-bar.css`))).toBe(true);
