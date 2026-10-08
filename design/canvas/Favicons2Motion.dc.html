@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Favicons, round 2 in motion</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#000}
+.fb{transform-box: fill-box; transform-origin: center}
+@keyframes fanL{0%,35%{transform: rotate(-16deg)}50%,80%{transform: rotate(-28deg)}95%,100%{transform: rotate(-16deg)}}
+@keyframes fanR{0%,35%{transform: rotate(16deg)}50%,80%{transform: rotate(28deg)}95%,100%{transform: rotate(16deg)}}
+.fanL{transform-origin: 32px 50px; animation: fanL 3.6s cubic-bezier(.32,.72,0,1) infinite}
+.fanR{transform-origin: 32px 50px; animation: fanR 3.6s cubic-bezier(.32,.72,0,1) infinite}
+@keyframes lift{0%,35%{transform: translateY(0)}50%,80%{transform: translateY(-3px)}95%,100%{transform: translateY(0)}}
+.lift{animation: lift 3.6s cubic-bezier(.32,.72,0,1) infinite}
+@keyframes cycle{
+  0%,20%{transform: translateX(21px) scale(.5,.611); opacity: .5}
+  25%,45%{transform: translateX(0) scale(1,1); opacity: 1}
+  50%,70%{transform: translateX(-21px) scale(.5,.611); opacity: .5}
+  75%{transform: translateX(-40px) scale(.3,.4); opacity: 0}
+  76%,95%{transform: translateX(40px) scale(.3,.4); opacity: 0}
+  100%{transform: translateX(21px) scale(.5,.611); opacity: .5}}
+.slide{transform-box: fill-box; transform-origin: center; animation: cycle 7.2s cubic-bezier(.32,.72,0,1) infinite}
+.s1{animation-delay: 0s}.s2{animation-delay: -1.8s}.s3{animation-delay: -3.6s}.s4{animation-delay: -5.4s}
+@keyframes meter{0%,100%{transform: scaleY(1)}30%{transform: scaleY(.72)}60%{transform: scaleY(1.08)}}
+.bar{transform-box: fill-box; transform-origin: center; animation: meter 1.6s cubic-bezier(.45,0,.55,1) infinite}
+.b2{animation-delay: .18s}.b3{animation-delay: .36s}
+@keyframes hydrate{0%,15%{transform: scaleX(0); opacity: 1}55%,85%{transform: scaleX(1); opacity: 1}100%{transform: scaleX(1); opacity: 0}}
+.hyd{transform-box: fill-box; transform-origin: left center; animation: hydrate 3.4s cubic-bezier(.32,.72,0,1) infinite}
+@keyframes glow{0%,50%{opacity: 0}60%,85%{opacity: .5}100%{opacity: 0}}
+.glow{animation: glow 3.4s ease infinite}
+.arm{transform-box: fill-box; transform-origin: center bottom}
+@keyframes armS{0%,8%{transform: scaleY(0); opacity: 1}24%,84%{transform: scaleY(1); opacity: 1}96%,100%{transform: scaleY(1); opacity: 0}}
+@keyframes armL{0%,22%{transform: scaleY(0); opacity: 1}44%,84%{transform: scaleY(1); opacity: 1}96%,100%{transform: scaleY(1); opacity: 0}}
+.armS{animation: armS 3.4s cubic-bezier(.32,.72,0,1) infinite}
+.armL{animation: armL 3.4s cubic-bezier(.32,.72,0,1) infinite}
+@media (prefers-reduced-motion: reduce){
+  .fanL,.fanR,.lift,.slide,.bar,.hyd,.glow,.armS,.armL{animation: none}
+  .s1{transform: translateX(21px) scale(.5,.611); opacity: .5}
+  .s2{transform: none}
+  .s3{transform: translateX(-21px) scale(.5,.611); opacity: .5}
+  .s4{opacity: 0}
+  .hyd{transform: none}
+}
+</style>
+</helmet>
+<div style="width: 1280px; height: 760px; box-sizing: border-box; padding: 56px 64px; background: #000000; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; gap: 36px;">
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px;">
+    <sc-for list="{{ icons }}" as="ic" hint-placeholder-count="4">
+      <div style="background: #161617; border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="display: flex; align-items: flex-end; gap: 16px;">
+          <sc-for list="{{ sizes }}" as="z" hint-placeholder-count="4">
+            <svg width="{{ z.px }}" height="{{ z.px }}" viewBox="0 0 64 64" aria-hidden="true">
+              <defs><clipPath id="tile"><rect width="64" height="64" rx="14.4"></rect></clipPath></defs>
+              <rect width="64" height="64" rx="14.4" fill="#1c1c1e"></rect>
+              <sc-if value="{{ ic.isDecks }}" hint-placeholder-val="{{ true }}">
+                <g class="lift">
+                  <rect class="fanL" x="22" y="15" width="20" height="28" rx="4" fill="#2997ff"></rect>
+                  <rect class="fanR" x="22" y="15" width="20" height="28" rx="4" fill="#3ddc97"></rect>
+                  <rect x="22" y="15" width="20" height="28" rx="4" fill="#ff5c86"></rect>
+                </g>
+              </sc-if>
+              <sc-if value="{{ ic.isSlide }}" hint-placeholder-val="{{ false }}">
+                <g clip-path="url(#tile)">
+                  <rect class="slide s1" x="20" y="14" width="24" height="36" rx="4" fill="#2997ff"></rect>
+                  <rect class="slide s2" x="20" y="14" width="24" height="36" rx="4" fill="#2997ff"></rect>
+                  <rect class="slide s3" x="20" y="14" width="24" height="36" rx="4" fill="#2997ff"></rect>
+                  <rect class="slide s4" x="20" y="14" width="24" height="36" rx="4" fill="#2997ff"></rect>
+                </g>
+              </sc-if>
+              <sc-if value="{{ ic.isPlay }}" hint-placeholder-val="{{ false }}">
+                <rect class="bar" x="11" y="13" width="11" height="38" rx="3" fill="#ff5c86"></rect>
+                <rect class="bar b2" x="26" y="19" width="11" height="26" rx="3" fill="#ff5c86" opacity="0.8"></rect>
+                <rect class="bar b3" x="41" y="26" width="11" height="12" rx="3" fill="#ff5c86" opacity="0.6"></rect>
+              </sc-if>
+              <sc-if value="{{ ic.isPage }}" hint-placeholder-val="{{ false }}">
+                <rect x="12" y="12" width="40" height="10" rx="3" fill="#48484a"></rect>
+                <rect x="12" y="27" width="40" height="10" rx="3" fill="#48484a"></rect>
+                <rect class="glow" x="9" y="24" width="46" height="16" rx="5" fill="#3ddc97"></rect>
+                <rect class="hyd" x="12" y="27" width="40" height="10" rx="3" fill="#3ddc97"></rect>
+                <rect x="12" y="42" width="40" height="10" rx="3" fill="#48484a"></rect>
+              </sc-if>
+              <sc-if value="{{ ic.isForm }}" hint-placeholder-val="{{ false }}">
+                <g transform="rotate(-45 27 46)"><rect class="arm armS" x="22" y="29" width="10" height="20" rx="4" fill="#ffb020" opacity="0.7"></rect></g>
+                <g transform="rotate(39.4 27 46)"><rect class="arm armL" x="22" y="10" width="10" height="39" rx="4" fill="#ffb020"></rect></g>
+              </sc-if>
+
+            </svg>
+          </sc-for>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="font-size: 21px; font-weight: 600; letter-spacing: -0.01em;">{{ ic.name }}</div>
+          <div style="font-size: 14px; line-height: 1.4; color: #a1a1a6;">{{ ic.what }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div style="font-size: 13px; color: #a1a1a6;">In a tab, at 16 px</div>
+    <div style="background: #1c1c1e; border-radius: 14px; padding: 8px 8px 0; display: flex; gap: 2px;">
+      <sc-for list="{{ icons }}" as="ic" hint-placeholder-count="4">
+        <div style="flex: 1; min-width: 0; height: 36px; border-radius: 10px 10px 0 0; background: {{ ic.tabBg }}; display: flex; align-items: center; gap: 8px; padding: 0 12px;">
+          <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true" style="flex: none;">
+            <defs><clipPath id="tile16"><rect width="64" height="64" rx="14.4"></rect></clipPath></defs>
+            <rect width="64" height="64" rx="14.4" fill="#2c2c2e"></rect>
+            <sc-if value="{{ ic.isDecks }}" hint-placeholder-val="{{ true }}">
+              <rect class="fanL" x="22" y="15" width="20" height="28" rx="4" fill="#2997ff"></rect>
+              <rect class="fanR" x="22" y="15" width="20" height="28" rx="4" fill="#3ddc97"></rect>
+              <rect x="22" y="15" width="20" height="28" rx="4" fill="#ff5c86"></rect>
+            </sc-if>
+            <sc-if value="{{ ic.isSlide }}" hint-placeholder-val="{{ false }}">
+              <g clip-path="url(#tile16)">
+                <rect class="slide s1" x="20" y="14" width="24" height="36" rx="4" fill="#2997ff"></rect>
+                <rect class="slide s2" x="20" y="14" width="24" height="36" rx="4" fill="#2997ff"></rect>
+                <rect class="slide s3" x="20" y="14" width="24" height="36" rx="4" fill="#2997ff"></rect>
+                <rect class="slide s4" x="20" y="14" width="24" height="36" rx="4" fill="#2997ff"></rect>
+              </g>
+            </sc-if>
+            <sc-if value="{{ ic.isPlay }}" hint-placeholder-val="{{ false }}">
+              <rect class="bar" x="11" y="13" width="11" height="38" rx="3" fill="#ff5c86"></rect>
+              <rect class="bar b2" x="26" y="19" width="11" height="26" rx="3" fill="#ff5c86" opacity="0.8"></rect>
+              <rect class="bar b3" x="41" y="26" width="11" height="12" rx="3" fill="#ff5c86" opacity="0.6"></rect>
+            </sc-if>
+            <sc-if value="{{ ic.isPage }}" hint-placeholder-val="{{ false }}">
+              <rect x="12" y="12" width="40" height="10" rx="3" fill="#48484a"></rect>
+              <rect x="12" y="27" width="40" height="10" rx="3" fill="#48484a"></rect>
+              <rect class="hyd" x="12" y="27" width="40" height="10" rx="3" fill="#3ddc97"></rect>
+              <rect x="12" y="42" width="40" height="10" rx="3" fill="#48484a"></rect>
+            </sc-if>
+              <sc-if value="{{ ic.isForm }}" hint-placeholder-val="{{ false }}">
+                <g transform="rotate(-45 27 46)"><rect class="arm armS" x="22" y="29" width="10" height="20" rx="4" fill="#ffb020" opacity="0.7"></rect></g>
+                <g transform="rotate(39.4 27 46)"><rect class="arm armL" x="22" y="10" width="10" height="39" rx="4" fill="#ffb020"></rect></g>
+              </sc-if>
+
+          </svg>
+          <span style="font-size: 12px; color: #d2d2d7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ ic.tab }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      sizes: [96, 48, 32, 16].map((px) => ({ px })),
+      icons: [
+        ['decks', 'The side cards fan out and settle back', 'deck.cool: unstyled React packages'],
+        ['slidedeck', 'A real loop: the next card snaps to the centre', 'slidedeck: a React carousel'],
+        ['playdeck', 'The steps pulse like a playback meter', 'playdeck: a video player you compose'],
+        ['pagedeck', 'The middle section hydrates, left to right', 'pagedeck: zero JavaScript until…']
+      ].map(([name, what, tab], i) => ({ name: name === 'decks' ? 'deck.cool' : name, what, tab, isDecks: i === 0, isSlide: i === 1, isPlay: i === 2, isPage: i === 3, isForm: i === 4, tabBg: i === 1 ? '#000000' : 'rgba(0,0,0,0)' }))
+    };
+  }
+}
+</script>
+</body>
+</html>

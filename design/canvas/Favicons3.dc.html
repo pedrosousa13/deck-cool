@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Favicons, round 3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#000}
+</style>
+</helmet>
+<div style="width: 1280px; height: 1260px; box-sizing: border-box; padding: 56px 64px; background: #000000; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; gap: 48px;">
+  <sc-for list="{{ directions }}" as="dir" hint-placeholder-count="2">
+    <section style="display: flex; flex-direction: column; gap: 18px;">
+      <div style="display: flex; align-items: baseline; gap: 14px;">
+        <h2 style="margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.02em;">{{ dir.title }}</h2>
+        <div style="font-size: 17px; color: #a1a1a6;">{{ dir.line }}</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+        <sc-for list="{{ dir.icons }}" as="ic" hint-placeholder-count="4">
+          <div style="background: #161617; border-radius: 28px; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; align-items: flex-end; gap: 14px;">
+              <sc-for list="{{ ic.sizes }}" as="z" hint-placeholder-count="4">
+                <svg width="{{ z.px }}" height="{{ z.px }}" viewBox="0 0 64 64" aria-hidden="true">
+                  <path d="{{ ic.p0.d }}" fill="{{ ic.p0.f }}" opacity="{{ ic.p0.o }}" fill-rule="evenodd"></path>
+                  <path d="{{ ic.p1.d }}" fill="{{ ic.p1.f }}" opacity="{{ ic.p1.o }}" fill-rule="evenodd"></path>
+                  <path d="{{ ic.p2.d }}" fill="{{ ic.p2.f }}" opacity="{{ ic.p2.o }}" fill-rule="evenodd"></path>
+                </svg>
+              </sc-for>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <div style="font-size: 19px; font-weight: 600; letter-spacing: -0.01em;">{{ ic.name }}</div>
+              <div style="font-size: 13px; line-height: 1.4; color: #a1a1a6;">{{ ic.what }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+        <sc-for list="{{ dir.strips }}" as="st" hint-placeholder-count="2">
+          <div style="background: {{ st.bar }}; border-radius: 12px; padding: 6px 6px 0; display: flex; gap: 2px;">
+            <sc-for list="{{ st.tabs }}" as="ic" hint-placeholder-count="4">
+              <div style="flex: 1; min-width: 0; height: 32px; border-radius: 8px 8px 0 0; background: {{ ic.tabBg }}; display: flex; align-items: center; gap: 6px; padding: 0 10px;">
+                <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true" style="flex: none;">
+                  <path d="{{ ic.p0.d }}" fill="{{ ic.p0.f }}" opacity="{{ ic.p0.o }}" fill-rule="evenodd"></path>
+                  <path d="{{ ic.p1.d }}" fill="{{ ic.p1.f }}" opacity="{{ ic.p1.o }}" fill-rule="evenodd"></path>
+                  <path d="{{ ic.p2.d }}" fill="{{ ic.p2.f }}" opacity="{{ ic.p2.o }}" fill-rule="evenodd"></path>
+                </svg>
+                <span style="font-size: 11px; color: {{ st.text }}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ ic.name }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1260}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rr = (x, y, w, h, r) => `M${x + r} ${y} H${x + w - r} A${r} ${r} 0 0 1 ${x + w} ${y + r} V${y + h - r} A${r} ${r} 0 0 1 ${x + w - r} ${y + h} H${x + r} A${r} ${r} 0 0 1 ${x} ${y + h - r} V${y + r} A${r} ${r} 0 0 1 ${x + r} ${y} Z`;
+    const circle = (cx, cy, r) => `M${cx - r} ${cy} a${r} ${r} 0 1 0 ${2 * r} 0 a${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
+    const asterisk = (cx, cy, R, half) => {
+      const inner = half / Math.sin(Math.PI / 6);
+      const pts = [];
+      for (let k = 0; k < 6; k++) {
+        const t = (k * Math.PI) / 3 - Math.PI / 2;
+        const u = [Math.cos(t), Math.sin(t)], n = [-Math.sin(t), Math.cos(t)];
+        pts.push([cx + R * u[0] - half * n[0], cy + R * u[1] - half * n[1]]);
+        pts.push([cx + R * u[0] + half * n[0], cy + R * u[1] + half * n[1]]);
+        const b = t + Math.PI / 6;
+        pts.push([cx + inner * Math.cos(b), cy + inner * Math.sin(b)]);
+      }
+      return 'M' + pts.map((p) => p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' L') + ' Z';
+    };
+    const P = (d, f, o) => ({ d, f, o: o ?? 1 });
+    const NONE = P('', 'none', 0);
+    const A = { decks: '#f5f5f7', slidedeck: '#2997ff', playdeck: '#ff5c86', pagedeck: '#3ddc97' };
+    const W = '#ffffff', K = '#000000';
+    const card = rr(10, 6, 44, 52, 9);
+
+    const stacked = {
+      decks: [P(rr(14, 6, 44, 44, 9), A.decks, 0.4), P(rr(6, 14, 44, 44, 9), A.decks),
+        P(rr(16, 24, 11, 22, 3) + rr(30, 24, 11, 22, 3), K)],
+      slidedeck: [P(rr(14, 6, 44, 44, 9), A.slidedeck, 0.4), P(rr(6, 14, 44, 44, 9), A.slidedeck),
+        P(rr(14, 25, 20, 22, 4) + rr(37, 28, 6, 16, 2), W)],
+      playdeck: [P(rr(14, 6, 44, 44, 9), A.playdeck, 0.4), P(rr(6, 14, 44, 44, 9), A.playdeck),
+        P('M21 25 L38 36 L21 47 Z', W)],
+      pagedeck: [P(rr(14, 6, 44, 44, 9), A.pagedeck, 0.4), P(rr(6, 14, 44, 44, 9), A.pagedeck),
+        P('M17 22 H30 L38 30 V50 H17 Z', W)]
+    };
+    const bite = {
+      decks: [P(card + asterisk(32, 32, 14, 3.2), A.decks), NONE, NONE],
+      slidedeck: [P(card + 'M54 20 L42 32 L54 44 Z', A.slidedeck), NONE, NONE],
+      playdeck: [P('M19 6 H38 L56 32 L38 58 H19 A9 9 0 0 1 10 49 V15 A9 9 0 0 1 19 6 Z', A.playdeck), NONE, NONE],
+      pagedeck: [P(card + circle(38, 44, 7), A.pagedeck), NONE, NONE]
+    };
+    const INFO = [
+      ['decks', 'The umbrella', 'An asterisk cut through the card: the * in *deck'],
+      ['slidedeck', 'A slide, the next one peeking', 'A notch on the right edge: next'],
+      ['playdeck', 'A play mark on the front card', 'The card itself comes to a point: play'],
+      ['pagedeck', 'A page on the front card', 'One hole punched through: the island']
+    ];
+    const build = (set, whatIdx) => INFO.map((row) => {
+      const [name] = row;
+      const s = set[name];
+      return { name, what: row[whatIdx], p0: s[0], p1: s[1], p2: s[2] };
+    });
+    const strips = (icons) => [
+      { bar: '#1c1c1e', text: '#d2d2d7', active: '#000000' },
+      { bar: '#dedee3', text: '#1d1d1f', active: '#ffffff' }
+    ].map((st) => ({ ...st, tabs: icons.map((ic, i) => ({ ...ic, tabBg: i === 1 ? st.active : 'rgba(0,0,0,0)' })) }));
+    const sizes = [96, 48, 32, 16].map((px) => ({ px }));
+    const stackedIcons = build(stacked, 1).map((ic) => ({ ...ic, sizes }));
+    const biteIcons = build(bite, 2).map((ic) => ({ ...ic, sizes }));
+    return {
+      directions: [
+        { title: 'Stacked', line: 'Round 1’s glyphs on a deck: a second card always peeks behind.', icons: stackedIcons, strips: strips(stackedIcons) },
+        { title: 'Bite', line: 'One card, cut to fit its job. No tile, no glyph.', icons: biteIcons, strips: strips(biteIcons) }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

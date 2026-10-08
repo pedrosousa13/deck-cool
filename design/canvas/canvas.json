@@ -1,0 +1,125 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-08T19:30:00Z"
+  },
+  "title": "deck.cool: the umbrella site",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 1900,
+      "title": "The umbrella site: every *deck package and what it does",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "NavIsland.dc.html": {
+      "x": 0,
+      "y": 2700,
+      "w": 1280,
+      "h": 680,
+      "title": "A \u00b7 Island: the bar shrinks into a capsule on scroll",
+      "is_interactive": true
+    },
+    "NavGlide.dc.html": {
+      "x": 1360,
+      "y": 2700,
+      "w": 1280,
+      "h": 680,
+      "title": "B \u00b7 Glide: a sliding highlight and a morphing menu",
+      "is_interactive": true
+    },
+    "NavFamily.dc.html": {
+      "x": 2720,
+      "y": 2700,
+      "w": 1280,
+      "h": 680,
+      "title": "C \u00b7 Family: CHOSEN top bar",
+      "is_interactive": true
+    },
+    "Favicons.dc.html": {
+      "x": 0,
+      "y": 3820,
+      "w": 1280,
+      "h": 760,
+      "title": "Favicons, round 1 (superseded)"
+    },
+    "Favicons2.dc.html": {
+      "x": 1360,
+      "y": 3820,
+      "w": 1280,
+      "h": 1240,
+      "title": "Favicons, round 2: CHOSEN"
+    },
+    "Favicons3.dc.html": {
+      "x": 2720,
+      "y": 3820,
+      "w": 1280,
+      "h": 1260,
+      "title": "Favicons, round 3: Stacked and Bite"
+    },
+    "Favicons4.dc.html": {
+      "x": 4080,
+      "y": 3820,
+      "w": 1280,
+      "h": 1120,
+      "title": "Favicons, round 4: Living and Wildcards"
+    },
+    "Favicons2Motion.dc.html": {
+      "x": 1360,
+      "y": 5180,
+      "w": 1280,
+      "h": 760,
+      "title": "Round 2 in motion (chosen set, animated)"
+    },
+    "FormdeckParked.dc.html": {
+      "x": 2720,
+      "y": 5180,
+      "w": 1280,
+      "h": 520,
+      "title": "Parked: formdeck (not ready yet)"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "NavIsland.dc.html",
+    "NavGlide.dc.html",
+    "NavFamily.dc.html",
+    "Favicons.dc.html",
+    "Favicons2.dc.html",
+    "Favicons3.dc.html",
+    "Favicons4.dc.html",
+    "Favicons2Motion.dc.html",
+    "FormdeckParked.dc.html"
+  ],
+  "notes": {
+    "t1": {
+      "x": 0,
+      "y": -300,
+      "text": "deck.cool: one home for the packages",
+      "kind": "title1",
+      "maxW": 1280
+    },
+    "t2": {
+      "x": 0,
+      "y": 2440,
+      "text": "Top bar directions (they all work: scroll, hover, click)",
+      "kind": "title1",
+      "maxW": 4000
+    },
+    "t3": {
+      "x": 0,
+      "y": 3560,
+      "text": "Favicons",
+      "kind": "title1",
+      "maxW": 5360
+    }
+  },
+  "designSystems": []
+}

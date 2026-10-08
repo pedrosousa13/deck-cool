@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Favicons, round 2</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#000}
+</style>
+</helmet>
+<div style="width: 1280px; height: 1240px; box-sizing: border-box; padding: 56px 64px; background: #000000; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; gap: 36px;">
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px;">
+    <sc-for list="{{ main }}" as="ic" hint-placeholder-count="4">
+      <div style="background: #161617; border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="display: flex; align-items: flex-end; gap: 16px;">
+          <sc-for list="{{ ic.sizes }}" as="z" hint-placeholder-count="4">
+            <svg width="{{ z.px }}" height="{{ z.px }}" viewBox="0 0 64 64" aria-hidden="true">
+              <rect width="64" height="64" rx="14.4" fill="{{ ic.tile }}"></rect>
+              <rect x="{{ ic.s0.x }}" y="{{ ic.s0.y }}" width="{{ ic.s0.w }}" height="{{ ic.s0.h }}" rx="{{ ic.s0.r }}" fill="{{ ic.s0.f }}" opacity="{{ ic.s0.o }}" transform="{{ ic.s0.t }}"></rect>
+              <rect x="{{ ic.s1.x }}" y="{{ ic.s1.y }}" width="{{ ic.s1.w }}" height="{{ ic.s1.h }}" rx="{{ ic.s1.r }}" fill="{{ ic.s1.f }}" opacity="{{ ic.s1.o }}" transform="{{ ic.s1.t }}"></rect>
+              <rect x="{{ ic.s2.x }}" y="{{ ic.s2.y }}" width="{{ ic.s2.w }}" height="{{ ic.s2.h }}" rx="{{ ic.s2.r }}" fill="{{ ic.s2.f }}" opacity="{{ ic.s2.o }}" transform="{{ ic.s2.t }}"></rect>
+              <rect x="{{ ic.s3.x }}" y="{{ ic.s3.y }}" width="{{ ic.s3.w }}" height="{{ ic.s3.h }}" rx="{{ ic.s3.r }}" fill="{{ ic.s3.f }}" opacity="{{ ic.s3.o }}" transform="{{ ic.s3.t }}"></rect>
+            </svg>
+          </sc-for>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="font-size: 21px; font-weight: 600; letter-spacing: -0.01em;">{{ ic.name }}</div>
+          <div style="font-size: 14px; line-height: 1.4; color: #a1a1a6;">{{ ic.what }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+    <div style="flex: 1 1 400px; background: #161617; border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 16px;">
+      <div style="font-size: 17px; font-weight: 600;">Outline only, one grey</div>
+      <div style="display: flex; align-items: center; gap: 28px;">
+        <sc-for list="{{ grey }}" as="ic" hint-placeholder-count="4">
+          <div style="display: flex; align-items: flex-end; gap: 10px;">
+            <sc-for list="{{ ic.sizes }}" as="z" hint-placeholder-count="2">
+              <svg width="{{ z.px }}" height="{{ z.px }}" viewBox="0 0 64 64" aria-hidden="true">
+                <rect x="{{ ic.s0.x }}" y="{{ ic.s0.y }}" width="{{ ic.s0.w }}" height="{{ ic.s0.h }}" rx="{{ ic.s0.r }}" fill="#8e8e93" opacity="{{ ic.s0.v }}" transform="{{ ic.s0.t }}"></rect>
+                <rect x="{{ ic.s1.x }}" y="{{ ic.s1.y }}" width="{{ ic.s1.w }}" height="{{ ic.s1.h }}" rx="{{ ic.s1.r }}" fill="#8e8e93" opacity="{{ ic.s1.v }}" transform="{{ ic.s1.t }}"></rect>
+                <rect x="{{ ic.s2.x }}" y="{{ ic.s2.y }}" width="{{ ic.s2.w }}" height="{{ ic.s2.h }}" rx="{{ ic.s2.r }}" fill="#8e8e93" opacity="{{ ic.s2.v }}" transform="{{ ic.s2.t }}"></rect>
+                <rect x="{{ ic.s3.x }}" y="{{ ic.s3.y }}" width="{{ ic.s3.w }}" height="{{ ic.s3.h }}" rx="{{ ic.s3.r }}" fill="#8e8e93" opacity="{{ ic.s3.v }}" transform="{{ ic.s3.t }}"></rect>
+              </svg>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex: 1 1 400px; background: #161617; border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 16px;">
+      <div style="font-size: 17px; font-weight: 600;">Alternates</div>
+      <div style="display: flex; align-items: flex-end; gap: 22px;">
+        <sc-for list="{{ alts }}" as="ic" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: flex-end; gap: 8px;">
+              <sc-for list="{{ ic.sizes }}" as="z" hint-placeholder-count="2">
+                <svg width="{{ z.px }}" height="{{ z.px }}" viewBox="0 0 64 64" aria-hidden="true">
+                  <rect width="64" height="64" rx="14.4" fill="{{ ic.tile }}"></rect>
+                  <rect x="{{ ic.s0.x }}" y="{{ ic.s0.y }}" width="{{ ic.s0.w }}" height="{{ ic.s0.h }}" rx="{{ ic.s0.r }}" fill="{{ ic.s0.f }}" opacity="{{ ic.s0.o }}" transform="{{ ic.s0.t }}"></rect>
+                  <rect x="{{ ic.s1.x }}" y="{{ ic.s1.y }}" width="{{ ic.s1.w }}" height="{{ ic.s1.h }}" rx="{{ ic.s1.r }}" fill="{{ ic.s1.f }}" opacity="{{ ic.s1.o }}" transform="{{ ic.s1.t }}"></rect>
+                  <rect x="{{ ic.s2.x }}" y="{{ ic.s2.y }}" width="{{ ic.s2.w }}" height="{{ ic.s2.h }}" rx="{{ ic.s2.r }}" fill="{{ ic.s2.f }}" opacity="{{ ic.s2.o }}" transform="{{ ic.s2.t }}"></rect>
+                  <rect x="{{ ic.s3.x }}" y="{{ ic.s3.y }}" width="{{ ic.s3.w }}" height="{{ ic.s3.h }}" rx="{{ ic.s3.r }}" fill="{{ ic.s3.f }}" opacity="{{ ic.s3.o }}" transform="{{ ic.s3.t }}"></rect>
+                </svg>
+              </sc-for>
+            </div>
+            <div style="font-size: 12px; color: #a1a1a6;">{{ ic.name }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <sc-for list="{{ strips }}" as="st" hint-placeholder-count="2">
+      <div style="background: {{ st.bar }}; border-radius: 14px; padding: 8px 8px 0; display: flex; gap: 2px;">
+        <sc-for list="{{ st.tabs }}" as="ic" hint-placeholder-count="4">
+          <div style="flex: 1; min-width: 0; height: 36px; border-radius: 10px 10px 0 0; background: {{ ic.tabBg }}; display: flex; align-items: center; gap: 8px; padding: 0 12px;">
+            <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true">
+              <rect width="64" height="64" rx="14.4" fill="{{ ic.tile }}"></rect>
+              <rect x="{{ ic.s0.x }}" y="{{ ic.s0.y }}" width="{{ ic.s0.w }}" height="{{ ic.s0.h }}" rx="{{ ic.s0.r }}" fill="{{ ic.s0.f }}" opacity="{{ ic.s0.o }}" transform="{{ ic.s0.t }}"></rect>
+              <rect x="{{ ic.s1.x }}" y="{{ ic.s1.y }}" width="{{ ic.s1.w }}" height="{{ ic.s1.h }}" rx="{{ ic.s1.r }}" fill="{{ ic.s1.f }}" opacity="{{ ic.s1.o }}" transform="{{ ic.s1.t }}"></rect>
+              <rect x="{{ ic.s2.x }}" y="{{ ic.s2.y }}" width="{{ ic.s2.w }}" height="{{ ic.s2.h }}" rx="{{ ic.s2.r }}" fill="{{ ic.s2.f }}" opacity="{{ ic.s2.o }}" transform="{{ ic.s2.t }}"></rect>
+              <rect x="{{ ic.s3.x }}" y="{{ ic.s3.y }}" width="{{ ic.s3.w }}" height="{{ ic.s3.h }}" rx="{{ ic.s3.r }}" fill="{{ ic.s3.f }}" opacity="{{ ic.s3.o }}" transform="{{ ic.s3.t }}"></rect>
+            </svg>
+            <span style="font-size: 12px; color: {{ st.text }}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ ic.tab }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tile":{"editor":"enum","options":["dark","colour"],"default":"dark"},"$preview":{"width":1280,"height":1240}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const colour = (this.props.tile ?? 'dark') === 'colour';
+    const A = { decks: '#f5f5f7', slidedeck: '#2997ff', playdeck: '#ff5c86', pagedeck: '#3ddc97', formdeck: '#ffb020' };
+    const DEEP = { decks: '#2c2c2e', slidedeck: '#0071e3', playdeck: '#d9214f', pagedeck: '#0a7a50', formdeck: '#b36b00' };
+    const R = (x, y, w, h, r, f, o, t, v) => ({ x, y, w, h, r, f, o: o ?? 1, t: t ?? '', v: v ?? o ?? 1 });
+    const NONE = R(0, 0, 0, 0, 0, 'none', 0);
+    const shapes = {
+      decks: (a, m) => [R(22, 15, 20, 28, 4, '#2997ff', 1, 'rotate(-16 32 50)'), R(22, 15, 20, 28, 4, '#3ddc97', 1, 'rotate(16 32 50)'), R(22, 15, 20, 28, 4, '#ff5c86'), NONE],
+      slidedeck: (a, m) => [R(5, 21, 12, 22, 3, m, 1, '', 0.5), R(47, 21, 12, 22, 3, m, 1, '', 0.5), R(20, 14, 24, 36, 4, a), NONE],
+      playdeck: (a, m) => [R(11, 13, 11, 38, 3, a), R(26, 19, 11, 26, 3, a, 0.8), R(41, 26, 11, 12, 3, a, 0.6), NONE],
+      pagedeck: (a, m) => [R(12, 12, 40, 10, 3, m, 1, '', 0.5), R(12, 27, 40, 10, 3, a), R(12, 42, 40, 10, 3, m, 1, '', 0.5), NONE],
+      formdeck: (a, m) => [R(22, 29, 10, 20, 4, a, 0.7, 'rotate(-45 27 46)'), R(22, 10, 10, 39, 4, a, 1, 'rotate(39.4 27 46)'), NONE, NONE],
+      decksAlt: (a, m) => [R(27, 10, 10, 44, 4, '#2997ff', 1, 'rotate(60 32 32)'), R(27, 10, 10, 44, 4, '#3ddc97', 1, 'rotate(120 32 32)'), R(27, 10, 10, 44, 4, '#ff5c86'), NONE],
+      slidedeckAlt: (a, m) => [R(14, 12, 36, 30, 5, a), R(21, 49, 6, 6, 3, m), R(29, 49, 6, 6, 3, a), R(37, 49, 6, 6, 3, m)],
+      playdeckAlt: (a, m) => [R(10, 12, 44, 28, 5, m), R(10, 48, 44, 4, 2, m), R(10, 48, 20, 4, 2, a), R(25, 43, 14, 14, 7, a)],
+      formdeckAlt: (a, m) => [R(8, 22, 48, 20, 10, m), R(36, 24, 16, 16, 8, a), NONE, NONE],
+      pagedeckAlt: (a, m) => [R(15, 9, 34, 46, 5, m), R(33, 37, 12, 12, 6, a), NONE, NONE]
+    };
+    const make = (key, base, px) => {
+      const onColour = colour && base !== 'decks';
+      const a = onColour ? '#ffffff' : A[base];
+      const m = onColour ? 'rgba(255,255,255,0.45)' : '#48484a';
+      const s = shapes[key](a, m);
+      return { tile: onColour ? DEEP[base] : '#1c1c1e', s0: s[0], s1: s[1], s2: s[2], s3: s[3], sizes: px.map((p) => ({ px: p })) };
+    };
+    const INFO = [
+      ['decks', 'Three cards, fanned out', 'deck.cool: unstyled React packages'],
+      ['slidedeck', 'Three cards in a row, the middle one in front', 'slidedeck: a React carousel'],
+      ['playdeck', 'Three cards stepping down: a play shape from cards', 'playdeck: a video player you compose'],
+      ['pagedeck', 'Three sections of a page, one lit: the island', 'pagedeck: zero JavaScript until…']
+    ];
+    return {
+      main: INFO.map(([name, what]) => ({ name: name === 'decks' ? 'deck.cool' : name, what, ...make(name, name, [96, 48, 32, 16]) })),
+      grey: INFO.map(([name]) => ({ name, ...make(name, name, [32, 16]) })),
+      alts: INFO.map(([name]) => ({ name: (name === 'decks' ? 'deck.cool' : name) + ' alt', ...make(name + 'Alt', name, [48, 16]) })),
+      strips: [
+        { bar: '#1c1c1e', text: '#d2d2d7', active: '#000000' },
+        { bar: '#dedee3', text: '#1d1d1f', active: '#ffffff' }
+      ].map((st) => ({ ...st, tabs: INFO.map(([name, what, tab], i) => ({ tab, tabBg: i === 2 ? st.active : 'rgba(0,0,0,0)', ...make(name, name, [16]) })) }))
+    };
+  }
+}
+</script>
+</body>
+</html>

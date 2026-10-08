@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Favicons for the decks</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#000}
+</style>
+</helmet>
+<div style="width: 1280px; height: 760px; box-sizing: border-box; padding: 56px 64px; background: #000000; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; gap: 40px;">
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px;">
+    <sc-for list="{{ icons }}" as="ic" hint-placeholder-count="4">
+      <div style="background: #161617; border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="display: flex; align-items: flex-end; gap: 18px;">
+          <sc-for list="{{ sizes }}" as="s" hint-placeholder-count="4">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+              <sc-if value="{{ ic.isDeck }}" hint-placeholder-val="{{ true }}"><svg width="{{ s.px }}" height="{{ s.px }}" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#2c2c2e"></rect><rect x="22" y="15" width="20" height="28" rx="4" fill="#2997ff" transform="rotate(-16 32 50)"></rect><rect x="22" y="15" width="20" height="28" rx="4" fill="#3ddc97" transform="rotate(16 32 50)"></rect><rect x="22" y="15" width="20" height="28" rx="4" fill="#ff5c86"></rect></svg></sc-if>
+              <sc-if value="{{ ic.isSlide }}" hint-placeholder-val="{{ false }}"><svg width="{{ s.px }}" height="{{ s.px }}" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#0071e3"></rect><rect x="12" y="18" width="30" height="28" rx="5" fill="#fff"></rect><rect x="46" y="22" width="8" height="20" rx="3" fill="#fff" opacity="0.55"></rect></svg></sc-if>
+              <sc-if value="{{ ic.isPlay }}" hint-placeholder-val="{{ false }}"><svg width="{{ s.px }}" height="{{ s.px }}" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#d9214f"></rect><rect x="12" y="16" width="40" height="32" rx="7" fill="#fff"></rect><path d="M28 25 L39 32 L28 39 Z" fill="#d9214f"></path></svg></sc-if>
+              <sc-if value="{{ ic.isPage }}" hint-placeholder-val="{{ false }}"><svg width="{{ s.px }}" height="{{ s.px }}" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#0a7a50"></rect><path d="M18 12 H38 L48 22 V52 H18 Z" fill="#fff"></path><path d="M38 12 V22 H48" fill="none" stroke="#0a7a50" stroke-width="3" stroke-linejoin="round"></path></svg></sc-if>
+              <div style="font-size: 11px; color: #86868b;">{{ s.px }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="font-size: 21px; font-weight: 600; letter-spacing: -0.01em;">{{ ic.name }}</div>
+          <div style="font-size: 14px; color: #a1a1a6;">{{ ic.what }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-size: 13px; color: #a1a1a6;">In a dark tab strip, at 16 px</div>
+    <div style="background: #1c1c1e; border-radius: 14px; padding: 8px 8px 0; display: flex; gap: 2px;">
+      <sc-for list="{{ icons }}" as="ic" hint-placeholder-count="4">
+        <div style="flex: 1; min-width: 0; height: 36px; border-radius: 10px 10px 0 0; background: {{ ic.tabBg }}; display: flex; align-items: center; gap: 8px; padding: 0 12px;">
+          <sc-if value="{{ ic.isDeck }}" hint-placeholder-val="{{ true }}"><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#2c2c2e"></rect><rect x="22" y="15" width="20" height="28" rx="4" fill="#2997ff" transform="rotate(-16 32 50)"></rect><rect x="22" y="15" width="20" height="28" rx="4" fill="#3ddc97" transform="rotate(16 32 50)"></rect><rect x="22" y="15" width="20" height="28" rx="4" fill="#ff5c86"></rect></svg></sc-if>
+          <sc-if value="{{ ic.isSlide }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#0071e3"></rect><rect x="12" y="18" width="30" height="28" rx="5" fill="#fff"></rect><rect x="46" y="22" width="8" height="20" rx="3" fill="#fff" opacity="0.55"></rect></svg></sc-if>
+          <sc-if value="{{ ic.isPlay }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#d9214f"></rect><rect x="12" y="16" width="40" height="32" rx="7" fill="#fff"></rect><path d="M28 25 L39 32 L28 39 Z" fill="#d9214f"></path></svg></sc-if>
+          <sc-if value="{{ ic.isPage }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#0a7a50"></rect><path d="M18 12 H38 L48 22 V52 H18 Z" fill="#fff"></path><path d="M38 12 V22 H48" fill="none" stroke="#0a7a50" stroke-width="3" stroke-linejoin="round"></path></svg></sc-if>
+          <span style="font-size: 12px; color: #d2d2d7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ ic.tab }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="height: 40px; background: #161617; border-radius: 0 0 14px 14px; margin-top: -12px;"></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const I = [
+      ['decks', 'The umbrella: three cards, fanned', 'decks: unstyled React packages'],
+      ['slidedeck', 'A slide, and the next one peeking', 'slidedeck: a React carousel'],
+      ['playdeck', 'A frame with a play mark cut out', 'Playdeck: a video player you compose'],
+      ['pagedeck', 'A page with its corner folded', 'Pagedeck: zero JavaScript until…']
+    ];
+    return {
+      sizes: [72, 48, 32, 16].map((px) => ({ px })),
+      icons: I.map(([name, what, tab], i) => ({
+        name, what, tab,
+        isDeck: i === 0, isSlide: i === 1, isPlay: i === 2, isPage: i === 3,
+        tabBg: i === 1 ? '#161617' : 'rgba(255,255,255,0)'
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

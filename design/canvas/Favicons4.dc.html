@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Favicons, round 4</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#000}
+.fb{transform-box: fill-box}
+@keyframes fanL{0%,30%{transform: rotate(-16deg)}50%,80%{transform: rotate(-30deg)}100%{transform: rotate(-16deg)}}
+@keyframes fanR{0%,30%{transform: rotate(16deg)}50%,80%{transform: rotate(30deg)}100%{transform: rotate(16deg)}}
+.fanL{transform-origin: 32px 52px; animation: fanL 3.2s cubic-bezier(.32,.72,0,1) infinite}
+.fanR{transform-origin: 32px 52px; animation: fanR 3.2s cubic-bezier(.32,.72,0,1) infinite}
+@keyframes snap{0%,22%{transform: translateX(0)}33%,55%{transform: translateX(-22px)}66%,88%{transform: translateX(-44px)}100%{transform: translateX(-66px)}}
+.strip{animation: snap 4.5s cubic-bezier(.32,.72,0,1) infinite}
+@keyframes fill{0%{transform: scaleX(0)}85%{transform: scaleX(1)}100%{transform: scaleX(1)}}
+.prog{transform-origin: 0 0; animation: fill 4s linear infinite}
+@keyframes hydrate{0%,40%{opacity: 0; transform: scale(.4)}55%{opacity: 1; transform: scale(1.25)}65%,92%{opacity: 1; transform: scale(1)}100%{opacity: 0; transform: scale(1)}}
+.island{transform-box: fill-box; transform-origin: center; animation: hydrate 3.6s cubic-bezier(.32,.72,0,1) infinite}
+@media (prefers-reduced-motion: reduce){.fanL,.fanR,.strip,.prog,.island{animation: none}.prog{transform: scaleX(.6)}.island{opacity: 1}}
+</style>
+</helmet>
+<div style="width: 1280px; height: 1120px; box-sizing: border-box; padding: 56px 64px; background: #000000; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; gap: 48px;">
+
+  <section style="display: flex; flex-direction: column; gap: 18px;">
+    <div style="display: flex; align-items: baseline; gap: 14px;">
+      <h2 style="margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.02em;">Living</h2>
+      <div style="font-size: 17px; color: #a1a1a6;">Each icon does, in the tab, what its package does on the page.</div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+      <sc-for list="{{ living }}" as="ic" hint-placeholder-count="4">
+        <div style="background: #161617; border-radius: 28px; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; align-items: flex-end; gap: 14px;">
+            <sc-for list="{{ sizes }}" as="z" hint-placeholder-count="3">
+              <svg width="{{ z.px }}" height="{{ z.px }}" viewBox="0 0 64 64" aria-hidden="true">
+                <sc-if value="{{ ic.isDecks }}" hint-placeholder-val="{{ true }}">
+                  <rect class="fanL" x="22" y="15" width="20" height="30" rx="4" fill="#2997ff"></rect>
+                  <rect class="fanR" x="22" y="15" width="20" height="30" rx="4" fill="#3ddc97"></rect>
+                  <rect x="22" y="15" width="20" height="30" rx="4" fill="#ff5c86"></rect>
+                </sc-if>
+                <sc-if value="{{ ic.isSlide }}" hint-placeholder-val="{{ false }}">
+                  <g class="strip">
+                    <rect x="4" y="14" width="18" height="36" rx="4" fill="#2997ff" opacity="0.45"></rect>
+                    <rect x="26" y="14" width="18" height="36" rx="4" fill="#2997ff"></rect>
+                    <rect x="48" y="14" width="18" height="36" rx="4" fill="#2997ff" opacity="0.45"></rect>
+                    <rect x="70" y="14" width="18" height="36" rx="4" fill="#2997ff" opacity="0.45"></rect>
+                    <rect x="92" y="14" width="18" height="36" rx="4" fill="#2997ff" opacity="0.45"></rect>
+                    <rect x="114" y="14" width="18" height="36" rx="4" fill="#2997ff" opacity="0.45"></rect>
+                  </g>
+                </sc-if>
+                <sc-if value="{{ ic.isPlay }}" hint-placeholder-val="{{ false }}">
+                  <path d="M19 6 H38 L56 32 L38 58 H19 A9 9 0 0 1 10 49 V15 A9 9 0 0 1 19 6 Z" fill="#ff5c86" opacity="0.35"></path>
+                  <path class="prog" d="M19 6 H38 L56 32 L38 58 H19 A9 9 0 0 1 10 49 V15 A9 9 0 0 1 19 6 Z" fill="#ff5c86"></path>
+                </sc-if>
+                <sc-if value="{{ ic.isPage }}" hint-placeholder-val="{{ false }}">
+                  <path d="M19 6 H45 A9 9 0 0 1 54 15 V49 A9 9 0 0 1 45 58 H19 A9 9 0 0 1 10 49 V15 A9 9 0 0 1 19 6 Z M31 44 a7 7 0 1 0 14 0 a7 7 0 1 0 -14 0 Z" fill="#48484a" fill-rule="evenodd"></path>
+                  <circle class="island" cx="38" cy="44" r="7" fill="#3ddc97"></circle>
+                </sc-if>
+              </svg>
+            </sc-for>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="font-size: 19px; font-weight: 600; letter-spacing: -0.01em;">{{ ic.name }}</div>
+            <div style="font-size: 13px; line-height: 1.4; color: #a1a1a6;">{{ ic.what }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 18px;">
+    <div style="display: flex; align-items: baseline; gap: 14px;">
+      <h2 style="margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.02em;">Wildcards</h2>
+      <div style="font-size: 17px; color: #a1a1a6;">*deck is a wildcard. Each package is one match: its own number of arms.</div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+      <sc-for list="{{ stars }}" as="ic" hint-placeholder-count="4">
+        <div style="background: #161617; border-radius: 28px; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; align-items: flex-end; gap: 14px;">
+            <sc-for list="{{ sizes }}" as="z" hint-placeholder-count="3">
+              <svg width="{{ z.px }}" height="{{ z.px }}" viewBox="0 0 64 64" aria-hidden="true">
+                <path d="{{ ic.d }}" fill="{{ ic.f }}"></path>
+              </svg>
+            </sc-for>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="font-size: 19px; font-weight: 600; letter-spacing: -0.01em;">{{ ic.name }}</div>
+            <div style="font-size: 13px; line-height: 1.4; color: #a1a1a6;">{{ ic.what }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="background: #1c1c1e; border-radius: 12px; padding: 6px 6px 0; display: flex; gap: 2px; max-width: 760px;">
+      <sc-for list="{{ stars }}" as="ic" hint-placeholder-count="4">
+        <div style="flex: 1; min-width: 0; height: 32px; border-radius: 8px 8px 0 0; background: {{ ic.tabBg }}; display: flex; align-items: center; gap: 6px; padding: 0 10px;">
+          <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true" style="flex: none;"><path d="{{ ic.d }}" fill="{{ ic.f }}"></path></svg>
+          <span style="font-size: 11px; color: #d2d2d7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ ic.name }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1120}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const star = (n, R, half, rot) => {
+      const inner = half / Math.sin(Math.PI / n);
+      const pts = [];
+      for (let k = 0; k < n; k++) {
+        const t = rot + (2 * Math.PI * k) / n;
+        const u = [Math.cos(t), Math.sin(t)], v = [-Math.sin(t), Math.cos(t)];
+        pts.push([32 + R * u[0] - half * v[0], 32 + R * u[1] - half * v[1]]);
+        pts.push([32 + R * u[0] + half * v[0], 32 + R * u[1] + half * v[1]]);
+        const b = t + Math.PI / n;
+        pts.push([32 + inner * Math.cos(b), 32 + inner * Math.sin(b)]);
+      }
+      return 'M' + pts.map((p) => p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' L') + ' Z';
+    };
+    const up = -Math.PI / 2;
+    const STARS = [
+      ['decks', '6 arms: the wildcard itself', star(6, 27, 6, up), '#f5f5f7'],
+      ['slidedeck', '5 arms', star(5, 28, 6.5, up), '#2997ff'],
+      ['playdeck', '3 arms, one pointing ahead', star(3, 28, 8, 0), '#ff5c86'],
+      ['pagedeck', '4 arms: a page in sections', star(4, 27, 7, 0), '#3ddc97']
+    ];
+    return {
+      sizes: [96, 48, 16].map((px) => ({ px })),
+      living: [
+        ['decks', 'The cards fan out and close, slowly'],
+        ['slidedeck', 'The cards snap one step and loop, like the deck'],
+        ['playdeck', 'The card fills like a progress bar'],
+        ['pagedeck', 'The island lights once: hydration']
+      ].map(([name, what], i) => ({ name, what, isDecks: i === 0, isSlide: i === 1, isPlay: i === 2, isPage: i === 3 })),
+      stars: STARS.map(([name, what, d, f], i) => ({ name, what, d, f, tabBg: i === 1 ? '#000000' : 'rgba(0,0,0,0)' }))
+    };
+  }
+}
+</script>
+</body>
+</html>

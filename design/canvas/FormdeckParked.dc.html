@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>formdeck, parked</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#000}
+.arm{transform-box: fill-box; transform-origin: center bottom}
+@keyframes armS{0%,8%{transform: scaleY(0); opacity: 1}24%,84%{transform: scaleY(1); opacity: 1}96%,100%{transform: scaleY(1); opacity: 0}}
+@keyframes armL{0%,22%{transform: scaleY(0); opacity: 1}44%,84%{transform: scaleY(1); opacity: 1}96%,100%{transform: scaleY(1); opacity: 0}}
+.armS{animation: armS 3.4s cubic-bezier(.32,.72,0,1) infinite}
+.armL{animation: armL 3.4s cubic-bezier(.32,.72,0,1) infinite}
+@media (prefers-reduced-motion: reduce){.armS,.armL{animation: none}}
+</style>
+</helmet>
+<div style="width: 1280px; height: 520px; box-sizing: border-box; padding: 56px 64px; background: #000000; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; gap: 28px;">
+  <div style="display: flex; align-items: baseline; gap: 14px;">
+    <h2 style="margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.02em;">formdeck</h2>
+    <div style="font-size: 17px; color: #a1a1a6;">Parked until the package is ready. Joins the round 2 set, the umbrella site and the switcher then.</div>
+  </div>
+  <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+    <div style="flex: 1 1 400px; background: #161617; border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 18px;">
+      <div style="font-size: 17px; font-weight: 600;">Still: two cards meet in a check</div>
+      <div style="display: flex; align-items: flex-end; gap: 16px;">
+        <sc-for list="{{ sizes }}" as="z" hint-placeholder-count="4">
+          <svg width="{{ z.px }}" height="{{ z.px }}" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#1c1c1e"></rect><rect x="22" y="29" width="10" height="20" rx="4" fill="#ffb020" opacity="0.7" transform="rotate(-45 27 46)"></rect><rect x="22" y="10" width="10" height="39" rx="4" fill="#ffb020" transform="rotate(39.4 27 46)"></rect></svg>
+        </sc-for>
+      </div>
+      <div style="font-size: 14px; line-height: 1.45; color: #a1a1a6;">Accent amber #ffb020. Buttons in amber take dark text: white on amber fails contrast.</div>
+    </div>
+    <div style="flex: 1 1 400px; background: #161617; border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 18px;">
+      <div style="font-size: 17px; font-weight: 600;">Motion: the check draws itself</div>
+      <div style="display: flex; align-items: flex-end; gap: 16px;">
+        <sc-for list="{{ sizes }}" as="z" hint-placeholder-count="4">
+          <svg width="{{ z.px }}" height="{{ z.px }}" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#1c1c1e"></rect><g transform="rotate(-45 27 46)"><rect class="arm armS" x="22" y="29" width="10" height="20" rx="4" fill="#ffb020" opacity="0.7"></rect></g><g transform="rotate(39.4 27 46)"><rect class="arm armL" x="22" y="10" width="10" height="39" rx="4" fill="#ffb020"></rect></g></svg>
+        </sc-for>
+      </div>
+      <div style="font-size: 14px; line-height: 1.45; color: #a1a1a6;">Short arm, then long, hold, fade. Still under reduced motion.</div>
+    </div>
+    <div style="flex: 0 1 220px; background: #161617; border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 18px;">
+      <div style="font-size: 17px; font-weight: 600;">Alternate: a toggle</div>
+      <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#1c1c1e"></rect><rect x="8" y="22" width="48" height="20" rx="10" fill="#48484a"></rect><rect x="36" y="24" width="16" height="16" rx="8" fill="#ffb020"></rect></svg>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":520}}'>
+class Component extends DCLogic {
+  renderVals() { return { sizes: [96, 48, 32, 16].map((px) => ({ px })) }; }
+}
+</script>
+</body>
+</html>

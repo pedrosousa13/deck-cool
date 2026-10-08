@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Top bar C: Family</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#000}
+a{color:#2997ff}a:hover{color:#5eb0ff}
+.roll{transition: transform .55s cubic-bezier(.32,.72,0,1)}
+.hair{transition: background-color .5s ease}
+.sheet{transition: height .45s cubic-bezier(.32,.72,0,1)}
+.tile{transition: opacity .3s ease, transform .45s cubic-bezier(.32,.72,0,1), background-color .2s ease}
+.tile:hover{background-color:#2c2c2e}
+.hero{transition: opacity .4s ease, transform .55s cubic-bezier(.32,.72,0,1)}
+.fanbtn rect{transition: transform .45s cubic-bezier(.32,.72,0,1); transform-origin: 32px 52px}
+.chev{transition: transform .45s cubic-bezier(.32,.72,0,1)}
+.flink{color:#a1a1a6;text-decoration:none;transition: color .2s ease}
+.flink:hover{color:#f5f5f7}
+.shade{transition: opacity .3s ease}
+@media (prefers-reduced-motion: reduce){.roll,.sheet,.tile,.hero,.fanbtn rect,.chev{transition: opacity .2s ease}}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 680px; overflow: hidden; background: #000000; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased;">
+
+  <sc-for list="{{ heroes }}" as="h" hint-placeholder-count="3">
+    <section class="hero" style="position: absolute; inset: 0; box-sizing: border-box; padding: 160px 22px 0; text-align: center; opacity: {{ h.opacity }}; transform: translateY({{ h.shift }}px); pointer-events: none;">
+      <div style="font-size: 21px; font-weight: 600; color: {{ h.tint }};">{{ h.eyebrow }}</div>
+      <h1 style="margin: 12px auto 0; max-width: 860px; font-size: 80px; line-height: 1.05; font-weight: 600; letter-spacing: -0.025em;">{{ h.headline }}</h1>
+      <p style="margin: 20px auto 0; max-width: 620px; font-size: 21px; line-height: 1.38; color: #a1a1a6;">{{ h.sub }}</p>
+    </section>
+  </sc-for>
+
+  <div class="shade" onClick="{{ close }}" style="position: absolute; inset: 0; background: rgba(0,0,0,0.55); opacity: {{shadeOpacity}}; pointer-events: {{shadeEvents}};"></div>
+
+  <div class="sheet" style="position: absolute; left: 0; right: 0; top: 0; height: {{sheetH}}px; background: rgba(22,22,23,0.94); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); overflow: hidden;">
+    <div style="max-width: 980px; margin: 0 auto; padding: 76px 22px 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 12px; color: #a1a1a6;">The decks</div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <sc-for list="{{ tiles }}" as="t" hint-placeholder-count="3">
+          <button type="button" class="tile" onClick="{{ t.pick }}" aria-pressed="{{ t.pressed }}" style="display: flex; align-items: center; gap: 14px; text-align: left; border: 1px solid {{ t.ring }}; border-radius: 18px; padding: 14px; background: #1c1c1e; color: #f5f5f7; font: inherit; cursor: pointer; opacity: {{ t.opacity }}; transform: translateY({{ t.shift }}px); transition-delay: {{ t.delay }}ms;">
+            <sc-if value="{{ t.isSlide }}" hint-placeholder-val="{{ true }}"><svg width="44" height="44" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#1c1c1e"></rect><rect x="5" y="21" width="12" height="22" rx="3" fill="#48484a"></rect><rect x="47" y="21" width="12" height="22" rx="3" fill="#48484a"></rect><rect x="20" y="14" width="24" height="36" rx="4" fill="#2997ff"></rect></svg></sc-if>
+            <sc-if value="{{ t.isPlay }}" hint-placeholder-val="{{ false }}"><svg width="44" height="44" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#1c1c1e"></rect><rect x="11" y="13" width="11" height="38" rx="3" fill="#ff5c86"></rect><rect x="26" y="19" width="11" height="26" rx="3" fill="#ff5c86" opacity="0.8"></rect><rect x="41" y="26" width="11" height="12" rx="3" fill="#ff5c86" opacity="0.6"></rect></svg></sc-if>
+            <sc-if value="{{ t.isPage }}" hint-placeholder-val="{{ false }}"><svg width="44" height="44" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14.4" fill="#1c1c1e"></rect><rect x="12" y="12" width="40" height="10" rx="3" fill="#48484a"></rect><rect x="12" y="27" width="40" height="10" rx="3" fill="#3ddc97"></rect><rect x="12" y="42" width="40" height="10" rx="3" fill="#48484a"></rect></svg></sc-if>
+            <span style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 17px; font-weight: 600;">{{ t.name }}</span>
+              <span style="font-size: 13px; color: #a1a1a6;">{{ t.kind }}</span>
+            </span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <nav aria-label="Main" style="position: absolute; left: 0; right: 0; top: 0; height: 52px; background: {{barBg}}; backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);">
+    <div style="max-width: 980px; height: 52px; margin: 0 auto; padding: 0 22px; display: flex; align-items: center; gap: 10px; box-sizing: border-box;">
+      <button type="button" class="fanbtn" onClick="{{ toggle }}" aria-expanded="{{ expanded }}" aria-label="Switch deck" style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 8px 0 4px; border: 0; border-radius: 999px; background: {{fanBg}}; color: #f5f5f7; cursor: pointer;">
+        <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="22" y="15" width="20" height="28" rx="4" fill="#0071e3" style="transform: rotate({{fanL}}deg);"></rect>
+          <rect x="22" y="15" width="20" height="28" rx="4" fill="#0a7a50" style="transform: rotate({{fanR}}deg);"></rect>
+          <rect x="22" y="15" width="20" height="28" rx="4" fill="#d9214f"></rect>
+        </svg>
+        <svg class="chev" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style="transform: rotate({{chev}}deg);"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="#a1a1a6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </button>
+      <span style="color: #424245; font-size: 20px; font-weight: 300;">/</span>
+      <a href="#" style="display: block; height: 22px; overflow: hidden; color: #f5f5f7; text-decoration: none; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; line-height: 22px;">
+        <span class="roll" style="display: flex; flex-direction: column; transform: translateY({{rollY}}px);">
+          <span>slidedeck</span><span>playdeck</span><span>pagedeck</span>
+        </span>
+      </a>
+      <div style="margin-left: auto; display: flex; gap: 22px; font-size: 13px;">
+        <a class="flink" href="#">Docs</a>
+        <a class="flink" href="#">Examples</a>
+        <a class="flink" href="#">GitHub</a>
+      </div>
+      <a href="#" style="margin-left: 8px; padding: 7px 14px; border-radius: 999px; background: {{accent}}; color: {{onAccent}}; font-size: 13px; text-decoration: none; transition: background-color .5s ease, color .5s ease;">Install</a>
+    </div>
+    <div class="hair" style="position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: {{hair}};"></div>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":680}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: false, pick: 0 };
+  }
+  renderVals() {
+    const D = [
+      { name: 'slidedeck', kind: 'Carousel', accent: '#0071e3', tint: '#2997ff', eyebrow: 'slidedeck 1.0', headline: 'Smooth. Natively.', sub: 'A carousel for React that lets the browser do the scrolling.' },
+      { name: 'playdeck', kind: 'Video player', accent: '#d9214f', tint: '#ff5c86', eyebrow: 'playdeck', headline: 'A video player you compose.', sub: 'React primitives and hooks over native video, HLS, YouTube, Vimeo and Wistia.' },
+      { name: 'pagedeck', kind: 'Site framework', accent: '#0a7a50', tint: '#3ddc97', eyebrow: 'pagedeck 0.2', headline: 'Zero JavaScript until a page needs it.', sub: 'A React framework for CMS-driven sites. Each page ships only what it uses.' }
+    ];
+    const { open, pick } = this.state;
+    const cur = D[pick];
+    return {
+      accent: cur.accent, onAccent: cur.onAccent || '#ffffff',
+      hair: open ? 'rgba(255,255,255,0)' : cur.accent,
+      rollY: -22 * pick,
+      sheetH: open ? 196 : 0,
+      barBg: open ? 'rgba(22,22,23,0)' : 'rgba(22,22,23,0.8)',
+      shadeOpacity: open ? 1 : 0, shadeEvents: open ? 'auto' : 'none',
+      expanded: open ? 'true' : 'false',
+      fanBg: open ? '#2c2c2e' : 'rgba(255,255,255,0)',
+      fanL: open ? -26 : -14, fanR: open ? 26 : 14, chev: open ? 180 : 0,
+      heroes: D.map((d, i) => ({ ...d, opacity: i === pick ? 1 : 0, shift: i === pick ? 0 : 16 })),
+      tiles: D.map((d, i) => ({
+        name: d.name, kind: d.kind,
+        isSlide: i === 0, isPlay: i === 1, isPage: i === 2,
+        pressed: i === pick ? 'true' : 'false',
+        ring: i === pick ? d.accent : 'rgba(255,255,255,0.08)',
+        opacity: open ? 1 : 0, shift: open ? 0 : -10, delay: open ? 60 + i * 50 : 0,
+        pick: () => this.setState({ pick: i, open: false })
+      })),
+      toggle: () => this.setState({ open: !open }),
+      close: () => this.setState({ open: false })
+    };
+  }
+}
+</script>
+</body>
+</html>
