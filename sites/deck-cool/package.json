@@ -1,0 +1,21 @@
+{
+  "name": "@sites/deck-cool",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pagedeck sync && pagedeck build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pagedeck/adapter-cloudflare-pages": "0.2.1",
+    "@pagedeck/content": "0.2.1",
+    "@pagedeck/core": "0.2.1",
+    "@pagedeck/markdown-loader": "0.2.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0"
+  }
+}

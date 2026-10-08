@@ -1,3 +1,8 @@
 .scratch/
 .factory/run.lock
 .factory/journal.json
+node_modules/
+# Written by pagedeck sync and pagedeck build.
+content.db
+site/
+.pagedeck/

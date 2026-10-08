@@ -1,0 +1,7 @@
+packages:
+  - sites/*
+  - packages/*
+# pnpm holds a newly published version back for a day. Pagedeck is the
+# maintainer's own framework, so its releases skip the hold.
+minimumReleaseAgeExclude:
+  - '@pagedeck/*'
