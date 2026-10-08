@@ -13,3 +13,16 @@ Canonical label names, as repo labels on pedrosousa13/deck-cool — plus `in-pro
 ### Domain docs
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Working in this repo
+
+Node 24 and pnpm. Sites live in `sites/<name>`, shared code in `packages/<name>`. Run every command from the repo root:
+
+```sh
+pnpm install     # install every site and package
+pnpm build       # build every site: pagedeck sync, then pagedeck build
+pnpm typecheck   # tsc in every site and package
+pnpm test        # vitest across the workspace
+```
+
+`pnpm build` writes each site to `sites/<name>/site/`, and its budget report to `sites/<name>/.pagedeck/budget-report.json`. Every `@pagedeck/*` package is pinned to one exact version; upgrade them together. CI runs the same four commands on every push.
