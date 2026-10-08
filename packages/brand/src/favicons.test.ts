@@ -1,10 +1,9 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
+import { ICON_NAMES } from "./touch-icon.ts";
 
 const DESIGN = new URL("../../../design/favicons/", import.meta.url);
 const ICONS = new URL("../public/icons/", import.meta.url);
-
-const ICON_NAMES = ["deck-cool", "slidedeck", "playdeck", "pagedeck"];
 
 test.each(ICON_NAMES.flatMap((name) => [
   [name, "still"],
