@@ -44,7 +44,7 @@ export function FamilyBar({ current, links, install }: FamilyBarProps) {
                 <ul aria-labelledby="family-bar-decks">
                   {decks.map((each) => (
                     <li key={each.name}>
-                      <a href={each.url} aria-current={each === deck ? "page" : undefined} data-deck={each.name}>
+                      <a href={each.url} aria-current={each === deck ? "page" : undefined}>
                         <img src={each.icons.still} alt="" width="44" height="44" />
                         <span>
                           <strong>{each.name}</strong>
