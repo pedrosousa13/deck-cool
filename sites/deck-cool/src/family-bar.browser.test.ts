@@ -1,55 +1,30 @@
 import { AxeBuilder } from "@axe-core/playwright";
-import { readFile } from "node:fs/promises";
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
-import { extname, join, normalize } from "node:path";
-import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { serveSite, type ServedSite } from "./serve-site.ts";
 
 // Drives the built site (build.global-setup.ts) in Chromium. Needs Playwright's
 // Chromium: `pnpm exec playwright install chromium`.
 
-const OUT = fileURLToPath(new URL("../site/", import.meta.url));
-const TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".css": "text/css",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-};
-
-let server: Server;
-let origin: string;
+let site: ServedSite;
 let browser: Browser;
 
 beforeAll(async () => {
-  server = createServer(async (request, response) => {
-    const path = new URL(request.url ?? "/", "http://localhost").pathname;
-    const file = join(OUT, normalize(path.endsWith("/") ? `${path}index.html` : path));
-    try {
-      const body = await readFile(file);
-      response.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
-      response.end(body);
-    } catch {
-      response.writeHead(404).end();
-    }
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  site = await serveSite();
   browser = await chromium.launch();
 });
 
 afterAll(async () => {
   await browser?.close();
-  await new Promise((resolve) => server?.close(resolve));
+  await site?.close();
 });
 
 async function open(options: { reducedMotion: "reduce" | "no-preference" }): Promise<Page> {
   const context = await browser.newContext(options);
   const page = await context.newPage();
   // Anything off this origin, such as a deck's site, is not loaded.
-  await context.route((url) => !url.href.startsWith(origin), (route) => route.abort());
-  await page.goto(`${origin}/`);
+  await context.route((url) => url.origin !== site.origin, (route) => route.abort());
+  await page.goto(`${site.origin}/`);
   return page;
 }
 
