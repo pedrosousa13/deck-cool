@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { decks, umbrella } from "./decks.ts";
 
@@ -25,4 +25,40 @@ test.each([umbrella, ...decks])("$name's icon paths name files the package serve
     expect(path).toMatch(/^\//);
     expect(existsSync(new URL(`.${path}`, PUBLIC)), path).toBe(true);
   }
+});
+
+// The umbrella board's copy, taken from each deck's live site on 2026-10-08.
+// The board keeps it in a `const DECKS = [...]` literal; read it from there.
+interface BoardDeck {
+  name: string;
+  kind: string;
+  line: string;
+  body: string;
+  install: string;
+  facts: [string, string][];
+}
+const board = readFileSync(new URL("../../../design/canvas/Main.dc.html", import.meta.url), "utf8");
+const literal = /const DECKS = (\[[\s\S]*?\]);\n/.exec(board)?.[1];
+const boardDecks = new Function(`return ${String(literal)}`)() as BoardDeck[];
+
+test("the board lists the same decks, in the same order", () => {
+  expect(boardDecks.map((deck) => deck.name)).toEqual(decks.map((deck) => deck.name));
+});
+
+test.each(decks)("$name's card copy is the board's, word for word", (deck) => {
+  const copy = boardDecks.find((each) => each.name === deck.name);
+  expect(copy).toBeDefined();
+  expect({
+    kind: deck.kind,
+    claim: deck.claim,
+    description: deck.description,
+    install: deck.install,
+    figures: deck.figures.map(({ value, label }) => [value, label]),
+  }).toEqual({
+    kind: copy?.kind,
+    claim: copy?.line,
+    description: copy?.body,
+    install: copy?.install,
+    figures: copy?.facts,
+  });
 });
