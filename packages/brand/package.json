@@ -4,13 +4,22 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./decks": "./src/decks.ts"
+    "./decks": "./src/decks.ts",
+    "./family-bar": "./src/family-bar.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "render-touch-icons": "node scripts/render-touch-icons.ts"
   },
   "devDependencies": {
-    "@resvg/resvg-js": "2.6.2"
+    "@resvg/resvg-js": "2.6.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "happy-dom": "20.14.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "peerDependencies": {
+    "react": "19.3.0"
   }
 }

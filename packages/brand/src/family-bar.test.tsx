@@ -1,0 +1,87 @@
+// @vitest-environment happy-dom
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, test } from "vitest";
+import { decks, umbrella, type Deck } from "./decks.ts";
+import { FamilyBar } from "./family-bar.tsx";
+
+const slidedeck = decks[0] as Deck;
+const links = [
+  { label: "Docs", href: "/docs" },
+  { label: "GitHub", href: "https://github.com/example/slidedeck" },
+];
+
+// A <template>'s content is inert, so the DOM fetches no stylesheet or image.
+function render(element: React.ReactElement): DocumentFragment {
+  const template = document.createElement("template");
+  template.innerHTML = renderToStaticMarkup(element);
+  return template.content;
+}
+
+describe("the Family bar", () => {
+  test("links its stylesheet before the bar", () => {
+    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    const sheet = doc.querySelector('link[rel="stylesheet"][href="/family-bar.css"]');
+    const header = doc.querySelector("header");
+    expect(sheet).not.toBeNull();
+    expect(header).not.toBeNull();
+    expect(sheet!.compareDocumentPosition(header!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test("the switcher is a details whose summary is labelled Switch deck", () => {
+    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    const summary = doc.querySelector("header details > summary");
+    expect(summary?.getAttribute("aria-label")).toBe("Switch deck");
+    expect(summary?.querySelector("svg")).not.toBeNull();
+  });
+
+  test("the panel links every deck with its still icon, name and kind", () => {
+    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    const tiles = [...doc.querySelectorAll("header details a")];
+    expect(tiles.map((a) => a.getAttribute("href"))).toEqual(decks.map((deck) => deck.url));
+    tiles.forEach((tile, at) => {
+      const deck = decks[at] as Deck;
+      expect(tile.querySelector("img")?.getAttribute("src")).toBe(deck.icons.still);
+      expect(tile.textContent).toContain(deck.name);
+      expect(tile.textContent).toContain(deck.kind);
+    });
+  });
+
+  test("only the current deck is marked aria-current", () => {
+    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    const current = [...doc.querySelectorAll('[aria-current="page"]')];
+    expect(current).toHaveLength(1);
+    expect(current[0]?.getAttribute("href")).toBe(slidedeck.url);
+  });
+
+  test("on a deck's site the bar names the deck after a slash and carries its accent", () => {
+    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    expect(doc.querySelector("header")?.dataset.deck).toBe("slidedeck");
+    expect(doc.querySelector("header nav")?.textContent).toContain("/slidedeck");
+  });
+
+  test("on the umbrella site no deck is current and no slash shows", () => {
+    const doc = render(<FamilyBar current={umbrella} links={[]} />);
+    expect(doc.querySelectorAll("[aria-current]")).toHaveLength(0);
+    expect(doc.querySelector("header")?.dataset.deck).toBeUndefined();
+    expect(doc.querySelector("header nav")?.textContent).not.toContain("/");
+    expect(doc.querySelector("header nav")?.textContent).toContain("deck.cool");
+  });
+
+  test("renders the site's own links", () => {
+    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    for (const { label, href } of links) {
+      const link = doc.querySelector(`header nav a[href="${href}"]`);
+      expect(link?.textContent).toBe(label);
+    }
+  });
+
+  test("renders the Install pill only when given", () => {
+    const without = render(<FamilyBar current={slidedeck} links={links} />);
+    expect(without.textContent).not.toContain("Install");
+
+    const withInstall = render(<FamilyBar current={slidedeck} links={links} install="/docs/install" />);
+    const pills = [...withInstall.querySelectorAll("header nav a")].filter((a) => a.textContent === "Install");
+    expect(pills).toHaveLength(1);
+    expect(pills[0]?.getAttribute("href")).toBe("/docs/install");
+  });
+});
