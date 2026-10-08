@@ -20,6 +20,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Family bar's browser tests run in headless Chromium only.
+      - run: pnpm exec playwright install --with-deps --only-shell chromium
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
