@@ -14,7 +14,7 @@ export interface Deck {
   /** The deck's canonical site. */
   readonly url: string;
   readonly accent: {
-    /** A fill that carries `--text`, such as a button. */
+    /** A fill that carries `--fill-text`, such as a button. */
     readonly fill: string;
     /** Text and marks on a ground. */
     readonly text: string;

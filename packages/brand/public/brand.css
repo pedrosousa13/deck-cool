@@ -1,0 +1,48 @@
+/*
+ * The deck.cool brand: the dark palette, the type and the motion curve.
+ * Dark is the only scheme.
+ *
+ * Token names pick the pairs src/contrast.test.ts checks for WCAG AA:
+ * every --text, --text-* and --*-text on every --ground-*, and --fill-text
+ * on every --*-fill.
+ */
+:root {
+  color-scheme: dark;
+
+  --ground-page: #000;
+  --ground-tile: #161617;
+  --ground-raised: #1c1c1e;
+  --rule: #2c2c2e;
+
+  --text: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-link: #2997ff;
+
+  --slidedeck-fill: #0071e3;
+  --slidedeck-text: #2997ff;
+  --playdeck-fill: #d9214f;
+  --playdeck-text: #ff5c86;
+  --pagedeck-fill: #0a7a50;
+  --pagedeck-text: #3ddc97;
+  /* Text on a deck's fill. */
+  --fill-text: #fff;
+
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", sans-serif;
+  --ease: cubic-bezier(.32, .72, 0, 1);
+}
+
+body {
+  background: var(--ground-page);
+  color: var(--text);
+  font-family: var(--font);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
