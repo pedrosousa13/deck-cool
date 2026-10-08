@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "vitest";
+import { beforeAll, expect, test } from "vitest";
 
 const SITE = fileURLToPath(new URL("..", import.meta.url));
 const BRAND = fileURLToPath(new URL("../../../packages/brand/public/", import.meta.url));
@@ -11,10 +11,12 @@ interface BudgetReport {
 }
 
 // pagedeck build bundles the site, so it takes longer than vitest's 5 seconds.
-test("every page ships 0 B of JavaScript", { timeout: 120_000 }, () => {
+beforeAll(() => {
   execFileSync("pnpm", ["exec", "pagedeck", "sync"], { cwd: SITE });
   execFileSync("pnpm", ["exec", "pagedeck", "build"], { cwd: SITE });
+}, 120_000);
 
+test("every page ships 0 B of JavaScript", () => {
   const report = JSON.parse(
     readFileSync(`${SITE}.pagedeck/budget-report.json`, "utf8"),
   ) as BudgetReport;
@@ -25,7 +27,6 @@ test("every page ships 0 B of JavaScript", { timeout: 120_000 }, () => {
   }
 });
 
-// Runs on the build the test above wrote.
 test("the home page links brand.css and the deck-cool icons, and serves them", () => {
   const html = readFileSync(`${SITE}site/index.html`, "utf8");
   for (const link of [

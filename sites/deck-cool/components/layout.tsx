@@ -11,7 +11,7 @@ export default function Layout({ title, html }: Props) {
       <title>{title}</title>
       {/* Pagedeck 0.2.1 hoists only <title> and <meta> into <head>, and
           compiles build.css only on a site with an island, so these links
-          land at the start of <main>. */}
+          land at the start of <main> until they can move to <head> (#21). */}
       <link rel="stylesheet" href="/brand.css" />
       <link rel="icon" type="image/svg+xml" href={umbrella.icons.still} />
       <link rel="apple-touch-icon" href={umbrella.icons.appleTouch} />
