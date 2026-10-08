@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
+import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 
 const SITE = fileURLToPath(new URL("..", import.meta.url));
 const BRAND = fileURLToPath(new URL("../../../packages/brand/public/", import.meta.url));
@@ -56,4 +57,10 @@ test("the home page opens with the Family bar, after the stylesheets it needs", 
 
   const served = readFileSync(`${SITE}site/family-bar.css`);
   expect(served.equals(readFileSync(`${BRAND}family-bar.css`))).toBe(true);
+});
+
+test("_headers sends the Content-Security-Policy on every path", () => {
+  const headers = readFileSync(`${SITE}site/_headers`, "utf8");
+  expect(headers).toContain(`/*\n`);
+  expect(headers).toContain(`  ${CONTENT_SECURITY_POLICY.name}: ${CONTENT_SECURITY_POLICY.value}\n`);
 });
