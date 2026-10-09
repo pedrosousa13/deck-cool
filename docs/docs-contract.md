@@ -72,7 +72,7 @@ Link to another page by its relative path to the `.md` file, from the page you a
 See [Install](./install.md#requirements), or go [back to the start](../index.md).
 ```
 
-A reference-style link (`[Install][install]` with `[install]: ./install.md` below) works the same. A link with the scheme `http:`, `https:` or `mailto:`, a link that starts with `/` and a link that is only a `#fragment` are left as they are. A link or image with any other scheme, such as `javascript:` or `data:`, fails the build. So does a link that names no scheme but another host (`//example.com/`): write `https://example.com/`. A relative link to anything that is not a `.md` file fails the build too.
+A reference-style link (`[Install][install]` with `[install]: ./install.md` below) works the same. A link with the scheme `http:`, `https:` or `mailto:`, a link that starts with `/` and a link that is only a `#fragment` are left as they are. A link or image with any other scheme, such as `javascript:` or `data:`, fails the build. So does a link that names no scheme but another host (`//example.com/`): write `https://example.com/`. The rule covers every link, a bare URL in the text among them. A link or image whose destination holds `&` fails the build, because a character reference such as `&#47;` can hide a scheme or a host: write the character itself, or percent-encode it (`%26` for `&`). A relative link to anything that is not a `.md` file fails the build too. Two definitions with one label (`[install]: …` twice) fail the build. A link may wrap across lines, in a list or a block quote too.
 
 ## Images
 
@@ -105,10 +105,11 @@ The build stops and names the file and line of each problem, with the fix:
 - a page that `nav.json` does not list, a page it lists twice, or an entry with no page;
 - two files with one route, such as `guides.md` and `guides/index.md`;
 - a link to a page that does not exist, or a relative link to a file that is not a `.md` page;
-- a link or image whose scheme is not `http:`, `https:` or `mailto:`;
-- raw HTML that is not a demo marker;
-- HTML, a link or an image that runs over several lines inside a block quote or a list, which the build cannot check;
-- a link whose path is written with backslash escapes or character references, which the build cannot rewrite;
+- a link or image whose scheme is not `http:`, `https:` or `mailto:`, or whose destination holds `&`;
+- a second definition of one label;
+- raw HTML that is not a demo marker, in a link's text or an image's alt text too;
+- HTML, a link or an image the build cannot find in the file as written, such as one on a list item's line indented with a tab;
+- a link whose path is written with backslash escapes, which the build cannot rewrite;
 - an image that is not a file under `assets/`;
 - a demo marker that is not on a line of its own, or a demo name the site does not register;
 - a code fence whose language the site does not load (Pagedeck's check, which names the file but not the line).
