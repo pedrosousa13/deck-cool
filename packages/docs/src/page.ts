@@ -75,7 +75,10 @@ function relativeUrl(href: string, address: string): string {
  * their addresses on the site. The rewrite is made in the markdown, so the page renders
  * through Pagedeck's own renderer like any other.
  */
-export function scanPage(file: string, source: string, context: PageContext): ScannedPage {
+export function scanPage(file: string, text: string, context: PageContext): ScannedPage {
+  // marked reads CR and CRLF as LF, so a token's text is found in the body only once the body
+  // has LF line ends too. The page renders from this body as well.
+  const source = text.replace(/\r\n?/g, "\n");
   const { frontmatter, body } = parseFrontmatter(source, file);
   const faults: Fault[] = [];
   const rewrites: Rewrite[] = [];
@@ -103,7 +106,13 @@ export function scanPage(file: string, source: string, context: PageContext): Sc
       const token = found(walked);
       if (token === undefined) return;
       const at = body.indexOf(token.raw, cursor);
-      if (at === -1) return;
+      if (at === -1) {
+        // Inside a block quote or a list, marked strips each line's prefix, so a token over
+        // several lines is not in the body as written. It is refused, not left unchecked.
+        const what = token.kind === "html" ? "HTML" : token.kind === "image" ? "an image" : "a link";
+        fault(offset, `has ${what} the loader cannot find in the file, ${token.raw.trim().split("\n")[0] ?? ""} — write it on lines of its own, outside any block quote or list`);
+        return;
+      }
       cursor = at + token.raw.length;
 
       if (token.kind === "html") {
@@ -128,6 +137,10 @@ export function scanPage(file: string, source: string, context: PageContext): Sc
 
       // A reference-style link's destination is on its definition, which is checked there.
       if (token.kind === "link" && !token.raw.includes("](") && !token.raw.startsWith("<")) return;
+      if (/^[/\\]{2}/.test(token.href)) {
+        fault(at, `links to "${token.href}", which names no scheme — link to another host with https:, or to a page by its .md file`);
+        return;
+      }
       const scheme = SCHEME.exec(token.href)?.[1];
       if (scheme !== undefined && !ALLOWED_SCHEMES.has(scheme.toLowerCase())) {
         fault(at, `links to "${token.href}", a scheme the site does not allow — link with http:, https: or mailto:, or to a page by its .md file`);

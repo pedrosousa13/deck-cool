@@ -72,7 +72,7 @@ Link to another page by its relative path to the `.md` file, from the page you a
 See [Install](./install.md#requirements), or go [back to the start](../index.md).
 ```
 
-A reference-style link (`[Install][install]` with `[install]: ./install.md` below) works the same. A link with the scheme `http:`, `https:` or `mailto:`, a link that starts with `/` and a link that is only a `#fragment` are left as they are. A link or image with any other scheme, such as `javascript:` or `data:`, fails the build. A relative link to anything that is not a `.md` file fails the build too.
+A reference-style link (`[Install][install]` with `[install]: ./install.md` below) works the same. A link with the scheme `http:`, `https:` or `mailto:`, a link that starts with `/` and a link that is only a `#fragment` are left as they are. A link or image with any other scheme, such as `javascript:` or `data:`, fails the build. So does a link that names no scheme but another host (`//example.com/`): write `https://example.com/`. A relative link to anything that is not a `.md` file fails the build too.
 
 ## Images
 
@@ -107,6 +107,7 @@ The build stops and names the file and line of each problem, with the fix:
 - a link to a page that does not exist, or a relative link to a file that is not a `.md` page;
 - a link or image whose scheme is not `http:`, `https:` or `mailto:`;
 - raw HTML that is not a demo marker;
+- HTML, a link or an image that runs over several lines inside a block quote or a list, which the build cannot check;
 - a link whose path is written with backslash escapes or character references, which the build cannot rewrite;
 - an image that is not a file under `assets/`;
 - a demo marker that is not on a line of its own, or a demo name the site does not register;

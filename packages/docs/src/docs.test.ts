@@ -125,6 +125,15 @@ describe("a fixture that follows the contract", () => {
     }
   });
 
+  test("reads a page with CRLF line ends as it reads one with LF", async () => {
+    const layout = readFileSync(new URL("guides/layout.md", FIXTURE), "utf8");
+    const body = async (text: string) =>
+      JSON.stringify((await sync(site({ "guides/layout.md": text }))).entries.find((entry) => entry.path === "docs/guides/layout")?.data.body);
+    const crlf = await body(layout.replace(/\n/g, "\r\n"));
+    expect(crlf).toBe(await body(layout));
+    expect(crlf).toContain('<a href=\\"/docs/install/\\">first</a>');
+  });
+
   test("drops a page's first # heading, as the contract says: the site shows the title", async () => {
     const { entries } = await sync(site({ "install.md": "---\ntitle: Install\ndescription: How.\n---\n\n# Install\n\nText.\n" }));
     const install = entries.find((entry) => entry.path === "docs/install");
@@ -338,6 +347,42 @@ describe("the build fails, naming the file and line", () => {
       { "guides/layout.md": LAYOUT.replace("../assets/grid.svg", "data:image/svg+xml,x") },
       {},
       'guides/layout.md:8 — links to "data:image/svg+xml,x", a scheme the site does not allow — link with http:, https: or mailto:, or to a page by its .md file',
+    ],
+    [
+      "an HTML block in a file with CRLF line ends",
+      { "guides/demos.md": DEMOS.replace("Press the button.", "<div>\n<script>alert(1)</script>\n</div>").replace(/\n/g, "\r\n") },
+      {},
+      "guides/demos.md:6 — has raw HTML, <div> — write it in markdown: the only HTML a page may hold is a demo marker, <!-- demo:<name> -->",
+    ],
+    [
+      "a javascript: link definition over two lines, with CRLF line ends",
+      { "guides/layout.md": LAYOUT.replace("[demos]: ./demos.md", "[demos]:\n  javascript:alert(1)").replace(/\n/g, "\r\n") },
+      {},
+      'guides/layout.md:12 — links to "javascript:alert(1)", a scheme the site does not allow — link with http:, https: or mailto:, or to a page by its .md file',
+    ],
+    [
+      "raw HTML in a file with lone CR line ends",
+      { "guides/demos.md": DEMOS.replace("Press the button.", "<script>alert(1)</script>").replace(/\n/g, "\r") },
+      {},
+      "guides/demos.md:6 — has raw HTML, <script>alert(1)</script> — write it in markdown: the only HTML a page may hold is a demo marker, <!-- demo:<name> -->",
+    ],
+    [
+      "HTML over several lines of a block quote, which the loader cannot place",
+      { "guides/demos.md": DEMOS.replace("Press the button.", "> <div>\n> <script>alert(1)</script>\n> </div>") },
+      {},
+      "guides/demos.md:6 — has HTML the loader cannot find in the file, <div> — write it on lines of its own, outside any block quote or list",
+    ],
+    [
+      "a protocol-relative link",
+      { "guides/layout.md": LAYOUT.replace("(../install.md)", "(//example.com/install)") },
+      {},
+      'guides/layout.md:10 — links to "//example.com/install", which names no scheme — link to another host with https:, or to a page by its .md file',
+    ],
+    [
+      "a protocol-relative link written with backslashes",
+      { "guides/layout.md": LAYOUT.replace("(../install.md)", "(\\\\\\\\example.com/install)") },
+      {},
+      'guides/layout.md:10 — links to "\\\\example.com/install", which names no scheme — link to another host with https:, or to a page by its .md file',
     ],
   ])("%s", async (_name, edits, overrides, message) => {
     expect(await failure(sync(site(edits), overrides))).toBe(
