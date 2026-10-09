@@ -1,5 +1,4 @@
 import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { expect, test } from "vitest";
 import { RESPONSE_HEADERS } from "./headers.ts";
 import { checkSite } from "./live-check.ts";
@@ -21,7 +20,9 @@ test("a host that drops the headers and caches everything as immutable fails, he
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
-    const failures = await checkSite(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+    const address = server.address();
+    if (address === null || typeof address === "string") throw new Error("the server is not on a TCP port");
+    const failures = await checkSite(`http://127.0.0.1:${address.port}`);
     for (const path of ["/", "/brand.css"]) {
       for (const { name } of RESPONSE_HEADERS) expect(failures).toContain(`${path}: ${name} missing`);
       expect(failures).toContain(`${path}: Cache-Control is immutable, but ${path} is not content-hashed`);

@@ -64,15 +64,26 @@ test("the home page opens with the Family bar, after the stylesheets it needs", 
   expect(served.equals(readFileSync(`${BRAND}family-bar.css`))).toBe(true);
 });
 
-interface Manifest {
-  files: { path: string }[];
-  routing: { trees: { notFound: unknown }[] };
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
+/** manifest.json's file paths and each tree's declared 404 page, checked as they are read. */
+function readManifest(): { paths: string[]; notFound: unknown[] } {
+  const value: unknown = JSON.parse(readFileSync(`${SITE}site/manifest.json`, "utf8"));
+  if (!isRecord(value) || !Array.isArray(value.files) || !isRecord(value.routing) || !Array.isArray(value.routing.trees)) {
+    throw new Error("manifest.json has no files or no routing.trees");
+  }
+  return {
+    paths: value.files.map((file: unknown) =>
+      present(isRecord(file) && typeof file.path === "string" ? file.path : undefined, "a manifest file's path"),
+    ),
+    notFound: value.routing.trees.map((tree: unknown) => (isRecord(tree) ? tree.notFound : undefined)),
+  };
 }
 
-const manifest = JSON.parse(readFileSync(`${SITE}site/manifest.json`, "utf8")) as Manifest;
+const manifest = readManifest();
 const rules = parseHeaders(readFileSync(`${SITE}site/_headers`, "utf8"));
 /** Every path the Worker serves: the home page, and each file but the ones wrangler reads as configuration. */
-const served = ["/", ...manifest.files.map((file) => file.path).filter((path) => !/^\/_(headers|redirects)$/.test(path))];
+const served = ["/", ...manifest.paths.filter((path) => !/^\/_(headers|redirects)$/.test(path))];
 
 /** The headers every response carries, page or file. */
 const EVERY_RESPONSE = {
@@ -99,11 +110,8 @@ test("_headers sends a Permissions-Policy that turns off every powerful feature"
 });
 
 test("no file is cached as immutable, because the build writes no content-hashed name", () => {
-  // A content-hashed name, as Pagedeck writes one: `name.AbCd1234.css`. When a
-  // build first writes one, its directory gets a rule in pagedeck.config.ts
-  // adding Cache-Control: public, max-age=31536000, immutable, and this test
-  // changes to expect it there and nowhere else.
-  for (const { path } of manifest.files) expect(path).not.toMatch(/[.-][A-Za-z0-9_-]{8}\.[a-z0-9]+$/);
+  // A hashed name (`name.AbCd1234.css`) needs an immutable rule for its directory (docs/deploy.md).
+  for (const path of manifest.paths) expect(path).not.toMatch(/[.-][A-Za-z0-9_-]{8}\.[a-z0-9]+$/);
   for (const path of served) expect(headersFor(rules, path).get("Cache-Control"), path).toBeUndefined();
 });
 
@@ -112,11 +120,9 @@ test(".assetsignore keeps the deploy manifest, the deploy directory and the fall
     .split("\n")
     .filter((line) => line !== "" && !line.startsWith("#"));
   expect(ignored).toEqual(["/manifest.json", "/.pagedeck", "/404.html"]);
-  // The 404 page is only the adapter's fallback: the site declares none, which
-  // is why wrangler.jsonc answers a missing path with a bare 404.
-  expect(manifest.routing.trees.map((tree) => tree.notFound ?? undefined)).toEqual([undefined]);
-  // A request for the manifest is proxied to the 404 page, which is not
-  // uploaded, so it answers 404.
+  // No declared 404 page, so /404.html is only the adapter's fallback.
+  expect(manifest.notFound.map((page) => page ?? undefined)).toEqual([undefined]);
+  // Proxied to the 404 page, which is not uploaded, so they answer 404.
   const redirects = readFileSync(`${SITE}site/_redirects`, "utf8");
   expect(redirects).toContain("/manifest.json /404.html 200\n");
   expect(redirects).toContain("/.pagedeck/* /404.html 200\n");
