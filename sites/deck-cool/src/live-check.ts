@@ -21,8 +21,12 @@ function headerFailures(path: string, response: Response, expected: typeof RESPO
   return failures;
 }
 
-/** Fetches a few paths from `origin` and lists every way they differ from what the build declares. */
-export async function checkSite(origin: string): Promise<string[]> {
+/**
+ * Fetches a few paths from `origin` and lists every way they differ from what
+ * the build declares. `httpOrigin` is the same host over plain HTTP, which the
+ * zone's Always Use HTTPS must answer with a 301 to the same path at `origin`.
+ */
+export async function checkSite(origin: string, httpOrigin = origin.replace(/^https:/, "http:")): Promise<string[]> {
   const failures: string[] = [];
   let home = "";
   for (const path of SERVED) {
@@ -47,5 +51,12 @@ export async function checkSite(origin: string): Promise<string[]> {
 
   const { response } = await get(origin, NOT_UPLOADED);
   if (response.status !== 404) failures.push(`${NOT_UPLOADED}: status ${response.status}, expected 404`);
+
+  const plain = new URL("/", httpOrigin).href;
+  const secure = new URL("/", origin).href;
+  const redirect = await fetch(plain, { redirect: "manual" });
+  const location = redirect.headers.get("Location");
+  if (redirect.status !== 301) failures.push(`${plain}: status ${redirect.status}, expected 301 to ${secure}`);
+  else if (location !== secure) failures.push(`${plain}: redirects to ${location ?? "nowhere"}, expected ${secure}`);
   return failures;
 }
