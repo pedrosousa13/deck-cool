@@ -122,6 +122,16 @@ test(".assetsignore keeps the deploy manifest, the deploy directory and the fall
   expect(redirects).toContain("/.pagedeck/* /404.html 200\n");
 });
 
+test("the Worker serves site/ at deck.cool alone, as a custom domain, with no 404 page", () => {
+  // wrangler.jsonc allows comments; it holds whole-line ones only.
+  const source = readFileSync(`${SITE}wrangler.jsonc`, "utf8").replace(/^\s*\/\/.*$/gm, "");
+  expect(JSON.parse(source)).toMatchObject({
+    workers_dev: false,
+    routes: [{ pattern: "deck.cool", custom_domain: true }],
+    assets: { directory: "./site", html_handling: "auto-trailing-slash", not_found_handling: "none" },
+  });
+});
+
 const window = new Window();
 
 function home(): Document {

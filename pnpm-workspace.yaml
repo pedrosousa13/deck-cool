@@ -3,6 +3,11 @@ packages:
   - packages/*
   # The docs loader's fixture docs package, linked into @deck-cool/docs.
   - packages/docs/fixtures/example-docs
+# wrangler deploy runs without esbuild's and workerd's install scripts: the
+# Worker has no code to bundle or run, only static assets.
+allowBuilds:
+  esbuild: false
+  workerd: false
 # pnpm holds a newly published version back for a day. Pagedeck is the
 # maintainer's own framework, so its releases skip the hold.
 minimumReleaseAgeExclude:

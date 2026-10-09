@@ -7,5 +7,7 @@ content.db
 site/
 .pagedeck/
 .pagedeck-docs/
+# wrangler's scratch directory.
+.wrangler/
 # Sites the docs loader's build test writes.
 packages/docs/.test-sites/
