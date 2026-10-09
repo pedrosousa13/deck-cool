@@ -1,0 +1,105 @@
+# The docs contract
+
+This is for a deck's maintainer. It says what a docs package must hold so that the deck's site on deck.cool can build from it. Why the docs arrive this way is in [ADR 0001](adr/0001-docs-arrive-as-an-npm-package.md).
+
+## The package
+
+Publish an npm package named `@<deck>/docs` (for example `@slidedeck/docs`) at the same version as the deck's code. It holds markdown, one `nav.json` and images, and no code.
+
+```
+@slidedeck/docs/
+├── package.json
+├── nav.json
+├── index.md
+├── guides/
+│   ├── install.md
+│   └── layout.md
+└── assets/
+    └── layout-grid.png
+```
+
+- **Pages** are the `.md` files anywhere under the package root.
+- **`nav.json`** is at the package root.
+- **Images** are under `assets/`.
+
+These files are not pages: `README.md`, `CHANGELOG.md` and `LICENSE.md` at the package root (npm adds them to every package), every `.md` file under `assets/`, and everything under `node_modules/`.
+
+## Frontmatter
+
+Every page opens with a frontmatter block that has a `title` and a `description`. Both are required, and neither can be empty.
+
+```md
+---
+title: Layout
+description: How slidedeck sizes a slide to its container.
+---
+
+A slide fills the width of its container...
+```
+
+The site shows `title` as the page's heading, so do not open the body with a `#` heading: the first one is dropped. Other fields are allowed, and the site ignores them.
+
+## `nav.json`
+
+An ordered list of groups. Each group has a `label` and an ordered list of `pages`. A page is named by its path from the package root, with `.md`.
+
+```json
+[
+  { "label": "Start", "pages": ["index.md", "guides/install.md"] },
+  { "label": "Guides", "pages": ["guides/layout.md"] }
+]
+```
+
+The site's navigation shows the groups and pages in this order. Every page must be in `nav.json` once, and every path in `nav.json` must be a page.
+
+## Routes
+
+A page's route comes from its path. The site picks the base, for example `/docs`.
+
+| File | Route |
+| --- | --- |
+| `index.md` | `/docs` |
+| `guides/layout.md` | `/docs/guides/layout` |
+| `guides/index.md` | `/docs/guides` |
+
+## Links
+
+Link to another page by its relative path to the `.md` file, from the page you are writing. A `#fragment` is kept. The site rewrites the link to the page's route.
+
+```md
+See [Install](./install.md#requirements), or go [back to the start](../index.md).
+```
+
+A reference-style link (`[Install][install]` with `[install]: ./install.md` below) works the same. A link with a scheme (`https:`, `mailto:`), a link that starts with `/` and a link that is only a `#fragment` are left as they are. A relative link to anything that is not a `.md` file fails the build.
+
+## Images
+
+Put the file under `assets/`, and link it relatively from the page.
+
+```md
+![The layout grid](../assets/layout-grid.png)
+```
+
+## Demos
+
+The docs hold no components. To show a live demo, put a marker on its own line where the demo goes:
+
+```md
+<!-- demo:counter -->
+```
+
+A name has letters, digits, `-` and `_`. The site swaps the marker for the component it registers under that name. Each site keeps its own list of names, so agree on a new name with the site before you release a page that uses it.
+
+## Code
+
+Fenced code blocks are highlighted at build time. Name the language on the fence (` ```tsx `). The site lists the languages it loads, and a fence with a language that is not on the list fails the build.
+
+## What fails the build
+
+The build stops and names the file and line of each problem:
+
+- a page with no `title` or no `description`;
+- a page that `nav.json` does not list, or a `nav.json` entry with no page;
+- a link to a page that does not exist, or a relative link to a file that is not a `.md` page;
+- an image that is not a file under `assets/`;
+- a demo marker that is not on its own line, or a demo name the site does not register.

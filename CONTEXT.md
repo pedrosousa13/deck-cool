@@ -8,6 +8,8 @@ deck.cool is the umbrella for a family of small, unstyled React packages, each n
 - **Umbrella site**: the site at `https://deck.cool`. It lists every deck and says what each one does.
 - **Package site**: a deck's own site, served at its subdomain of deck.cool.
 - **Family bar**: the top bar every site shares (design direction C). The umbrella mark opens a switcher across the decks, and the product name rolls to the pick.
+- **Docs package**: a deck's reference docs, published from the deck's repo as `@<deck>/docs` at the code's version: markdown pages, a `nav.json` and images. Its package site renders it under `/docs`. See `docs/docs-contract.md`.
+- **Demo**: a live component on a docs page. The page marks its place with `<!-- demo:<name> -->`, and the package site owns the component.
 - **Brand kit**: what every site shares: the favicons, the Family bar, the dark palette and the motion curve.
 
 ## Standing decisions
