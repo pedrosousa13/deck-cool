@@ -1,0 +1,104 @@
+name: Bump a deck
+
+# A deck's release workflow sends `deck-released` after `npm publish`, with the payload
+# { "deck": "slidedeck" | "playdeck" | "pagedeck", "version": "<MAJOR.MINOR.PATCH>" }.
+# This sets every @<deck>/* dependency in the workspace to that version and opens a PR
+# that merges itself once CI passes. A second dispatch for the same version does
+# nothing. AGENTS.md, "Releasing a deck", has the sending side.
+on:
+  repository_dispatch:
+    types: [deck-released]
+
+# The GITHUB_TOKEN only reads. The deck-cool-releases App's token pushes the branch
+# and opens the PR: a push with the GITHUB_TOKEN would not run CI, and main requires it.
+permissions:
+  contents: read
+
+# One run per release at a time, so a repeated dispatch finds the branch the first one pushed.
+concurrency:
+  group: bump-deck-${{ github.event.client_payload.deck }}-${{ github.event.client_payload.version }}
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Puts the pnpm named in package.json's packageManager on the path.
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # The payload is untrusted. It reaches a step only through env, and every later
+      # step reads the checked values this one writes.
+      - name: Check the payload
+        id: payload
+        env:
+          DECK: ${{ github.event.client_payload.deck }}
+          VERSION: ${{ github.event.client_payload.version }}
+        run: node packages/bump-deck/src/cli.ts check
+
+      - name: Look for the release's branch
+        id: branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.payload.outputs.branch }}
+        run: |
+          if out=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}" 2>&1); then
+            echo "::notice title=Nothing to do::${BRANCH} exists, so this release's PR is open or was merged."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif grep -q "HTTP 404" <<< "$out"; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$out"
+            exit 1
+          fi
+
+      # pnpm installs in strict release-age mode, so a version younger than
+      # minimumReleaseAge fails this step unless minimumReleaseAgeExclude lists it.
+      # No token is in reach while dependency code runs.
+      - name: Bump the packages
+        id: bump
+        if: steps.branch.outputs.exists == 'false'
+        env:
+          DECK: ${{ steps.payload.outputs.deck }}
+          VERSION: ${{ steps.payload.outputs.version }}
+        run: node packages/bump-deck/src/cli.ts bump "$RUNNER_TEMP/pr-body.md"
+
+      - name: Get a token from the deck-cool-releases App
+        id: app
+        if: steps.bump.outputs.changed == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.DECK_APP_ID }}
+          private-key: ${{ secrets.DECK_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Push the branch and open the PR
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          DECK: ${{ steps.payload.outputs.deck }}
+          VERSION: ${{ steps.payload.outputs.version }}
+          BRANCH: ${{ steps.payload.outputs.branch }}
+        run: |
+          bot="${APP_SLUG}[bot]"
+          bot_id=$(gh api "users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          git config user.name "$bot"
+          git config user.email "${bot_id}+${bot}@users.noreply.github.com"
+          git switch --create "$BRANCH"
+          git add --update
+          git commit --message "Bump ${DECK} to ${VERSION}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" \
+            --title "Bump ${DECK} to ${VERSION}" --body-file "$RUNNER_TEMP/pr-body.md"
+          gh pr merge "$BRANCH" --repo "$GITHUB_REPOSITORY" --auto --squash
