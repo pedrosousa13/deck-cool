@@ -35,7 +35,7 @@ deck.cool is deployed with wrangler, as Workers Static Assets, by `.github/workf
 
 ## Releasing a deck
 
-When a deck publishes a release, `.github/workflows/bump-deck.yml` sets every `@<deck>/*` dependency in the workspace to the new version, updates the lockfile, and opens a PR titled `Bump <deck> to <version>` from the branch `bump/<deck>-<version>`. The PR merges itself, squashed, once CI passes. A second dispatch for the same version does nothing. The bump logic is `packages/bump-deck`.
+When a deck publishes a release, `.github/workflows/bump-deck.yml` sets every `@<deck>/*` dependency in the workspace to the new version, updates the lockfile, and opens a PR titled `Bump <deck> to <version>` from the branch `bump/<deck>-<version>`. The PR merges itself, squashed, once CI passes. A second dispatch for the same version does nothing. A dispatch for a version older than one the workspace already has fails and changes nothing: the workflow never downgrades. The bump logic is `packages/bump-deck`.
 
 The workflow runs on a `repository_dispatch` of type `deck-released`, with this payload:
 

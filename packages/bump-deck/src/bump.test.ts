@@ -75,6 +75,34 @@ describe("a manifest's bump", () => {
     ]);
   });
 
+  test("bumps a dependency at an older version", () => {
+    const before = manifest({ dependencies: { "@slidedeck/core": "1.9.9" } });
+    expect(bumpManifest(before, { deck: "slidedeck", version: "1.10.0" }).changes).toEqual([
+      { name: "@slidedeck/core", from: "1.9.9", to: "1.10.0" },
+    ]);
+  });
+
+  test("refuses a downgrade, naming the package and both versions", () => {
+    const before = manifest({ dependencies: { "@slidedeck/core": "1.10.0" } });
+    expect(() => bumpManifest(before, { deck: "slidedeck", version: "1.9.9" })).toThrow(
+      "@slidedeck/core is at 1.10.0, newer than slidedeck 1.9.9 — a deck-released dispatch never downgrades, so nothing was bumped",
+    );
+  });
+
+  test("refuses a downgrade from a range's version", () => {
+    const before = manifest({ devDependencies: { "@slidedeck/docs": "^2.0.0" } });
+    expect(() => bumpManifest(before, { deck: "slidedeck", version: "1.9.9" })).toThrow(
+      "@slidedeck/docs is at ^2.0.0, newer than slidedeck 1.9.9",
+    );
+  });
+
+  test("refuses the whole manifest when one package is newer", () => {
+    const before = manifest({ dependencies: { "@slidedeck/core": "1.0.0", "@slidedeck/docs": "1.3.0" } });
+    expect(() => bumpManifest(before, { deck: "slidedeck", version: "1.2.0" })).toThrow(
+      "@slidedeck/docs is at 1.3.0, newer than slidedeck 1.2.0",
+    );
+  });
+
   test("leaves a workspace link as it is", () => {
     const before = manifest({ dependencies: { "@slidedeck/docs": "workspace:*" } });
     expect(bumpManifest(before, { deck: "slidedeck", version: "1.1.0" })).toEqual({ text: before, changes: [] });
@@ -262,6 +290,19 @@ describe("a workspace's bump", () => {
     const lockfile = read(root, "pnpm-lock.yaml");
     expect(await bumpWorkspace(root, { deck: "slidedeck", version: "1.1.0" }, env)).toEqual({ changes: [], bypassed: [] });
     expect(read(root, "pnpm-lock.yaml")).toBe(lockfile);
+  });
+
+  test("refuses a downgrade in any package, and writes nothing", { timeout: 60_000 }, async () => {
+    const root = await workspace();
+    await bumpWorkspace(root, { deck: "slidedeck", version: "1.1.0" }, env);
+    // One package newer than the dispatch, the other older.
+    const site = read(root, "sites/a/package.json").replace('"@slidedeck/core": "1.1.0"', '"@slidedeck/core": "1.0.0"');
+    writeFileSync(join(root, "sites/a/package.json"), site);
+    const files = ["sites/a/package.json", "packages/b/package.json", "pnpm-lock.yaml"].map((file) => read(root, file));
+    await expect(bumpWorkspace(root, { deck: "slidedeck", version: "1.0.5" }, env)).rejects.toThrow(
+      "@slidedeck/docs is at 1.1.0, newer than slidedeck 1.0.5",
+    );
+    expect(["sites/a/package.json", "packages/b/package.json", "pnpm-lock.yaml"].map((file) => read(root, file))).toEqual(files);
   });
 
   test("changes nothing for a deck the workspace does not use", { timeout: 60_000 }, async () => {

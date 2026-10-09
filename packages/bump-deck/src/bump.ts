@@ -46,7 +46,26 @@ export function branchOf({ deck, version }: Release): string {
 
 const FIELDS = ["dependencies", "devDependencies", "optionalDependencies"] as const;
 
-/** Sets every `@<deck>/*` dependency to the exact version. A `workspace:` link is left as it is. */
+/** The X.Y.Z a spec names, such as `1.2.0` or `^1.2.0`, as numbers. */
+function versionOf(spec: string): number[] | undefined {
+  return /^[\^~=v]?(\d+)\.(\d+)\.(\d+)/.exec(spec)?.slice(1).map(Number);
+}
+
+function isNewer(spec: string, version: string): boolean {
+  const current = versionOf(spec);
+  const next = versionOf(version) ?? [];
+  if (current === undefined) return false;
+  for (const [index, part] of current.entries()) {
+    const other = next[index] ?? 0;
+    if (part !== other) return part > other;
+  }
+  return false;
+}
+
+/**
+ * Sets every `@<deck>/*` dependency to the exact version. A `workspace:` link is left as it is.
+ * Throws if any of them is already at a newer version: an older dispatch must not open a downgrade.
+ */
 export function bumpManifest(text: string, { deck, version }: Release): { text: string; changes: Omit<Change, "file">[] } {
   const manifest = JSON.parse(text) as Partial<Record<(typeof FIELDS)[number], Record<string, string>>>;
   const changes: Omit<Change, "file">[] = [];
@@ -54,6 +73,11 @@ export function bumpManifest(text: string, { deck, version }: Release): { text: 
     const dependencies = manifest[field] ?? {};
     for (const [name, from] of Object.entries(dependencies)) {
       if (!name.startsWith(`@${deck}/`) || from === version || from.startsWith("workspace:")) continue;
+      if (isNewer(from, version)) {
+        throw new Error(
+          `${name} is at ${from}, newer than ${deck} ${version} — a deck-released dispatch never downgrades, so nothing was bumped`,
+        );
+      }
       dependencies[name] = version;
       changes.push({ name, from, to: version });
     }
@@ -102,7 +126,7 @@ const run = promisify(execFile);
 /**
  * Bumps every `@<deck>/*` dependency in every workspace package under `root`, then updates the
  * lockfile with `pnpm install`. Changes nothing when no package depends on the deck at another
- * version. pnpm runs in strict release-age mode: by default it would add a too-young version to
+ * version, and throws before writing anything when one is at a newer version. pnpm runs in strict release-age mode: by default it would add a too-young version to
  * `minimumReleaseAgeExclude` and install it anyway.
  */
 export async function bumpWorkspace(
