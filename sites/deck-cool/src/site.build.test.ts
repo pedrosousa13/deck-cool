@@ -1,8 +1,9 @@
-import { Window } from "happy-dom";
+import { Window, type Document, type Element } from "happy-dom";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { decks, umbrella } from "@deck-cool/brand/decks";
+import { GITHUB, NPM } from "../components/links.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 
 const SITE = fileURLToPath(new URL("..", import.meta.url));
@@ -68,15 +69,16 @@ test("_headers sends the Content-Security-Policy on every path", () => {
   expect(headers).toContain(`  ${CONTENT_SECURITY_POLICY.name}: ${CONTENT_SECURITY_POLICY.value}\n`);
 });
 
-// The board's GitHub and npm links are placeholders, so these are the
-// maintainer's profiles.
-const GITHUB = "https://github.com/pedrosousa13";
-const NPM = "https://www.npmjs.com/~pedrosousa13";
-
 const window = new Window();
 
 function home(): Document {
-  return new window.DOMParser().parseFromString(readFileSync(`${SITE}site/index.html`, "utf8"), "text/html") as unknown as Document;
+  return new window.DOMParser().parseFromString(readFileSync(`${SITE}site/index.html`, "utf8"), "text/html");
+}
+
+/** Narrows away `null` and `undefined`, failing the test when the value is missing. */
+function present<T>(value: T | null | undefined, what: string): T {
+  if (value == null) throw new Error(`${what} is missing`);
+  return value;
 }
 
 /** The element's text, with runs of white space as one space. */
@@ -84,7 +86,7 @@ function text(element: Element | null | undefined): string | undefined {
   return element?.textContent?.replace(/\s+/g, " ").trim();
 }
 
-function links(scope: ParentNode): [string | undefined, string | null][] {
+function links(scope: Element | Document): [string | undefined, string | null][] {
   return [...scope.querySelectorAll("a")].map((a) => [text(a), a.getAttribute("href")]);
 }
 
@@ -105,23 +107,22 @@ test("the home page is titled as on the board, and links umbrella.css", () => {
 });
 
 test("the Family bar links each deck's card, and GitHub", () => {
-  const bar = home().querySelector(".family-bar__links");
-  expect(bar).not.toBeNull();
-  expect(links(bar as Element)).toEqual([
+  const bar = present(home().querySelector(".family-bar__links"), "the bar's links");
+  expect(links(bar)).toEqual([
     ...decks.map((deck): [string, string] => [deck.name, `#${deck.name}`]),
     ["GitHub", GITHUB],
   ]);
 });
 
 test("the hero shows the fanned cards, the headline, the line under it and two links", () => {
-  const hero = home().querySelector("main > section:first-of-type");
+  const hero = present(home().querySelector("main > section:first-of-type"), "the hero");
   expect(hero?.querySelector("img")?.getAttribute("src")).toBe(umbrella.icons.animated);
   expect(hero?.querySelector("img")?.getAttribute("alt")).toBe("");
   expect(text(hero?.querySelector("h1"))).toBe("React, unstyled. One deck at a time.");
   expect(text(hero?.querySelector("p"))).toBe(
     "Small React packages that lean on what the browser already does. None of them ships a stylesheet. The look is yours.",
   );
-  expect(links(hero as Element)).toEqual([
+  expect(links(hero)).toEqual([
     ["Browse the decks", "#decks"],
     ["GitHub ›", GITHUB],
   ]);
@@ -150,7 +151,7 @@ describe("each deck's card", () => {
   });
 
   test.each(decks)("$name's card links to its site", (deck) => {
-    expect(links(home().getElementById(deck.name) as Element)).toEqual([[`Visit ${deck.name} ›`, deck.url]]);
+    expect(links(present(home().getElementById(deck.name), deck.name))).toEqual([[`Visit ${deck.name} ›`, deck.url]]);
   });
 });
 
@@ -164,9 +165,9 @@ test("the band says no stylesheet ships, with a part selector to style", () => {
 });
 
 test("the footer follows <main>, with deck.cool, the licence, GitHub and npm", () => {
-  const footer = home().querySelector("main + footer");
-  expect([...(footer?.querySelectorAll("span, a") ?? [])].map(text)).toEqual(["deck.cool", "MIT licensed", "GitHub", "npm"]);
-  expect(links(footer as Element)).toEqual([
+  const footer = present(home().querySelector("main + footer"), "the footer");
+  expect([...footer.querySelectorAll("span, a")].map(text)).toEqual(["deck.cool", "MIT licensed", "GitHub", "npm"]);
+  expect(links(footer)).toEqual([
     ["GitHub", GITHUB],
     ["npm", NPM],
   ]);

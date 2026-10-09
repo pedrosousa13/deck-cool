@@ -7,6 +7,13 @@ import { serveSite, type ServedSite } from "./serve-site.ts";
 // Drives the built home page (build.global-setup.ts) in Chromium, served with
 // the headers in the build's _headers file, so the page runs under its CSP.
 
+declare global {
+  interface Window {
+    /** CSP violations the page reported, set by the init script in visit(). */
+    cspViolations?: string[];
+  }
+}
+
 let site: ServedSite;
 let browser: Browser;
 
@@ -45,7 +52,7 @@ async function visit(options: { width: number; reducedMotion: "reduce" | "no-pre
   // An init script is not subject to the page's CSP.
   await context.addInitScript(() => {
     const seen: string[] = [];
-    Object.assign(window, { cspViolations: seen });
+    window.cspViolations = seen;
     window.addEventListener("securitypolicyviolation", (event) => {
       seen.push(`${event.effectiveDirective} ${event.blockedURI}`);
     });
@@ -62,7 +69,7 @@ async function visit(options: { width: number; reducedMotion: "reduce" | "no-pre
     offOrigin,
     violations: async () => [
       ...logged,
-      ...(await page.evaluate(() => (window as unknown as { cspViolations: string[] }).cspViolations)),
+      ...(await page.evaluate(() => window.cspViolations ?? ["the CSP listener never ran"])),
     ],
   };
 }

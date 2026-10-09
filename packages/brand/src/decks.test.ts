@@ -35,11 +35,35 @@ interface BoardDeck {
   line: string;
   body: string;
   install: string;
-  facts: [string, string][];
+  facts: [[string, string], [string, string], [string, string]];
+}
+
+const isString = (value: unknown): value is string => typeof value === "string";
+const isPair = (value: unknown): value is [string, string] =>
+  Array.isArray(value) && value.length === 2 && value.every(isString);
+
+function isBoardDeck(value: unknown): value is BoardDeck {
+  if (typeof value !== "object" || value === null) return false;
+  const record: Record<string, unknown> = Object.fromEntries(Object.entries(value));
+  const { name, kind, line, body, install, facts } = record;
+  return (
+    [name, kind, line, body, install].every(isString) &&
+    Array.isArray(facts) &&
+    facts.length === 3 &&
+    facts.every(isPair)
+  );
+}
+
+function readBoardDecks(literal: string | undefined): BoardDeck[] {
+  const value: unknown = new Function(`return ${String(literal)}`)();
+  if (!Array.isArray(value) || !value.every(isBoardDeck)) {
+    throw new Error("Main.dc.html's DECKS is not a list of decks with name, kind, line, body, install and three facts");
+  }
+  return value;
 }
 const board = readFileSync(new URL("../../../design/canvas/Main.dc.html", import.meta.url), "utf8");
 const literal = /const DECKS = (\[[\s\S]*?\]);\n/.exec(board)?.[1];
-const boardDecks = new Function(`return ${String(literal)}`)() as BoardDeck[];
+const boardDecks = readBoardDecks(literal);
 
 test("the board lists the same decks, in the same order", () => {
   expect(boardDecks.map((deck) => deck.name)).toEqual(decks.map((deck) => deck.name));
