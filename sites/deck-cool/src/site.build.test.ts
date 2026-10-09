@@ -1,9 +1,9 @@
 import { Window, type Document, type Element } from "happy-dom";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { decks, umbrella } from "@deck-cool/brand/decks";
-import { GITHUB, NPM } from "../components/links.ts";
+import { NPM } from "../components/links.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 import { headersFor, parseHeaders } from "./serve-site.ts";
 
@@ -175,15 +175,18 @@ test("the home page is titled as on the board, and links umbrella.css", () => {
   expect(served.equals(readFileSync(`${BRAND}umbrella.css`))).toBe(true);
 });
 
-test("the Family bar links each deck's card, and GitHub", () => {
+test("the Family bar links each deck's card", () => {
   const bar = present(home().querySelector(".family-bar__links"), "the bar's links");
-  expect(links(bar)).toEqual([
-    ...decks.map((deck): [string, string] => [deck.name, `#${deck.name}`]),
-    ["GitHub", GITHUB],
-  ]);
+  expect(links(bar)).toEqual(decks.map((deck): [string, string] => [deck.name, `#${deck.name}`]));
 });
 
-test("the hero shows the fanned cards, the headline, the line under it and two links", () => {
+// CONTEXT.md: the umbrella site links no GitHub profile.
+test.each(readdirSync(`${SITE}site`).filter((file) => file.endsWith(".html")))("%s links nothing on github.com", (file) => {
+  const html = readFileSync(`${SITE}site/${file}`, "utf8");
+  expect(html).not.toMatch(/href="https?:\/\/([^/"]+\.)?github\.com/i);
+});
+
+test("the hero shows the fanned cards, the headline, the line under it and a link to the decks", () => {
   const hero = present(home().querySelector("main > section:first-of-type"), "the hero");
   expect(hero?.querySelector("img")?.getAttribute("src")).toBe(umbrella.icons.animated);
   expect(hero?.querySelector("img")?.getAttribute("alt")).toBe("");
@@ -191,10 +194,7 @@ test("the hero shows the fanned cards, the headline, the line under it and two l
   expect(text(hero?.querySelector("p"))).toBe(
     "Small React packages that lean on what the browser already does. None of them ships a stylesheet. The look is yours.",
   );
-  expect(links(hero)).toEqual([
-    ["Browse the decks", "#decks"],
-    ["GitHub ›", GITHUB],
-  ]);
+  expect(links(hero)).toEqual([["Browse the decks", "#decks"]]);
   expect(home().getElementById("decks")).not.toBeNull();
 });
 
@@ -233,11 +233,8 @@ test("the band says no stylesheet ships, with a part selector to style", () => {
   expect(band?.querySelector("pre")?.textContent).toBe("[data-playdeck-part='play-button'] {\n  border-radius: 999px;\n}");
 });
 
-test("the footer follows <main>, with deck.cool, the licence, GitHub and npm", () => {
+test("the footer follows <main>, with deck.cool, the licence and npm", () => {
   const footer = present(home().querySelector("main + footer"), "the footer");
-  expect([...footer.querySelectorAll("span, a")].map(text)).toEqual(["deck.cool", "MIT licensed", "GitHub", "npm"]);
-  expect(links(footer)).toEqual([
-    ["GitHub", GITHUB],
-    ["npm", NPM],
-  ]);
+  expect([...footer.querySelectorAll("span, a")].map(text)).toEqual(["deck.cool", "MIT licensed", "npm"]);
+  expect(links(footer)).toEqual([["npm", NPM]]);
 });

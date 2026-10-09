@@ -1,5 +1,4 @@
 import { decks, umbrella } from "@deck-cool/brand/decks";
-import { GITHUB } from "./links.ts";
 
 interface Props {
   title: string;
@@ -32,7 +31,6 @@ export default function Layout({ title }: Props) {
           <a href="#decks" className="hero__browse">
             Browse the decks
           </a>
-          <a href={GITHUB}>GitHub ›</a>
         </div>
       </section>
 
