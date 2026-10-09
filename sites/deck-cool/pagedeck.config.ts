@@ -1,8 +1,8 @@
 import { cloudflarePages } from "@pagedeck/adapter-cloudflare-pages";
 import { defineCollection } from "@pagedeck/content";
-import { defineConfig, fromCollection, SECURITY_HEADERS } from "@pagedeck/core";
+import { defineConfig, fromCollection } from "@pagedeck/core";
 import { defineMarkdownLoader } from "@pagedeck/markdown-loader";
-import { CONTENT_SECURITY_POLICY } from "./src/csp.ts";
+import { RESPONSE_HEADERS } from "./src/headers.ts";
 
 const pages = defineCollection({
   name: "pages",
@@ -24,7 +24,7 @@ export default defineConfig({
     chrome: () => ({ before: [{ component: "familyBar" }], after: [{ component: "footer" }] }),
     // brand.css, family-bar.css, umbrella.css and every icon, served from the site's root.
     passthrough: { root: "./node_modules/@deck-cool/brand/public" },
-    routing: { headers: [{ prefix: "/", set: [...SECURITY_HEADERS, CONTENT_SECURITY_POLICY] }] },
+    routing: { headers: [{ prefix: "/", set: [...RESPONSE_HEADERS] }] },
     // No page ships JavaScript.
     budget: { "/**": "0b" },
     adapter: cloudflarePages(),
