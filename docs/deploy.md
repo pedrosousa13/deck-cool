@@ -28,14 +28,16 @@ Once, in the Cloudflare account that holds the `deck.cool` zone.
 
 ### The API token
 
-Create an **account-owned** token: Manage Account → Account API Tokens → Create Token. Give it these two permissions and nothing else. The role names are Cloudflare's new Workers roles (2026-09-15), not yet checked against a deploy. If the dashboard offers only the classic permissions, use the ones in parentheses.
+Create an **account-owned** token named `deck-cool-deploy`: Manage Account → Account API Tokens → Create Token. It has two permission policies and nothing else. This token deployed the site from CI on 2026-10-09.
 
-| Permission | Scope | Why |
-| --- | --- | --- |
-| Workers → **Admin** (classic: Account › Workers Scripts › Edit) | Workers product (all Workers in the account) | The first deploy creates the `deck-cool` Worker. Only product-level Admin can create a Worker. |
-| Zone → **Workers Routes** → **Write** (classic: Zone › Workers Routes › Edit) | the `deck.cool` zone only | Each deploy sets the Worker's custom domain on that zone. |
+| Policy | Resource | Permission | Why |
+| --- | --- | --- | --- |
+| 1 | Entire account | Workers → **Editor** | Deploys new versions and rolls back. It can't create or delete a Worker. Keep it at the Workers product scope: Cloudflare doesn't support per-Worker roles for custom domains yet. |
+| 2 | the `deck.cool` zone | **Workers Routes Write** | Each deploy sends the Worker's custom domain for that zone. |
 
-After the first deploy has created the Worker, edit the token and lower Workers → Admin to Workers → **Editor**, still at the Workers product scope. Editor can deploy new versions and roll back, but cannot create or delete a Worker. Keep the product scope: Cloudflare does not support per-Worker roles for custom domains yet. Keep Workers Routes → Write: every deploy sends the custom domain to Cloudflare again. With classic permissions there is nothing to lower.
+The permission search shows only the permissions for the policy's resource type. **Workers Routes Write** is a zone permission, so it appears only in a policy whose resource is the `deck.cool` zone.
+
+The `deck-cool` Worker already exists; the first deploy created it on 2026-10-09 from a `wrangler login` session. Creating a new Worker needs Workers → **Admin**, so give a token Admin only for that one-off, then take it away.
 
 If a deploy is refused with an authorization error, add only the permission that the error names.
 
