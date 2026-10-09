@@ -93,6 +93,39 @@ const running = (page: Page) =>
 const settled = (page: Page) =>
   page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== "running"));
 
+interface Frame {
+  sheet: { top: number; left: number; width: number; height: number };
+  shade: { top: number; left: number; width: number; height: number };
+}
+
+declare global {
+  interface Window {
+    /** The sheet's and the shade's boxes on each frame of a close, set by recordClose(). */
+    closeFrames?: Promise<Frame[]>;
+  }
+}
+
+/** Records the sheet's and the shade's boxes on every frame, from now until the panel is hidden. */
+const recordClose = (page: Page) =>
+  page.evaluate(() => {
+    window.closeFrames = new Promise((resolve) => {
+      const frames: Frame[] = [];
+      const rect = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (element === null) throw new Error(`${selector} is missing`);
+        const { top, left, width, height } = element.getBoundingClientRect();
+        return { top, left, width, height };
+      };
+      const panel = document.querySelector("header [popover]");
+      const look = () => {
+        if (panel === null || getComputedStyle(panel).display === "none") return resolve(frames);
+        frames.push({ sheet: rect(".family-bar__sheet"), shade: rect(".family-bar__shade") });
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    });
+  });
+
 describe("the Family bar's switcher in a browser", () => {
   test.each([390, 1280])("at %ipx, axe finds no violations and the CSP holds, closed or open", async (width) => {
     const { page } = await visit({ width, reducedMotion: "reduce" });
@@ -258,5 +291,34 @@ describe("the Family bar's switcher in a browser", () => {
     expect(await isOpen(page)).toBe(false);
     expect(await running(page)).toEqual([]);
     expect(await page.locator(PANEL).isVisible()).toBe(false);
+  });
+
+  // Closing is the opening played backwards: the sheet and the shade keep their
+  // open boxes on every frame until the panel is hidden (#35).
+  test.each([
+    [1280, "Escape"],
+    [390, "Escape"],
+    [1280, "a click on the shade"],
+    [390, "a click on the shade"],
+  ])("at %ipx, the sheet keeps its place under the bar while it closes on %s", async (width, how) => {
+    const { page } = await visit({ width, reducedMotion: "no-preference" });
+    await page.locator(BUTTON).click();
+    await settled(page);
+    const bar = await box(page, "header");
+    const sheet = await box(page, SHEET);
+    const shade = await box(page, ".family-bar__shade");
+    expect(sheet).toMatchObject({ x: 0, y: bar.y + bar.height, width });
+
+    await recordClose(page);
+    if (how === "Escape") await page.keyboard.press("Escape");
+    else await page.mouse.click(width / 2, shade.y + shade.height / 2);
+    const frames = await page.evaluate(() => window.closeFrames ?? Promise.reject(new Error("not recording")));
+
+    // The exit runs for .45s, so a broken frame has many chances to show.
+    expect(frames.length).toBeGreaterThan(5);
+    for (const frame of frames) {
+      expect(frame.sheet).toEqual({ top: sheet.y, left: sheet.x, width: sheet.width, height: sheet.height });
+      expect(frame.shade).toEqual({ top: shade.y, left: shade.x, width: shade.width, height: shade.height });
+    }
   });
 });

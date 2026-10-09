@@ -130,10 +130,13 @@
   border: 0;
   background: transparent;
   color: var(--text);
+  /* Here, not on :popover-open: while the panel animates closed it keeps
+     display: flex but no longer matches, and would turn into a row (#35). */
+  flex-direction: column;
 }
+/* Only while open, so the browser's display: none hides the closed panel. */
 .family-bar__panel:popover-open {
   display: flex;
-  flex-direction: column;
 }
 .family-bar__sheet {
   background: var(--bar-sheet);
