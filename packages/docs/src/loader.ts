@@ -208,5 +208,8 @@ export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
     }
     return { changed, deleted: [], authoritative: true, cursor: startedAt };
   };
-  return { syncAll, syncSince: (writer) => syncAll(writer) };
+  // Every check spans the whole package, so an incremental sync reads it all too. Only a
+  // full sync may report itself authoritative, so a page removed since is pruned by the next one.
+  const syncSince: Loader<DocsPage>["syncSince"] = async (writer) => ({ ...(await syncAll(writer)), authoritative: false });
+  return { syncAll, syncSince };
 }

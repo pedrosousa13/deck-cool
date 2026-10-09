@@ -1,4 +1,4 @@
-import { listEntries, openStore, syncCollection } from "@pagedeck/content";
+import { listEntries, openStore, syncCollection, syncCollectionSince } from "@pagedeck/content";
 import { describeError } from "@pagedeck/core";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -118,6 +118,16 @@ describe("a fixture that follows the contract", () => {
     expect(readFileSync(join(docs.contentRoot, "docs/assets/grid.svg"), "utf8")).toBe(
       readFileSync(new URL("assets/grid.svg", FIXTURE), "utf8"),
     );
+  });
+
+  test("syncs incrementally (pagedeck sync --incremental) as it syncs in full", async () => {
+    const from = site();
+    const docs = defineDocs(options(from));
+    const store = openStore(fileURLToPath(new URL("content.db", from)));
+    await syncCollection(store, docs.collection);
+    await syncCollectionSince(store, docs.collection);
+    expect(listEntries(store, docs.collection)).toHaveLength(4);
+    store.close();
   });
 
   test("splits a page's body at each demo marker", async () => {
