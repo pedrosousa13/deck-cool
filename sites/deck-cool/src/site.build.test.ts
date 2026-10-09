@@ -56,7 +56,7 @@ test("the home page opens with the Family bar, after the stylesheets it needs", 
   expect(at('<link rel="stylesheet" href="/family-bar.css"/>')).toBeLessThan(header);
   // Outside <main>, so the header is the page's banner landmark.
   expect(header).toBeLessThan(at("<main>"));
-  // The bar's deck icons sit in a closed <details>, so nothing fetches them
+  // The bar's deck icons sit in a closed popover, so nothing fetches them
   // early. (React preloads the page's own images, which the page shows.)
   for (const deck of decks) expect(html).not.toContain(`rel="preload" as="image" href="${deck.icons.still}"`);
 

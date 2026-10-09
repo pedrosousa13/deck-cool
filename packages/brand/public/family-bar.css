@@ -1,7 +1,8 @@
 /*
  * The Family bar, design direction C (design/canvas/NavFamily.dc.html).
- * Uses the tokens in brand.css. The switcher is a <details>: every motion
- * is CSS, and every motion is under prefers-reduced-motion: no-preference.
+ * Uses the tokens in brand.css. The switcher is a popover its button
+ * toggles: every motion is CSS, and every motion is under
+ * prefers-reduced-motion: no-preference.
  */
 .family-bar {
   --bar-fill: var(--text);
@@ -21,8 +22,7 @@
 .family-bar[data-deck="playdeck"] { --bar-fill: var(--playdeck-fill); }
 .family-bar[data-deck="pagedeck"] { --bar-fill: var(--pagedeck-fill); }
 
-/* The bar's ground is a layer of its own, so the open panel's blur sees the
-   page and not only the bar. */
+/* The bar's ground is a layer of its own. */
 .family-bar::before {
   content: "";
   position: absolute;
@@ -41,10 +41,11 @@
   height: 1px;
   background: var(--bar-hairline);
 }
-.family-bar:has(.family-bar__switch[open])::before {
-  background: transparent;
+/* While the panel is open, the bar and the panel read as one sheet. */
+.family-bar:has(.family-bar__sheet:popover-open)::before {
+  background: rgba(22, 22, 23, .94);
 }
-.family-bar:has(.family-bar__switch[open])::after {
+.family-bar:has(.family-bar__sheet:popover-open)::after {
   background: transparent;
 }
 
@@ -59,27 +60,26 @@
   gap: 10px;
 }
 
-.family-bar :is(summary, a):focus-visible {
+.family-bar :is(button, a):focus-visible {
   outline: 2px solid var(--text-link);
   outline-offset: 2px;
 }
 
 /* The switcher's button: the fanned cards and a chevron. */
-.family-bar__switch > summary {
+.family-bar__switch {
   display: flex;
   align-items: center;
   gap: 6px;
   height: 36px;
   padding: 0 8px 0 4px;
+  border: 0;
   border-radius: 999px;
+  background: transparent;
   color: var(--text);
+  font: inherit;
   cursor: pointer;
-  list-style: none;
 }
-.family-bar__switch > summary::-webkit-details-marker {
-  display: none;
-}
-.family-bar__switch[open] > summary {
+.family-bar:has(.family-bar__sheet:popover-open) .family-bar__switch {
   background: var(--rule);
 }
 .family-bar__fan rect {
@@ -96,10 +96,10 @@
 .family-bar__fan-front {
   fill: var(--playdeck-fill);
 }
-.family-bar__switch[open] .family-bar__fan-left {
+.family-bar:has(.family-bar__sheet:popover-open) .family-bar__fan-left {
   transform: rotate(-26deg);
 }
-.family-bar__switch[open] .family-bar__fan-right {
+.family-bar:has(.family-bar__sheet:popover-open) .family-bar__fan-right {
   transform: rotate(26deg);
 }
 .family-bar__chevron path {
@@ -109,37 +109,34 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.family-bar__switch[open] .family-bar__chevron {
+.family-bar:has(.family-bar__sheet:popover-open) .family-bar__chevron {
   transform: rotate(180deg);
 }
 
-/* The open panel: a sheet from the top of the page, over a shade. Without
-   script, clicks on the shade reach the page. */
-.family-bar__shade {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  z-index: -1;
-  height: 100vh;
-  background: rgba(0, 0, 0, .55);
-  pointer-events: none;
-}
+/* The open panel: a sheet under the bar, in the top layer, over a shade (its
+   ::backdrop). Escape and a click outside close it; clicks on the shade reach
+   the page. */
 .family-bar__sheet {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  z-index: -1;
+  inset: 52px 0 auto;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
   background: rgba(22, 22, 23, .94);
+  color: var(--text);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   backdrop-filter: saturate(180%) blur(20px);
+}
+.family-bar__sheet::backdrop {
+  inset: 52px 0 0;
+  background: rgba(0, 0, 0, .55);
 }
 .family-bar__decks {
   box-sizing: border-box;
   max-width: 980px;
   margin: 0 auto;
-  padding: 76px 22px 18px;
+  padding: 24px 22px 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -266,32 +263,55 @@
   .family-bar__name > span {
     animation: family-bar-roll .55s var(--ease) both;
   }
-  .family-bar__switch[open] .family-bar__shade {
-    animation: family-bar-fade .3s var(--ease);
+
+  /* The panel slides down and its decks drop in, then both play back on
+     close: display and overlay keep it on screen until they finish. */
+  .family-bar__sheet {
+    clip-path: inset(0 0 100% 0);
+    transition: clip-path .45s var(--ease), overlay .45s var(--ease) allow-discrete,
+      display .45s var(--ease) allow-discrete;
   }
-  .family-bar__switch[open] .family-bar__sheet {
-    animation: family-bar-sheet .45s var(--ease);
+  .family-bar__sheet:popover-open {
+    clip-path: inset(0);
   }
-  .family-bar__switch[open] .family-bar__decks li {
-    animation: family-bar-fade .3s var(--ease) 60ms both, family-bar-drop .45s var(--ease) 60ms both;
+  .family-bar__sheet::backdrop {
+    background: transparent;
+    transition: background-color .3s var(--ease), overlay .3s var(--ease) allow-discrete,
+      display .3s var(--ease) allow-discrete;
   }
-  .family-bar__switch[open] .family-bar__decks li:nth-child(2) {
-    animation-delay: 110ms;
+  .family-bar__sheet:popover-open::backdrop {
+    background: rgba(0, 0, 0, .55);
   }
-  .family-bar__switch[open] .family-bar__decks li:nth-child(3) {
-    animation-delay: 160ms;
+  .family-bar__decks li {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity .3s var(--ease), transform .45s var(--ease);
+  }
+  .family-bar__sheet:popover-open li {
+    opacity: 1;
+    transform: none;
+    transition-delay: 60ms;
+  }
+  .family-bar__sheet:popover-open li:nth-child(2) {
+    transition-delay: 110ms;
+  }
+  .family-bar__sheet:popover-open li:nth-child(3) {
+    transition-delay: 160ms;
+  }
+  @starting-style {
+    .family-bar__sheet:popover-open {
+      clip-path: inset(0 0 100% 0);
+    }
+    .family-bar__sheet:popover-open::backdrop {
+      background: transparent;
+    }
+    .family-bar__sheet:popover-open li {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
   }
 }
 
 @keyframes family-bar-roll {
   from { transform: translateY(22px); }
-}
-@keyframes family-bar-fade {
-  from { opacity: 0; }
-}
-@keyframes family-bar-sheet {
-  from { clip-path: inset(0 0 100% 0); }
-}
-@keyframes family-bar-drop {
-  from { transform: translateY(-10px); }
 }

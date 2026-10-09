@@ -31,16 +31,22 @@ describe("the Family bar", () => {
     expect(sheet.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  test("the switcher is a details whose summary is labelled Switch deck", () => {
+  test("the switcher is a button, labelled Switch deck, that toggles an auto popover", () => {
     const doc = render(<FamilyBar current={slidedeck} links={links} />);
-    const summary = doc.querySelector("header details > summary");
-    expect(summary?.getAttribute("aria-label")).toBe("Switch deck");
-    expect(summary?.querySelector("svg")).not.toBeNull();
+    expect(doc.querySelector("details, summary")).toBeNull();
+    const button = present(doc.querySelector("header button[popovertarget]"), "the switcher's button");
+    expect(button.getAttribute("type")).toBe("button");
+    expect(button.getAttribute("aria-label")).toBe("Switch deck");
+    expect(button.querySelector("svg")).not.toBeNull();
+    const panel = present(doc.getElementById(button.getAttribute("popovertarget") ?? ""), "the panel");
+    expect(panel.getAttribute("popover")).toBe("auto");
+    // Right after the button, so Tab moves from the button into the panel.
+    expect(button.nextElementSibling).toBe(panel);
   });
 
   test("the panel links every deck with its still icon, name and kind", () => {
     const doc = render(<FamilyBar current={slidedeck} links={links} />);
-    const tiles = [...doc.querySelectorAll("header details a")];
+    const tiles = [...doc.querySelectorAll("header [popover] a")];
     expect(tiles.map((a) => a.getAttribute("href"))).toEqual(decks.map((deck) => deck.url));
     tiles.forEach((tile, at) => {
       const deck = present(decks[at], `deck ${at}`);
