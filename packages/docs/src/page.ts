@@ -83,6 +83,12 @@ export function scanPage(file: string, source: string, context: PageContext): Sc
   const lineAt = (offset: number) => firstLine + (body.slice(0, offset).match(/\n/g)?.length ?? 0);
   const fault = (offset: number, message: string) => faults.push({ file, line: lineAt(offset), message });
   const href = context.hrefOf(file);
+  for (const field of ["title", "description"]) {
+    const value = frontmatter[field];
+    if (typeof value !== "string" || value.trim() === "") {
+      faults.push({ file, line: 1, message: `has no "${field}" in its frontmatter` });
+    }
+  }
 
   const marked = new Marked();
   let offset = 0;

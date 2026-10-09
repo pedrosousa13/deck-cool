@@ -1,4 +1,5 @@
 import { listEntries, openStore, syncCollection } from "@pagedeck/content";
+import { describeError } from "@pagedeck/core";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -44,6 +45,16 @@ function options(from: URL, overrides: Partial<DocsOptions> = {}): DocsOptions {
     languages: ["sh"],
     ...overrides,
   };
+}
+
+/** What `pagedeck sync` prints for the error a sync rejects with. */
+async function failure(syncing: Promise<unknown>): Promise<string> {
+  try {
+    await syncing;
+  } catch (error) {
+    return describeError(error);
+  }
+  throw new Error("the sync passed");
 }
 
 async function sync(from: URL, overrides: Partial<DocsOptions> = {}) {
@@ -117,5 +128,115 @@ describe("a fixture that follows the contract", () => {
       { kind: "demo", name: "counter" },
       { kind: "html", html: "<p>That was the demo.</p>\n" },
     ]);
+  });
+});
+
+const LAYOUT = readFileSync(new URL("guides/layout.md", FIXTURE), "utf8");
+const DEMOS = readFileSync(new URL("guides/demos.md", FIXTURE), "utf8");
+const PAGE = "---\ntitle: Extra\ndescription: Not in the nav.\n---\n\nText.\n";
+
+describe("the build fails, naming the file and line", () => {
+  test.each<[string, Readonly<Record<string, string | undefined>>, Partial<DocsOptions>, string]>([
+    [
+      "a page with no title",
+      { "install.md": "---\ndescription: How to install.\n---\n\nText.\n" },
+      {},
+      'install.md:1 — has no "title" in its frontmatter',
+    ],
+    [
+      "a page with no description",
+      { "install.md": "---\ntitle: Install\n---\n\nText.\n" },
+      {},
+      'install.md:1 — has no "description" in its frontmatter',
+    ],
+    ["a page nav.json does not list", { "guides/extra.md": PAGE }, {}, "guides/extra.md:1 — is not listed in nav.json"],
+    [
+      "a nav.json entry with no page",
+      {
+        "nav.json": readFileSync(new URL("nav.json", FIXTURE), "utf8").replace(
+          '"guides/demos.md"',
+          '"guides/demos.md", "guides/theming.md"',
+        ),
+      },
+      {},
+      'nav.json:3 — lists "guides/theming.md", which is not a page',
+    ],
+    ["a package with no nav.json", { "nav.json": undefined }, {}, "nav.json:1 — is missing"],
+    [
+      "a nav.json of another shape",
+      { "nav.json": '{ "Start": ["index.md"] }\n' },
+      {},
+      'nav.json:1 — is not a list of groups, each written { "label": "Start", "pages": ["index.md"] }',
+    ],
+    [
+      "a link to a missing page",
+      { "guides/layout.md": LAYOUT.replace("(../install.md)", "(../setup.md)") },
+      {},
+      'guides/layout.md:10 — links to "../setup.md", which is not a page in this package',
+    ],
+    [
+      "a link by reference to a missing page",
+      { "guides/layout.md": LAYOUT.replace("[demos]: ./demos.md", "[demos]: ./live.md") },
+      {},
+      'guides/layout.md:12 — links to "./live.md", which is not a page in this package',
+    ],
+    [
+      "a relative link to a file that is not a page",
+      { "guides/layout.md": LAYOUT.replace("(../install.md)", "(../assets/grid.svg)") },
+      {},
+      'guides/layout.md:10 — links to "../assets/grid.svg", which is not a .md page — link a page by its .md file, and show a file under assets/ as an image',
+    ],
+    [
+      "an image that is not under assets/",
+      { "guides/layout.md": LAYOUT.replace("../assets/grid.svg", "../assets/missing.svg") },
+      {},
+      'guides/layout.md:8 — shows "../assets/missing.svg", which is not a file under assets/',
+    ],
+    [
+      "a demo the site does not register",
+      {},
+      { demos: { chart: "./components/chart.tsx" } },
+      'guides/demos.md:8 — marks demo "counter", which the site does not register — the site\'s demos are "chart"',
+    ],
+    [
+      "a demo when the site registers none",
+      {},
+      { demos: {} },
+      'guides/demos.md:8 — marks demo "counter", which the site does not register — the site\'s demos are none',
+    ],
+    [
+      "a demo marker inside a paragraph",
+      { "guides/demos.md": DEMOS.replace("Press the button.", "Press the button. <!-- demo:counter -->") },
+      {},
+      "guides/demos.md:6 — has a demo marker that is not on a line of its own — write it alone on its line, as <!-- demo:<name> -->",
+    ],
+  ])("%s", async (_name, edits, overrides, message) => {
+    expect(await failure(sync(site(edits), overrides))).toBe(
+      `Collection "docs": loader syncAll failed: Docs package "@example/docs": 1 problem — fix it in the docs package: ${message}`,
+    );
+  });
+
+  test("names every problem in one run", async () => {
+    const edits = { "install.md": "Text.\n", "guides/extra.md": PAGE };
+    expect(await failure(sync(site(edits)))).toBe(
+      'Collection "docs": loader syncAll failed: Docs package "@example/docs": 3 problems — fix each in the docs package: ' +
+        "guides/extra.md:1 — is not listed in nav.json; " +
+        'install.md:1 — has no "title" in its frontmatter; ' +
+        'install.md:1 — has no "description" in its frontmatter',
+    );
+  });
+
+  test("writes nothing to the store or the content root", async () => {
+    const from = site();
+    const docs = defineDocs(options(from));
+    await syncCollection(openStore(fileURLToPath(new URL("content.db", from))), docs.collection);
+    const broken = site({ "install.md": "Text.\n" });
+    // Same site directory, now with a broken package.
+    cpSync(new URL("node_modules/", broken), new URL("node_modules/", from), { recursive: true });
+    const store = openStore(fileURLToPath(new URL("content.db", from)));
+    expect(await failure(syncCollection(store, docs.collection))).toContain("install.md:1");
+    expect(listEntries(store, docs.collection).map((entry) => entry.data.title)).toContain("Install");
+    store.close();
+    expect(readFileSync(join(docs.contentRoot, "docs/assets/grid.svg"), "utf8")).toContain("<svg");
   });
 });

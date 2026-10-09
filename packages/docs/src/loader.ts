@@ -6,7 +6,7 @@ import { join, posix, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { DocsOptions } from "./index.ts";
 import { scanPage, splitAtDemos } from "./page.ts";
-import type { BodyPart } from "./page.ts";
+import type { BodyPart, Fault } from "./page.ts";
 
 /** One docs page, as the collection stores it. */
 export interface DocsPage {
@@ -86,8 +86,62 @@ function hrefOf(options: DocsOptions, file: string): string {
   return (options.trailingSlash ?? "always") === "always" ? `${path}/` : path;
 }
 
-function readNav(root: string): NavFile[] {
-  return JSON.parse(readFileSync(join(root, "nav.json"), "utf8")) as NavFile[];
+const NAV = "nav.json";
+
+function isNav(value: unknown): value is NavFile[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (group: unknown) =>
+        typeof group === "object" &&
+        group !== null &&
+        "label" in group &&
+        typeof group.label === "string" &&
+        "pages" in group &&
+        Array.isArray(group.pages) &&
+        group.pages.every((page: unknown) => typeof page === "string"),
+    )
+  );
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+/** nav.json, checked against the pages: what it lists, and the faults between the two. */
+function readNav(root: string, pages: ReadonlySet<string>): { groups: NavFile[]; faults: Fault[] } {
+  const path = join(root, NAV);
+  if (!isFile(path)) return { groups: [], faults: [{ file: NAV, line: 1, message: "is missing" }] };
+  const text = readFileSync(path, "utf8");
+  const groups = parseJson(text);
+  if (!isNav(groups)) {
+    const message = 'is not a list of groups, each written { "label": "Start", "pages": ["index.md"] }';
+    return { groups: [], faults: [{ file: NAV, line: 1, message }] };
+  }
+  const listed = new Set(groups.flatMap((group) => group.pages));
+  const lineOf = (page: string) => text.slice(0, Math.max(text.indexOf(JSON.stringify(page)), 0)).split("\n").length;
+  const faults = [
+    ...[...listed]
+      .filter((page) => !pages.has(page))
+      .map((page) => ({ file: NAV, line: lineOf(page), message: `lists "${page}", which is not a page` })),
+    ...[...pages]
+      .filter((page) => !listed.has(page))
+      .map((page) => ({ file: page, line: 1, message: `is not listed in ${NAV}` })),
+  ];
+  return { groups, faults };
+}
+
+/** Every fault in one report, by file and then by line. */
+function problems(name: string, faults: readonly Fault[]): Error {
+  const sorted = [...faults].sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line));
+  const subject = sorted.length === 1 ? "1 problem — fix it" : `${String(sorted.length)} problems — fix each`;
+  const lines = sorted.map(({ file, line, message }) => `${file}:${String(line)} — ${message}`);
+  // One line: Pagedeck's CLI prints a loader's error as a cause, with each newline replaced.
+  return new Error(`Docs package "${name}": ${subject} in the docs package: ${lines.join("; ")}`);
 }
 
 /** Where the docs' assets are staged, laid out by the address each is published at. */
@@ -112,6 +166,10 @@ export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
       demos: new Set(Object.keys(options.demos)),
     };
     const scanned = files.map((file) => scanPage(file, readFileSync(join(root, file), "utf8"), context));
+    const nav = readNav(root, context.pages);
+    const faults = [...nav.faults, ...scanned.flatMap((page) => page.faults)];
+    if (faults.length > 0) throw problems(options.package, faults);
+
     const renderer = await createMarkdownRenderer({
       languages: options.languages,
       ...(options.theme === undefined ? {} : { theme: options.theme }),
@@ -135,7 +193,7 @@ export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
     }
 
     const byFile = new Map(pages.map((page) => [page.file, page]));
-    const nav = readNav(root).map((group) => ({
+    const navGroups = nav.groups.map((group) => ({
       label: group.label,
       pages: group.pages.flatMap((file) => {
         const page = byFile.get(file);
@@ -145,7 +203,7 @@ export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
     const changed = [];
     for (const page of pages) {
       const id = { locale: LOCALE, path: entryPath(options.base, page.file) };
-      writer.upsert({ ...id, data: { ...page, nav } });
+      writer.upsert({ ...id, data: { ...page, nav: navGroups } });
       changed.push(id);
     }
     return { changed, deleted: [], authoritative: true, cursor: startedAt };
