@@ -10,10 +10,10 @@
   },
   "dependencies": {
     "@deck-cool/brand": "workspace:*",
-    "@pagedeck/adapter-cloudflare-pages": "0.2.1",
-    "@pagedeck/content": "0.2.1",
-    "@pagedeck/core": "0.2.1",
-    "@pagedeck/markdown-loader": "0.2.1",
+    "@pagedeck/adapter-cloudflare-pages": "0.2.3",
+    "@pagedeck/content": "0.2.3",
+    "@pagedeck/core": "0.2.3",
+    "@pagedeck/markdown-loader": "0.2.3",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
