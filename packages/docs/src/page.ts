@@ -38,6 +38,8 @@ const MARKER = /^<!-- demo:([A-Za-z0-9_-]+) -->$/;
 const MARKER_START = /<!--\s*demo:/;
 const MARKER_IN_HTML = /<!-- demo:([A-Za-z0-9_-]+) -->/;
 const NOT_RELATIVE = /^(?:[a-z][a-z0-9+.-]*:|\/|#|$)/i;
+const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+const ALLOWED_SCHEMES = new Set(["http", "https", "mailto"]);
 
 type Found =
   | { readonly kind: "html"; readonly raw: string; readonly block: boolean }
@@ -105,7 +107,11 @@ export function scanPage(file: string, source: string, context: PageContext): Sc
       cursor = at + token.raw.length;
 
       if (token.kind === "html") {
-        if (!MARKER_START.test(token.raw)) return;
+        if (!MARKER_START.test(token.raw)) {
+          const html = token.raw.trim().split("\n")[0] ?? "";
+          fault(at, `has raw HTML, ${html} — write it in markdown: the only HTML a page may hold is a demo marker, <!-- demo:<name> -->`);
+          return;
+        }
         const name = MARKER.exec(token.raw.trim())?.[1];
         if (!token.block || name === undefined) {
           fault(at, "has a demo marker that is not on a line of its own — write it alone on its line, as <!-- demo:<name> -->");
@@ -121,7 +127,12 @@ export function scanPage(file: string, source: string, context: PageContext): Sc
       }
 
       // A reference-style link's destination is on its definition, which is checked there.
-      if (token.kind === "link" && !token.raw.includes("](")) return;
+      if (token.kind === "link" && !token.raw.includes("](") && !token.raw.startsWith("<")) return;
+      const scheme = SCHEME.exec(token.href)?.[1];
+      if (scheme !== undefined && !ALLOWED_SCHEMES.has(scheme.toLowerCase())) {
+        fault(at, `links to "${token.href}", a scheme the site does not allow — link with http:, https: or mailto:, or to a page by its .md file`);
+        return;
+      }
       if (NOT_RELATIVE.test(token.href)) return;
       const [path, fragment] = splitFragment(token.href);
       const target = posix.join(posix.dirname(file), path);

@@ -116,6 +116,15 @@ describe("a fixture that follows the contract", () => {
     expect(html("docs/guides/index")).toContain('<a href="/docs/guides/layout/">the layout</a>');
   });
 
+  test("keeps http:, https: and mailto: links as they are", async () => {
+    const links = "[a](http://example.com/a) [b](HTTPS://example.com/b) [c](mailto:me@example.com) <https://example.com/d>";
+    const { entries } = await sync(site({ "install.md": `---\ntitle: Install\ndescription: How.\n---\n\n${links}\n` }));
+    const html = JSON.stringify(entries.find((entry) => entry.path === "docs/install")?.data.body);
+    for (const href of ["http://example.com/a", "HTTPS://example.com/b", "mailto:me@example.com", "https://example.com/d"]) {
+      expect(html).toContain(`href=\\"${href}\\"`);
+    }
+  });
+
   test("drops a page's first # heading, as the contract says: the site shows the title", async () => {
     const { entries } = await sync(site({ "install.md": "---\ntitle: Install\ndescription: How.\n---\n\n# Install\n\nText.\n" }));
     const install = entries.find((entry) => entry.path === "docs/install");
@@ -287,6 +296,48 @@ describe("the build fails, naming the file and line", () => {
       { "guides/demos.md": DEMOS.replace("Press the button.", "Press the button. <!-- demo:counter -->") },
       {},
       "guides/demos.md:6 — has a demo marker that is not on a line of its own — write it alone on its line, as <!-- demo:<name> -->",
+    ],
+    [
+      "raw HTML in a block of its own",
+      { "guides/demos.md": DEMOS.replace("Press the button.", "<script>alert(1)</script>") },
+      {},
+      "guides/demos.md:6 — has raw HTML, <script>alert(1)</script> — write it in markdown: the only HTML a page may hold is a demo marker, <!-- demo:<name> -->",
+    ],
+    [
+      "raw HTML inside a paragraph",
+      { "guides/demos.md": DEMOS.replace("Press the button.", 'Press <img src="x" onerror="alert(1)"> the button.') },
+      {},
+      'guides/demos.md:6 — has raw HTML, <img src="x" onerror="alert(1)"> — write it in markdown: the only HTML a page may hold is a demo marker, <!-- demo:<name> -->',
+    ],
+    [
+      "an HTML comment that is not a demo marker",
+      { "guides/demos.md": DEMOS.replace("Press the button.", "<!-- a note -->") },
+      {},
+      "guides/demos.md:6 — has raw HTML, <!-- a note --> — write it in markdown: the only HTML a page may hold is a demo marker, <!-- demo:<name> -->",
+    ],
+    [
+      "a javascript: link",
+      { "guides/layout.md": LAYOUT.replace("(../install.md)", "(javascript:alert(1))") },
+      {},
+      'guides/layout.md:10 — links to "javascript:alert(1)", a scheme the site does not allow — link with http:, https: or mailto:, or to a page by its .md file',
+    ],
+    [
+      "a javascript: link by reference",
+      { "guides/layout.md": LAYOUT.replace("[demos]: ./demos.md", "[demos]: javascript:alert(1)") },
+      {},
+      'guides/layout.md:12 — links to "javascript:alert(1)", a scheme the site does not allow — link with http:, https: or mailto:, or to a page by its .md file',
+    ],
+    [
+      "a javascript: autolink",
+      { "guides/layout.md": LAYOUT.replace("[first](../install.md)", "<javascript:alert(1)>") },
+      {},
+      'guides/layout.md:10 — links to "javascript:alert(1)", a scheme the site does not allow — link with http:, https: or mailto:, or to a page by its .md file',
+    ],
+    [
+      "a data: image",
+      { "guides/layout.md": LAYOUT.replace("../assets/grid.svg", "data:image/svg+xml,x") },
+      {},
+      'guides/layout.md:8 — links to "data:image/svg+xml,x", a scheme the site does not allow — link with http:, https: or mailto:, or to a page by its .md file',
     ],
   ])("%s", async (_name, edits, overrides, message) => {
     expect(await failure(sync(site(edits), overrides))).toBe(

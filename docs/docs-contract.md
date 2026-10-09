@@ -72,7 +72,7 @@ Link to another page by its relative path to the `.md` file, from the page you a
 See [Install](./install.md#requirements), or go [back to the start](../index.md).
 ```
 
-A reference-style link (`[Install][install]` with `[install]: ./install.md` below) works the same. A link with a scheme (`https:`, `mailto:`), a link that starts with `/` and a link that is only a `#fragment` are left as they are. A relative link to anything that is not a `.md` file fails the build.
+A reference-style link (`[Install][install]` with `[install]: ./install.md` below) works the same. A link with the scheme `http:`, `https:` or `mailto:`, a link that starts with `/` and a link that is only a `#fragment` are left as they are. A link or image with any other scheme, such as `javascript:` or `data:`, fails the build. A relative link to anything that is not a `.md` file fails the build too.
 
 ## Images
 
@@ -90,7 +90,7 @@ The docs hold no components. To show a live demo, put a marker on its own line w
 <!-- demo:counter -->
 ```
 
-A name has letters, digits, `-` and `_`. The site swaps the marker for the component it registers under that name. Each site keeps its own list of names, so agree on a new name with the site before you release a page that uses it.
+A name has letters, digits, `-` and `_`. A demo marker is the only HTML a page may hold: any other HTML, an HTML comment among it, fails the build. Write it in markdown instead. The site swaps the marker for the component it registers under that name. Each site keeps its own list of names, so agree on a new name with the site before you release a page that uses it.
 
 ## Code
 
@@ -105,6 +105,8 @@ The build stops and names the file and line of each problem, with the fix:
 - a page that `nav.json` does not list, a page it lists twice, or an entry with no page;
 - two files with one route, such as `guides.md` and `guides/index.md`;
 - a link to a page that does not exist, or a relative link to a file that is not a `.md` page;
+- a link or image whose scheme is not `http:`, `https:` or `mailto:`;
+- raw HTML that is not a demo marker;
 - a link whose path is written with backslash escapes or character references, which the build cannot rewrite;
 - an image that is not a file under `assets/`;
 - a demo marker that is not on a line of its own, or a demo name the site does not register;
