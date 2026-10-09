@@ -1,5 +1,6 @@
 import { listEntries, openStore, syncCollection, syncCollectionSince } from "@pagedeck/content";
 import { describeError } from "@pagedeck/core";
+import type { Page } from "@pagedeck/core";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -248,5 +249,57 @@ describe("the build fails, naming the file and line", () => {
     expect(listEntries(store, docs.collection).map((entry) => entry.data.title)).toContain("Install");
     store.close();
     expect(readFileSync(join(docs.contentRoot, "docs/assets/grid.svg"), "utf8")).toContain("<svg");
+  });
+});
+
+describe("the content callback", () => {
+  async function synced(overrides: Partial<DocsOptions> = {}) {
+    const from = site();
+    const docs = defineDocs(options(from, overrides));
+    const store = openStore(fileURLToPath(new URL("content.db", from)));
+    await syncCollection(store, docs.collection);
+    made.push(fileURLToPath(new URL(".", from)));
+    return { docs, store };
+  }
+
+  function page(path: `/${string}`, entry?: string): Page {
+    return {
+      locale: "en",
+      path,
+      output: `${path}index.html`,
+      dependencies: [],
+      ...(entry === undefined ? {} : { collection: "docs", entry: { locale: "en", path: entry } }),
+    };
+  }
+
+  test("renders the layout around the prose and the demo", async () => {
+    const { docs, store } = await synced();
+    const content = docs.content(page("/docs/guides/demos/", "docs/guides/demos"), store);
+    expect(content.tree?.[0]).toMatchObject({
+      component: "docsPage",
+      props: { title: "Demos", description: "The example, live.", href: "/docs/guides/demos/" },
+      children: [
+        { component: "docsProse", props: { html: "<p>Press the button.</p>\n" } },
+        { component: "docsDemo:counter" },
+        { component: "docsProse", props: { html: "<p>That was the demo.</p>\n" } },
+      ],
+    });
+    store.close();
+  });
+
+  test("refuses a page whose address disagrees with the loader's trailingSlash", async () => {
+    const { docs, store } = await synced({ trailingSlash: "never" });
+    expect(() => docs.content(page("/docs/install/", "docs/install"), store)).toThrow(
+      'Docs page /docs/install/: the docs loader linked it as "/docs/install" — give defineDocs the trailingSlash the site\'s pages use',
+    );
+    store.close();
+  });
+
+  test("refuses a page from another source", async () => {
+    const { docs, store } = await synced();
+    expect(() => docs.content(page("/about/"), store)).toThrow(
+      "Page /about/: is not a docs page — render it with build.content only for pages from the docs collection",
+    );
+    store.close();
   });
 });

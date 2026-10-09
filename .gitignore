@@ -7,3 +7,5 @@ content.db
 site/
 .pagedeck/
 .pagedeck-docs/
+# Sites the docs loader's build test writes.
+packages/docs/.test-sites/
