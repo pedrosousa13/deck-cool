@@ -1,10 +1,6 @@
 import { RESPONSE_HEADERS } from "./headers.ts";
 
-/**
- * A page and a file. The build writes no content-hashed name, so neither may
- * be cached as immutable. When it writes one, a hashed file joins these checks
- * expecting `immutable` (site.build.test.ts says when).
- */
+/** A page and a file, neither content-hashed, so neither may be immutable. */
 const SERVED = ["/", "/brand.css"];
 /** Proxied to the fallback 404 page, which .assetsignore keeps out of the upload. */
 const NOT_UPLOADED = "/manifest.json";

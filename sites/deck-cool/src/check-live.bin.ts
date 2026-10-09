@@ -1,6 +1,4 @@
-// Checks the deployed site: `pnpm --filter @sites/deck-cool check-live`, or
-// with an origin, `... check-live https://deck.cool`. Not part of `pnpm test`,
-// which stays offline. docs/deploy.md says when to run it.
+// Kept out of `pnpm test`, which stays offline; docs/deploy.md says when to run it.
 import { checkSite } from "./live-check.ts";
 
 const origin = process.argv[2] ?? "https://deck.cool";

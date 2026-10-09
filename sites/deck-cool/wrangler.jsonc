@@ -1,7 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // The umbrella site, as Workers Static Assets: no Worker code, only site/.
-  // Runbook: docs/deploy.md.
+  // Workers Static Assets, no Worker code. Runbook: docs/deploy.md.
   "name": "deck-cool",
   // Not a secret: an account ID grants nothing without a token.
   "account_id": "c0bf36f52ec4652dabdacd6538b54983",
@@ -12,8 +11,7 @@
   "assets": {
     "directory": "./site",
     "html_handling": "auto-trailing-slash",
-    // The site declares no 404 page, and .assetsignore keeps the adapter's
-    // fallback out of the upload, so a missing path answers a bare 404.
+    // No 404 page: .assetsignore keeps the adapter's fallback out of the upload.
     "not_found_handling": "none"
   }
 }
