@@ -25,43 +25,64 @@ test("every page ships 0 B of JavaScript", () => {
   }
 });
 
-test("the home page links brand.css and the deck-cool icons, and serves them", () => {
-  const html = readFileSync(`${SITE}site/index.html`, "utf8");
-  for (const link of [
-    '<link rel="stylesheet" href="/brand.css"/>',
-    '<link rel="icon" type="image/svg+xml" href="/icons/deck-cool/still.svg"/>',
-    '<link rel="apple-touch-icon" href="/icons/deck-cool/apple-touch-icon.png"/>',
-  ]) {
-    expect(html).toContain(link);
+test("the home page's <head> links the deck-cool icons and one hashed stylesheet, and <body> no icon or stylesheet", () => {
+  const doc = home();
+  // React writes a preload for each image the page shows, where the page's
+  // content starts. Pagedeck leaves those in <body>, where a preload is valid.
+  const shown = new Set([...doc.body.querySelectorAll("img")].map((img) => img.getAttribute("src")));
+  for (const link of doc.body.querySelectorAll("link")) {
+    expect(link.outerHTML).toMatch(/^<link rel="preload" as="image" href="[^"]+">$/);
+    expect(shown.has(link.getAttribute("href")), link.outerHTML).toBe(true);
   }
-  for (const path of [
-    "brand.css",
-    "icons/deck-cool/still.svg",
-    "icons/deck-cool/apple-touch-icon.png",
-  ]) {
-    const served = readFileSync(`${SITE}site/${path}`);
-    expect(served.equals(readFileSync(`${BRAND}${path}`)), path).toBe(true);
+  const head = [...doc.head.querySelectorAll("link")].map((link) => [link.getAttribute("rel"), link.getAttribute("href")]);
+  expect(head).toHaveLength(3);
+  expect(head).toEqual(
+    expect.arrayContaining([
+      ["icon", umbrella.icons.still],
+      ["apple-touch-icon", umbrella.icons.appleTouch],
+      ["stylesheet", expect.stringMatching(/^\/assets\/[^/]+\.css$/)],
+    ]),
+  );
+  for (const path of [umbrella.icons.still, umbrella.icons.appleTouch]) {
+    const served = readFileSync(`${SITE}site${path}`);
+    expect(served.equals(readFileSync(`${BRAND}${path.slice(1)}`)), path).toBe(true);
   }
 });
 
-test("the home page opens with the Family bar, after the stylesheets it needs", () => {
+/** The text of the one stylesheet the home page links. */
+function stylesheet(): string {
+  const href = present(home().head.querySelector('link[rel="stylesheet"]')?.getAttribute("href"), "the stylesheet link");
+  return readFileSync(`${SITE}site${href}`, "utf8");
+}
+
+test("the stylesheet holds brand.css, then family-bar.css, then umbrella.css", () => {
+  const css = stylesheet();
+  const brand = css.indexOf("--ground-page");
+  const bar = css.indexOf(".family-bar");
+  const home = css.indexOf(".hero");
+  expect(brand).toBeGreaterThanOrEqual(0);
+  expect(brand).toBeLessThan(bar);
+  expect(css.lastIndexOf(".family-bar")).toBeLessThan(home);
+});
+
+test("the site serves no stylesheet but the hashed one", () => {
+  const sheets = manifest.paths.filter((path) => path.endsWith(".css"));
+  expect(sheets).toHaveLength(1);
+  expect(sheets[0]).toMatch(/^\/assets\//);
+});
+
+test("the home page opens with the Family bar", () => {
   const html = readFileSync(`${SITE}site/index.html`, "utf8");
   const at = (needle: string) => {
     const index = html.indexOf(needle);
     expect(index, needle).toBeGreaterThanOrEqual(0);
     return index;
   };
-  const header = at('<header class="family-bar"');
-  expect(at('<link rel="stylesheet" href="/brand.css"/>')).toBeLessThan(header);
-  expect(at('<link rel="stylesheet" href="/family-bar.css"/>')).toBeLessThan(header);
   // Outside <main>, so the header is the page's banner landmark.
-  expect(header).toBeLessThan(at("<main>"));
+  expect(at('<header class="family-bar"')).toBeLessThan(at("<main>"));
   // The bar's deck icons sit in a closed popover, so nothing fetches them
   // early. (React preloads the page's own images, which the page shows.)
   for (const deck of decks) expect(html).not.toContain(`rel="preload" as="image" href="${deck.icons.still}"`);
-
-  const served = readFileSync(`${SITE}site/family-bar.css`);
-  expect(served.equals(readFileSync(`${BRAND}family-bar.css`))).toBe(true);
 });
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
@@ -109,10 +130,17 @@ test("_headers sends a Permissions-Policy that turns off every powerful feature"
   }
 });
 
-test("no file is cached as immutable, because the build writes no content-hashed name", () => {
-  // A hashed name (`name.AbCd1234.css`) needs an immutable rule for its directory (docs/deploy.md).
-  for (const path of manifest.paths) expect(path).not.toMatch(/[.-][A-Za-z0-9_-]{8}\.[a-z0-9]+$/);
-  for (const path of served) expect(headersFor(rules, path).get("Cache-Control"), path).toBeUndefined();
+test("_headers caches /assets/, which holds only hashed names, as immutable, and nothing else", () => {
+  const assets = served.filter((path) => path.startsWith("/assets/"));
+  expect(assets).not.toHaveLength(0);
+  // A hashed name (`name-AbCd1234.css`) outside /assets/ would need its own rule (docs/deploy.md).
+  const hashed = /[.-][A-Za-z0-9_-]{8}\.[a-z0-9]+$/;
+  for (const path of served) expect(hashed.test(path), path).toBe(path.startsWith("/assets/"));
+  for (const path of served) {
+    expect(headersFor(rules, path).get("Cache-Control"), path).toBe(
+      path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : undefined,
+    );
+  }
 });
 
 test(".assetsignore keeps the deploy manifest, the deploy directory and the fallback 404 out of the upload", () => {
@@ -167,12 +195,8 @@ test("the home page carries no script, no <style> and no inline style or handler
   }
 });
 
-test("the home page is titled as on the board, and links umbrella.css", () => {
-  const html = readFileSync(`${SITE}site/index.html`, "utf8");
+test("the home page is titled as on the board", () => {
   expect(home().title).toBe("deck.cool: unstyled React packages");
-  expect(html).toContain('<link rel="stylesheet" href="/umbrella.css"/>');
-  const served = readFileSync(`${SITE}site/umbrella.css`);
-  expect(served.equals(readFileSync(`${BRAND}umbrella.css`))).toBe(true);
 });
 
 test("the Family bar links each deck's card", () => {

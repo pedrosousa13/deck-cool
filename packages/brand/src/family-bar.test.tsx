@@ -24,11 +24,10 @@ function render(element: React.ReactElement): DocumentFragment {
 }
 
 describe("the Family bar", () => {
-  test("links its stylesheet before the bar", () => {
+  test("links no stylesheet: a site loads family-bar.css through build.css", () => {
     const doc = render(<FamilyBar current={slidedeck} links={links} />);
-    const sheet = present(doc.querySelector('link[rel="stylesheet"][href="/family-bar.css"]'), "the stylesheet link");
-    const header = present(doc.querySelector("header"), "the header");
-    expect(sheet.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(doc.querySelector("link")).toBeNull();
+    expect(doc.firstElementChild?.tagName).toBe("HEADER");
   });
 
   test("the switcher is a button, labelled Switch deck, that toggles an auto popover", () => {

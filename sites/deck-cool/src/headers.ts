@@ -34,3 +34,11 @@ export const RESPONSE_HEADERS: readonly HeaderField[] = [
   { name: "Cross-Origin-Opener-Policy", value: "same-origin" },
   { name: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
 ];
+
+/**
+ * What a file under /assets/ carries besides RESPONSE_HEADERS. The build names
+ * each file there by its content's hash, so a cached copy never goes stale.
+ */
+export const HASHED_FILE_HEADERS: readonly HeaderField[] = [
+  { name: "Cache-Control", value: "public, max-age=31536000, immutable" },
+];

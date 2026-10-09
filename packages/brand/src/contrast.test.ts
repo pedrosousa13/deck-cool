@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { decks } from "./decks.ts";
 
-const css = readFileSync(new URL("../public/brand.css", import.meta.url), "utf8");
+const css = readFileSync(new URL("../styles/brand.css", import.meta.url), "utf8");
 const tokens = new Map<string, string>();
 for (const [, name, value] of css.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
   if (name !== undefined && value !== undefined) tokens.set(name, value.trim());

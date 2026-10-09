@@ -5,7 +5,7 @@ import { expect, test } from "vitest";
 const SHEETS = ["brand.css", "family-bar.css", "umbrella.css"];
 
 test.each(SHEETS)("every transition and animation in %s uses the brand curve", (sheet) => {
-  const css = readFileSync(new URL(`../public/${sheet}`, import.meta.url), "utf8");
+  const css = readFileSync(new URL(`../styles/${sheet}`, import.meta.url), "utf8");
   const declarations = [...css.matchAll(/\b(transition|animation)(-[\w-]+)?\s*:\s*([^;}]+)/g)];
   expect(declarations).not.toHaveLength(0);
 
