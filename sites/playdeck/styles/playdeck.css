@@ -107,135 +107,363 @@ main .pd-button:hover {
   flex-direction: column;
 }
 
-/* The home page. */
-.pd-home {
-  padding-block: 56px 88px;
+/*
+ * The home page, laid out as deck.cool's home page is (the brand kit's
+ * umbrella.css): a centred hero, a 28px card, and full-width bands of tiles.
+ */
+.pd-intro {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 112px 22px 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  text-align: center;
 }
-.pd-thesis {
-  display: grid;
-  gap: 16px;
-  justify-items: start;
-}
-.pd-thesis__name {
+.pd-intro > * {
   margin: 0;
-  color: var(--text-secondary);
+}
+.pd-intro img {
+  display: block;
+}
+.pd-intro .pd-intro__lead {
+  color: var(--playdeck-text);
   font-size: 21px;
-}
-.pd-thesis__display {
-  max-width: 22ch;
-  margin: 0;
-  font-size: clamp(36px, 7vw, 64px);
   font-weight: 600;
+  letter-spacing: -.01em;
+}
+/* 80px as on deck.cool, narrowing so each line holds down to 360px. */
+.pd-intro h1 {
+  font-size: clamp(32px, 9vw, 80px);
   line-height: 1.05;
   letter-spacing: -.025em;
-  text-wrap: balance;
 }
-.pd-thesis__lede {
-  max-width: 60ch;
-  margin: 0;
+.pd-intro h1 span,
+.pd-intro p {
   color: var(--text-secondary);
-  font-size: 19px;
-  line-height: 1.42;
 }
-.pd-thesis__actions {
+.pd-intro p {
+  max-width: 640px;
+  font-size: 21px;
+  line-height: 1.38;
+}
+.pd-intro__actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   gap: 12px;
   margin-top: 8px;
 }
+/* No copy island: one click or tap selects the whole command instead. */
 .pd-install {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 4px 18px;
+  max-width: 100%;
+  padding: 11px 22px;
+  border: 1px solid var(--rule);
   border-radius: 999px;
-  background: var(--ground-raised);
+  background: var(--ground-tile);
 }
-/* One click or tap selects the whole command, so it copies with no script. */
 main .pd-install__command {
-  min-width: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 0;
-  overflow-wrap: anywhere;
-  background: none;
-  font-size: 15px;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.5;
   -webkit-user-select: all;
   user-select: all;
   cursor: text;
 }
-
-.pd-cards {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
-  margin-top: 72px;
-}
-@media (min-width: 48rem) {
-  .pd-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-main .pd-card {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  min-width: 0;
-  padding: 28px;
-  border-radius: 28px;
-  background: var(--ground-tile);
-  color: var(--text);
+main .pd-more {
+  color: var(--playdeck-text);
+  font-size: 17px;
   text-decoration: none;
 }
-main .pd-card:hover {
-  background: var(--ground-raised);
+main .pd-more:hover {
   color: var(--text);
 }
-.pd-card__number {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-.pd-card__headline {
-  margin: 0;
-  color: var(--playdeck-text);
-  font-size: 24px;
-}
-.pd-card__description {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 15px;
-}
-.pd-card__snippet {
-  min-width: 0;
-  margin-top: 8px;
-}
-.pd-card .shiki {
-  padding: 14px 18px;
-  border-radius: 14px;
-  background-color: var(--ground-page) !important;
-  font-size: 13px;
-}
 
-.pd-close {
-  display: grid;
-  justify-items: start;
-  gap: 20px;
-  margin-top: 72px;
-  padding-top: 32px;
-  border-top: 1px solid var(--rule);
-}
-.pd-close__measured {
-  max-width: 60ch;
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-}
-.pd-close__links {
+/* The proof: three points beside the one figure. */
+.pd-proof {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 24px;
+  gap: 40px;
+  margin: 0 max(22px, calc((100% - 980px) / 2)) 112px;
+  padding: 40px;
+  border-radius: 28px;
+  background: var(--ground-tile);
+}
+.pd-proof h2,
+.pd-proof h3,
+.pd-proof p {
   margin: 0;
+}
+.pd-proof__text {
+  flex: 1 1 380px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.pd-proof h2 {
+  font-size: 32px;
+  line-height: 1.12;
+  letter-spacing: -.02em;
+}
+.pd-proof__points {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pd-proof__points li {
+  display: grid;
+  gap: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+.pd-proof h3 {
+  font-size: 19px;
+  letter-spacing: -.01em;
+}
+.pd-proof__points p {
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1.47;
+}
+.pd-proof__figure {
+  flex: 1 1 280px;
+  min-width: 0;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.pd-proof__figure p:first-child {
+  color: var(--playdeck-text);
+  font-size: clamp(80px, 16vw, 140px);
+  line-height: .95;
+  font-weight: 600;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+}
+.pd-proof__figure p:nth-child(2) {
+  font-size: 21px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.pd-proof__figure p:nth-child(3) {
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+.pd-proof__figure .pd-more {
+  margin-top: 12px;
+}
+
+/* The four quality sections, each a band. */
+.pd-band {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 96px max(22px, calc((100% - 980px) / 2));
+  background: #0b0b0c;
+  border-top: 1px solid #1d1d1f;
+}
+.pd-band__text {
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+.pd-band h2,
+.pd-band__text p {
+  margin: 0;
+}
+.pd-band h2 {
+  font-size: 48px;
+  line-height: 1.08;
+  letter-spacing: -.02em;
+}
+.pd-band__text p {
+  color: var(--text-secondary);
+  font-size: 19px;
+  line-height: 1.42;
+}
+.pd-band__note {
+  max-width: 680px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+/* The call to action a band ends on sits on its own line, at its own width. */
+.pd-band > .pd-button {
+  align-self: flex-start;
+}
+.pd-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pd-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 32px;
+  border-radius: 28px;
+  background: var(--ground-tile);
+}
+.pd-tile h3,
+.pd-tile p {
+  margin: 0;
+}
+.pd-tile h3 {
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -.01em;
+}
+.pd-tile__body {
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1.47;
+}
+.pd-code {
+  min-width: 0;
+}
+/* A blank line keeps its height in the column the lines are laid in. */
+.pd-code .line {
+  min-height: 1lh;
+}
+
+/* Two skins: one player, the same markup twice, each sheet shown below it. */
+.pd-skins {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+  gap: 20px;
+}
+.pd-skin {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 28px;
+  background: var(--ground-tile);
+}
+.pd-skin figcaption {
+  padding: 24px 32px 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+}
+.pd-skin__stage {
+  min-width: 0;
+  padding: 24px 32px 32px;
+}
+/* Each skin's source, folded until opened. */
+.pd-skin__source {
+  margin-top: auto;
+  border-top: 1px solid var(--rule);
+}
+.pd-skin__source > summary {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 0 32px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  list-style: none;
+  cursor: pointer;
+}
+.pd-skin__source > summary:hover {
+  color: var(--text);
+}
+.pd-skin__source > summary:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: -2px;
+}
+/* A disclosure triangle, drawn, that turns when the source is open. */
+.pd-skin__source > summary::-webkit-details-marker {
+  display: none;
+}
+.pd-skin__source > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  margin-right: 12px;
+  border-block: 5px solid transparent;
+  border-inline-start: 7px solid currentcolor;
+}
+.pd-skin__source[open] > summary::before {
+  rotate: 90deg;
+}
+.pd-skin__source .shiki {
+  max-height: 32rem;
+  padding: 0 32px 32px;
+  overflow: auto;
+  border-radius: 0;
+  font-size: 13px;
+  scrollbar-width: thin;
+}
+
+/* One line back to deck.cool. */
+.pd-family {
+  padding: 56px 22px;
+  border-top: 1px solid #1d1d1f;
+  text-align: center;
+}
+.pd-family p {
+  max-width: 640px;
+  margin: 0 auto;
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1.47;
+}
+/* Underlined: it sits in a line of text. */
+main .pd-family .pd-more {
+  text-decoration: underline;
+}
+
+@media (max-width: 734px) {
+  .pd-intro {
+    padding: 72px 22px 64px;
+  }
+  .pd-intro p {
+    font-size: 19px;
+  }
+  .pd-proof {
+    gap: 32px;
+    margin-bottom: 72px;
+    padding: 28px 24px;
+  }
+  .pd-band {
+    padding-block: 64px;
+  }
+  .pd-band h2 {
+    font-size: 40px;
+  }
+  .pd-tile {
+    padding: 28px 24px;
+  }
+  .pd-skin figcaption,
+  .pd-skin__stage,
+  .pd-skin__source > summary,
+  .pd-skin__source .shiki {
+    padding-inline: 20px;
+  }
 }
 
 /* /examples. */

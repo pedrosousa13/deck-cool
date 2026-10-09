@@ -11,10 +11,6 @@ export const ORIGIN = "https://playdeck.video";
  */
 export const DOCS = {
   start: `${ORIGIN}/start/`,
-  reference: `${ORIGIN}/reference/`,
-  providers: `${ORIGIN}/providers/`,
-  contract: `${ORIGIN}/guides/contract/`,
-  capabilities: `${ORIGIN}/guides/capabilities-matrix/`,
 } as const;
 
 /** Each page this site builds, at the path playdeck.video serves it at today. */

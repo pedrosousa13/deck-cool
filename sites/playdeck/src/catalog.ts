@@ -5,6 +5,8 @@ export const HOME_PAGE = "home_page";
 export const EXAMPLES_PAGE = "examples_page";
 export const STREAMING_SERVICE = "streaming_service";
 export const COURSE_PLATFORM = "course_platform";
+/** The home page's one player, which it renders once per skin. */
+export const SKIN_PLAYER = "skin_player";
 export const PROSE = "prose";
 export const SEARCH = "search";
 export const SEARCH_PAGE = "search_page";
@@ -18,6 +20,7 @@ export const components: BuildSection["components"] = {
   [EXAMPLES_PAGE]: "./components/examples-page.tsx",
   [STREAMING_SERVICE]: "./components/archetype-streaming-service.tsx",
   [COURSE_PLATFORM]: "./components/archetype-course-platform.tsx",
+  [SKIN_PLAYER]: "./components/skin-player.tsx",
   [PROSE]: "./components/prose.tsx",
   // Idle: hydrating it fetches nothing, and `visible` would hydrate it the
   // moment it scrolled into view.

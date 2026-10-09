@@ -3,10 +3,11 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { decks } from "@deck-cool/brand/decks";
+import { decks, umbrella } from "@deck-cool/brand/decks";
 import { DOCS, ORIGIN, PATHS, REPO } from "../components/links.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 import { headersFor, parseHeaders } from "./serve-site.ts";
+import { SKINS } from "./skins.ts";
 
 // Reads the build that build.global-setup.ts writes.
 
@@ -150,7 +151,8 @@ describe("budgets, measured and pinned", () => {
   // Spelled again rather than imported, so a limit raised in the config fails here.
   // Each is the page's measured size rounded up to a whole kilobyte.
   const PINNED: Record<string, string> = {
-    [PATHS.home]: "0b",
+    // The two skinned players: one island, rendered twice.
+    [PATHS.home]: "59kb",
     [PATHS.examples]: "88kb",
     [PATHS.comparison]: "0b",
     [PATHS.search]: "60kb",
@@ -171,15 +173,15 @@ describe("budgets, measured and pinned", () => {
     }
   });
 
-  test.each([PATHS.home, PATHS.comparison])("%s ships 0 B of JavaScript, and no script at all", (path) => {
-    expect(budget.find((row) => row.path === path)?.actual).toBe(0);
-    expect(parse(path).querySelectorAll("script, link[rel=modulepreload]")).toHaveLength(0);
+  test("the comparison guide ships 0 B of JavaScript, and no script at all", () => {
+    expect(budget.find((row) => row.path === PATHS.comparison)?.actual).toBe(0);
+    expect(parse(PATHS.comparison).querySelectorAll("script, link[rel=modulepreload]")).toHaveLength(0);
   });
 
   test("each page with islands carries only its own", () => {
     const islands = Object.fromEntries(manifest.pages.map((page) => [page.path, [...page.components].sort()]));
     expect(islands).toEqual({
-      [PATHS.home]: [],
+      [PATHS.home]: ["skin_player"],
       [PATHS.examples]: ["course_platform", "streaming_service"],
       [PATHS.comparison]: [],
       [PATHS.search]: ["search"],
@@ -390,59 +392,242 @@ describe("the served headers", () => {
   });
 });
 
-describe("the home page, playdeck.video's copy", () => {
+function links(scope: Element | undefined): [string | undefined, string | null][] {
+  return [...(scope?.querySelectorAll("a") ?? [])].map((a) => [text(a), a.getAttribute("href")]);
+}
+
+function tiles(scope: Element | undefined): [string | undefined, string | undefined][] {
+  return [...(scope?.querySelectorAll(".pd-tile") ?? [])].map((tile) => [text(tile.querySelector("h3")), text(tile.querySelector("p"))]);
+}
+
+// CONTEXT.md, "The landing pages' message".
+describe("the home page", () => {
   const main = () => present(parse(PATHS.home).querySelector("main"), "<main>");
+  /** The sections of <main>, in order. */
+  const sections = () => [...main().querySelectorAll(":scope > section")];
+  const band = (heading: string) => sections().find((section) => text(section.querySelector("h2")) === heading);
 
-  test("is titled and headed as playdeck.video's", () => {
-    expect(parse(PATHS.home).title).toBe("Playdeck: a video player you compose");
-    expect([...main().querySelectorAll("h1")].map(text)).toEqual(["Playdeck"]);
-    expect(text(main().querySelector(".pd-thesis__display"))).toBe("A video player you compose, not one you configure.");
-    expect(text(main().querySelector(".pd-thesis__lede"))).toBe(
-      "React primitives and hooks over native video, HLS, YouTube, Vimeo and Wistia. You write the markup, you write the CSS, and the same six lines drive all five.",
+  test("is titled with the claim, and described for all three audiences", () => {
+    const doc = parse(PATHS.home);
+    expect(doc.title).toBe("Playdeck: A video player you compose, not one you configure");
+    expect(doc.head.querySelector('meta[name="description"]')?.getAttribute("content")).toBe(
+      "A React video player you compose from parts and style with your own CSS. One API plays your own files, HLS, YouTube, Vimeo and Wistia.",
     );
   });
 
-  test("carries the install command, selectable whole with no script, and Start", () => {
-    const thesis = present(main().querySelector(".pd-thesis"), "the thesis");
-    expect(text(thesis.querySelector("code.pd-install__command"))).toBe("pnpm add @playdeck/react");
-    expect(thesis.querySelectorAll("button, [data-fw-component]")).toHaveLength(0);
-    expect([...thesis.querySelectorAll("a")].map((a) => [text(a), a.getAttribute("href")])).toEqual([["Start →", DOCS.start]]);
-  });
-
-  test("holds the four feature cards, each with its snippet highlighted", () => {
-    const cards = [...main().querySelectorAll(".pd-card")];
-    expect(cards.map((card) => [text(card.querySelector("h2")), card.getAttribute("href")])).toEqual([
-      ["Compose it", DOCS.reference],
-      ["Style it", DOCS.contract],
-      ["Ask what the provider can do", DOCS.capabilities],
-      ["Recover from refused autoplay", DOCS.reference],
-    ]);
-    for (const card of cards) expect(card.querySelector("pre.shiki")).not.toBeNull();
-  });
-
-  test("gives each card one description paragraph, never a sentence split across two", () => {
-    const cards = [...main().querySelectorAll(".pd-card")];
-    expect(cards.map((card) => [...card.querySelectorAll("p")].map(text))).toEqual([
-      ["Every control is a component. Reorder them, drop one, put your own between them."],
-      ["No CSS ships in the bundle. Two authored themes, or write your own against stable part names."],
-      ["Every provider declares what it can do. A control it cannot honour renders nothing, and you can read the same answer."],
-      ["Ask for sound. If the browser refuses, the player retries muted once and tells you, so you can draw the unmute."],
+  test("runs hero, proof, the four quality sections, then the line back to deck.cool", () => {
+    expect(sections().map((section) => section.className)).toEqual([
+      "pd-intro",
+      "pd-proof",
+      "pd-band",
+      "pd-band",
+      "pd-band",
+      "pd-band",
+      "pd-family",
     ]);
   });
 
-  test("closes on the measured line, Start, and the ways onward", () => {
-    expect(text(main().querySelector(".pd-close__measured"))).toBe(
-      "23 kB gzipped, the whole of what @playdeck/react ships. Adding YouTube costs 7 kB. 0 requests to a provider before play.",
+  test("the hero: the version, the claim, one sentence for all three audiences, and the calls to action", () => {
+    const hero = sections()[0];
+    expect(hero?.querySelector("img")?.getAttribute("src")).toBe(playdeck.icons.animated);
+    expect(hero?.querySelector("img")?.getAttribute("alt")).toBe("");
+    expect([...main().querySelectorAll("h1")].map(text)).toEqual([playdeck.claim]);
+    expect(text(hero?.querySelector("h1"))).toBe("A video player you compose, not one you configure.");
+    expect([...(hero?.querySelectorAll("p") ?? [])].map(text)).toEqual([
+      "playdeck 1.3.0",
+      "Compose it from React parts, style each one with your own CSS, or hand it to your agent. The same few lines play your own files, HLS, YouTube, Vimeo and Wistia.",
+    ]);
+    expect(text(hero?.querySelector("code.pd-install__command"))).toBe("pnpm add @playdeck/react");
+    // No copy island: one click selects the command.
+    expect(hero?.querySelectorAll("button, [data-fw-component]")).toHaveLength(0);
+    // The docs as the call to action, and the examples as a quieter third.
+    expect(links(hero)).toEqual([
+      ["Read the docs", DOCS.start],
+      ["See it in action ›", PATHS.examples],
+    ]);
+    expect([...(hero?.querySelectorAll(".pd-intro__actions a") ?? [])].map((a) => a.className)).toEqual(["pd-button", "pd-more"]);
+  });
+
+  // CONTEXT.md: the "plain markdown" line waits until @playdeck/docs is on npm.
+  test("makes no claim about markdown docs or llms.txt", () => {
+    expect(main().textContent).not.toMatch(/Using an agent|markdown|llms\.txt/i);
+  });
+
+  test("the proof: three points beside the one figure, which this site's tests check", () => {
+    const proof = sections()[1];
+    expect(text(proof?.querySelector("h2"))).toBe("You pick the controls. playdeck knows what each source can do.");
+    expect(
+      [...(proof?.querySelectorAll(".pd-proof__points li") ?? [])].map((point) => [text(point.querySelector("h3")), text(point.querySelector("p"))]),
+    ).toEqual([
+      [
+        "Every control is a component",
+        "Reorder them, drop one, or put your own between them. Nothing renders that you did not compose.",
+      ],
+      ["It asks before it draws", "Each provider says what it can do. A control it cannot honour is left out, not shown and disabled."],
+      [
+        "One API, five sources",
+        "Native video, HLS, YouTube, Vimeo and Wistia. The source picks the provider, and nothing else changes.",
+      ],
+    ]);
+    expect([...(proof?.querySelectorAll(".pd-proof__figure > p") ?? [])].map(text)).toEqual([
+      playdeck.figure.value,
+      "requests to a video host before play",
+      "Measured on this page. Both players below wait for a press, and this site's tests fail if anything reaches another host before it.",
+    ]);
+    expect(links(proof)).toEqual([["See the examples ›", PATHS.examples]]);
+  });
+
+  test("the four quality sections, in the brief's order", () => {
+    expect(sections().slice(2, 6).map((section) => text(section.querySelector("h2")))).toEqual([
+      "Unstyled, your look.",
+      "Small, leans on the browser.",
+      "Built for agents.",
+      "Accessible by default.",
+    ]);
+  });
+
+  describe("unstyled: one player, two skins", () => {
+    const section = () => band("Unstyled, your look.");
+    const skins = () => [...(section()?.querySelectorAll(".pd-skin") ?? [])];
+
+    test("says playdeck brings no look, and names its parts", () => {
+      expect(text(section()?.querySelector(".pd-band__text p"))).toBe(
+        'playdeck imports no stylesheet. Its parts set only the geometry they need, and the optional theme is one import. Every part carries a name, like data-playdeck-part="play-button", for your CSS or your tokens to reach. Here is one live player, shown twice: the markup is the same, and only the CSS changes.',
+      );
+    });
+
+    test("renders the same player twice, dormant, each in its own skin", () => {
+      expect(skins().map((skin) => text(skin.querySelector("figcaption")))).toEqual(SKINS.map((skin) => skin.name));
+      const stages = skins().map((skin) => present(skin.querySelector(".pd-skin__stage"), "a skin's stage"));
+      expect(stages.map((stage) => stage.className)).toEqual(SKINS.map((skin) => `pd-skin__stage ${skin.className}`));
+      // The same markup, but for the id prefix Pagedeck gives each island.
+      const markup = stages.map((stage) => {
+        const prefix = present(stage.querySelector("[data-fw-prefix]")?.getAttribute("data-fw-prefix"), "an island's prefix");
+        return stage.innerHTML.replaceAll(prefix, "");
+      });
+      expect(markup[0]).toBe(markup[1]);
+      for (const stage of stages) {
+        const player = present(stage.querySelector('[data-fw-component="skin_player"]'), "a skinned player");
+        expect(player.querySelector('[data-playdeck-part="viewport"] button[data-playdeck-part="activation"]')).not.toBeNull();
+      }
+      // Dormant: no clip is set and no provider is framed before a press.
+      expect(main().querySelectorAll("video[src], source[src], iframe")).toHaveLength(0);
+    });
+
+    test("folds each skin's source into a closed <details>, named and counted in its summary", () => {
+      const sources = skins().map((skin) => present(skin.querySelector("details.pd-skin__source"), "a skin's source"));
+      expect(sources.map((source) => source.hasAttribute("open"))).toEqual([false, false]);
+      expect(sources.map((source) => text(source.querySelector(":scope > summary")))).toEqual(
+        SKINS.map((skin) => `${skin.name} CSS · ${readFileSync(`${SITE}${skin.file}`, "utf8").trim().split("\n").length} lines`),
+      );
+    });
+
+    test("highlights each source at build time, and names the block it scrolls in", () => {
+      for (const [at, skin] of skins().entries()) {
+        const pre = present(skin.querySelector("details > div > pre.shiki"), "a skin's highlighted source");
+        expect(pre.getAttribute("aria-label")).toBe(`${SKINS[at]?.name} CSS`);
+        expect(pre.getAttribute("tabindex")).toBe("0");
+        expect(pre.querySelectorAll('.line span[style*="color"]').length).toBeGreaterThan(0);
+      }
+    });
+
+    test("shows beside each skin the source file the stylesheet is compiled from, written against part names alone", () => {
+      const css = readFileSync(`${SITE}site${present(parse(PATHS.home).head.querySelector('link[rel="stylesheet"]')?.getAttribute("href"), "the stylesheet link")}`, "utf8");
+      expect(skins().map((skin) => [...skin.querySelectorAll("pre .line")].map((line) => line.textContent).join("\n"))).toEqual(
+        SKINS.map((skin) => readFileSync(`${SITE}${skin.file}`, "utf8").trim()),
+      );
+      for (const skin of SKINS) {
+        const source = readFileSync(`${SITE}${skin.file}`, "utf8");
+        // Each rule reaches the player through a part name, never a class of its own.
+        for (const [selector = ""] of source.matchAll(/^[^\s@}][^{]*(?=\{)/gm)) {
+          for (const each of selector.split(",")) expect(each.trim(), skin.file).toMatch(new RegExp(`^\\.${skin.className} \\[data-playdeck-part="[a-z-]+"\\]`));
+        }
+        expect(css).toContain(`.${skin.className} [data-playdeck-part=`);
+      }
+    });
+
+    test("ends on a call to action for every example", () => {
+      const cta = present(section()?.querySelector(":scope > a:last-child"), "the section's last link");
+      expect([text(cta), cta.getAttribute("href"), cta.className]).toEqual(["See all examples ›", PATHS.examples, "pd-button"]);
+      // Under the two skins.
+      expect(section()?.querySelector(".pd-skins ~ a.pd-button")).toBe(cta);
+    });
+
+    test("says neither player loads before a press, and credits the clip", () => {
+      expect(text(section()?.querySelector(".pd-band__note"))).toBe(
+        "Neither player fetches its clip or its provider until you press play. The clip is the Sintel trailer, © Blender Foundation, licensed CC BY 3.0, played from the foundation's own host.",
+      );
+      expect(links(section()?.querySelector(".pd-band__note") ?? undefined)).toEqual([
+        ["CC BY 3.0", "https://creativecommons.org/licenses/by/3.0/"],
+      ]);
+    });
+  });
+
+  // Each figure is playdeck's README at 1.3.0 (cf72813).
+  test("small: providers on demand, native HLS, and what an MP4 page downloads", () => {
+    const section = band("Small, leans on the browser.");
+    expect(text(section?.querySelector(".pd-band__text p"))).toBe(
+      "The browser already knows how to play a video. playdeck drives the video element instead of rebuilding it, and loads a provider only when a source needs one.",
     );
-    expect([...main().querySelectorAll(".pd-close__links a")].map((a) => [text(a), a.getAttribute("href")])).toEqual([
-      ["Reference →", DOCS.reference],
-      ["Providers →", DOCS.providers],
-      ["Examples →", PATHS.examples],
+    expect(tiles(section)).toEqual([
+      ["Providers on demand", "A page that plays MP4 ships no YouTube, Vimeo, Wistia or hls.js code. Each provider loads once a source asks for it."],
+      ["Native HLS where it exists", "Safari and iOS play HLS on their own, so playdeck never fetches hls.js there."],
+      ["40.4 KB for an MP4", "The core, the primitives and the native provider, gzipped, with React external. playdeck's CI measures it on every run."],
     ]);
   });
 
-  test("has no bench and no link to /design", () => {
-    expect(main().querySelector("video, iframe, .bench")).toBeNull();
+  test("agents: a few named parts, typed, and mistakes that say what they are, over the quickstart", () => {
+    const section = band("Built for agents.");
+    expect(text(section?.querySelector(".pd-band__text p"))).toBe(
+      "Whether you write the code or your coding agent does, playdeck leaves less to guess.",
+    );
+    expect(tiles(section)).toEqual([
+      [
+        "A few named parts",
+        "A player is Player.Root, Player.Viewport and Player.Media, plus the controls you pick. The quickstart below is the whole of one.",
+      ],
+      ["Typed all the way", "playdeck is written in TypeScript and ships its types, so your editor and your agent see every prop."],
+      [
+        "Mistakes say what they are",
+        "Ask a player to autoplay while it waits for a press, or to load on sight with no Player.Viewport, and it reports an error that names the mistake.",
+      ],
+    ]);
+    const quickstart = [...(section?.querySelectorAll(".pd-code .line") ?? [])].map((line) => line.textContent).join("\n");
+    expect(quickstart).toContain("import * as Player from '@playdeck/react';");
+    expect(quickstart).toContain('<Player.Root source="https://example.com/clip.mp4">');
+  });
+
+  // Only playdeck's rows in deck-cool#46, each with a heading: every one is a test in pedrosousa13/playdeck.
+  test("accessible: playdeck's six tested claims", () => {
+    const section = band("Accessible by default.");
+    expect(text(section?.querySelector(".pd-band__text p"))).toBe(
+      "playdeck takes care of the keyboard, focus and screen readers for you. Each line below is backed by a test in playdeck's own repo.",
+    );
+    expect(tiles(section)).toEqual([
+      ["Every control by Tab", "Every control is reachable by Tab, in order."],
+      ["Shortcuts reach the video", "Keyboard shortcuts mute, pause and seek the video itself."],
+      ["Focus comes back", "The settings menu takes focus when it opens and gives it back on Escape."],
+      ["Announced, never narrated", "Live regions announce changes of state, never the ticking clock."],
+      ["Clean under axe", "axe finds no violations in any state of the reference player."],
+      ["Calm under reduced motion", "A viewer who asks for reduced motion gets no autoplay, unless you opt out."],
+    ]);
+    expect(links(section)).toEqual([["Try the examples ›", PATHS.examples]]);
+  });
+
+  test("closes with one line back to deck.cool", () => {
+    const family = sections()[6];
+    expect(text(family?.querySelector("p"))).toBe(
+      "playdeck is part of deck.cool, a family of unstyled React packages that look like you and work like the browser. Meet the family ›",
+    );
+    expect(links(family)).toEqual([["Meet the family ›", umbrella.url]]);
+  });
+
+  // The home page only: the examples keep playdeck.video's copy as it was ported.
+  test("uses no em dash anywhere", () => {
+    expect(html(PATHS.home)).not.toMatch(/—|&mdash;/);
+  });
+
+  test("links no page this site drops", () => {
     for (const path of PAGES) expect(hrefs(parse(path)).filter((href) => /\/design\/?$/.test(href ?? "")), path).toEqual([]);
   });
 });

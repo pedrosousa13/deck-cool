@@ -9,7 +9,6 @@ import { defineSearch } from "@pagedeck/search";
 import { cpSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { codeToHtml } from "shiki";
 import type { DocsLayoutProps } from "@deck-cool/docs";
-import type { Card } from "./components/home-page.tsx";
 import type { SourceFile } from "./components/examples-page.tsx";
 import { DOCS, ORIGIN, PATHS, REPO } from "./components/links.ts";
 import {
@@ -28,6 +27,7 @@ import {
 import { playdeckChunkNames } from "./src/chunk-names.ts";
 import { iconizeFeaturesTable, scrollTables, stageComparison } from "./src/comparison.ts";
 import { HASHED_FILE_HEADERS, HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
+import { SKINS, skins } from "./src/skins.ts";
 
 const LOCALE = "en";
 
@@ -35,57 +35,30 @@ const LOCALE = "en";
 // where `github-dark`'s do not all.
 const CODE_THEME = "github-dark-default";
 
-/** The home page: playdeck.video's copy on 2026-10-09. */
+/** The home page: CONTEXT.md's "The landing pages' message". */
 const HOME = {
-  title: "Playdeck: a video player you compose",
-  display: "A video player you compose, not one you configure.",
-  lede: "React primitives and hooks over native video, HLS, YouTube, Vimeo and Wistia. You write the markup, you write the CSS, and the same six lines drive all five.",
-  install: "pnpm add @playdeck/react",
-  // playdeck's scripts/bundle-budgets.mjs measures both at 1.3.0, and
-  // playdeck.video printed them on 2026-10-09. Its literal backticks around
-  // the package name are dropped on purpose: they rendered as text, not code.
-  // Re-read the figures at each bump.
-  measured:
-    "23 kB gzipped, the whole of what @playdeck/react ships. Adding YouTube costs 7 kB. 0 requests to a provider before play.",
-} as const;
+  title: "Playdeck: A video player you compose, not one you configure",
+  description:
+    "A React video player you compose from parts and style with your own CSS. One API plays your own files, HLS, YouTube, Vimeo and Wistia.",
+  // The quickstart in playdeck's README at 1.3.0 (cf72813), verbatim.
+  quickstart: `import * as Player from '@playdeck/react';
 
-/**
- * The four feature cards. playdeck.video's source wraps each description
- * over two lines, and printed each line as a paragraph of its own; here each
- * is one sentence run, in one paragraph. "Style it" pointed at playdeck.video's /design,
- * which this site drops (CONTEXT.md: no site shows off shared tokens), so it
- * points at the part-name contract it describes.
- */
-const CARDS = [
-  {
-    headline: "Compose it",
-    description: "Every control is a component. Reorder them, drop one, put your own between them.",
-    snippet: `<Player.Controls>\n  <Player.PlayButton />\n  <Logo />\n  <Player.Time type="current" />\n</Player.Controls>`,
-    lang: "tsx",
-    href: DOCS.reference,
-  },
-  {
-    headline: "Style it",
-    description: "No CSS ships in the bundle. Two authored themes, or write your own against stable part names.",
-    snippet: `[data-playdeck-part='play-button'] {\n  border-radius: 999px;\n}`,
-    lang: "css",
-    href: DOCS.contract,
-  },
-  {
-    headline: "Ask what the provider can do",
-    description: "Every provider declares what it can do. A control it cannot honour renders nothing, and you can read the same answer.",
-    snippet: "usePlayerState((s) => s.capabilities.pictureInPicture)",
-    lang: "tsx",
-    href: DOCS.capabilities,
-  },
-  {
-    headline: "Recover from refused autoplay",
-    description: "Ask for sound. If the browser refuses, the player retries muted once and tells you, so you can draw the unmute.",
-    snippet: `<Player.Root autoplay="audible-then-muted">`,
-    lang: "tsx",
-    href: DOCS.reference,
-  },
-] as const;
+// One API across MP4/WebM, HLS, YouTube, Vimeo and Wistia: the source decides
+// which provider loads, and nothing else changes.
+export const Clip = () => (
+  <Player.Root source="https://example.com/clip.mp4">
+    <Player.Viewport>
+      <Player.Media />
+      <Player.Controls>
+        <Player.PlayButton />
+        <Player.SeekSlider />
+        <Player.Time type="current" />
+        <Player.FullscreenButton />
+      </Player.Controls>
+    </Player.Viewport>
+  </Player.Root>
+);`,
+} as const;
 
 const EXAMPLES = {
   title: "Examples — Playdeck",
@@ -129,6 +102,9 @@ const BAR_LINKS = [
 // kilobyte. Re-measure rather than raise one.
 const BUDGET = {
   "/**": "0b",
+  // The players hydrate on "visible": the budget counts the chunks a page
+  // loads eagerly, and each player's own code arrives when it scrolls into view.
+  [PATHS.home]: "59kb",
   [PATHS.examples]: "88kb",
   [PATHS.search]: "60kb",
 } as const;
@@ -164,31 +140,35 @@ function singlePage(route: Route): PageSource<Record<string, never>> {
   };
 }
 
-/** `code`, highlighted as the markdown loader highlights a fence. */
-function highlight(code: string, lang: string): Promise<string> {
-  return codeToHtml(code, { lang, theme: CODE_THEME });
+/**
+ * `code`, highlighted as the markdown loader highlights a fence. A `label`
+ * names the <pre>, which is a tab stop because it scrolls.
+ */
+function highlight(code: string, lang: string, label?: string): Promise<string> {
+  return codeToHtml(code, {
+    lang,
+    theme: CODE_THEME,
+    transformers: label === undefined ? [] : [{ pre: (node) => void (node.properties["aria-label"] = label) }],
+  });
+}
+
+/** The version of @playdeck/react this site installs, which the home page's hero names. */
+function playdeckVersion(): string {
+  const pkg: unknown = JSON.parse(readFileSync("./node_modules/@playdeck/react/package.json", "utf8"));
+  const version = typeof pkg === "object" && pkg !== null && "version" in pkg ? pkg.version : undefined;
+  if (typeof version !== "string") throw new Error("@playdeck/react's package.json has no version");
+  return version;
 }
 
 async function homeContent(): Promise<PageContent> {
-  const cards: Card[] = await Promise.all(
-    CARDS.map(async ({ snippet, lang, ...card }) => ({ ...card, html: await highlight(snippet, lang) })),
-  );
   return {
     tree: [
       {
         component: HOME_PAGE,
         props: {
-          display: HOME.display,
-          lede: HOME.lede,
-          install: HOME.install,
-          start: DOCS.start,
-          cards,
-          measured: HOME.measured,
-          links: [
-            ["Reference", DOCS.reference],
-            ["Providers", DOCS.providers],
-            ["Examples", PATHS.examples],
-          ],
+          version: playdeckVersion(),
+          skins: await Promise.all(skins().map(async (skin) => ({ ...skin, html: await highlight(skin.css, "css", `${skin.name} CSS`) }))),
+          quickstart: await highlight(HOME.quickstart, "tsx"),
         },
       },
     ],
@@ -257,7 +237,7 @@ function contentOf(page: Page, store: ContentStoreReader): PageContent | Promise
 }
 
 function headOf(page: Page): PageHead | undefined {
-  if (page.path === PATHS.home) return { title: HOME.title, description: HOME.lede };
+  if (page.path === PATHS.home) return { title: HOME.title, description: HOME.description };
   if (page.path === PATHS.examples) return { title: EXAMPLES.title, description: EXAMPLES.description };
   if (page.path === PATHS.search) return { title: SEARCH_COPY.title, description: SEARCH_COPY.description };
   // The comparison guide's title and description are the docs layout's.
@@ -300,6 +280,7 @@ export default defineConfig({
       "./styles/playdeck.css",
       "./styles/archetype-streaming-service.css",
       "./styles/archetype-course-platform.css",
+      ...SKINS.map((skin) => `./${skin.file}`),
     ].map((sheet) => realpathSync(sheet)),
     passthrough: { root: stagePublic() },
     routing: {

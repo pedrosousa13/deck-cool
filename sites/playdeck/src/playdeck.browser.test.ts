@@ -147,33 +147,74 @@ describe("the playdeck site in a browser", () => {
 
   test("with motion allowed, a link's colour change eases on the brand's curve", async () => {
     const { page } = await visit(PATHS.home, { width: 1280, reducedMotion: "no-preference" });
-    const timing = await page.locator(".pd-card").first().evaluate((card) => getComputedStyle(card).transitionTimingFunction);
+    const timing = await page.locator(".pd-intro .pd-button").evaluate((button) => getComputedStyle(button).transitionTimingFunction);
     expect(timing).toContain("cubic-bezier(0.32, 0.72, 0, 1)");
     expect(timing.replaceAll("cubic-bezier(0.32, 0.72, 0, 1)", "").replace(/[\s,]/g, "")).toBe("");
   });
 
-  test("the home page's install command is selected whole by one click, with no script", async () => {
-    const { page, scripts } = await visit(PATHS.home, { width: 1280 });
+  // No copy island: the command selects whole in one click.
+  test("the home page's install command is selected whole by one click", async () => {
+    const { page } = await visit(PATHS.home, { width: 1280 });
     await page.locator(".pd-install__command").click();
     expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("pnpm add @playdeck/react");
-    expect(scripts).toEqual([]);
+  });
+
+  test("the home page's two skins set the same player in two different faces and grounds", async () => {
+    const { page } = await visit(PATHS.home, { width: 1280 });
+    const looks = await page.locator('.pd-skin__stage [data-playdeck-part="viewport"]').evaluateAll((viewports) =>
+      viewports.map((viewport) => {
+        const style = getComputedStyle(viewport);
+        return [style.fontFamily, style.backgroundImage, style.backgroundColor, style.borderRadius];
+      }),
+    );
+    expect(looks).toHaveLength(2);
+    expect(looks[0]?.[0]).not.toBe(looks[1]?.[0]);
+    expect(looks[0]?.slice(1, 3)).not.toEqual(looks[1]?.slice(1, 3));
+    expect(looks[0]?.[3]).not.toBe(looks[1]?.[3]);
+  });
+
+  // Longer than the default: it runs axe, which is slow under the full suite.
+  test("each skin's source opens from the keyboard, folded until then, and keeps its name open", { timeout: 30_000 }, async () => {
+    const { page, violations } = await visit(PATHS.home, { width: 1280 });
+    for (const name of ["Velvet", "Broadcast"]) {
+      const source = page.getByLabel(`${name} CSS`, { exact: true });
+      expect(await source.evaluate((element) => element.tagName)).toBe("PRE");
+      expect(await source.isVisible()).toBe(false);
+      const summary = page.locator("summary", { hasText: `${name} CSS ·` });
+      await summary.focus();
+      expect(await summary.evaluate((element) => element === document.activeElement)).toBe(true);
+      await page.keyboard.press("Enter");
+      await expect.poll(() => source.isVisible()).toBe(true);
+      // Open, the scrolling block is still a named stop for the keyboard.
+      await page.keyboard.press("Tab");
+      expect(await source.evaluate((element) => element === document.activeElement)).toBe(true);
+    }
+    expect((await new AxeBuilder({ page }).include(".pd-skins").analyze()).violations).toEqual([]);
+    expect(await violations()).toEqual([]);
   });
 
   // CONTEXT.md's figure for playdeck: 0 requests to YouTube or Vimeo before
   // play. No page here mounts either provider yet (#52's demos do), so this
-  // holds the stronger claim: before a press, a player requests nothing from
-  // any other origin, and loads no provider.
+  // holds the stronger claim, the one the home page's figure makes: before a
+  // press, a player requests nothing from any other origin, and loads no
+  // provider.
+  const SINTEL = "/durian/trailer/sintel_trailer-720p.mp4";
   describe.each([
-    { name: "streaming service", press: "Play from the beginning", clip: "/durian/trailer/sintel_trailer-720p.mp4" },
-    { name: "course platform", press: "Start the lesson", clip: "/peach/trailer/trailer_iphone.m4v" },
-  ])("the $name player", ({ press, clip }) => {
+    { name: "home page's Velvet", path: PATHS.home, scope: ".pd-skin__stage.velvet", press: "Play video", clip: SINTEL },
+    { name: "home page's Broadcast", path: PATHS.home, scope: ".pd-skin__stage.broadcast", press: "Play video", clip: SINTEL },
+    { name: "streaming service", path: PATHS.examples, scope: "main", press: "Play from the beginning", clip: SINTEL },
+    { name: "course platform", path: PATHS.examples, scope: "main", press: "Start the lesson", clip: "/peach/trailer/trailer_iphone.m4v" },
+  ])("the $name player", ({ path, scope, press, clip }) => {
     test("requests nothing off the origin, and loads no provider, until it is pressed; then plays its clip under the CSP", async () => {
-      const { page, offOrigin, scripts, violations, errors } = await visit(PATHS.examples, { width: 1280 });
+      const { page, offOrigin, scripts, violations, errors } = await visit(path, { width: 1280 });
       await page.waitForLoadState("networkidle");
-      // Every island on the page has hydrated: each player's activation is live.
-      await expect.poll(() => page.locator("[data-fw-component] [data-playdeck-part]").count()).toBeGreaterThan(0);
       // Scrolled past both players, so anything that loads on sight has loaded.
       await page.mouse.wheel(0, 4000);
+      await page.waitForLoadState("networkidle");
+      // Then back to this one, until it has hydrated: a viewport writes
+      // data-idle from an effect, which the server's HTML does not carry.
+      await page.locator(scope).first().scrollIntoViewIfNeeded();
+      await page.locator(`${scope} [data-playdeck-part="viewport"][data-idle]`).first().waitFor();
       await page.waitForLoadState("networkidle");
       expect(offOrigin).toEqual([]);
       const before = [...scripts];
@@ -182,7 +223,7 @@ describe("the playdeck site in a browser", () => {
       expect(before.length).toBeGreaterThan(0);
       expect(before.filter((path) => provider.test(path))).toEqual([]);
 
-      await page.getByRole("button", { name: press, exact: true }).click();
+      await page.locator(scope).getByRole("button", { name: press, exact: true }).click();
       await expect.poll(() => offOrigin).toContain(`${MEDIA_ORIGINS[0]}${clip}`);
       // Only the player's own clip: no provider, no other host.
       for (const url of offOrigin) expect(new URL(url).origin).toBe(MEDIA_ORIGINS[0]);

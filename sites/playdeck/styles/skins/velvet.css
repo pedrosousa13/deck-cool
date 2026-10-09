@@ -1,0 +1,70 @@
+.velvet [data-playdeck-part="viewport"] {
+  aspect-ratio: var(--playdeck-media-aspect-ratio, 16 / 9);
+  overflow: hidden;
+  border-radius: 28px;
+  background: radial-gradient(circle at 25% 15%, #7b3fa8, #2a0f45 55%, #12061f);
+  color: #fff;
+  font-family: ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+}
+.velvet [data-playdeck-part="media"] {
+  width: 100%;
+  height: 100%;
+}
+.velvet [data-playdeck-part="activation"] {
+  --playdeck-activation-fill: #fff;
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+  box-shadow: 0 16px 48px rgb(0 0 0 / .5);
+  color: #2a0f45;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.velvet [data-playdeck-part="activation"]:hover {
+  --playdeck-activation-fill: #ffd6e5;
+}
+.velvet [data-playdeck-part="controls"] {
+  position: absolute;
+  inset: auto 14px 14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgb(18 6 31 / .72);
+  backdrop-filter: blur(16px);
+}
+.velvet [data-playdeck-part="controls"] button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+}
+.velvet [data-playdeck-part="controls"] svg {
+  width: 22px;
+  height: 22px;
+}
+.velvet [data-playdeck-part="seek-slider"] {
+  flex: 1;
+  min-width: 0;
+}
+.velvet [data-playdeck-part="seek-slider-input"] {
+  display: block;
+  width: 100%;
+  accent-color: #ff8fb1;
+}
+.velvet [data-playdeck-part="time"] {
+  padding: 0 6px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.velvet [data-playdeck-part="viewport"] :focus-visible {
+  outline: 2px solid #ff8fb1;
+  outline-offset: 2px;
+}

@@ -1,0 +1,89 @@
+.broadcast [data-playdeck-part="viewport"] {
+  aspect-ratio: var(--playdeck-media-aspect-ratio, 16 / 9);
+  border: 4px solid #000;
+  background: #ffd60a;
+  color: #000;
+  font-family: ui-monospace, Menlo, monospace;
+  text-transform: uppercase;
+}
+.broadcast [data-playdeck-part="media"] {
+  width: 100%;
+  height: 100%;
+}
+.broadcast [data-playdeck-part="activation"] {
+  --playdeck-activation-fill: transparent;
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 20px 24px;
+  color: #000;
+  font: inherit;
+  font-size: clamp(36px, 8vw, 64px);
+  font-weight: 800;
+  line-height: .9;
+  letter-spacing: -.04em;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.broadcast [data-playdeck-part="activation"]::before {
+  content: "";
+  width: .62em;
+  height: .72em;
+  background: currentcolor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.broadcast [data-playdeck-part="activation"]:hover {
+  --playdeck-activation-fill: #000;
+  color: #ffd60a;
+}
+.broadcast [data-playdeck-part="controls"] {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  gap: 4px;
+  border-top: 4px solid #000;
+  background: #000;
+}
+.broadcast [data-playdeck-part="controls"] button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+}
+.broadcast [data-playdeck-part="controls"] button:hover {
+  background: #000;
+  color: #ffd60a;
+}
+.broadcast [data-playdeck-part="controls"] svg {
+  width: 20px;
+  height: 20px;
+}
+.broadcast [data-playdeck-part="seek-slider"] {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  padding: 0 12px;
+  background: #fff;
+}
+.broadcast [data-playdeck-part="seek-slider-input"] {
+  width: 100%;
+  accent-color: #000;
+}
+.broadcast [data-playdeck-part="time"] {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.broadcast [data-playdeck-part="viewport"] :focus-visible {
+  outline: 4px solid #000;
+  outline-offset: -8px;
+}
