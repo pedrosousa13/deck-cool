@@ -1,0 +1,292 @@
+/*
+ * The umbrella site's home page (design/canvas/Main.dc.html). Uses the tokens
+ * in brand.css. Every motion is under prefers-reduced-motion: no-preference.
+ */
+body {
+  -webkit-font-smoothing: antialiased;
+}
+main a {
+  color: var(--text-link);
+}
+main a:hover {
+  color: #5eb0ff;
+}
+main a:focus-visible,
+.site-footer a:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+}
+main p,
+main h1,
+main h2 {
+  margin: 0;
+}
+
+/* The hero. */
+.hero {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 112px 22px 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  text-align: center;
+}
+/* 80px as on the board, narrowing so each line holds down to 360px. */
+.hero h1 {
+  font-size: clamp(32px, 9vw, 80px);
+  line-height: 1.05;
+  font-weight: 600;
+  letter-spacing: -.025em;
+}
+.hero h1 span,
+.hero p {
+  color: var(--text-secondary);
+}
+.hero p {
+  max-width: 640px;
+  font-size: 21px;
+  line-height: 1.38;
+}
+.hero__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+.hero__links a {
+  padding: 12px 6px;
+  font-size: 17px;
+  text-decoration: none;
+}
+.hero__links .hero__browse {
+  padding: 12px 22px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--ground-page);
+}
+
+/* One card per deck. */
+.decks {
+  box-sizing: border-box;
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 0 22px 112px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.decks,
+.card {
+  scroll-margin-top: 72px;
+}
+.card {
+  --tint: var(--text-link);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+  padding: 40px;
+  border-radius: 28px;
+  background: var(--ground-tile);
+}
+.card:hover {
+  background: var(--ground-raised);
+}
+.card[data-deck="slidedeck"] { --tint: var(--slidedeck-text); }
+.card[data-deck="playdeck"] { --tint: var(--playdeck-text); }
+.card[data-deck="pagedeck"] { --tint: var(--pagedeck-text); }
+.card__text {
+  flex: 1 1 380px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.card__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.card__head img {
+  display: block;
+  flex: none;
+}
+.card h2 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -.015em;
+}
+.card__kind {
+  font-size: 15px;
+  color: var(--tint);
+}
+.card__claim {
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.card__description {
+  font-size: 17px;
+  line-height: 1.47;
+  color: var(--text-secondary);
+}
+/* The board's Copy button needs script; selecting the command takes one click. */
+.card__install {
+  box-sizing: border-box;
+  max-width: 420px;
+  margin-top: 6px;
+  padding: 15px 16px;
+  border-radius: 14px;
+  background: var(--ground-page);
+}
+.card__install code {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 14px;
+  color: var(--text);
+  -webkit-user-select: all;
+  user-select: all;
+}
+.card .card__visit {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 17px;
+  color: var(--tint);
+  text-decoration: none;
+}
+.card__figures {
+  flex: 1 1 280px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  align-content: center;
+}
+.card__figures li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+.card__figures span:first-child {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+.card__figures span:last-child {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* The band. */
+.band {
+  padding: 96px max(22px, calc((100% - 980px) / 2));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 48px;
+  background: #0b0b0c;
+  border-top: 1px solid #1d1d1f;
+}
+.band > div {
+  flex: 1 1 360px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.band h2 {
+  font-size: 48px;
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+.band p {
+  font-size: 19px;
+  line-height: 1.42;
+  color: var(--text-secondary);
+}
+.band pre {
+  flex: 1 1 360px;
+  min-width: 0;
+  margin: 0;
+  padding: 24px;
+  overflow-x: auto;
+  border-radius: 18px;
+  background: var(--ground-tile);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.band pre span {
+  color: var(--playdeck-text);
+}
+
+/* The footer. */
+.site-footer {
+  padding: 32px 22px 48px;
+  border-top: 1px solid #1d1d1f;
+}
+.site-footer > div {
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  font-size: 12px;
+  color: #86868b;
+}
+.site-footer a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.site-footer a:hover {
+  color: var(--text);
+}
+
+@media (max-width: 734px) {
+  .hero {
+    padding: 72px 22px 64px;
+  }
+  .hero p {
+    font-size: 19px;
+  }
+  .card {
+    gap: 28px;
+    padding: 28px 24px;
+  }
+  .band {
+    padding-block: 64px;
+  }
+  .band h2 {
+    font-size: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    transition: transform .45s var(--ease), background-color .3s var(--ease);
+  }
+  .card__head img {
+    transition: transform .45s var(--ease);
+  }
+  main a,
+  .site-footer a {
+    transition: color .2s var(--ease);
+  }
+  .card:hover {
+    transform: translateY(-4px);
+  }
+  .card:hover .card__head img {
+    transform: scale(1.08) rotate(-4deg);
+  }
+}

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 
 // CONTEXT.md, "Motion": one easing curve, the brand's --ease.
-const SHEETS = ["brand.css", "family-bar.css"];
+const SHEETS = ["brand.css", "family-bar.css", "umbrella.css"];
 
 test.each(SHEETS)("every transition and animation in %s uses the brand curve", (sheet) => {
   const css = readFileSync(new URL(`../public/${sheet}`, import.meta.url), "utf8");
