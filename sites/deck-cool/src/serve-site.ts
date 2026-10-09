@@ -17,7 +17,7 @@ export interface ServedSite {
   close(): Promise<void>;
 }
 
-interface HeaderRule {
+export interface HeaderRule {
   readonly pattern: RegExp;
   readonly set: [string, string][];
   readonly detach: string[];
@@ -28,7 +28,7 @@ interface HeaderRule {
  * path pattern, where `*` matches anything, then indented `Name: value` and
  * `! Name` lines. Every rule that matches applies, in file order.
  */
-function parseHeaders(text: string): HeaderRule[] {
+export function parseHeaders(text: string): HeaderRule[] {
   const rules: HeaderRule[] = [];
   for (const line of text.split("\n")) {
     if (line.trim() === "") continue;
@@ -50,17 +50,23 @@ function parseHeaders(text: string): HeaderRule[] {
   return rules;
 }
 
+/** The headers a response for `path` carries, by the rules `parseHeaders` read. */
+export function headersFor(rules: readonly HeaderRule[], path: string): Map<string, string> {
+  const headers = new Map<string, string>();
+  for (const rule of rules.filter(({ pattern }) => pattern.test(path))) {
+    for (const [name, value] of rule.set) headers.set(name, value);
+    for (const name of rule.detach) headers.delete(name);
+  }
+  return headers;
+}
+
 /** Serves the built site from 127.0.0.1, with the headers its `_headers` file sets. */
 export async function serveSite(): Promise<ServedSite> {
   const rules = parseHeaders(await readFile(join(OUT, "_headers"), "utf8"));
   const server = createServer(async (request, response) => {
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
     const file = join(OUT, normalize(path.endsWith("/") ? `${path}index.html` : path));
-    const headers = new Map<string, string>();
-    for (const rule of rules.filter(({ pattern }) => pattern.test(path))) {
-      for (const [name, value] of rule.set) headers.set(name, value);
-      for (const name of rule.detach) headers.delete(name);
-    }
+    const headers = headersFor(rules, path);
     try {
       const body = await readFile(file);
       headers.set("content-type", TYPES[extname(file)] ?? "application/octet-stream");
