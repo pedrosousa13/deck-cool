@@ -1,6 +1,7 @@
 import { defineCollection, getEntry } from "@pagedeck/content";
 import type { Collection, Entry } from "@pagedeck/content";
 import { fromCollection } from "@pagedeck/core";
+import type { defineConfig } from "@pagedeck/core";
 import type { EntryNode, Page, PageContent, PageSource, TrailingSlash } from "@pagedeck/core";
 import type { MarkdownLoaderOptions } from "@pagedeck/markdown-loader";
 import { fileURLToPath } from "node:url";
@@ -10,10 +11,13 @@ import type { DocsPage } from "./loader.ts";
 export type { DocsPage, NavGroup } from "./loader.ts";
 
 /** A component as `build.components` declares one: a module path, or `{ path, hydrate }`. */
-export type ComponentDeclaration = string | { readonly path: string; readonly hydrate?: "load" | "idle" | "visible" | "none" };
+export type ComponentDeclaration = NonNullable<Parameters<typeof defineConfig>[0]["build"]>["components"][string];
 
 export interface DocsOptions extends Pick<MarkdownLoaderOptions, "languages" | "theme"> {
-  /** The site's `pagedeck.config.ts`, as `import.meta.url`. The package resolves from here. */
+  /**
+   * The site's `pagedeck.config.ts`, as `import.meta.url`. The package resolves from here,
+   * and its images are staged in `.pagedeck-docs/` beside it.
+   */
   readonly from: string | URL;
   /** The docs package's name, such as `@slidedeck/docs`. */
   readonly package: string;

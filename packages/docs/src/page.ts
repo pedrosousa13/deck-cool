@@ -28,7 +28,9 @@ export interface PageContext {
 
 export interface ScannedPage {
   readonly file: string;
-  readonly frontmatter: Readonly<Record<string, unknown>>;
+  /** Empty when missing, which is a fault. */
+  readonly title: string;
+  readonly description: string;
   /** The body with every relative link and image pointed at its address on the site. */
   readonly body: string;
   readonly faults: readonly Fault[];
@@ -83,12 +85,14 @@ export function scanPage(file: string, source: string, context: PageContext): Sc
   const lineAt = (offset: number) => firstLine + (body.slice(0, offset).match(/\n/g)?.length ?? 0);
   const fault = (offset: number, message: string) => faults.push({ file, line: lineAt(offset), message });
   const href = context.hrefOf(file);
-  for (const field of ["title", "description"]) {
+  const required = (field: "title" | "description"): string => {
     const value = frontmatter[field];
-    if (typeof value !== "string" || value.trim() === "") {
-      faults.push({ file, line: 1, message: `has no "${field}" in its frontmatter` });
-    }
-  }
+    if (typeof value === "string" && value.trim() !== "") return value;
+    faults.push({ file, line: 1, message: `has no "${field}" in its frontmatter` });
+    return "";
+  };
+  const title = required("title");
+  const description = required("description");
 
   const marked = new Marked();
   let offset = 0;
@@ -152,7 +156,7 @@ export function scanPage(file: string, source: string, context: PageContext): Sc
   for (const { start, end, text } of rewrites.sort((a, b) => b.start - a.start)) {
     rewritten = rewritten.slice(0, start) + text + rewritten.slice(end);
   }
-  return { file, frontmatter, body: rewritten, faults };
+  return { file, title, description, body: rewritten, faults };
 }
 
 /** Cuts rendered HTML at each demo marker. A marker in a code block is escaped, so it is not cut. */

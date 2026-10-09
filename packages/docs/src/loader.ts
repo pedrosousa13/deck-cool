@@ -178,8 +178,8 @@ export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
     for (const page of scanned) {
       const rendered = await renderer.render(page.body, page.file);
       pages.push({
-        title: String(page.frontmatter["title"]),
-        description: String(page.frontmatter["description"]),
+        title: page.title,
+        description: page.description,
         file: page.file,
         href: hrefOf(options, page.file),
         body: splitAtDemos(rendered.html),
