@@ -1,0 +1,6 @@
+{
+  "name": "@example/docs",
+  "version": "1.2.3",
+  "private": true,
+  "description": "A docs package that follows docs/docs-contract.md, for the loader's tests."
+}

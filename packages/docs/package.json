@@ -1,0 +1,28 @@
+{
+  "name": "@deck-cool/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pagedeck/content": "0.2.1",
+    "@pagedeck/core": "0.2.1",
+    "@pagedeck/markdown-loader": "0.2.1",
+    "marked": "18.1.0"
+  },
+  "devDependencies": {
+    "@example/docs": "workspace:*",
+    "@types/react": "19.3.0",
+    "happy-dom": "20.14.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "peerDependencies": {
+    "react": "^19.3.0"
+  }
+}
