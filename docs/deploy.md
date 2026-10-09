@@ -16,11 +16,11 @@ wrangler is `sites/deck-cool`'s exact-version dev dependency. Run it as `pnpm ex
 
 `pagedeck build` writes three files that wrangler reads as configuration and does not upload:
 
-- `_headers`: one `/*` rule. Every page and file gets the CSP from `src/csp.ts`, then `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, all from `src/headers.ts`.
+- `_headers`: a `/*` rule and an `/assets/*` rule. Every page and file gets the CSP from `src/csp.ts`, then `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, all from `src/headers.ts`. Files under `/assets/` also get `Cache-Control: public, max-age=31536000, immutable`.
 - `_redirects`: three rows that proxy `/manifest.json`, `/.pagedeck` and `/.pagedeck/*` to `/404.html`.
 - `.assetsignore`, from `packages/brand/public/` through passthrough. It keeps `/manifest.json`, `/.pagedeck` and `/404.html` out of the upload. Because `/404.html` is not uploaded, the proxy rows answer `404`.
 
-**No file is cached as `immutable`.** The build writes no content-hashed file name: `brand.css`, the other stylesheets and every icon under `/icons/` keep their names from build to build, so they get Cloudflare's default `Cache-Control`. When a build first writes a hashed name, add a header rule for its directory in `pagedeck.config.ts` with `Cache-Control: public, max-age=31536000, immutable`. `site.build.test.ts` fails until you do.
+**Only `/assets/` is cached as `immutable`.** The build compiles the stylesheets in `build.css` into one sheet, `/assets/fw-core-<hash>.css`, named by its content's hash, so a changed sheet gets a new URL. Every other file keeps its name from build to build, the icons under `/icons/` among them, so it gets Cloudflare's default `Cache-Control`. If a build writes a hashed name outside `/assets/`, add a header rule for its directory in `pagedeck.config.ts`. `site.build.test.ts` fails until you do.
 
 ## Setting up
 
@@ -84,7 +84,7 @@ pnpm --filter @sites/deck-cool check-live                      # https://deck.co
 pnpm --filter @sites/deck-cool check-live https://example.com  # any other origin
 ```
 
-`check-live` fetches `/` and `/brand.css` and fails unless each answers `200` with every header in `src/headers.ts`, at its exact value, and no `immutable`. It also fails unless `/manifest.json` answers `404`. It is not part of `pnpm test`, which stays offline. `src/live-check.test.ts` runs the same checks against the build served locally.
+`check-live` fetches `/` and `/icons/deck-cool/still.svg` and fails unless each answers `200` with every header in `src/headers.ts`, at its exact value, and no `immutable`. It then fetches the hashed stylesheet `/` links, and fails unless it answers `200` with the same headers and `Cache-Control: public, max-age=31536000, immutable`. It also fails unless `/manifest.json` answers `404`. It is not part of `pnpm test`, which stays offline. `src/live-check.test.ts` runs the same checks against the build served locally.
 
 For a quick look with curl:
 
