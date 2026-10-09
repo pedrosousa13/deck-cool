@@ -1,0 +1,76 @@
+name: Deploy deck.cool
+
+# Every push builds the umbrella site and runs `wrangler deploy --dry-run`,
+# which uses no credential and sends nothing to Cloudflare. A manual run with
+# `apply` publishes it to deck.cool, then checks the live site. Runbook:
+# docs/deploy.md.
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Publish to deck.cool. Off is a dry run that lists the upload and sends nothing."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+# A publishing run is never cancelled: wrangler uploads the assets before it
+# publishes the version that serves them.
+concurrency:
+  group: deploy-deck-cool-${{ inputs.apply && 'apply' || github.ref }}
+  cancel-in-progress: ${{ !inputs.apply }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sites/deck-cool
+    # No secret here: a job-level `env:` reaches every action and install script.
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Puts the pnpm named in package.json's packageManager on the path.
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - run: pnpm build
+
+      - name: Check the Worker without publishing
+        if: ${{ !inputs.apply }}
+        run: pnpm exec wrangler deploy --dry-run
+
+      - name: Publish the Worker
+        if: ${{ inputs.apply }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error title=Not published::The CLOUDFLARE_API_TOKEN secret is not set. Nothing was published. Add it (docs/deploy.md) and run again with apply."
+            exit 1
+          fi
+          pnpm exec wrangler deploy
+
+      # A first deploy waits for the custom domain's certificate, so retry for
+      # up to five minutes before failing.
+      - name: Check the live site
+        if: ${{ inputs.apply }}
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if pnpm check-live; then exit 0; fi
+            echo "Attempt $attempt failed; retrying in 30 s."
+            sleep 30
+          done
+          exit 1
