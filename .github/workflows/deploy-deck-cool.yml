@@ -59,9 +59,43 @@ jobs:
       - name: Check the Worker without publishing
         run: pnpm exec wrangler deploy --dry-run
 
-  publish:
+  # Builds the site to publish. No environment and no secret: the build runs
+  # dependency code, so it runs in a job that never holds the Cloudflare token.
+  build:
     if: ${{ inputs.apply && github.ref == 'refs/heads/main' }}
-    # Holds CLOUDFLARE_API_TOKEN, and deploys from main only.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sites/deck-cool
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Puts the pnpm named in package.json's packageManager on the path.
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - run: pnpm build
+      # site/ holds .assetsignore, which wrangler reads, so hidden files go too.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deck-cool-site
+          path: sites/deck-cool/site/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    if: ${{ inputs.apply && github.ref == 'refs/heads/main' }}
+    # Holds CLOUDFLARE_API_TOKEN, and deploys from main only. It publishes the
+    # build job's site/ and builds nothing itself.
     environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -82,9 +116,14 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      # For wrangler. pnpm runs a dependency's build script only if allowBuilds
+      # allows it, and it allows none.
       - run: pnpm install --frozen-lockfile
         working-directory: .
-      - run: pnpm build
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: deck-cool-site
+          path: sites/deck-cool/site/
 
       - name: Publish the Worker
         env:

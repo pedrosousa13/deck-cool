@@ -70,7 +70,7 @@ gh secret set CLOUDFLARE_API_TOKEN --env production -R pedrosousa13/deck-cool
 `.github/workflows/deploy-deck-cool.yml` builds the site from the checked-out commit and then:
 
 - on every push, and on a manual run without `apply`, runs `wrangler deploy --dry-run` in the `dry-run` job. The dry run uses no environment and no credential, and sends nothing to Cloudflare.
-- on a manual run on `main` with `apply`, runs `wrangler deploy` in the `publish` job, in the `production` environment, then `pnpm check-live` against `https://deck.cool`, retrying for up to five minutes while a new custom domain gets its certificate.
+- on a manual run on `main` with `apply`, builds the site in the `build` job, which has no environment and no secret, and uploads `site/` as an artifact. The `publish` job, in the `production` environment, downloads that `site/`, runs `wrangler deploy`, then `pnpm check-live` against `https://deck.cool`, retrying for up to five minutes while a new custom domain gets its certificate. `pnpm build` runs dependency code, so it never runs in the job that holds `CLOUDFLARE_API_TOKEN`.
 
 ```sh
 gh workflow run deploy-deck-cool.yml -R pedrosousa13/deck-cool --ref main               # dry run
