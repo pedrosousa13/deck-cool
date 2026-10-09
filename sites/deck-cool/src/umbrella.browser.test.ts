@@ -1,4 +1,5 @@
 import { AxeBuilder } from "@axe-core/playwright";
+import { decks } from "@deck-cool/brand/decks";
 import { chromium, type Browser, type Page, type Response } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
@@ -100,6 +101,34 @@ describe("the umbrella site in a browser", () => {
   test.each([390, 1280])("at %ipx, the page does not scroll sideways", async (width) => {
     const { page } = await visit({ width, reducedMotion: "reduce" });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  });
+
+  test.each(decks)("a click anywhere on $name's card follows its link, except on the install command", async (deck) => {
+    const { page, offOrigin } = await visit({ width: 1280, reducedMotion: "reduce" });
+    const card = page.locator(`#${deck.name}`);
+    await card.scrollIntoViewIfNeeded();
+    /** What a click at the middle of the element lands on. */
+    const hit = (selector: string) =>
+      card.locator(selector).first().evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const target = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return { link: target?.closest("a")?.getAttribute("href"), isElement: target === element };
+      });
+
+    expect((await hit(".card__description")).link).toBe(deck.url);
+    expect((await hit(".card__figures li")).link).toBe(deck.url);
+    expect(await hit("code")).toEqual({ link: undefined, isElement: true });
+
+    // One click selects the whole command, and goes nowhere.
+    await card.locator("code").click();
+    expect(await page.evaluate(() => getSelection()?.toString())).toBe(deck.install);
+    expect(offOrigin).toEqual([]);
+
+    // The link covers the description, so click where it is, not on it.
+    const box = await card.locator(".card__description").boundingBox();
+    if (box === null) throw new Error("the description is not on screen");
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect.poll(() => offOrigin).toContain(new URL(deck.url).href);
   });
 
   test("with prefers-reduced-motion: reduce, nothing on the page moves, hovered or not", async () => {

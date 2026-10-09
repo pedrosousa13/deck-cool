@@ -83,6 +83,7 @@ main h2 {
 }
 .card {
   --tint: var(--text-link);
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 40px;
@@ -132,8 +133,11 @@ main h2 {
   line-height: 1.47;
   color: var(--text-secondary);
 }
-/* The board's Copy button needs script; selecting the command takes one click. */
+/* The board's Copy button needs script; selecting the command takes one click.
+   It sits above the card's link, so a click on it selects and goes nowhere. */
 .card__install {
+  position: relative;
+  z-index: 1;
   box-sizing: border-box;
   max-width: 420px;
   margin-top: 6px;
@@ -158,6 +162,13 @@ main h2 {
   font-size: 17px;
   color: var(--tint);
   text-decoration: none;
+}
+/* The link covers the whole card, so a click anywhere on it follows the link. */
+.card__visit::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
 }
 .card__figures {
   flex: 1 1 280px;
