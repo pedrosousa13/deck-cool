@@ -1,0 +1,6 @@
+# Every site serves this directory from its root, so this file reaches each
+# site's build. It keeps Pagedeck's deploy manifest, its deploy directory and
+# the adapter's fallback 404 out of the Workers Static Assets upload.
+/manifest.json
+/.pagedeck
+/404.html

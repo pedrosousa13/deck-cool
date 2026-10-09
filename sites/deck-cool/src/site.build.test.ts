@@ -66,6 +66,7 @@ test("the home page opens with the Family bar, after the stylesheets it needs", 
 
 interface Manifest {
   files: { path: string }[];
+  routing: { trees: { notFound: unknown }[] };
 }
 
 const manifest = JSON.parse(readFileSync(`${SITE}site/manifest.json`, "utf8")) as Manifest;
@@ -104,6 +105,21 @@ test("no file is cached as immutable, because the build writes no content-hashed
   // changes to expect it there and nowhere else.
   for (const { path } of manifest.files) expect(path).not.toMatch(/[.-][A-Za-z0-9_-]{8}\.[a-z0-9]+$/);
   for (const path of served) expect(headersFor(rules, path).get("Cache-Control"), path).toBeUndefined();
+});
+
+test(".assetsignore keeps the deploy manifest, the deploy directory and the fallback 404 out of the upload", () => {
+  const ignored = readFileSync(`${SITE}site/.assetsignore`, "utf8")
+    .split("\n")
+    .filter((line) => line !== "" && !line.startsWith("#"));
+  expect(ignored).toEqual(["/manifest.json", "/.pagedeck", "/404.html"]);
+  // The 404 page is only the adapter's fallback: the site declares none, which
+  // is why wrangler.jsonc answers a missing path with a bare 404.
+  expect(manifest.routing.trees.map((tree) => tree.notFound ?? undefined)).toEqual([undefined]);
+  // A request for the manifest is proxied to the 404 page, which is not
+  // uploaded, so it answers 404.
+  const redirects = readFileSync(`${SITE}site/_redirects`, "utf8");
+  expect(redirects).toContain("/manifest.json /404.html 200\n");
+  expect(redirects).toContain("/.pagedeck/* /404.html 200\n");
 });
 
 const window = new Window();
