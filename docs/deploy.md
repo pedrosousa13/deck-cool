@@ -28,33 +28,33 @@ Once, in the Cloudflare account that holds the `deck.cool` zone.
 
 ### The API token
 
-Create an **account-owned** token: Manage Account → Account API Tokens → Create Token. Give it these two permissions and nothing else:
+Create an **account-owned** token: Manage Account → Account API Tokens → Create Token. Give it these two permissions and nothing else. The role names are Cloudflare's new Workers roles (2026-09-15), not yet checked against a deploy. If the dashboard offers only the classic permissions, use the ones in parentheses.
 
 | Permission | Scope | Why |
 | --- | --- | --- |
-| Workers → **Admin** | Workers product (all Workers in the account) | The first deploy creates the `deck-cool` Worker. Only product-level Admin can create a Worker. |
-| Zone → **Workers Routes** → **Write** | the `deck.cool` zone only | Each deploy sets the Worker's custom domain on that zone. |
+| Workers → **Admin** (classic: Account › Workers Scripts › Edit) | Workers product (all Workers in the account) | The first deploy creates the `deck-cool` Worker. Only product-level Admin can create a Worker. |
+| Zone → **Workers Routes** → **Write** (classic: Zone › Workers Routes › Edit) | the `deck.cool` zone only | Each deploy sets the Worker's custom domain on that zone. |
 
-After the first deploy has created the Worker, edit the token and lower Workers → Admin to Workers → **Editor**, still at the Workers product scope. Editor can deploy new versions and roll back, but cannot create or delete a Worker. Keep the product scope: Cloudflare does not support per-Worker roles for custom domains yet. Keep Workers Routes → Write: every deploy sends the custom domain to Cloudflare again.
+After the first deploy has created the Worker, edit the token and lower Workers → Admin to Workers → **Editor**, still at the Workers product scope. Editor can deploy new versions and roll back, but cannot create or delete a Worker. Keep the product scope: Cloudflare does not support per-Worker roles for custom domains yet. Keep Workers Routes → Write: every deploy sends the custom domain to Cloudflare again. With classic permissions there is nothing to lower.
 
 If a deploy is refused with an authorization error, add only the permission that the error names.
 
 ### The secret
 
-Add the token as the repository secret `CLOUDFLARE_API_TOKEN`, under Settings → Secrets and variables → Actions:
+Add the token as `CLOUDFLARE_API_TOKEN`, a secret of the repository's `production` environment, not a repository secret:
 
 ```sh
-gh secret set CLOUDFLARE_API_TOKEN -R pedrosousa13/deck-cool
+gh secret set CLOUDFLARE_API_TOKEN --env production -R pedrosousa13/deck-cool
 ```
 
-`gh` reads the value from standard input when you paste it, so the value is not on a command line. The workflow gives the secret to the publish step only.
+`gh` reads the value from standard input when you paste it, so the value is not on a command line. The `production` environment's deployment branch policy allows `main` only, so no other branch's run can read the secret. In the workflow, only the publish job uses the environment, and only its publish step reads the secret.
 
 ## Deploying
 
 `.github/workflows/deploy-deck-cool.yml` builds the site from the checked-out commit and then:
 
-- on every push, and on a manual run without `apply`, runs `wrangler deploy --dry-run`. The dry run uses no credential and sends nothing to Cloudflare.
-- on a manual run with `apply`, runs `wrangler deploy`, then `pnpm check-live` against `https://deck.cool`, retrying for up to five minutes while a new custom domain gets its certificate.
+- on every push, and on a manual run without `apply`, runs `wrangler deploy --dry-run` in the `dry-run` job. The dry run uses no environment and no credential, and sends nothing to Cloudflare.
+- on a manual run on `main` with `apply`, runs `wrangler deploy` in the `publish` job, in the `production` environment, then `pnpm check-live` against `https://deck.cool`, retrying for up to five minutes while a new custom domain gets its certificate.
 
 ```sh
 gh workflow run deploy-deck-cool.yml -R pedrosousa13/deck-cool --ref main               # dry run
@@ -62,9 +62,9 @@ gh workflow run deploy-deck-cool.yml -R pedrosousa13/deck-cool --ref main -f app
 gh run watch -R pedrosousa13/deck-cool
 ```
 
-A run with `apply` and no secret fails, says so, and publishes nothing.
+A run with `apply` on any branch but `main`, or with no secret in `production`, fails, says so, and publishes nothing.
 
-Before the first deploy, check the zone's DNS records. A custom domain cannot be created on a hostname that already has a CNAME record, and the custom domain creates its own record for `deck.cool`. Write down any record it would replace.
+Before the first deploy, check the zone's DNS records. The zone had none on 2026-10-09; check again. A custom domain cannot be created on a hostname that already has a CNAME record, and the custom domain creates its own record for `deck.cool`. Write down any record it would replace.
 
 To deploy from your machine instead, after `pnpm install` at the repository root:
 
