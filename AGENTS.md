@@ -43,7 +43,7 @@ The workflow runs on a `repository_dispatch` of type `deck-released`, with this 
 { "deck": "slidedeck", "version": "1.4.0" }
 ```
 
-`deck` is `slidedeck`, `playdeck` or `pagedeck`, and `version` is `MAJOR.MINOR.PATCH` with no `v`. The workflow rejects any other payload before it does anything else.
+`deck` is `slidedeck`, `playdeck` or `pagedeck`, and `version` is `MAJOR.MINOR.PATCH` with no `v`. The payload is untrusted. The workflow checks out the repo and sets up Node and pnpm first, none of which reads the payload. The payload then reaches only the check step, through env, and the workflow stops there on any other payload. Every later step reads the checked values.
 
 pnpm holds back a version for `minimumReleaseAge` (a day) unless `minimumReleaseAgeExclude` lists it, and the workflow keeps that hold: a dispatch for a younger version fails, says so, and pushes nothing. Send the dispatch again once the version is a day old. `@pagedeck/*` is excluded today, so a pagedeck release is bumped at once, and its PR says the hold was bypassed.
 

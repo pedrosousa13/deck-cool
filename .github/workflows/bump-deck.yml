@@ -98,7 +98,10 @@ jobs:
           git switch --create "$BRANCH"
           git add --update
           git commit --message "Bump ${DECK} to ${VERSION}"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
+          # git asks gh for the credential, and gh reads GH_TOKEN from env: the token
+          # is on no command line.
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/${BRANCH}"
           gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" \
             --title "Bump ${DECK} to ${VERSION}" --body-file "$RUNNER_TEMP/pr-body.md"
           gh pr merge "$BRANCH" --repo "$GITHUB_REPOSITORY" --auto --squash
