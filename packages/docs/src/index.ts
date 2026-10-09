@@ -19,7 +19,6 @@ export interface DocsOptions extends Pick<MarkdownLoaderOptions, "languages" | "
    * and its images are staged in `.pagedeck-docs/` beside it.
    */
   readonly from: string | URL;
-  /** The docs package's name, such as `@slidedeck/docs`. */
   readonly package: string;
   /** Where the docs live on the site, such as `/docs`. */
   readonly base: `/${string}`;
@@ -36,7 +35,6 @@ export type DocsLayoutProps = Pick<DocsPage, "title" | "description" | "href" | 
 
 /** The pieces a site's `pagedeck.config.ts` wires in. */
 export interface Docs {
-  /** For `collections`. */
   readonly collection: Collection<DocsPage>;
   /** For `build.pages`: one page per docs page, rendered by `content`. */
   readonly pages: PageSource<Entry<DocsPage>>;
@@ -51,7 +49,6 @@ export interface Docs {
 const COLLECTION = "docs";
 const PROSE = "docsProse";
 
-/** The `build.components` key a demo is registered under. */
 function demoComponent(name: string): string {
   return `docsDemo:${name}`;
 }

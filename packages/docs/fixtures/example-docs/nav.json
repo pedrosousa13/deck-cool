@@ -1,4 +1,4 @@
 [
   { "label": "Start", "pages": ["index.md", "install.md"] },
-  { "label": "Guides", "pages": ["guides/layout.md", "guides/demos.md"] }
+  { "label": "Guides", "pages": ["guides/index.md", "guides/layout.md", "guides/demos.md"] }
 ]

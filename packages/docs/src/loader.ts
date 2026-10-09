@@ -8,7 +8,6 @@ import type { DocsOptions } from "./index.ts";
 import { scanPage, splitAtDemos } from "./page.ts";
 import type { BodyPart, Fault } from "./page.ts";
 
-/** One docs page, as the collection stores it. */
 export interface DocsPage {
   readonly title: string;
   readonly description: string;
@@ -115,24 +114,48 @@ function parseJson(text: string): unknown {
 /** nav.json, checked against the pages: what it lists, and the faults between the two. */
 function readNav(root: string, pages: ReadonlySet<string>): { groups: NavFile[]; faults: Fault[] } {
   const path = join(root, NAV);
-  if (!isFile(path)) return { groups: [], faults: [{ file: NAV, line: 1, message: "is missing" }] };
+  const example = '[{ "label": "Start", "pages": ["index.md"] }]';
+  if (!isFile(path)) {
+    return { groups: [], faults: [{ file: NAV, line: 1, message: `is missing — add ${NAV} at the package root: ${example}` }] };
+  }
   const text = readFileSync(path, "utf8");
   const groups = parseJson(text);
   if (!isNav(groups)) {
-    const message = 'is not a list of groups, each written { "label": "Start", "pages": ["index.md"] }';
-    return { groups: [], faults: [{ file: NAV, line: 1, message }] };
+    return { groups: [], faults: [{ file: NAV, line: 1, message: `is not a list of groups — write it as ${example}` }] };
   }
-  const listed = new Set(groups.flatMap((group) => group.pages));
-  const lineOf = (page: string) => text.slice(0, Math.max(text.indexOf(JSON.stringify(page)), 0)).split("\n").length;
-  const faults = [
-    ...[...listed]
-      .filter((page) => !pages.has(page))
-      .map((page) => ({ file: NAV, line: lineOf(page), message: `lists "${page}", which is not a page` })),
-    ...[...pages]
-      .filter((page) => !listed.has(page))
-      .map((page) => ({ file: page, line: 1, message: `is not listed in ${NAV}` })),
-  ];
+  const faults: Fault[] = [];
+  const listed = new Set<string>();
+  // Each listing is found in the text after the one before it, so a page listed twice is
+  // placed at its second listing.
+  let cursor = 0;
+  for (const page of groups.flatMap((group) => group.pages)) {
+    const at = text.indexOf(JSON.stringify(page), cursor);
+    cursor = at === -1 ? cursor : at + 1;
+    const line = text.slice(0, Math.max(at, 0)).split("\n").length;
+    if (listed.has(page)) {
+      faults.push({ file: NAV, line, message: `lists "${page}" a second time — list each page once` });
+    } else if (!pages.has(page)) {
+      faults.push({ file: NAV, line, message: `lists "${page}", which is not a page — remove it, or add the page` });
+    }
+    listed.add(page);
+  }
+  for (const page of pages) {
+    if (!listed.has(page)) faults.push({ file: page, line: 1, message: `is not listed in ${NAV} — add "${page}" to a group in ${NAV}` });
+  }
   return { groups, faults };
+}
+
+/** `guides.md` and `guides/index.md` are both served at `<base>/guides`. */
+function routeCollisions(files: readonly string[], hrefOf: (file: string) => string): Fault[] {
+  const owners = new Map<string, string>();
+  const faults: Fault[] = [];
+  for (const file of files) {
+    const href = hrefOf(file);
+    const owner = owners.get(href);
+    if (owner === undefined) owners.set(href, file);
+    else faults.push({ file, line: 1, message: `has the route ${href}, as ${owner} does — rename or remove one of the two` });
+  }
+  return faults;
 }
 
 /** Every fault in one report, by file and then by line. */
@@ -167,7 +190,7 @@ export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
     };
     const scanned = files.map((file) => scanPage(file, readFileSync(join(root, file), "utf8"), context));
     const nav = readNav(root, context.pages);
-    const faults = [...nav.faults, ...scanned.flatMap((page) => page.faults)];
+    const faults = [...nav.faults, ...routeCollisions(files, context.hrefOf), ...scanned.flatMap((page) => page.faults)];
     if (faults.length > 0) throw problems(options.package, faults);
 
     const renderer = await createMarkdownRenderer({

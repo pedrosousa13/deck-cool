@@ -48,12 +48,16 @@ function options(from: URL, overrides: Partial<DocsOptions> = {}): DocsOptions {
   };
 }
 
-/** What `pagedeck sync` prints for the error a sync rejects with. */
+/**
+ * The docs package's report in what `pagedeck sync` prints for a failed sync, without
+ * Pagedeck's own wrapper, so a change to Pagedeck's wording does not break these tests.
+ */
 async function failure(syncing: Promise<unknown>): Promise<string> {
   try {
     await syncing;
   } catch (error) {
-    return describeError(error);
+    const printed = describeError(error);
+    return printed.slice(printed.indexOf('Docs package "'));
   }
   throw new Error("the sync passed");
 }
@@ -74,6 +78,7 @@ describe("a fixture that follows the contract", () => {
     const { entries } = await sync(site());
     expect(entries.map((entry) => [entry.path, entry.data.title, entry.data.href]).sort()).toEqual([
       ["docs/guides/demos", "Demos", "/docs/guides/demos/"],
+      ["docs/guides/index", "Guides", "/docs/guides/"],
       ["docs/guides/layout", "Layout", "/docs/guides/layout/"],
       ["docs/index", "Example", "/docs/"],
       ["docs/install", "Install", "/docs/install/"],
@@ -93,6 +98,7 @@ describe("a fixture that follows the contract", () => {
       {
         label: "Guides",
         pages: [
+          { title: "Guides", href: "/docs/guides/" },
           { title: "Layout", href: "/docs/guides/layout/" },
           { title: "Demos", href: "/docs/guides/demos/" },
         ],
@@ -107,6 +113,33 @@ describe("a fixture that follows the contract", () => {
     expect(html("docs/index")).toContain('<a href="/docs/guides/layout/#the-grid">the layout grid</a>');
     expect(html("docs/guides/layout")).toContain('<a href="/docs/install/">first</a>');
     expect(html("docs/guides/layout")).toContain('<a href="/docs/guides/demos/">it live</a>');
+    expect(html("docs/guides/index")).toContain('<a href="/docs/guides/layout/">the layout</a>');
+  });
+
+  test("drops a page's first # heading, as the contract says: the site shows the title", async () => {
+    const { entries } = await sync(site({ "install.md": "---\ntitle: Install\ndescription: How.\n---\n\n# Install\n\nText.\n" }));
+    const install = entries.find((entry) => entry.path === "docs/install");
+    expect(install?.data.body).toEqual([{ kind: "html", html: "<p>Text.</p>\n" }]);
+  });
+
+  test("highlights code with the theme the site names", async () => {
+    const { entries } = await sync(site(), { theme: "github-dark" });
+    const install = entries.find((entry) => entry.path === "docs/install");
+    // github-dark's background; Pagedeck's default theme, github-light, is #fff.
+    expect(JSON.stringify(install?.data.body)).toContain("background-color:#24292e");
+  });
+
+  test("reads a pinned npm install and a workspace link of the same package as the same pages and nav", async () => {
+    // Inside packages/docs, so Node finds @example/docs at the workspace link in its node_modules.
+    mkdirSync(fileURLToPath(new URL("../.test-sites/", import.meta.url)), { recursive: true });
+    const linked = mkdtempSync(fileURLToPath(new URL("../.test-sites/workspace-", import.meta.url)));
+    made.push(linked);
+    const workspace = await sync(pathToFileURL(join(linked, "pagedeck.config.ts")));
+    // A copy laid out as npm installs a pinned version: node_modules/@example/docs.
+    const pinned = await sync(site());
+    const pages = (entries: typeof pinned.entries) => entries.map(({ path, data }) => ({ path, data }));
+    expect(pages(workspace.entries)).toHaveLength(5);
+    expect(pages(workspace.entries)).toEqual(pages(pinned.entries));
   });
 
   test("points images at assets/ from the page's address, and copies the files to the content root", async () => {
@@ -127,7 +160,7 @@ describe("a fixture that follows the contract", () => {
     const store = openStore(fileURLToPath(new URL("content.db", from)));
     await syncCollection(store, docs.collection);
     await syncCollectionSince(store, docs.collection);
-    expect(listEntries(store, docs.collection)).toHaveLength(4);
+    expect(listEntries(store, docs.collection)).toHaveLength(5);
     store.close();
   });
 
@@ -147,49 +180,77 @@ const DEMOS = readFileSync(new URL("guides/demos.md", FIXTURE), "utf8");
 const PAGE = "---\ntitle: Extra\ndescription: Not in the nav.\n---\n\nText.\n";
 
 describe("the build fails, naming the file and line", () => {
+  const nav = readFileSync(new URL("nav.json", FIXTURE), "utf8");
+
   test.each<[string, Readonly<Record<string, string | undefined>>, Partial<DocsOptions>, string]>([
     [
       "a page with no title",
       { "install.md": "---\ndescription: How to install.\n---\n\nText.\n" },
       {},
-      'install.md:1 — has no "title" in its frontmatter',
+      'install.md:1 — has no "title" in its frontmatter — add title: <the page\'s title> to its frontmatter',
     ],
     [
       "a page with no description",
       { "install.md": "---\ntitle: Install\n---\n\nText.\n" },
       {},
-      'install.md:1 — has no "description" in its frontmatter',
+      'install.md:1 — has no "description" in its frontmatter — add description: <one sentence on the page> to its frontmatter',
     ],
-    ["a page nav.json does not list", { "guides/extra.md": PAGE }, {}, "guides/extra.md:1 — is not listed in nav.json"],
+    [
+      "a page nav.json does not list",
+      { "guides/extra.md": PAGE },
+      {},
+      'guides/extra.md:1 — is not listed in nav.json — add "guides/extra.md" to a group in nav.json',
+    ],
     [
       "a nav.json entry with no page",
-      {
-        "nav.json": readFileSync(new URL("nav.json", FIXTURE), "utf8").replace(
-          '"guides/demos.md"',
-          '"guides/demos.md", "guides/theming.md"',
-        ),
-      },
+      { "nav.json": nav.replace('"guides/demos.md"', '"guides/demos.md", "guides/theming.md"') },
       {},
-      'nav.json:3 — lists "guides/theming.md", which is not a page',
+      'nav.json:3 — lists "guides/theming.md", which is not a page — remove it, or add the page',
     ],
-    ["a package with no nav.json", { "nav.json": undefined }, {}, "nav.json:1 — is missing"],
+    [
+      "a page nav.json lists twice in one group",
+      { "nav.json": nav.replace('"install.md"', '"install.md", "install.md"') },
+      {},
+      'nav.json:2 — lists "install.md" a second time — list each page once',
+    ],
+    [
+      "a page nav.json lists in two groups",
+      { "nav.json": nav.replace('"guides/demos.md"', '"guides/demos.md", "install.md"') },
+      {},
+      'nav.json:3 — lists "install.md" a second time — list each page once',
+    ],
+    [
+      "a package with no nav.json",
+      { "nav.json": undefined },
+      {},
+      'nav.json:1 — is missing — add nav.json at the package root: [{ "label": "Start", "pages": ["index.md"] }]',
+    ],
     [
       "a nav.json of another shape",
       { "nav.json": '{ "Start": ["index.md"] }\n' },
       {},
-      'nav.json:1 — is not a list of groups, each written { "label": "Start", "pages": ["index.md"] }',
+      'nav.json:1 — is not a list of groups — write it as [{ "label": "Start", "pages": ["index.md"] }]',
+    ],
+    [
+      "two pages with one route",
+      {
+        "guides.md": "---\ntitle: All guides\ndescription: Every guide.\n---\n\nText.\n",
+        "nav.json": nav.replace('"guides/index.md"', '"guides.md", "guides/index.md"'),
+      },
+      {},
+      "guides/index.md:1 — has the route /docs/guides/, as guides.md does — rename or remove one of the two",
     ],
     [
       "a link to a missing page",
       { "guides/layout.md": LAYOUT.replace("(../install.md)", "(../setup.md)") },
       {},
-      'guides/layout.md:10 — links to "../setup.md", which is not a page in this package',
+      'guides/layout.md:10 — links to "../setup.md", which is not a page in this package — fix the link, or add the page',
     ],
     [
       "a link by reference to a missing page",
       { "guides/layout.md": LAYOUT.replace("[demos]: ./demos.md", "[demos]: ./live.md") },
       {},
-      'guides/layout.md:12 — links to "./live.md", which is not a page in this package',
+      'guides/layout.md:12 — links to "./live.md", which is not a page in this package — fix the link, or add the page',
     ],
     [
       "a relative link to a file that is not a page",
@@ -198,22 +259,28 @@ describe("the build fails, naming the file and line", () => {
       'guides/layout.md:10 — links to "../assets/grid.svg", which is not a .md page — link a page by its .md file, and show a file under assets/ as an image',
     ],
     [
+      "a link the loader cannot rewrite",
+      { "guides/layout.md": LAYOUT.replace("(../install.md)", "(..\\/install.md)") },
+      {},
+      'guides/layout.md:10 — links to "../install.md" in a form the loader cannot rewrite — write the path plainly, with no backslash escapes or character references',
+    ],
+    [
       "an image that is not under assets/",
       { "guides/layout.md": LAYOUT.replace("../assets/grid.svg", "../assets/missing.svg") },
       {},
-      'guides/layout.md:8 — shows "../assets/missing.svg", which is not a file under assets/',
+      'guides/layout.md:8 — shows "../assets/missing.svg", which is not a file under assets/ — add it under assets/, or fix the path',
     ],
     [
       "a demo the site does not register",
       {},
       { demos: { chart: "./components/chart.tsx" } },
-      'guides/demos.md:8 — marks demo "counter", which the site does not register — the site\'s demos are "chart"',
+      'guides/demos.md:8 — marks demo "counter", which the site does not register — use a demo the site registers ("chart"), or have the site register "counter"',
     ],
     [
       "a demo when the site registers none",
       {},
       { demos: {} },
-      'guides/demos.md:8 — marks demo "counter", which the site does not register — the site\'s demos are none',
+      'guides/demos.md:8 — marks demo "counter", which the site does not register — the site registers no demos; remove the marker, or have the site register "counter"',
     ],
     [
       "a demo marker inside a paragraph",
@@ -223,17 +290,22 @@ describe("the build fails, naming the file and line", () => {
     ],
   ])("%s", async (_name, edits, overrides, message) => {
     expect(await failure(sync(site(edits), overrides))).toBe(
-      `Collection "docs": loader syncAll failed: Docs package "@example/docs": 1 problem — fix it in the docs package: ${message}`,
+      `Docs package "@example/docs": 1 problem — fix it in the docs package: ${message}`,
     );
+  });
+
+  test("a code fence in a language the site does not load, by Pagedeck's own check", async () => {
+    const printed = await sync(site(), { languages: [] }).then(() => "the sync passed", describeError);
+    expect(printed).toContain('Markdown "install.md": 1 code language is not loaded');
   });
 
   test("names every problem in one run", async () => {
     const edits = { "install.md": "Text.\n", "guides/extra.md": PAGE };
     expect(await failure(sync(site(edits)))).toBe(
-      'Collection "docs": loader syncAll failed: Docs package "@example/docs": 3 problems — fix each in the docs package: ' +
-        "guides/extra.md:1 — is not listed in nav.json; " +
-        'install.md:1 — has no "title" in its frontmatter; ' +
-        'install.md:1 — has no "description" in its frontmatter',
+      'Docs package "@example/docs": 3 problems — fix each in the docs package: ' +
+        'guides/extra.md:1 — is not listed in nav.json — add "guides/extra.md" to a group in nav.json; ' +
+        'install.md:1 — has no "title" in its frontmatter — add title: <the page\'s title> to its frontmatter; ' +
+        'install.md:1 — has no "description" in its frontmatter — add description: <one sentence on the page> to its frontmatter',
     );
   });
 

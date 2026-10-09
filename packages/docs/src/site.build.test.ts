@@ -20,13 +20,19 @@ function build(site: string): void {
   execFileSync(PAGEDECK, ["build"], { cwd: site, stdio: "pipe" });
 }
 
-interface BudgetReport {
-  pages: { path: string; actual: number }[];
-}
-
+/** Each page's JavaScript, in bytes, from the budget report the build writes. */
 function budget(site: string): Map<string, number> {
-  const report = JSON.parse(readFileSync(join(site, ".pagedeck/budget-report.json"), "utf8")) as BudgetReport;
-  return new Map(report.pages.map((page) => [page.path, page.actual]));
+  const report: unknown = JSON.parse(readFileSync(join(site, ".pagedeck/budget-report.json"), "utf8"));
+  const pages = typeof report === "object" && report !== null && "pages" in report ? report.pages : undefined;
+  if (!Array.isArray(pages)) throw new Error("the budget report has no pages");
+  return new Map(
+    pages.map((page: unknown): [string, number] => {
+      if (typeof page !== "object" || page === null || !("path" in page) || !("actual" in page)) {
+        throw new Error("a budget report row has no path or actual");
+      }
+      return [String(page.path), Number(page.actual)];
+    }),
+  );
 }
 
 const window = new Window();
@@ -40,7 +46,7 @@ describe("the fixture site, built with the fixture docs package", () => {
   beforeAll(() => build(SITE), BUILD_TIMEOUT);
 
   test("serves each page at its route", () => {
-    for (const route of ["docs", "docs/install", "docs/guides/layout", "docs/guides/demos"]) {
+    for (const route of ["docs", "docs/install", "docs/guides", "docs/guides/layout", "docs/guides/demos"]) {
       expect(existsSync(join(SITE, "site", route, "index.html")), route).toBe(true);
     }
     expect(page("docs/guides/layout").title).toBe("Layout");
@@ -52,6 +58,7 @@ describe("the fixture site, built with the fixture docs package", () => {
     expect([...(nav?.querySelectorAll("a") ?? [])].map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
       ["Example", "/docs/"],
       ["Install", "/docs/install/"],
+      ["Guides", "/docs/guides/"],
       ["Layout", "/docs/guides/layout/"],
       ["Demos", "/docs/guides/demos/"],
     ]);
@@ -78,7 +85,7 @@ describe("the fixture site, built with the fixture docs package", () => {
   test("ships JavaScript only to the page with the demo", () => {
     const actual = budget(SITE);
     expect(actual.get("/docs/guides/demos/")).toBeGreaterThan(0);
-    for (const route of ["/docs/", "/docs/install/", "/docs/guides/layout/"]) expect(actual.get(route), route).toBe(0);
+    for (const route of ["/docs/", "/docs/install/", "/docs/guides/", "/docs/guides/layout/"]) expect(actual.get(route), route).toBe(0);
   });
 });
 
@@ -105,7 +112,7 @@ describe("a site whose demo map is empty", () => {
 
   test("ships 0 B of JavaScript on every page", () => {
     const actual = budget(site);
-    expect([...actual.keys()].sort()).toEqual(["/docs/", "/docs/guides/demos/", "/docs/guides/layout/", "/docs/install/"]);
+    expect([...actual.keys()].sort()).toEqual(["/docs/", "/docs/guides/", "/docs/guides/demos/", "/docs/guides/layout/", "/docs/install/"]);
     for (const [route, bytes] of actual) expect(bytes, route).toBe(0);
   });
 });
