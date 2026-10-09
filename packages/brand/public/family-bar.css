@@ -8,10 +8,14 @@
   --bar-fill: var(--text);
   --bar-fill-text: var(--ground-page);
   --bar-hairline: rgba(255, 255, 255, .08);
+  --bar-height: 52px;
+  /* The open panel's sheet, and the shade over the page under it. */
+  --bar-sheet: rgba(22, 22, 23, .94);
+  --bar-shade: rgba(0, 0, 0, .55);
   position: sticky;
   top: 0;
   z-index: 10;
-  height: 52px;
+  height: var(--bar-height);
   -webkit-font-smoothing: antialiased;
 }
 .family-bar[data-deck] {
@@ -42,17 +46,17 @@
   background: var(--bar-hairline);
 }
 /* While the panel is open, the bar and the panel read as one sheet. */
-.family-bar:has(.family-bar__sheet:popover-open)::before {
-  background: rgba(22, 22, 23, .94);
+.family-bar:has(.family-bar__panel:popover-open)::before {
+  background: var(--bar-sheet);
 }
-.family-bar:has(.family-bar__sheet:popover-open)::after {
+.family-bar:has(.family-bar__panel:popover-open)::after {
   background: transparent;
 }
 
 .family-bar__row {
   box-sizing: border-box;
   max-width: 980px;
-  height: 52px;
+  height: var(--bar-height);
   margin: 0 auto;
   padding: 0 22px;
   display: flex;
@@ -79,7 +83,7 @@
   font: inherit;
   cursor: pointer;
 }
-.family-bar:has(.family-bar__sheet:popover-open) .family-bar__switch {
+.family-bar:has(.family-bar__panel:popover-open) .family-bar__switch {
   background: var(--rule);
 }
 .family-bar__fan rect {
@@ -96,10 +100,10 @@
 .family-bar__fan-front {
   fill: var(--playdeck-fill);
 }
-.family-bar:has(.family-bar__sheet:popover-open) .family-bar__fan-left {
+.family-bar:has(.family-bar__panel:popover-open) .family-bar__fan-left {
   transform: rotate(-26deg);
 }
-.family-bar:has(.family-bar__sheet:popover-open) .family-bar__fan-right {
+.family-bar:has(.family-bar__panel:popover-open) .family-bar__fan-right {
   transform: rotate(26deg);
 }
 .family-bar__chevron path {
@@ -109,28 +113,39 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.family-bar:has(.family-bar__sheet:popover-open) .family-bar__chevron {
+.family-bar:has(.family-bar__panel:popover-open) .family-bar__chevron {
   transform: rotate(180deg);
 }
 
-/* The open panel: a sheet under the bar, in the top layer, over a shade (its
-   ::backdrop). Escape and a click outside close it; clicks on the shade reach
-   the page. */
-.family-bar__sheet {
-  inset: 52px 0 auto;
+/* The open panel, in the top layer, covers the page under the bar: the sheet
+   of decks, then the shade. A click on the shade closes the panel and does
+   not reach the page (a popover's ::backdrop cannot take the click), a click
+   on the bar closes it too, and so does Escape. */
+.family-bar__panel {
+  inset: var(--bar-height) 0 0;
   width: auto;
   height: auto;
   margin: 0;
   padding: 0;
   border: 0;
-  background: rgba(22, 22, 23, .94);
+  background: transparent;
   color: var(--text);
+}
+.family-bar__panel:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+.family-bar__sheet {
+  background: var(--bar-sheet);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   backdrop-filter: saturate(180%) blur(20px);
 }
-.family-bar__sheet::backdrop {
-  inset: 52px 0 0;
-  background: rgba(0, 0, 0, .55);
+.family-bar__shade {
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: var(--bar-shade);
+  cursor: default;
 }
 .family-bar__decks {
   box-sizing: border-box;
@@ -264,48 +279,50 @@
     animation: family-bar-roll .55s var(--ease) both;
   }
 
-  /* The panel slides down and its decks drop in, then both play back on
-     close: display and overlay keep it on screen until they finish. */
+  /* The sheet slides down, the shade fades in and the decks drop in, then
+     all play back on close: display and overlay keep the panel on screen
+     until they finish. */
+  .family-bar__panel {
+    transition: overlay .45s var(--ease) allow-discrete, display .45s var(--ease) allow-discrete;
+  }
   .family-bar__sheet {
     clip-path: inset(0 0 100% 0);
-    transition: clip-path .45s var(--ease), overlay .45s var(--ease) allow-discrete,
-      display .45s var(--ease) allow-discrete;
+    transition: clip-path .45s var(--ease);
   }
-  .family-bar__sheet:popover-open {
+  .family-bar__panel:popover-open .family-bar__sheet {
     clip-path: inset(0);
   }
-  .family-bar__sheet::backdrop {
+  .family-bar__shade {
     background: transparent;
-    transition: background-color .3s var(--ease), overlay .3s var(--ease) allow-discrete,
-      display .3s var(--ease) allow-discrete;
+    transition: background-color .3s var(--ease);
   }
-  .family-bar__sheet:popover-open::backdrop {
-    background: rgba(0, 0, 0, .55);
+  .family-bar__panel:popover-open .family-bar__shade {
+    background: var(--bar-shade);
   }
   .family-bar__decks li {
     opacity: 0;
     transform: translateY(-10px);
     transition: opacity .3s var(--ease), transform .45s var(--ease);
   }
-  .family-bar__sheet:popover-open li {
+  .family-bar__panel:popover-open li {
     opacity: 1;
     transform: none;
     transition-delay: 60ms;
   }
-  .family-bar__sheet:popover-open li:nth-child(2) {
+  .family-bar__panel:popover-open li:nth-child(2) {
     transition-delay: 110ms;
   }
-  .family-bar__sheet:popover-open li:nth-child(3) {
+  .family-bar__panel:popover-open li:nth-child(3) {
     transition-delay: 160ms;
   }
   @starting-style {
-    .family-bar__sheet:popover-open {
+    .family-bar__panel:popover-open .family-bar__sheet {
       clip-path: inset(0 0 100% 0);
     }
-    .family-bar__sheet:popover-open::backdrop {
+    .family-bar__panel:popover-open .family-bar__shade {
       background: transparent;
     }
-    .family-bar__sheet:popover-open li {
+    .family-bar__panel:popover-open li {
       opacity: 0;
       transform: translateY(-10px);
     }

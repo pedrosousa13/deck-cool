@@ -61,6 +61,14 @@ async function visit(options: { width?: number; reducedMotion: "reduce" | "no-pr
 
 const BUTTON = 'header button[aria-label="Switch deck"]';
 const PANEL = "header [popover]";
+/** The sheet of decks, inside the panel. Below it, the panel is the shade. */
+const SHEET = ".family-bar__sheet";
+
+async function box(page: Page, selector: string) {
+  const found = await page.locator(selector).first().boundingBox();
+  if (found === null) throw new Error(`${selector} is not on screen`);
+  return found;
+}
 
 const isOpen = (page: Page) => page.locator(PANEL).evaluate((panel) => panel.matches(":popover-open"));
 const focused = (page: Page) =>
@@ -133,14 +141,22 @@ describe("the Family bar's switcher in a browser", () => {
     expect(await focused(page)).toBe("Switch deck");
   });
 
-  test("a click outside the panel closes it", async () => {
+  test("a click on the shade closes the panel and does not reach the page under it", async () => {
+    const { page } = await visit({ width: 1280, reducedMotion: "reduce" });
+    const browse = await box(page, 'main a[href="#decks"]');
+    await page.locator(BUTTON).click();
+    expect((await box(page, SHEET)).y + (await box(page, SHEET)).height).toBeLessThan(browse.y);
+    await page.mouse.click(browse.x + browse.width / 2, browse.y + browse.height / 2);
+    expect(await isOpen(page)).toBe(false);
+    expect(new URL(page.url()).hash).toBe("");
+  });
+
+  test("a click on the bar closes the panel, and the bar's links still work", async () => {
     const { page } = await visit({ width: 1280, reducedMotion: "reduce" });
     await page.locator(BUTTON).click();
-    const panel = await page.locator(PANEL).boundingBox();
-    if (panel === null) throw new Error("the open panel is not on screen");
-    // Below the panel, over the page.
-    await page.mouse.click(640, panel.y + panel.height + 100);
+    await page.locator('header nav a[href="#playdeck"]').click();
     expect(await isOpen(page)).toBe(false);
+    expect(new URL(page.url()).hash).toBe("#playdeck");
   });
 
   test("a click on a deck link follows it", async () => {
@@ -148,20 +164,53 @@ describe("the Family bar's switcher in a browser", () => {
     await page.locator(BUTTON).click();
     const link = page.locator(`${PANEL} a`).nth(1);
     const href = await link.getAttribute("href");
+    if (href === null) throw new Error("the deck link has no href");
     await link.click();
-    await expect.poll(() => offOrigin).toContain(new URL(href ?? "").href);
+    await expect.poll(() => offOrigin).toContain(new URL(href).href);
   });
 
-  test("the panel sits under the bar, on the 980px measure", async () => {
+  test("the sheet sits under the bar, on the 980px measure", async () => {
     const { page } = await visit({ width: 1280, reducedMotion: "reduce" });
     await page.locator(BUTTON).click();
-    const bar = await page.locator("header").boundingBox();
-    const panel = await page.locator(PANEL).boundingBox();
-    const list = await page.locator(`${PANEL} ul`).boundingBox();
-    const row = await page.locator("header nav").boundingBox();
-    expect(panel?.y).toBe((bar?.y ?? NaN) + (bar?.height ?? NaN));
-    expect(list?.x).toBe((row?.x ?? NaN) + 22);
-    expect(list?.width).toBe(980 - 2 * 22);
+    const bar = await box(page, "header");
+    const row = await box(page, "header nav");
+    const sheet = await box(page, SHEET);
+    const list = await box(page, `${SHEET} ul`);
+    expect(sheet.y).toBe(bar.y + bar.height);
+    expect(list.x).toBe(row.x + 22);
+    expect(list.width).toBe(980 - 2 * 22);
+  });
+
+  test.each([
+    [390, 1],
+    [1280, 3],
+  ])("at %ipx, the decks sit in %i column(s)", async (width, columns) => {
+    const { page } = await visit({ width, reducedMotion: "reduce" });
+    await page.locator(BUTTON).click();
+    const lefts = await page
+      .locator(`${SHEET} li`)
+      .evaluateAll((items) => new Set(items.map((item) => item.getBoundingClientRect().x)).size);
+    expect(lefts).toBe(columns);
+  });
+
+  test("with motion allowed, each deck's icon is there as its tile appears", async () => {
+    const { page } = await visit({ reducedMotion: "no-preference" });
+    const atFirstSight = await page.evaluate(
+      () =>
+        new Promise<boolean[]>((resolve) => {
+          const panel = document.querySelector<HTMLElement>("header [popover]");
+          const first = panel?.querySelector("li");
+          if (!panel || !first) throw new Error("no panel or no tile");
+          panel.showPopover();
+          const look = () => {
+            if (Number(getComputedStyle(first).opacity) > 0) {
+              resolve([...panel.querySelectorAll("img")].map((img) => img.complete && img.naturalWidth > 0));
+            } else requestAnimationFrame(look);
+          };
+          look();
+        }),
+    );
+    expect(atFirstSight).toEqual([true, true, true]);
   });
 
   test("with motion allowed, opening and closing both animate, and the fan follows", async () => {

@@ -14,15 +14,15 @@ export interface FamilyBarProps {
   readonly install?: string;
 }
 
+/** The switcher's panel. One bar per page, so a fixed id. */
+const PANEL = "family-bar-decks";
+
 /**
  * The top bar every deck.cool site shares (design direction C). The switcher
  * is a popover its button toggles, which closes on Escape and on a click
  * outside it. Every motion is CSS in `public/family-bar.css`, so the bar ships
  * no JavaScript.
  */
-/** The switcher's panel. One bar per page, so a fixed id. */
-const PANEL = "family-bar-decks";
-
 export function FamilyBar({ current, links, install }: FamilyBarProps) {
   const deck = "kind" in current ? current : undefined;
   return (
@@ -40,23 +40,37 @@ export function FamilyBar({ current, links, install }: FamilyBarProps) {
               <path d="M2 3.5 L5 6.5 L8 3.5" />
             </svg>
           </button>
-          <div id={PANEL} popover="auto" className="family-bar__sheet">
-            <div className="family-bar__decks">
-              <p id={`${PANEL}-label`}>The decks</p>
-              <ul aria-labelledby={`${PANEL}-label`}>
-                {decks.map((each) => (
-                  <li key={each.name}>
-                    <a href={each.url} aria-current={each === deck ? "page" : undefined}>
-                      <img src={each.icons.still} alt="" width="44" height="44" loading="lazy" />
-                      <span>
-                        <strong>{each.name}</strong>
-                        <span>{each.kind}</span>
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
+          {/* The panel covers the page under the bar: the sheet of decks, then
+              the shade, which closes the panel and keeps the click from the page. */}
+          <div id={PANEL} popover="auto" className="family-bar__panel">
+            <div className="family-bar__sheet">
+              <div className="family-bar__decks">
+                <p id={`${PANEL}-label`}>The decks</p>
+                <ul aria-labelledby={`${PANEL}-label`}>
+                  {decks.map((each) => (
+                    <li key={each.name}>
+                      <a href={each.url} aria-current={each === deck ? "page" : undefined}>
+                        {/* Low priority, and not lazy: React then writes no preload,
+                            and the icons are there before the panel first opens. */}
+                        <img src={each.icons.still} alt="" width="44" height="44" fetchPriority="low" />
+                        <span>
+                          <strong>{each.name}</strong>
+                          <span>{each.kind}</span>
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
+            <button
+              type="button"
+              className="family-bar__shade"
+              popoverTarget={PANEL}
+              popoverTargetAction="hide"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
           </div>
           {deck && (
             <span className="family-bar__slash" aria-hidden="true">
