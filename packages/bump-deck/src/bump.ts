@@ -44,6 +44,10 @@ export function branchOf({ deck, version }: Release): string {
   return `bump/${deck}-${version}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 const FIELDS = ["dependencies", "devDependencies", "optionalDependencies"] as const;
 
 /** The X.Y.Z a spec names, such as `1.2.0` or `^1.2.0`, as numbers. */
@@ -67,11 +71,14 @@ function isNewer(spec: string, version: string): boolean {
  * Throws if any of them is already at a newer version: an older dispatch must not open a downgrade.
  */
 export function bumpManifest(text: string, { deck, version }: Release): { text: string; changes: Omit<Change, "file">[] } {
-  const manifest = JSON.parse(text) as Partial<Record<(typeof FIELDS)[number], Record<string, string>>>;
+  const manifest: unknown = JSON.parse(text);
+  if (!isRecord(manifest)) throw new Error("package.json is not a JSON object");
   const changes: Omit<Change, "file">[] = [];
   for (const field of FIELDS) {
-    const dependencies = manifest[field] ?? {};
+    const dependencies = manifest[field];
+    if (!isRecord(dependencies)) continue;
     for (const [name, from] of Object.entries(dependencies)) {
+      if (typeof from !== "string") continue;
       if (!name.startsWith(`@${deck}/`) || from === version || from.startsWith("workspace:")) continue;
       if (isNewer(from, version)) {
         throw new Error(
@@ -124,9 +131,11 @@ export function prBody({ deck, version }: Release, changes: readonly Change[], b
 const run = promisify(execFile);
 
 /**
- * Bumps every `@<deck>/*` dependency in every workspace package under `root`, then updates the
- * lockfile with `pnpm install`. Changes nothing when no package depends on the deck at another
- * version, and throws before writing anything when one is at a newer version. pnpm runs in strict release-age mode: by default it would add a too-young version to
+ * Bumps every `@<deck>/*` dependency in every workspace package under `root`, then updates
+ * the lockfile with `pnpm install`. Changes nothing when no package depends on the deck at
+ * another version, and throws before writing anything when one is at a newer version.
+ *
+ * pnpm runs in strict release-age mode: by default it would add a too-young version to
  * `minimumReleaseAgeExclude` and install it anyway.
  */
 export async function bumpWorkspace(
@@ -135,13 +144,16 @@ export async function bumpWorkspace(
   env: Readonly<Record<string, string>> = {},
 ): Promise<{ changes: Change[]; bypassed: string[] }> {
   const options = { cwd: root, env: { ...process.env, ...env, pnpm_config_minimum_release_age_strict: "true" } };
-  const projects = JSON.parse((await run("pnpm", ["ls", "-r", "--depth", "-1", "--json"], options)).stdout) as { path: string }[];
-  const excluded = JSON.parse((await run("pnpm", ["config", "get", "minimumReleaseAgeExclude", "--json"], options)).stdout || "[]") as unknown;
+  const listed: unknown = JSON.parse((await run("pnpm", ["ls", "-r", "--depth", "-1", "--json"], options)).stdout);
+  const paths = Array.isArray(listed)
+    ? listed.flatMap((project: unknown) => (isRecord(project) && typeof project["path"] === "string" ? [project["path"]] : []))
+    : [];
+  const excluded: unknown = JSON.parse((await run("pnpm", ["config", "get", "minimumReleaseAgeExclude", "--json"], options)).stdout || "[]");
   const patterns = Array.isArray(excluded) ? excluded.filter((pattern): pattern is string => typeof pattern === "string") : [];
 
   const changes: Change[] = [];
   const writes: [string, string][] = [];
-  for (const { path } of projects) {
+  for (const path of paths) {
     const file = join(path, "package.json");
     const bumped = bumpManifest(readFileSync(file, "utf8"), release);
     if (bumped.changes.length === 0) continue;
@@ -156,7 +168,7 @@ export async function bumpWorkspace(
   try {
     await run("pnpm", ["install", "--no-frozen-lockfile"], options);
   } catch (error) {
-    const output = error instanceof Error && "stdout" in error ? `${String(error.stdout)}${String((error as { stderr?: unknown }).stderr ?? "")}` : String(error);
+    const output = (isRecord(error) ? `${String(error["stdout"] ?? "")}${String(error["stderr"] ?? "")}` : "") || String(error);
     if (output.includes("ERR_PNPM_NO_MATURE_MATCHING_VERSION")) {
       throw new Error(
         `${release.deck} ${release.version} is younger than pnpm's release-age hold (minimumReleaseAge), so nothing was pushed. ` +

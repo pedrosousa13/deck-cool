@@ -103,6 +103,10 @@ describe("a manifest's bump", () => {
     );
   });
 
+  test("refuses a manifest that is not a JSON object", () => {
+    expect(() => bumpManifest("[]\n", { deck: "slidedeck", version: "1.1.0" })).toThrow("package.json is not a JSON object");
+  });
+
   test("leaves a workspace link as it is", () => {
     const before = manifest({ dependencies: { "@slidedeck/docs": "workspace:*" } });
     expect(bumpManifest(before, { deck: "slidedeck", version: "1.1.0" })).toEqual({ text: before, changes: [] });
