@@ -4,7 +4,6 @@ import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 /** No page uses a powerful feature, so each one is off, for the page and for anything it embeds. */
 const PERMISSIONS_POLICY = [
   "accelerometer",
-  "bluetooth",
   "camera",
   "display-capture",
   "fullscreen",

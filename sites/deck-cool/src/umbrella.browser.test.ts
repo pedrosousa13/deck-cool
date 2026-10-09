@@ -35,6 +35,8 @@ interface Visit {
   offOrigin: string[];
   /** CSP violations, from the event and from the console. */
   violations: () => Promise<string[]>;
+  /** Console messages about the Permissions-Policy header. */
+  permissionsPolicy: string[];
 }
 
 async function visit(options: { width: number; reducedMotion: "reduce" | "no-preference" }): Promise<Visit> {
@@ -60,14 +62,17 @@ async function visit(options: { width: number; reducedMotion: "reduce" | "no-pre
   });
   const page = await context.newPage();
   const logged: string[] = [];
+  const permissionsPolicy: string[] = [];
   page.on("console", (message) => {
     if (/Content.Security.Policy/i.test(message.text())) logged.push(message.text());
+    if (/Permissions.Policy/i.test(message.text())) permissionsPolicy.push(message.text());
   });
   const response = await page.goto(`${site.origin}/`, { waitUntil: "load" });
   return {
     page,
     response,
     offOrigin,
+    permissionsPolicy,
     violations: async () => [
       ...logged,
       ...(await page.evaluate(() => window.cspViolations ?? ["the CSP listener never ran"])),
@@ -79,6 +84,11 @@ describe("the umbrella site in a browser", () => {
   test("the home page is served with the CSP the build writes", async () => {
     const { response } = await visit({ width: 1280, reducedMotion: "reduce" });
     expect(await response?.headerValue(CONTENT_SECURITY_POLICY.name)).toBe(CONTENT_SECURITY_POLICY.value);
+  });
+
+  test("the browser recognizes every feature the Permissions-Policy names", async () => {
+    const { permissionsPolicy } = await visit({ width: 1280, reducedMotion: "reduce" });
+    expect(permissionsPolicy).toEqual([]);
   });
 
   test("the harness sees a CSP violation when there is one", async () => {
