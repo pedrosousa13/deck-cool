@@ -62,6 +62,8 @@ A page's route comes from its path. The site picks the base, for example `/docs`
 | `guides/layout.md` | `/docs/guides/layout` |
 | `guides/index.md` | `/docs/guides` |
 
+Two files cannot share a route, so a package cannot have both `guides.md` and `guides/index.md`.
+
 ## Links
 
 Link to another page by its relative path to the `.md` file, from the page you are writing. A `#fragment` is kept. The site rewrites the link to the page's route.
@@ -92,14 +94,26 @@ A name has letters, digits, `-` and `_`. The site swaps the marker for the compo
 
 ## Code
 
-Fenced code blocks are highlighted at build time. Name the language on the fence (` ```tsx `). The site lists the languages it loads, and a fence with a language that is not on the list fails the build.
+Fenced code blocks are highlighted at build time. Name the language on the fence (` ```tsx `). Which languages are loaded is the site's choice, not yours: the site declares its list, and adds any language a docs package needs. A fence with a language that is not on the site's list fails the site's build, so tell the site before you release a page with a new one.
 
 ## What fails the build
 
-The build stops and names the file and line of each problem:
+The build stops and names the file and line of each problem, with the fix:
 
 - a page with no `title` or no `description`;
-- a page that `nav.json` does not list, or a `nav.json` entry with no page;
+- no `nav.json`, or a `nav.json` that is not a list of groups, each with a `label` and `pages`;
+- a page that `nav.json` does not list, a page it lists twice, or an entry with no page;
+- two files with one route, such as `guides.md` and `guides/index.md`;
 - a link to a page that does not exist, or a relative link to a file that is not a `.md` page;
+- a link whose path is written with backslash escapes or character references, which the build cannot rewrite;
 - an image that is not a file under `assets/`;
-- a demo marker that is not on its own line, or a demo name the site does not register.
+- a demo marker that is not on a line of its own, or a demo name the site does not register;
+- a code fence whose language the site does not load (Pagedeck's check, which names the file but not the line).
+
+## Known limits
+
+These are limits of the site's loader, not rules for the docs package:
+
+- A site shows one docs package. It holds every page in one collection, named `docs`, in one locale, `en`.
+- The docs use the site's one `build.passthrough.contentRoot`, which publishes the images the pages show. The site can't use it for anything else.
+- `pagedeck sync` stages the images. A `pagedeck build` from a content snapshot that was pulled without a sync has no images to publish.
