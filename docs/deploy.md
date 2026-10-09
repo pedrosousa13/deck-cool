@@ -39,6 +39,20 @@ After the first deploy has created the Worker, edit the token and lower Workers 
 
 If a deploy is refused with an authorization error, add only the permission that the error names.
 
+### The zone settings
+
+`wrangler deploy` sets only the Worker and its custom domain. The site also relies on this setting of the `deck.cool` zone, which you set once:
+
+- **Always Use HTTPS** on: SSL/TLS → Edge Certificates → Always Use HTTPS, or the zone setting `always_use_https` set to `on` through the API. Cloudflare then answers every `http://` request on the zone, `*.deck.cool` included, with a `301` to the same URL over `https://`, before the Worker runs. Browsers ignore `Strict-Transport-Security` on a plain-HTTP response, so without the redirect a first visit over `http://` gets the page in cleartext. It was turned on 2026-10-09.
+
+To check it:
+
+```sh
+curl -sI http://deck.cool/   # HTTP/1.1 301 Moved Permanently, Location: https://deck.cool/
+```
+
+`check-live` fails if the setting is off.
+
 ### The secret
 
 Add the token as `CLOUDFLARE_API_TOKEN`, a secret of the repository's `production` environment, not a repository secret:
@@ -84,13 +98,14 @@ pnpm --filter @sites/deck-cool check-live                      # https://deck.co
 pnpm --filter @sites/deck-cool check-live https://example.com  # any other origin
 ```
 
-`check-live` fetches `/` and `/icons/deck-cool/still.svg` and fails unless each answers `200` with every header in `src/headers.ts`, at its exact value, and no `immutable`. It then fetches the hashed stylesheet `/` links, and fails unless it answers `200` with the same headers and `Cache-Control: public, max-age=31536000, immutable`. It also fails unless `/manifest.json` answers `404`. It is not part of `pnpm test`, which stays offline. `src/live-check.test.ts` runs the same checks against the build served locally.
+`check-live` fetches `/` and `/icons/deck-cool/still.svg` and fails unless each answers `200` with every header in `src/headers.ts`, at its exact value, and no `immutable`. It then fetches the hashed stylesheet `/` links, and fails unless it answers `200` with the same headers and `Cache-Control: public, max-age=31536000, immutable`. It also fails unless `/manifest.json` answers `404`, and unless `http://<host>/` answers `301` with `Location` set to the same path over `https://`, which is the zone's Always Use HTTPS. It is not part of `pnpm test`, which stays offline. `src/live-check.test.ts` runs the same checks against the build served locally.
 
 For a quick look with curl:
 
 ```sh
 curl -sI https://deck.cool/
 curl -sI https://deck.cool/manifest.json   # 404
+curl -sI http://deck.cool/                  # 301 to https://deck.cool/
 ```
 
 ## Rolling back
