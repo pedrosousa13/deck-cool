@@ -117,8 +117,7 @@ export default function HomePage({
           <span>not one you configure.</span>
         </h1>
         <p>
-          Compose it from React parts, style each one with your own CSS, or hand it to your agent. The same few lines
-          play your own files, HLS, YouTube, Vimeo and Wistia.
+          Compose it from React parts, style each one with your own CSS, or hand it to your agent.
         </p>
         <div className="pd-intro__actions">
           {/* No Copy button, which would be one more island: one click selects the command. */}

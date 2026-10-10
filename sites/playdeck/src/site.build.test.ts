@@ -436,7 +436,7 @@ describe("the home page", () => {
     expect(text(hero?.querySelector("h1"))).toBe("A video player you compose, not one you configure.");
     expect([...(hero?.querySelectorAll("p") ?? [])].map(text)).toEqual([
       "playdeck 1.3.0",
-      "Compose it from React parts, style each one with your own CSS, or hand it to your agent. The same few lines play your own files, HLS, YouTube, Vimeo and Wistia.",
+      "Compose it from React parts, style each one with your own CSS, or hand it to your agent.",
     ]);
     expect(text(hero?.querySelector("code.pd-install__command"))).toBe("pnpm add @playdeck/react");
     // No copy island: one click selects the command.
