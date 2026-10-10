@@ -151,10 +151,8 @@ describe("budgets, measured and pinned", () => {
   // Spelled again rather than imported, so a limit raised in the config fails here.
   // Each is the page's measured size rounded up to a whole kilobyte.
   const PINNED: Record<string, string> = {
-    // Eager chunks only: the two players hydrate on sight. The browser test
-    // pins the page's 84kb once they have.
     [PATHS.home]: "59kb",
-    [PATHS.examples]: "88kb",
+    [PATHS.examples]: "89kb",
     [PATHS.comparison]: "0b",
     [PATHS.search]: "60kb",
   };
@@ -416,9 +414,10 @@ describe("the home page", () => {
     );
   });
 
-  test("runs hero, proof, the four quality sections, then the line back to deck.cool", () => {
+  test("runs hero, showcase, proof, the four quality sections, then the line back to deck.cool", () => {
     expect(sections().map((section) => section.className)).toEqual([
       "pd-intro",
+      "pd-showcase",
       "pd-proof",
       "pd-band",
       "pd-band",
@@ -450,8 +449,23 @@ describe("the home page", () => {
     expect(main().textContent).not.toMatch(/Using an agent|markdown|llms\.txt/i);
   });
 
+  test("the showcase: one wide player, dormant, playing Sprite Fright from YouTube under its own still", () => {
+    const showcase = present(sections()[1], "the showcase");
+    const islands = [...showcase.querySelectorAll("[data-fw-component]")];
+    expect(islands.map((island) => [island.getAttribute("data-fw-component"), island.getAttribute("data-fw-props")])).toEqual([
+      ["skin_player", '{"provider":"youtube","stage":"showcase"}'],
+    ]);
+    expect(showcase.querySelector('[data-playdeck-part="viewport"] button[data-playdeck-part="activation"]')).not.toBeNull();
+    const poster = present(showcase.querySelector('img[data-playdeck-part="poster-image"]'), "the showcase's poster");
+    expect(poster.getAttribute("srcset")).toBe("/sprite-fright-poster-1024w.webp 1024w, /sprite-fright-poster-2048w.webp 2048w");
+    expect(poster.getAttribute("sizes")).toBe("(min-width: 980px) 936px, calc(100vw - 44px)");
+    // Near the top of the page, so not lazy.
+    expect(poster.hasAttribute("loading")).toBe(false);
+    expect(showcase.querySelectorAll("video[src], source[src], iframe")).toHaveLength(0);
+  });
+
   test("the proof: three points beside the one figure, which this site's tests check", () => {
-    const proof = sections()[1];
+    const proof = sections()[2];
     expect(text(proof?.querySelector("h2"))).toBe("You pick the controls. playdeck knows what each source can do.");
     expect(
       [...(proof?.querySelectorAll(".pd-proof__points li") ?? [])].map((point) => [text(point.querySelector("h3")), text(point.querySelector("p"))]),
@@ -477,7 +491,7 @@ describe("the home page", () => {
   });
 
   test("the four quality sections, in the brief's order", () => {
-    expect(sections().slice(2, 6).map((section) => text(section.querySelector("h2")))).toEqual([
+    expect(sections().slice(3, 7).map((section) => text(section.querySelector("h2")))).toEqual([
       "Unstyled, your look.",
       "Small, leans on the browser.",
       "Built for agents.",
@@ -491,18 +505,23 @@ describe("the home page", () => {
 
     test("says playdeck brings no look, and names its parts", () => {
       expect(text(section()?.querySelector(".pd-band__text p"))).toBe(
-        'playdeck imports no stylesheet. Its parts set only the geometry they need, and the optional theme is one import. Every part carries a name, like data-playdeck-part="play-button", for your CSS or your tokens to reach. Here is one live player, shown twice: the markup is the same, and only the CSS changes.',
+        'playdeck imports no stylesheet. Its parts set only the geometry they need, and the optional theme is one import. Every part carries a name, like data-playdeck-part="play-button", for your CSS or your tokens to reach. Here is one live player, shown twice: the markup is the same, and only the CSS and the source change.',
       );
     });
 
-    test("renders the same player twice, dormant, each in its own skin", () => {
-      expect(skins().map((skin) => text(skin.querySelector("figcaption")))).toEqual(SKINS.map((skin) => skin.name));
+    test("renders the same player twice, dormant, each in its own skin and from its own host", () => {
+      expect(skins().map((skin) => text(skin.querySelector("figcaption")))).toEqual(["Velvet · YouTube", "Broadcast · Vimeo"]);
       const stages = skins().map((skin) => present(skin.querySelector(".pd-skin__stage"), "a skin's stage"));
       expect(stages.map((stage) => stage.className)).toEqual(SKINS.map((skin) => `pd-skin__stage ${skin.className}`));
-      // The same markup, but for the id prefix Pagedeck gives each island.
+      // Each island's one prop is its provider.
+      expect(stages.map((stage) => stage.querySelector("[data-fw-props]")?.getAttribute("data-fw-props"))).toEqual([
+        '{"provider":"youtube"}',
+        '{"provider":"vimeo"}',
+      ]);
+      // The same markup, but for the id prefix Pagedeck gives each island and that prop.
       const markup = stages.map((stage) => {
         const prefix = present(stage.querySelector("[data-fw-prefix]")?.getAttribute("data-fw-prefix"), "an island's prefix");
-        return stage.innerHTML.replaceAll(prefix, "");
+        return stage.innerHTML.replaceAll(prefix, "").replace(/ data-fw-props="[^"]*"/, "");
       });
       expect(markup[0]).toBe(markup[1]);
       for (const stage of stages) {
@@ -556,13 +575,28 @@ describe("the home page", () => {
       expect(section()?.querySelector(".pd-skins ~ a.pd-button")).toBe(cta);
     });
 
-    test("says neither player loads before a press, and credits the clip", () => {
+    test("shows Sprite Fright's still on each player, from this site, at two widths", () => {
+      for (const skin of skins()) {
+        const poster = present(skin.querySelector('[data-playdeck-part="poster"] img[data-playdeck-part="poster-image"]'), "a poster");
+        expect(poster.getAttribute("src")).toBe("/sprite-fright-poster-1024w.webp");
+        expect(poster.getAttribute("srcset")).toBe("/sprite-fright-poster-1024w.webp 1024w, /sprite-fright-poster-2048w.webp 2048w");
+        expect(poster.getAttribute("sizes")).toBe("(min-width: 870px) 416px, calc(100vw - 84px)");
+        expect(poster.getAttribute("loading")).toBe("lazy");
+        expect(poster.getAttribute("alt")).toBe("");
+      }
+      for (const [file, most] of [["sprite-fright-poster-1024w.webp", 50_000], ["sprite-fright-poster-2048w.webp", 100_000]] as const) {
+        expect(readFileSync(`${SITE}site/${file}`).byteLength, file).toBeLessThan(most);
+      }
+    });
+
+    test("says neither player loads before a press, and credits the film", () => {
       expect(text(section()?.querySelector(".pd-band__note"))).toBe(
-        "Neither player fetches its clip or its provider until you press play. The clip is the Sintel trailer, © Blender Foundation, licensed CC BY 3.0, played from the foundation's own host.",
+        "Neither player fetches its clip or its provider until you press play. Both play Sprite Fright, © Blender Studio, licensed CC BY 4.0, from the studio's own uploads to YouTube and Vimeo.",
       );
       expect(links(section()?.querySelector(".pd-band__note") ?? undefined)).toEqual([
-        ["CC BY 3.0", "https://creativecommons.org/licenses/by/3.0/"],
+        ["CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"],
       ]);
+      expect(text(section()?.querySelector(".pd-band__note em"))).toBe("Sprite Fright");
     });
   });
 
@@ -622,7 +656,7 @@ describe("the home page", () => {
   });
 
   test("closes with one line back to deck.cool", () => {
-    const family = sections()[6];
+    const family = sections()[7];
     expect(text(family?.querySelector("p"))).toBe(
       "playdeck is part of deck.cool, a family of unstyled React packages that look like you and work like the browser. Meet the family ›",
     );

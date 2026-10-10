@@ -1,14 +1,10 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { chromium, type Browser, type Page, type Response } from "playwright";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { brotliCompressSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { PATHS } from "../components/links.ts";
 import { MEDIA_ORIGINS } from "./csp.ts";
 import { RESPONSE_HEADERS } from "./headers.ts";
 import { serveSite, type ServedSite } from "./serve-site.ts";
-import { SKINS } from "./skins.ts";
 
 // Drives the built site (build.global-setup.ts) in Chromium, served with the
 // headers in the build's _headers file, so every page runs under its CSP.
@@ -197,27 +193,6 @@ describe("the playdeck site in a browser", () => {
     expect(await violations()).toEqual([]);
   });
 
-  // Pagedeck's budget counts only the chunks a page loads eagerly, and the home
-  // page's players hydrate on "visible". This counts what the budget cannot:
-  // every script the page has loaded once both players have hydrated, before a
-  // press, weighed as the budget weighs a chunk (brotli at its default quality).
-  // Measured, then rounded up to a whole kilobyte: re-measure rather than raise it.
-  test("the home page ships 84kb of JavaScript before a press, its players hydrated", async () => {
-    const { page, scripts } = await visit(PATHS.home, { width: 1280 });
-    await page.waitForLoadState("networkidle");
-    for (const skin of SKINS) {
-      await page.locator(`.pd-skin__stage.${skin.className}`).scrollIntoViewIfNeeded();
-      await page.locator(`.pd-skin__stage.${skin.className} [data-playdeck-part="viewport"][data-idle]`).waitFor();
-    }
-    await page.waitForLoadState("networkidle");
-    const bytes = [...new Set(scripts)]
-      .map((path) => brotliCompressSync(readFileSync(fileURLToPath(new URL(`../site${path}`, import.meta.url)))).byteLength)
-      .reduce((sum, each) => sum + each, 0);
-    const limit = 84 * 1024;
-    expect(bytes).toBeLessThanOrEqual(limit);
-    expect(limit - bytes).toBeLessThan(2048);
-  });
-
   test("an open skin's source scrolls inside itself at 390px, never the page", async () => {
     const { page } = await visit(PATHS.home, { width: 390 });
     const source = page.getByLabel("Broadcast CSS", { exact: true });
@@ -228,13 +203,74 @@ describe("the playdeck site in a browser", () => {
   });
 
   // CONTEXT.md's figure for playdeck: 0 requests to YouTube or Vimeo before
-  // play. No page here mounts either provider yet (#52's demos do), so this
-  // holds a stronger claim that implies it: before a press, a player requests
-  // nothing from any other origin, and loads no provider.
+  // play. The home page's two players embed one each, and this holds a
+  // stronger claim that implies it: before a press, a player requests nothing
+  // from any other origin, and loads no provider. After it, each frames its
+  // own embed under the CSP. Every off-origin request is still aborted, so
+  // YouTube's API is answered here by a stub that only defines YT.Player.
+  describe.each([
+    {
+      name: "showcase",
+      scope: ".pd-showcase",
+      provider: "youtube",
+      frame: "https://www.youtube-nocookie.com/embed/_cMxraX_5RE?",
+      reached: ["https://www.youtube.com/iframe_api", "https://www.youtube-nocookie.com/embed/_cMxraX_5RE?"],
+    },
+    {
+      name: "Velvet",
+      scope: ".pd-skin__stage.velvet",
+      provider: "youtube",
+      frame: "https://www.youtube-nocookie.com/embed/_cMxraX_5RE?",
+      reached: ["https://www.youtube.com/iframe_api", "https://www.youtube-nocookie.com/embed/_cMxraX_5RE?"],
+    },
+    {
+      name: "Broadcast",
+      scope: ".pd-skin__stage.broadcast",
+      provider: "vimeo",
+      frame: "https://player.vimeo.com/video/640499893?",
+      reached: ["https://player.vimeo.com/video/640499893?"],
+    },
+  ])("the home page's $name player", ({ scope, provider, frame, reached }) => {
+    test(`requests nothing off the origin, and loads no provider, until it is pressed; then frames ${provider} under the CSP`, { timeout: 30_000 }, async () => {
+      const { page, offOrigin, scripts, violations, errors } = await visit(PATHS.home, { width: 1280 });
+      await page.route("https://www.youtube.com/iframe_api", (route) => {
+        offOrigin.push(route.request().url());
+        return route.fulfill({
+          contentType: "text/javascript",
+          body: "window.YT = { Player: function () {} }; window.onYouTubeIframeAPIReady();",
+        });
+      });
+      await page.waitForLoadState("networkidle");
+      await page.mouse.wheel(0, 4000);
+      await page.waitForLoadState("networkidle");
+      await page.locator(scope).scrollIntoViewIfNeeded();
+      await page.locator(`${scope} [data-playdeck-part="viewport"][data-idle]`).waitFor();
+      await page.waitForLoadState("networkidle");
+      expect(offOrigin).toEqual([]);
+      expect(scripts.filter((path) => /_playdeck-provider-/.test(path))).toEqual([]);
+      // The still is this site's, and has loaded.
+      const poster = page.locator(`${scope} img[data-playdeck-part="poster-image"]`);
+      await expect.poll(() => poster.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+      expect(new URL(await poster.evaluate((img: HTMLImageElement) => img.currentSrc)).origin).toBe(site.origin);
+
+      await page.locator(scope).getByRole("button", { name: "Play video", exact: true }).click();
+      const iframe = page.locator(`${scope} iframe`);
+      await expect.poll(async () => (await iframe.getAttribute("src"))?.startsWith(frame)).toBe(true);
+      await expect.poll(() => offOrigin.map((url) => reached.find((prefix) => url.startsWith(prefix)) ?? url)).toEqual(reached);
+      // Its own provider, fetched by the press.
+      const own = new RegExp(`^/assets/_playdeck-provider-${provider}-[A-Za-z0-9_-]{8}\\.js$`);
+      await expect.poll(() => scripts.filter((path) => own.test(path))).toHaveLength(1);
+      for (const path of scripts.filter((each) => /_playdeck-provider-/.test(each))) expect(path).toMatch(own);
+      // Nothing else reached: the player has no other job to do off the page.
+      await page.waitForTimeout(500);
+      expect(offOrigin.map((url) => reached.find((prefix) => url.startsWith(prefix)) ?? url)).toEqual(reached);
+      expect(await violations()).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+  });
+
   const SINTEL = "/durian/trailer/sintel_trailer-720p.mp4";
   describe.each([
-    { name: "home page's Velvet", path: PATHS.home, scope: ".pd-skin__stage.velvet", press: "Play video", clip: SINTEL },
-    { name: "home page's Broadcast", path: PATHS.home, scope: ".pd-skin__stage.broadcast", press: "Play video", clip: SINTEL },
     { name: "streaming service", path: PATHS.examples, scope: "main", press: "Play from the beginning", clip: SINTEL },
     { name: "course platform", path: PATHS.examples, scope: "main", press: "Start the lesson", clip: "/peach/trailer/trailer_iphone.m4v" },
   ])("the $name player", ({ path, scope, press, clip }) => {

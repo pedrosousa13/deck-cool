@@ -14,23 +14,38 @@ export const MEDIA_ORIGINS = [
 ] as const;
 
 /**
+ * What the home page's YouTube player loads once it is pressed: the iframe
+ * API's loader, then the widget script that loader adds, which YouTube serves
+ * under /s/player/. Vimeo's SDK is bundled with its provider, so it adds none.
+ */
+export const EMBED_SCRIPTS = ["https://www.youtube.com/iframe_api", "https://www.youtube.com/s/player/"] as const;
+
+/**
+ * The embeds the home page's two players frame once pressed: YouTube's
+ * privacy-enhanced host, playdeck's default, and Vimeo's player. Each player
+ * shows this site's own still, so neither provider's image host is needed.
+ */
+export const EMBED_FRAMES = ["https://www.youtube-nocookie.com", "https://player.vimeo.com"] as const;
+
+/**
  * Scripts, stylesheets, images, the captions and the search index come from
- * the site itself, the clips from MEDIA_ORIGINS, and everything else is
- * refused. No page frames a provider: YouTube, Vimeo and Wistia's iframes and
- * scripts, and HLS's blob: media, wait for #52's demos, which add their
- * origins here. `style-src-attr 'unsafe-inline'` is for the code
- * highlighter's `style=` colours and the players' own inline styles.
+ * the site itself, the clips from MEDIA_ORIGINS, the embeds from EMBED_FRAMES
+ * and EMBED_SCRIPTS, and everything else is refused. Wistia and HLS's blob:
+ * media wait for #52's demos, which add their origins here.
+ * `style-src-attr 'unsafe-inline'` is for the code highlighter's `style=`
+ * colours and the players' own inline styles.
  */
 export const CONTENT_SECURITY_POLICY: HeaderField = {
   name: "Content-Security-Policy",
   value: [
     "default-src 'none'",
-    "script-src 'self'",
+    `script-src 'self' ${EMBED_SCRIPTS.join(" ")}`,
     "style-src 'self'",
     "style-src-attr 'unsafe-inline'",
     "img-src 'self'",
     `media-src 'self' ${MEDIA_ORIGINS.join(" ")}`,
     "connect-src 'self'",
+    `frame-src ${EMBED_FRAMES.join(" ")}`,
     "base-uri 'none'",
     "form-action 'none'",
     "frame-ancestors 'none'",

@@ -114,7 +114,7 @@ main .pd-button:hover {
 .pd-intro {
   max-width: 980px;
   margin: 0 auto;
-  padding: 112px 22px 96px;
+  padding: 112px 22px 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -133,9 +133,10 @@ main .pd-button:hover {
   font-weight: 600;
   letter-spacing: -.01em;
 }
-/* 80px as on deck.cool, narrowing so each line holds down to 360px. */
+/* Smaller than deck.cool's 80px, so the claim sets in two lines over the
+   showcase at 1280px, narrowing so each line holds down to 360px. */
 .pd-intro h1 {
-  font-size: clamp(32px, 9vw, 80px);
+  font-size: clamp(32px, 6vw, 56px);
   line-height: 1.05;
   letter-spacing: -.025em;
 }
@@ -185,6 +186,82 @@ main .pd-more {
 }
 main .pd-more:hover {
   color: var(--text);
+}
+
+/*
+ * The showcase: the home page's player at the full measure, in the site's own
+ * look, reached through its part names as the skins below reach it.
+ */
+.pd-showcase {
+  margin: 0 max(22px, calc((100% - 980px) / 2)) 96px;
+}
+.pd-showcase [data-playdeck-part="viewport"] {
+  aspect-ratio: var(--playdeck-media-aspect-ratio, 16 / 9);
+  border-radius: 28px;
+  background: #000;
+  box-shadow: 0 0 0 1px var(--rule), 0 32px 96px rgb(217 33 79 / .18);
+  color: #fff;
+}
+.pd-showcase [data-playdeck-part="media"] {
+  width: 100%;
+  height: 100%;
+}
+.pd-showcase [data-playdeck-part="activation"] {
+  --playdeck-activation-fill: var(--playdeck-fill);
+  width: 88px;
+  height: 88px;
+  border-radius: 999px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / .45);
+  color: var(--fill-text);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pd-showcase [data-playdeck-part="activation"]:hover {
+  --playdeck-activation-fill: #c01c46;
+}
+.pd-showcase [data-playdeck-part="controls"] {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 32px 16px 12px;
+  background: linear-gradient(transparent, rgb(0 0 0 / .72));
+}
+.pd-showcase [data-playdeck-part="controls"] button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+}
+.pd-showcase [data-playdeck-part="controls"] button:hover {
+  background: rgb(255 255 255 / .14);
+}
+.pd-showcase [data-playdeck-part="controls"] svg {
+  width: 22px;
+  height: 22px;
+}
+.pd-showcase [data-playdeck-part="seek-slider"] {
+  flex: 1;
+  min-width: 0;
+}
+.pd-showcase [data-playdeck-part="seek-slider-input"] {
+  display: block;
+  width: 100%;
+  accent-color: var(--playdeck-text);
+}
+.pd-showcase [data-playdeck-part="time"] {
+  padding: 0 8px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The proof: three points beside the one figure. */
@@ -394,7 +471,17 @@ main .pd-family .pd-more {
 
 @media (max-width: 734px) {
   .pd-intro {
-    padding: 72px 22px 64px;
+    padding: 72px 22px 40px;
+  }
+  .pd-showcase {
+    margin-bottom: 64px;
+  }
+  .pd-showcase [data-playdeck-part="viewport"] {
+    border-radius: 18px;
+  }
+  .pd-showcase [data-playdeck-part="activation"] {
+    width: 72px;
+    height: 72px;
   }
   .pd-intro p {
     font-size: 19px;

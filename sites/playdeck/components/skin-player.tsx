@@ -3,17 +3,32 @@
 import * as Player from "@playdeck/react";
 
 /*
- * The Sintel trailer, the clip /examples' streaming service plays, from the
- * Blender Foundation's own host: the one media origin the CSP allows. MP4
- * first, and Theora for an engine with no H.264 decoder.
+ * Sprite Fright (Blender Studio, 2021, CC BY 4.0), as playdeck.video's bench
+ * played it: Blender Studio's own uploads to YouTube and to Vimeo.
  */
-const SINTEL = {
-  type: "video",
-  sources: [
-    { src: "https://download.blender.org/durian/trailer/sintel_trailer-720p.mp4", mimeType: "video/mp4" },
-    { src: "https://download.blender.org/durian/trailer/sintel_trailer-720p.ogv", mimeType: "video/ogg" },
-  ],
-} as const satisfies Player.RootProps["source"];
+const SOURCES = {
+  youtube: "https://www.youtube.com/watch?v=_cMxraX_5RE",
+  vimeo: "https://vimeo.com/640499893",
+} as const;
+
+export type SkinProvider = keyof typeof SOURCES;
+
+/** A frame of the film, served from this site, so nothing reaches either host before a press. */
+const STILL = {
+  src: "/sprite-fright-poster-1024w.webp",
+  srcSet: "/sprite-fright-poster-1024w.webp 1024w, /sprite-fright-poster-2048w.webp 2048w",
+} as const;
+
+/**
+ * The still for each place the player stands, `sizes` being the player's
+ * width there. A skin is 416px once the skins sit side by side, from 870px,
+ * and the page less its gutters below that; it is far down the page, so its
+ * still loads lazily. The showcase, under the hero, fills the 936px measure.
+ */
+const POSTERS = {
+  skin: { ...STILL, sizes: "(min-width: 870px) 416px, calc(100vw - 84px)", loading: "lazy" },
+  showcase: { ...STILL, sizes: "(min-width: 980px) 936px, calc(100vw - 44px)" },
+} as const satisfies Record<string, Player.ResponsivePoster>;
 
 /**
  * The controls, once there is a player to control. Before that the activation
@@ -41,15 +56,19 @@ function Controls() {
 }
 
 /**
- * The home page's one player, rendered once per skin. It carries no class of
- * its own: each skin styles it through playdeck's part names alone. It loads
- * nothing, neither the clip nor the provider, until someone presses play.
+ * The home page's one player: the showcase under the hero, then once per skin,
+ * differing only in the host it plays from. It carries no class of its own:
+ * the page styles it through playdeck's part names alone. It loads nothing,
+ * neither the film nor the provider, until someone presses play.
  */
-export default function SkinPlayer() {
+export default function SkinPlayer({ provider, stage = "skin" }: { provider: SkinProvider; stage?: keyof typeof POSTERS }) {
   return (
-    <Player.Root loading="interaction" source={SINTEL}>
+    <Player.Root loading="interaction" source={SOURCES[provider]} poster={POSTERS[stage]}>
       <Player.Viewport>
         <Player.Media />
+        {/* YouTube draws its own title and shelf over a paused embed: the
+            still covers them. Vimeo shows its own paused frame. */}
+        <Player.Poster showWhilePaused={provider === "youtube"} />
         <Player.ActivationButton />
         <Player.LoadingIndicator />
         <Player.ErrorDisplay />

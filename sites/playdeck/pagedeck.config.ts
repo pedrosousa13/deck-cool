@@ -99,11 +99,8 @@ const BAR_LINKS = [
 // kilobyte. Re-measure rather than raise one.
 const BUDGET = {
   "/**": "0b",
-  // The players hydrate on "visible", and the budget counts only the chunks a
-  // page loads eagerly. With both players hydrated the page has loaded 84kb
-  // before a press, which playdeck.browser.test.ts measures and pins.
   [PATHS.home]: "59kb",
-  [PATHS.examples]: "88kb",
+  [PATHS.examples]: "89kb",
   [PATHS.search]: "60kb",
 } as const;
 

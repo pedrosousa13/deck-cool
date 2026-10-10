@@ -16,13 +16,14 @@
   align-items: flex-end;
   gap: 16px;
   padding: 20px 24px;
-  color: #000;
+  color: #ffd60a;
   font: inherit;
   font-size: clamp(36px, 8vw, 64px);
   font-weight: 800;
   line-height: .9;
   letter-spacing: -.04em;
   text-transform: inherit;
+  text-shadow: 4px 4px 0 #000;
   cursor: pointer;
 }
 .broadcast [data-playdeck-part="activation"]::before {
@@ -33,8 +34,7 @@
   clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 .broadcast [data-playdeck-part="activation"]:hover {
-  --playdeck-activation-fill: #000;
-  color: #ffd60a;
+  --playdeck-activation-fill: rgb(0 0 0 / .6);
 }
 .broadcast [data-playdeck-part="controls"] {
   position: absolute;

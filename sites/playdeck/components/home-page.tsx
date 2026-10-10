@@ -130,6 +130,11 @@ export default function HomePage({
         </div>
       </section>
 
+      {/* The same player as the skins below, in the site's own look. */}
+      <section className="pd-showcase">
+        <SkinPlayer provider="youtube" stage="showcase" />
+      </section>
+
       <section className="pd-proof" aria-labelledby="proof">
         <div className="pd-proof__text">
           <h2 id="proof">You pick the controls. playdeck knows what each source can do.</h2>
@@ -161,27 +166,29 @@ export default function HomePage({
           <p>
             playdeck imports no stylesheet. Its parts set only the geometry they need, and the optional theme is one
             import. Every part carries a name, like <code>data-playdeck-part="play-button"</code>, for your CSS or your
-            tokens to reach. Here is one live player, shown twice: the markup is the same, and only the CSS changes.
+            tokens to reach. Here is one live player, shown twice: the markup is the same, and only the CSS and the source change.
           </p>
         </div>
         <div className="pd-skins">
           {skins.map((skin) => (
             <figure key={skin.name} className="pd-skin">
-              <figcaption>{skin.name}</figcaption>
+              <figcaption>
+                {skin.name} · {skin.host}
+              </figcaption>
               <div className={`pd-skin__stage ${skin.className}`}>
-                <SkinPlayer />
+                <SkinPlayer provider={skin.provider} />
               </div>
               <SkinSheet name={skin.name} css={skin.css} html={skin.html} />
             </figure>
           ))}
         </div>
         <p className="pd-band__note">
-          Neither player fetches its clip or its provider until you press play. The clip is the Sintel trailer, ©
-          Blender Foundation, licensed{" "}
-          <a href="https://creativecommons.org/licenses/by/3.0/" rel="license">
-            CC BY 3.0
+          Neither player fetches its clip or its provider until you press play. Both play <em>Sprite Fright</em>, ©
+          Blender Studio, licensed{" "}
+          <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">
+            CC BY 4.0
           </a>
-          , played from the foundation's own host.
+          , from the studio's own uploads to YouTube and Vimeo.
         </p>
         <a className="pd-button" href={PATHS.examples}>
           See all examples ›

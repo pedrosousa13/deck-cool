@@ -6,10 +6,11 @@ import { CODE_THEME } from "./code-theme.ts";
  * The home page's two skins for one player. Each is a stylesheet the build
  * compiles into the site's sheet, and the home page shows the source file the
  * stylesheet is compiled from under the player it styles, folded until opened.
+ * Each plays the same film from its own host, named in its caption.
  */
 export const SKINS = [
-  { name: "Velvet", className: "velvet", file: "styles/skins/velvet.css" },
-  { name: "Broadcast", className: "broadcast", file: "styles/skins/broadcast.css" },
+  { name: "Velvet", className: "velvet", file: "styles/skins/velvet.css", provider: "youtube", host: "YouTube" },
+  { name: "Broadcast", className: "broadcast", file: "styles/skins/broadcast.css", provider: "vimeo", host: "Vimeo" },
 ] as const;
 
 export type Skin = (typeof SKINS)[number] & { readonly css: string; readonly html: string };
