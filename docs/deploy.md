@@ -18,7 +18,7 @@ slidedeck's site (`sites/slidedeck`), pagedeck's (`sites/pagedeck`) and playdeck
 
 `pagedeck build` writes three files that wrangler reads as configuration and does not upload:
 
-- `_headers`: a `/*` rule and an `/assets/*` rule. Every page and file gets the CSP from `src/csp.ts`, then `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, all from `src/headers.ts`. Files under `/assets/` also get `Cache-Control: public, max-age=31536000, immutable`.
+- `_headers`: a `/*` rule and an `/assets/*` rule. Every page and file gets the CSP from `src/csp.ts`, then `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, all from `src/headers.ts`, which takes every field but the CSP from `packages/site-kit`. Files under `/assets/` also get `Cache-Control: public, max-age=31536000, immutable`.
 - `_redirects`: three rows that proxy `/manifest.json`, `/.pagedeck` and `/.pagedeck/*` to `/404.html`.
 - `.assetsignore`, from `packages/brand/public/` through passthrough. It keeps `/manifest.json`, `/.pagedeck` and `/404.html` out of the upload. Because `/404.html` is not uploaded, the proxy rows answer `404`.
 
@@ -104,6 +104,8 @@ pnpm --filter @sites/deck-cool check-live https://example.com  # any other origi
 
 `check-live` fetches `/` and `/icons/deck-cool/still.svg` and fails unless each answers `200` with every header in `src/headers.ts`, at its exact value, and no `immutable`. It then fetches the hashed stylesheet `/` links, and fails unless it answers `200` with the same headers and `Cache-Control: public, max-age=31536000, immutable`. It also fails unless `/manifest.json` answers `404`, and unless `http://<host>/` answers `301` with `Location` set to the same path over `https://`, which is the zone's Always Use HTTPS. It is not part of `pnpm test`, which stays offline. `src/live-check.test.ts` runs the same checks against the build served locally.
 
+The checks themselves are in `packages/site-kit/src/live-check.ts`, which every site shares, and its test runs each against a local host that fails it. A site's `src/live-check.ts` lists only what its check fetches: the paths that must answer `200`, the hashed stylesheets, and the paths that must answer `404`.
+
 For a quick look with curl:
 
 ```sh
@@ -177,7 +179,7 @@ pnpm --filter @sites/slidedeck check-live https://example.com  # any other origi
 
 `check-live` fetches `/`, `/examples/` and `/icons/slidedeck/still.svg`, and fails unless each answers `200` with every header in `sites/slidedeck/src/headers.ts`, at its exact value, and no `immutable`. The CSP, and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, are among those headers. It then checks the hashed stylesheet that `/` links, as deck.cool's check does. It fails unless `/manifest.json` and `/no-such-page/` answer `404`, and unless `http://slide.deck.cool/` answers `301` to `https://slide.deck.cool/`. `sites/slidedeck/src/live-check.test.ts` runs the same checks against the build served locally.
 
-`src/live-check.ts` and its test are copies of deck.cool's, with this site's paths. #56 moves the sites' shared code into one package; take these copies with it.
+`src/live-check.ts` lists this site's paths. The checks are site-kit's, as deck.cool's are.
 
 Rolling back, and taking the site off the domain, are the same as for deck.cool, with the Worker `slidedeck` in `sites/slidedeck`.
 
@@ -240,7 +242,7 @@ pnpm --filter @sites/pagedeck check-live https://example.com  # any other origin
 
 `check-live` fetches `/`, `/interactive/`, `/features/`, `/server-data/`, `/docs/search/` and `/embed/demo-embed.js`, and fails unless each answers `200` with every header in `sites/pagedeck/src/headers.ts`, at its exact value, and no `immutable`. The CSP, and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, are among those headers. It then checks two hashed stylesheets, the one `/` links under `/assets/` and the font sheet `/features/` links under `/fonts/`: each must answer `200` with the same headers and `Cache-Control: public, max-age=31536000, immutable`. It fails unless `/manifest.json` and `/no-such-page/` answer `404`, and unless `http://page.deck.cool/` answers `301` to `https://page.deck.cool/`. `sites/pagedeck/src/live-check.test.ts` runs the same checks against the build served locally.
 
-`src/live-check.ts` and its test are copies of slidedeck's, with this site's paths and the font sheet. #56 moves the sites' shared code into one package; take these copies with it.
+`src/live-check.ts` lists this site's paths and its two stylesheets. The checks are site-kit's, as deck.cool's are.
 
 Rolling back, and taking the site off the domain, are the same as for deck.cool, with the Worker `pagedeck` in `sites/pagedeck`.
 
@@ -299,6 +301,6 @@ pnpm --filter @sites/playdeck check-live https://example.com  # any other origin
 
 `check-live` fetches `/`, `/examples/`, `/guides/comparison/`, `/docs/search/` and `/archetype-captions.vtt`, and fails unless each answers `200` with every header in `sites/playdeck/src/headers.ts`, at its exact value, and no `immutable`. The CSP, and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, are among those headers. It fails unless each page's `<link rel="canonical">` is the same path on `https://playdeck.video`. It then checks the hashed stylesheet that `/` links, as deck.cool's check does. It fails unless `/manifest.json` and `/no-such-page/` answer `404`, and unless `http://play.deck.cool/` answers `301` to `https://play.deck.cool/`. `sites/playdeck/src/live-check.test.ts` runs the same checks against the build served locally.
 
-`src/live-check.ts` and its test are copies of slidedeck's, with this site's paths and the canonical check. #56 moves the sites' shared code into one package; take these copies with it.
+`src/live-check.ts` lists this site's paths and holds the canonical check, which site-kit runs on each page it fetches. The other checks are site-kit's, as deck.cool's are.
 
 Rolling back, and taking the site off the domain, are the same as for deck.cool, with the Worker `play-deck-cool` in `sites/playdeck`.

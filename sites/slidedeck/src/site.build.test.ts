@@ -4,6 +4,9 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { buildOutput } from "@deck-cool/site-kit/build";
+import { everyResponse, present, readManifest, text } from "@deck-cool/site-kit/build-test";
+import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { REPOSITORY } from "../components/links.ts";
 import { umbrella } from "@deck-cool/brand/decks";
 import { slidedeck } from "../components/slidedeck.ts";
@@ -11,8 +14,6 @@ import { CONTENT_SECURITY_POLICY, DECK_STYLE_HASHES } from "./csp.ts";
 import { install, size, version } from "./facts.ts";
 import { SKINS } from "./skins.ts";
 import { SITE_ORIGIN } from "./seo.ts";
-import { BUILD_OUTPUT } from "./build.global-setup.ts";
-import { headersFor, parseHeaders } from "./serve-site.ts";
 
 // Reads the build build.global-setup.ts makes.
 
@@ -36,38 +37,11 @@ function parse(file: string): Document {
 const home = () => parse("index.html");
 const examples = () => parse("examples/index.html");
 
-/** Narrows away `null` and `undefined`, failing the test when the value is missing. */
-function present<T>(value: T | null | undefined, what: string): T {
-  if (value == null) throw new Error(`${what} is missing`);
-  return value;
-}
-
-/** The element's text, with runs of white space as one space. */
-function text(element: Element | null | undefined): string | undefined {
-  return element?.textContent?.replace(/\s+/g, " ").trim();
-}
-
 function links(scope: Element | Document): [string | undefined, string | null][] {
   return [...scope.querySelectorAll("a")].map((a) => [text(a), a.getAttribute("href")]);
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
-
-/** manifest.json's file paths and each tree's declared 404 page, checked as they are read. */
-function readManifest(): { paths: string[]; notFound: unknown[] } {
-  const value: unknown = JSON.parse(readFileSync(`${OUT}/manifest.json`, "utf8"));
-  if (!isRecord(value) || !Array.isArray(value.files) || !isRecord(value.routing) || !Array.isArray(value.routing.trees)) {
-    throw new Error("manifest.json has no files or no routing.trees");
-  }
-  return {
-    paths: value.files.map((file: unknown) =>
-      present(isRecord(file) && typeof file.path === "string" ? file.path : undefined, "a manifest file's path"),
-    ),
-    notFound: value.routing.trees.map((tree: unknown) => (isRecord(tree) ? tree.notFound : undefined)),
-  };
-}
-
-const manifest = readManifest();
+const manifest = readManifest(SITE);
 
 interface BudgetPage {
   path: string;
@@ -212,14 +186,14 @@ test("slidedeck.css times every transition with the brand's one easing curve", (
 });
 
 test("the site serves no stylesheet but the hashed one", () => {
-  const sheets = manifest.paths.filter((path) => path.endsWith(".css"));
+  const sheets = manifest.files.filter((path) => path.endsWith(".css"));
   expect(sheets).toHaveLength(1);
   expect(sheets[0]).toMatch(/^\/assets\//);
 });
 
 test("the social card's font is the build's alone: the site serves no font", () => {
   const font = readFileSync(`${SITE}fonts/Inter-SemiBold.woff`);
-  expect(manifest.paths.filter((path) => /\.(woff2?|ttf|otf)$/.test(path))).toEqual([]);
+  expect(manifest.files.filter((path) => /\.(woff2?|ttf|otf)$/.test(path))).toEqual([]);
   for (const file of readdirSync(OUT, { recursive: true, encoding: "utf8" })) {
     const path = `${OUT}/${file}`;
     if (statSync(path).isFile()) expect(readFileSync(path).equals(font), file).toBe(false);
@@ -521,7 +495,7 @@ describe("every page", () => {
 
   // Until #51 builds /docs/, the links there have no page; the build only warns.
   test("every link the build warns names nothing is under /docs/", () => {
-    const output = readFileSync(BUILD_OUTPUT, "utf8");
+    const output = readFileSync(buildOutput(SITE), "utf8");
     const broken = [...output.matchAll(/^pagedeck: {3}en \S+ — "([^"]+)"$/gm)].map(([, href]) => href);
     if (output.includes("references name nothing this build emitted")) expect(broken).not.toHaveLength(0);
     for (const href of broken) expect(href).toMatch(/^\/docs\//);
@@ -566,17 +540,9 @@ test("the sitemap and robots.txt name slide.deck.cool", () => {
 
 const rules = parseHeaders(readFileSync(`${OUT}/_headers`, "utf8"));
 /** Every path the host serves: each page, and each file but the ones wrangler reads as configuration. */
-const served = [...PAGES.map(([path]) => path), ...manifest.paths.filter((path) => !/^\/_(headers|redirects)$/.test(path))];
+const served = [...PAGES.map(([path]) => path), ...manifest.files.filter((path) => !/^\/_(headers|redirects)$/.test(path))];
 
-/** The headers every response carries, page or file. */
-const EVERY_RESPONSE = {
-  [CONTENT_SECURITY_POLICY.name]: CONTENT_SECURITY_POLICY.value,
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
-  "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Cross-Origin-Opener-Policy": "same-origin",
-  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-};
+const EVERY_RESPONSE = everyResponse(CONTENT_SECURITY_POLICY);
 
 describe("the served headers", () => {
   test("_headers sends the CSP, the security headers and HSTS on every page and file", () => {

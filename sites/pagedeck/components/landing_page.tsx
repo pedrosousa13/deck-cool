@@ -1,17 +1,9 @@
-import { decks, umbrella, type Deck } from "@deck-cool/brand/decks";
+import { pagedeck, umbrella } from "@deck-cool/brand/decks";
 import { SkinSheet } from "@deck-cool/brand/skin-sheet";
 import { formatBytes, utf8Bytes } from "../src/bytes.ts";
 import { PICKER, PRODUCT } from "../src/product.ts";
 import type { Skin } from "../src/skins.ts";
 import { DOCS_ORIGIN, PATHS } from "./links.ts";
-
-function find(name: string): Deck {
-  const deck = decks.find((each) => each.name === name);
-  if (deck === undefined) throw new Error(`the decks module has no ${name}`);
-  return deck;
-}
-
-const pagedeck = find("pagedeck");
 
 /**
  * The maintainer's lead on #48: "like Astro, if Astro were made for React".

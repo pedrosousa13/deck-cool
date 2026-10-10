@@ -2,7 +2,8 @@ import { cloudflarePages } from "@pagedeck/adapter-cloudflare-pages";
 import { defineCollection } from "@pagedeck/content";
 import { defineConfig, fromCollection } from "@pagedeck/core";
 import { defineMarkdownLoader } from "@pagedeck/markdown-loader";
-import { HASHED_FILE_HEADERS, RESPONSE_HEADERS } from "./src/headers.ts";
+import { HASHED_FILE_HEADERS } from "@deck-cool/site-kit/headers";
+import { RESPONSE_HEADERS } from "./src/headers.ts";
 
 const pages = defineCollection({
   name: "pages",

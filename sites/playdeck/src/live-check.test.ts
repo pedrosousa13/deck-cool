@@ -1,29 +1,16 @@
-// A copy of sites/slidedeck/src/live-check.test.ts with this site's paths and
-// the canonical links; #56 shares it.
-import { createServer, type ServerResponse } from "node:http";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
-import { RESPONSE_HEADERS } from "./headers.ts";
-import { checkSite } from "./live-check.ts";
-import { serveSite } from "./serve-site.ts";
+import { checkSite } from "@deck-cool/site-kit/live-check";
+import { serveSite } from "@deck-cool/site-kit/serve-site";
+import { checkCanonical, LIVE_SITE } from "./live-check.ts";
 
-const SHEET = '<link rel="stylesheet" href="/assets/fw-core-AbCd1234.css">';
-const NOT_FOUND = ["/manifest.json", "/no-such-page/"];
-const PAGES = ["/", "/examples/", "/guides/comparison/", "/docs/search/"];
-const SERVED = [...PAGES, "/archetype-captions.vtt"];
-
-/** A page's <head>, canonical at `canonicalOrigin`, with the stylesheet's link on `/`. */
-function bodyOf(path: string, canonicalOrigin = "https://playdeck.video"): string {
-  if (!PAGES.includes(path)) return "";
-  const canonical = `<link rel="canonical" href="${canonicalOrigin}${path}">`;
-  return `<head>${canonical}${path === "/" ? SHEET : ""}</head>`;
-}
-
+// packages/site-kit/src/live-check.test.ts tests the checks themselves, against hosts that fail each one.
 test("the build, served with its _headers, passes every check but the ones only the upload and the zone can pass", async () => {
-  const site = await serveSite();
+  const site = await serveSite(fileURLToPath(new URL("..", import.meta.url)));
   try {
     // The local server serves every file in site/, .assetsignore or not, and
     // answers plain HTTP itself, where the zone's Always Use HTTPS would redirect.
-    expect(await checkSite(site.origin)).toEqual([
+    expect(await checkSite(LIVE_SITE, site.origin)).toEqual([
       "/manifest.json: status 200, expected 404",
       `${site.origin}/: status 200, expected 301 to ${site.origin}/`,
     ]);
@@ -32,117 +19,22 @@ test("the build, served with its _headers, passes every check but the ones only 
   }
 });
 
-test("a host that drops the headers, caches everything as immutable and serves every path fails, header by header", async () => {
-  const failures = await checkHost((_path, response) => {
-    response.writeHead(200, { "Cache-Control": "public, max-age=31536000, immutable" }).end();
-  });
-  for (const path of SERVED) {
-    for (const { name } of RESPONSE_HEADERS) expect(failures).toContain(`${path}: ${name} missing`);
-    expect(failures).toContain(`${path}: Cache-Control is immutable, but ${path} is not content-hashed`);
-  }
-  for (const path of PAGES) expect(failures).toContain(`${path}: no canonical link, expected https://playdeck.video${path}`);
-  expect(failures).toContain("/: links no stylesheet under /assets/");
-  for (const path of NOT_FOUND) expect(failures).toContain(`${path}: status 200, expected 404`);
+test("a page whose canonical link is its own path on playdeck.video passes", () => {
+  expect(checkCanonical("/examples/", '<link rel="canonical" href="https://playdeck.video/examples/">')).toEqual([]);
 });
 
-test("a host whose pages name themselves as canonical, not playdeck.video, fails", async () => {
-  const failures = await checkHost((path, response) => {
-    const headers = Object.fromEntries(RESPONSE_HEADERS.map(({ name, value }) => [name, value]));
-    if (path.startsWith("/assets/")) headers["Cache-Control"] = "public, max-age=31536000, immutable";
-    response.writeHead(NOT_FOUND.includes(path) ? 404 : 200, headers);
-    response.end(bodyOf(path, "https://play.deck.cool"));
-  });
-  expect(failures).toEqual(
-    PAGES.map((path) => `${path}: canonical is https://play.deck.cool${path}, expected https://playdeck.video${path}`),
-  );
+test("a page with no canonical link fails", () => {
+  expect(checkCanonical("/examples/", "<head></head>")).toEqual([
+    "/examples/: no canonical link, expected https://playdeck.video/examples/",
+  ]);
 });
 
-test("a host whose HSTS leaves out the subdomains fails", async () => {
-  const failures = await checkHost((path, response) => {
-    const headers = Object.fromEntries(RESPONSE_HEADERS.map(({ name, value }) => [name, value]));
-    headers["Strict-Transport-Security"] = "max-age=31536000";
-    if (path.startsWith("/assets/")) headers["Cache-Control"] = "public, max-age=31536000, immutable";
-    response.writeHead(NOT_FOUND.includes(path) ? 404 : 200, headers);
-    response.end(bodyOf(path));
-  });
-  const expected = 'Strict-Transport-Security is "max-age=31536000", expected "max-age=31536000; includeSubDomains"';
-  expect(failures).toEqual([...SERVED, "/assets/fw-core-AbCd1234.css"].map((path) => `${path}: ${expected}`));
+test("a page that names itself as canonical, not playdeck.video, fails", () => {
+  expect(checkCanonical("/examples/", '<link rel="canonical" href="https://play.deck.cool/examples/">')).toEqual([
+    "/examples/: canonical is https://play.deck.cool/examples/, expected https://playdeck.video/examples/",
+  ]);
 });
 
-test("a host that serves the hashed stylesheet without immutable fails", async () => {
-  const failures = await checkHost((path, response) => {
-    const headers = Object.fromEntries(RESPONSE_HEADERS.map(({ name, value }) => [name, value]));
-    response.writeHead(NOT_FOUND.includes(path) ? 404 : 200, headers);
-    response.end(bodyOf(path));
-  });
-  expect(failures).toEqual(["/assets/fw-core-AbCd1234.css: Cache-Control missing"]);
+test("a file that is not a page needs no canonical link", () => {
+  expect(checkCanonical("/archetype-captions.vtt", "")).toEqual([]);
 });
-
-test("an origin whose plain HTTP serves the page instead of redirecting fails", async () => {
-  const { failures, origin, httpOrigin } = await checkHttp((_origin, response) => {
-    response.writeHead(200).end("<html></html>");
-  });
-  expect(failures).toEqual([`${httpOrigin}/: status 200, expected 301 to ${origin}/`]);
-});
-
-test("an origin whose plain HTTP redirects to another place fails", async () => {
-  const { failures, origin, httpOrigin } = await checkHttp((_origin, response) => {
-    response.writeHead(301, { Location: "https://example.com/" }).end();
-  });
-  expect(failures).toEqual([`${httpOrigin}/: redirects to https://example.com/, expected ${origin}/`]);
-});
-
-test("an origin whose plain HTTP answers 301 to the same path at the origin passes", async () => {
-  const { failures } = await checkHttp((origin, response) => {
-    response.writeHead(301, { Location: `${origin}/` }).end();
-  });
-  expect(failures).toEqual([]);
-});
-
-type Respond = (path: string, response: ServerResponse) => void;
-
-/**
- * Runs the checks against a host that serves the site correctly, plus a
- * second server that stands in for its plain-HTTP side and answers with
- * `respond`, given the origin it should redirect to.
- */
-async function checkHttp(
-  respond: (origin: string, response: ServerResponse) => void,
-): Promise<{ failures: string[]; origin: string; httpOrigin: string }> {
-  const headers = Object.fromEntries(RESPONSE_HEADERS.map(({ name, value }) => [name, value]));
-  const sheetHeaders = { ...headers, "Cache-Control": "public, max-age=31536000, immutable" };
-  const site = await listen((path, response) => {
-    if (NOT_FOUND.includes(path)) return response.writeHead(404, headers).end();
-    if (path.startsWith("/assets/")) return response.writeHead(200, sheetHeaders).end();
-    response.writeHead(200, headers);
-    response.end(bodyOf(path));
-  });
-  const http = await listen((_path, response) => respond(site.origin, response));
-  try {
-    return { failures: await checkSite(site.origin, http.origin), origin: site.origin, httpOrigin: http.origin };
-  } finally {
-    await Promise.all([site.close(), http.close()]);
-  }
-}
-
-/** Runs the checks against a local server that answers each path with `respond`, plain HTTP included. */
-async function checkHost(respond: Respond): Promise<string[]> {
-  const site = await listen(respond);
-  try {
-    // The same server answers the plain-HTTP request: drop that failure to keep each test to its subject.
-    return (await checkSite(site.origin)).filter((failure) => !failure.startsWith(`${site.origin}/:`));
-  } finally {
-    await site.close();
-  }
-}
-
-async function listen(respond: Respond): Promise<{ origin: string; close(): Promise<unknown> }> {
-  const server = createServer((request, response) => respond(request.url ?? "/", response));
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  if (address === null || typeof address === "string") throw new Error("the server is not on a TCP port");
-  return {
-    origin: `http://127.0.0.1:${address.port}`,
-    close: () => new Promise((resolve) => server.close(resolve)),
-  };
-}

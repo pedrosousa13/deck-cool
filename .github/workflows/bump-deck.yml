@@ -5,24 +5,29 @@ name: Bump a deck
 # This sets every @<deck>/* dependency in the workspace to that version and opens a PR
 # that merges itself once CI passes. A second dispatch for the same version does
 # nothing. AGENTS.md, "Releasing a deck", has the sending side.
+#
+# pnpm holds a version back for a day, so a dispatch sent straight after `npm publish`
+# fails. The daily run, and a run by hand with no inputs, reads each deck's latest
+# version from npm and bumps any that has passed the hold.
 on:
   repository_dispatch:
     types: [deck-released]
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
 
 # The GITHUB_TOKEN only reads. The deck-cool-releases App's token pushes the branch
 # and opens the PR: a push with the GITHUB_TOKEN would not run CI, and main requires it.
 permissions:
   contents: read
 
-# One run per release at a time, so a repeated dispatch finds the branch the first one pushed.
-concurrency:
-  group: bump-deck-${{ github.event.client_payload.deck }}-${{ github.event.client_payload.version }}
-  cancel-in-progress: false
-
 jobs:
-  bump:
+  # Says which releases to bump: the dispatch's one, or the ones the daily run finds on npm.
+  find:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    outputs:
+      releases: ${{ steps.payload.outputs.releases || steps.npm.outputs.releases }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,12 +39,51 @@ jobs:
           node-version: 24
 
       # The payload is untrusted. It reaches a step only through env, and every later
-      # step reads the checked values this one writes.
+      # step and job reads the checked values this one writes.
       - name: Check the payload
         id: payload
+        if: github.event_name == 'repository_dispatch'
         env:
           DECK: ${{ github.event.client_payload.deck }}
           VERSION: ${{ github.event.client_payload.version }}
+        run: node packages/bump-deck/src/cli.ts check
+
+      # npm's answer is checked the same way. A version still inside the hold is
+      # skipped with a notice.
+      - name: Find the releases on npm
+        id: npm
+        if: github.event_name != 'repository_dispatch'
+        run: node packages/bump-deck/src/cli.ts find
+
+  # One job per release, one at a time.
+  bump:
+    needs: find
+    if: needs.find.outputs.releases != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include: ${{ fromJSON(needs.find.outputs.releases) }}
+    # One run per release at a time, so a repeated dispatch finds the branch the first one pushed.
+    concurrency:
+      group: bump-deck-${{ matrix.deck }}-${{ matrix.version }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Check the release
+        id: payload
+        env:
+          DECK: ${{ matrix.deck }}
+          VERSION: ${{ matrix.version }}
         run: node packages/bump-deck/src/cli.ts check
 
       - name: Look for the release's branch
@@ -59,8 +103,7 @@ jobs:
           fi
 
       # pnpm installs in strict release-age mode, so a version younger than
-      # minimumReleaseAge fails this step unless minimumReleaseAgeExclude lists it.
-      # No token is in reach while dependency code runs.
+      # minimumReleaseAge fails this step. No token is in reach while dependency code runs.
       - name: Bump the packages
         id: bump
         if: steps.branch.outputs.exists == 'false'
@@ -77,7 +120,8 @@ jobs:
           app-id: ${{ vars.DECK_APP_ID }}
           private-key: ${{ secrets.DECK_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
+          # A schedule event carries no repository, so the name is written out.
+          repositories: deck-cool
           permission-contents: write
           permission-pull-requests: write
 

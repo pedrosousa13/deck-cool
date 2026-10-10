@@ -42,6 +42,7 @@ Made by the maintainer on 2026-10-08.
 - **Motion.** One easing curve, `cubic-bezier(.32,.72,0,1)`. Every animation holds still under `prefers-reduced-motion`. Only Firefox animates an SVG favicon, so sites ship the still icon as the favicon and animate the icon only inside a page (the Family bar, the umbrella site's cards). pagedeck never animates its favicon by script, because that would cost JavaScript on pages that otherwise ship none.
 - **formdeck is parked.** It is not ready, and stays out of every site and design until the maintainer says it is. Its design is kept in `design/favicons/parked/` and on the canvas: two cards meeting in a check mark, amber `#ffb020` with dark text on amber fills. When it is ready it gets `form.deck.cool`.
 - **The umbrella site links no GitHub profile.** Made by the maintainer on 2026-10-09: the links it had went to the maintainer's personal profile. Each package site links its own deck's repo instead. The umbrella footer keeps its npm link.
+- **One App key in four repos.** Made by the maintainer on 2026-10-09. deck-cool and the three deck repos all hold the `deck-cool-releases` App's private key. So anyone who can write to a deck repo could open a PR on deck-cool and have it merge itself. The maintainer is the only writer today, and accepts the risk. Revisit this if anyone else gets write access to a deck repo.
 
 ## Where the design is
 

@@ -2,14 +2,17 @@ import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { extname, join, normalize } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const OUT = fileURLToPath(new URL("../site/", import.meta.url));
 const TYPES: Record<string, string> = {
   ".html": "text/html",
   ".css": "text/css",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".webp": "image/webp",
+  ".js": "text/javascript",
+  ".json": "application/json",
+  ".xml": "application/xml",
+  ".txt": "text/plain",
 };
 
 export interface ServedSite {
@@ -60,12 +63,16 @@ export function headersFor(rules: readonly HeaderRule[], path: string): Map<stri
   return headers;
 }
 
-/** Serves the built site from 127.0.0.1, with the headers its `_headers` file sets. */
-export async function serveSite(): Promise<ServedSite> {
-  const rules = parseHeaders(await readFile(join(OUT, "_headers"), "utf8"));
+/**
+ * Serves the site the build wrote to `site/` under the site's directory, from
+ * 127.0.0.1, with the headers its `_headers` file sets.
+ */
+export async function serveSite(site: string): Promise<ServedSite> {
+  const out = join(site, "site");
+  const rules = parseHeaders(await readFile(join(out, "_headers"), "utf8"));
   const server = createServer(async (request, response) => {
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
-    const file = join(OUT, normalize(path.endsWith("/") ? `${path}index.html` : path));
+    const file = join(out, normalize(path.endsWith("/") ? `${path}index.html` : path));
     const headers = headersFor(rules, path);
     try {
       const body = await readFile(file);

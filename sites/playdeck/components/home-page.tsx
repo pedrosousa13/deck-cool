@@ -1,20 +1,12 @@
 // The home page at /: CONTEXT.md's "The landing pages' message", in the layout
 // of deck.cool's home page. A server component: it ships no JavaScript of its
 // own. Its one player is an island, rendered once per skin.
-import { decks, umbrella, type Deck } from "@deck-cool/brand/decks";
+import { playdeck, umbrella } from "@deck-cool/brand/decks";
 import { SkinSheet } from "@deck-cool/brand/skin-sheet";
 import { unescapedHtml } from "@pagedeck/core/tree";
 import type { Skin } from "../src/skins.ts";
 import { DOCS, PATHS } from "./links.ts";
 import SkinPlayer from "./skin-player.tsx";
-
-function find(name: string): Deck {
-  const deck = decks.find((each) => each.name === name);
-  if (deck === undefined) throw new Error(`the decks module has no ${name}`);
-  return deck;
-}
-
-const playdeck = find("playdeck");
 
 /** Each claim holds for playdeck's README at 1.3.0. */
 const points = [

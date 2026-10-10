@@ -3,18 +3,14 @@
 // retyped: a new release, with a new `pnpm compare` measurement, changes the
 // page on the next build.
 import { createMarkdownRenderer } from "@pagedeck/markdown-loader";
-import { readFileSync } from "node:fs";
-import { comparison, fence, slidedeckRow } from "./readme.ts";
+import { fence, readSlidedeckReadme, readSlidedeckVersion, slidedeckSize } from "@deck-cool/site-kit/slidedeck-readme";
 
-const read = (file: string) => readFileSync(new URL(`../node_modules/@slidedeck/react/${file}`, import.meta.url), "utf8");
+const SITE = new URL("../", import.meta.url);
 
-const readme = read("README.md");
+const readme = readSlidedeckReadme(SITE);
 
-/** The README's comparison, in its order. */
-export const libraries = comparison(readme);
-
-/** Slidedeck's min+gzip size, as the comparison measures it. */
-export const size = slidedeckRow(libraries).size;
+/** Slidedeck's min+gzip size, as the README's comparison measures it. deck.cool's card reads the same. */
+export const size = slidedeckSize(readme);
 
 /** A release's `MAJOR.MINOR.PATCH` as "MAJOR.MINOR". A prerelease fails: the page would name it as the release. */
 export function minorOf(version: string): string {
@@ -26,7 +22,7 @@ export function minorOf(version: string): string {
 }
 
 /** The installed version, as "1.0". */
-export const version = minorOf((JSON.parse(read("package.json")) as { version: string }).version);
+export const version = minorOf(readSlidedeckVersion(SITE));
 
 /** The README's install command. */
 export const install = fence(readme, "Install");

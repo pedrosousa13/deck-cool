@@ -55,12 +55,13 @@ function versionOf(spec: string): number[] | undefined {
   return /^[\^~=v]?(\d+)\.(\d+)\.(\d+)/.exec(spec)?.slice(1).map(Number);
 }
 
-function isNewer(spec: string, version: string): boolean {
-  const current = versionOf(spec);
-  const next = versionOf(version) ?? [];
-  if (current === undefined) return false;
-  for (const [index, part] of current.entries()) {
-    const other = next[index] ?? 0;
+/** Whether `a`'s X.Y.Z is newer than `b`'s. Each is a version or a spec. */
+function isNewer(a: string, b: string): boolean {
+  const left = versionOf(a);
+  const right = versionOf(b) ?? [];
+  if (left === undefined) return false;
+  for (const [index, part] of left.entries()) {
+    const other = right[index] ?? 0;
     if (part !== other) return part > other;
   }
   return false;
@@ -92,43 +93,118 @@ export function bumpManifest(text: string, { deck, version }: Release): { text: 
   return changes.length === 0 ? { text, changes } : { text: `${JSON.stringify(manifest, null, 2)}\n`, changes };
 }
 
-/** Whether a `minimumReleaseAgeExclude` entry (`@scope/*`, `name`, or `name@1.0.0 || 1.0.1`) lets this version skip the hold. */
-export function isExcluded(name: string, version: string, patterns: readonly string[]): boolean {
-  return patterns.some((pattern) => {
-    const at = pattern.lastIndexOf("@");
-    const namePattern = at > 0 ? pattern.slice(0, at) : pattern;
-    const versions = at > 0 ? pattern.slice(at + 1).split("||").map((entry) => entry.trim()) : undefined;
-    const glob = new RegExp(`^${namePattern.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\/]/g, "\\$&")).join(".*")}$`);
-    return glob.test(name) && (versions === undefined || versions.includes(version));
-  });
-}
-
-export function prBody({ deck, version }: Release, changes: readonly Change[], bypassed: readonly string[]): string {
+export function prBody({ deck, version }: Release, changes: readonly Change[]): string {
   const rows = changes.map(({ file, name, from, to }) => `| \`${file}\` | \`${name}\` | ${from} | ${to} |`);
-  const hold =
-    bypassed.length === 0
-      ? `pnpm's release-age hold applied: the install refused any version younger than \`minimumReleaseAge\`, so every version here has been on npm for at least that long.`
-      : [
-          `**The release-age hold was bypassed for ${bypassed.map((name) => `\`${name}\``).join(", ")}.** ` +
-            "`minimumReleaseAgeExclude` in `pnpm-workspace.yaml` exempts them, so pnpm installed this version without waiting, " +
-            "and this PR merges itself once CI passes. That is by design today: the exclusion lets the maintainer take a release of their own framework the day it ships.",
-          "",
-          `Proposal: remove \`@${deck}/*\` from \`minimumReleaseAgeExclude\`, so an automated bump waits a day like every other dependency and a bad release has time to be noticed before it reaches \`main\`. ` +
-            "A same-day upgrade by hand can still list the one version (`name@x.y.z`). This PR does not change the exclusion.",
-        ].join("\n");
   return [
-    `${deck} ${version} was published, and its release workflow sent \`deck-released\`. This sets every \`@${deck}/*\` dependency in the workspace to ${version} and updates the lockfile.`,
+    `${deck} ${version} was published to npm. This sets every \`@${deck}/*\` dependency in the workspace to ${version} and updates the lockfile.`,
     "",
     "| File | Package | From | To |",
     "| --- | --- | --- | --- |",
     ...rows,
     "",
-    hold,
+    `pnpm's release-age hold applied: the install refused any version younger than \`minimumReleaseAge\`, so every version here has been on npm for at least that long.`,
     "",
   ].join("\n");
 }
 
+/** What the daily run found on npm for one deck. */
+export type Finding =
+  /** No workspace package depends on the deck from npm. */
+  | { readonly kind: "unused"; readonly deck: Deck }
+  /** npm's latest version is no newer than the workspace's. */
+  | { readonly kind: "current"; readonly deck: Deck; readonly version: string }
+  /** npm's latest version is newer, but still inside pnpm's release-age hold. */
+  | { readonly kind: "young"; readonly deck: Deck; readonly version: string; readonly published: Date }
+  /** npm's latest version is newer and past the hold. */
+  | ({ readonly kind: "bump" } & Release);
+
+export interface RegistryOptions {
+  /** The registry's URL, ending in `/`. */
+  readonly registry: string;
+  /** pnpm's `minimumReleaseAge`. */
+  readonly holdMinutes: number;
+  readonly now: Date;
+  readonly fetch: typeof globalThis.fetch;
+}
+
+/** Every `@<deck>/*` dependency from npm in the manifests, as name and spec. */
+function dependenciesOf(manifests: readonly string[], deck: Deck): [string, string][] {
+  return manifests.flatMap((text) => {
+    const manifest: unknown = JSON.parse(text);
+    if (!isRecord(manifest)) throw new Error("package.json is not a JSON object");
+    return FIELDS.flatMap((field) => {
+      const dependencies = manifest[field];
+      if (!isRecord(dependencies)) return [];
+      return Object.entries(dependencies).flatMap(([name, spec]): [string, string][] =>
+        typeof spec === "string" && name.startsWith(`@${deck}/`) && !spec.startsWith("workspace:") ? [[name, spec]] : [],
+      );
+    });
+  });
+}
+
+/** npm's latest version of the package, and when it was published. The registry is untrusted too. */
+async function latestOf(name: string, { registry, fetch }: RegistryOptions): Promise<{ version: string; published: Date }> {
+  const url = `${registry}${name.replace("/", "%2f")}`;
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { accept: "application/json" } });
+  } catch (error) {
+    throw new Error(`npm did not answer for ${name}: ${url}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!response.ok) throw new Error(`npm did not answer for ${name}: ${url} returned HTTP ${String(response.status)}`);
+  const packument: unknown = await response.json();
+  const tags = isRecord(packument) ? packument["dist-tags"] : undefined;
+  const version = isRecord(tags) ? tags["latest"] : undefined;
+  if (typeof version !== "string" || !PLAIN_VERSION.test(version)) {
+    throw new Error(`npm's latest ${name} is ${JSON.stringify(version)}, which is not a plain version, so nothing was bumped`);
+  }
+  const times = isRecord(packument) ? packument["time"] : undefined;
+  const time = isRecord(times) ? times[version] : undefined;
+  const published = typeof time === "string" ? new Date(time) : undefined;
+  if (published === undefined || Number.isNaN(published.getTime())) {
+    throw new Error(`npm gives no publish time for ${name} ${version}, so nothing was bumped`);
+  }
+  return { version, published };
+}
+
+/**
+ * For each deck in turn, reads npm's latest version of every `@<deck>/*` package the
+ * workspace depends on, takes the highest, and says whether the deck can be bumped to it:
+ * whether any package is below it, and it has passed the hold. The bump itself goes
+ * through the same path as a dispatch, which checks again.
+ */
+export async function findReleases(manifests: readonly string[], options: RegistryOptions): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  for (const deck of DECKS) {
+    const dependencies = dependenciesOf(manifests, deck);
+    const names = [...new Set(dependencies.map(([name]) => name))].sort();
+    let newest: { version: string; published: Date } | undefined;
+    for (const name of names) {
+      const latest = await latestOf(name, options);
+      if (newest === undefined || isNewer(latest.version, newest.version)) newest = latest;
+    }
+    if (newest === undefined) {
+      findings.push({ kind: "unused", deck });
+    } else if (!dependencies.some(([, spec]) => isNewer(newest.version, spec))) {
+      findings.push({ kind: "current", deck, version: newest.version });
+    } else if (options.now.getTime() - newest.published.getTime() < options.holdMinutes * 60 * 1000) {
+      findings.push({ kind: "young", deck, version: newest.version, published: newest.published });
+    } else {
+      findings.push({ kind: "bump", deck, version: newest.version });
+    }
+  }
+  return findings;
+}
+
 const run = promisify(execFile);
+
+/** The directory of every package in the workspace at `root`, the root's own included. */
+export async function workspacePaths(root: string, env: NodeJS.ProcessEnv = process.env): Promise<string[]> {
+  const listed: unknown = JSON.parse((await run("pnpm", ["ls", "-r", "--depth", "-1", "--json"], { cwd: root, env })).stdout);
+  return Array.isArray(listed)
+    ? listed.flatMap((project: unknown) => (isRecord(project) && typeof project["path"] === "string" ? [project["path"]] : []))
+    : [];
+}
 
 /**
  * Bumps every `@<deck>/*` dependency in every workspace package under `root`, then updates
@@ -142,14 +218,9 @@ export async function bumpWorkspace(
   root: string,
   release: Release,
   env: Readonly<Record<string, string>> = {},
-): Promise<{ changes: Change[]; bypassed: string[] }> {
+): Promise<{ changes: Change[] }> {
   const options = { cwd: root, env: { ...process.env, ...env, pnpm_config_minimum_release_age_strict: "true" } };
-  const listed: unknown = JSON.parse((await run("pnpm", ["ls", "-r", "--depth", "-1", "--json"], options)).stdout);
-  const paths = Array.isArray(listed)
-    ? listed.flatMap((project: unknown) => (isRecord(project) && typeof project["path"] === "string" ? [project["path"]] : []))
-    : [];
-  const excluded: unknown = JSON.parse((await run("pnpm", ["config", "get", "minimumReleaseAgeExclude", "--json"], options)).stdout || "[]");
-  const patterns = Array.isArray(excluded) ? excluded.filter((pattern): pattern is string => typeof pattern === "string") : [];
+  const paths = await workspacePaths(root, options.env);
 
   const changes: Change[] = [];
   const writes: [string, string][] = [];
@@ -162,7 +233,7 @@ export async function bumpWorkspace(
     changes.push(...bumped.changes.map((change) => ({ file: name, ...change })));
   }
   changes.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.name < b.name ? -1 : 1));
-  if (changes.length === 0) return { changes, bypassed: [] };
+  if (changes.length === 0) return { changes };
 
   for (const [file, text] of writes) writeFileSync(file, text);
   try {
@@ -172,11 +243,10 @@ export async function bumpWorkspace(
     if (output.includes("ERR_PNPM_NO_MATURE_MATCHING_VERSION")) {
       throw new Error(
         `${release.deck} ${release.version} is younger than pnpm's release-age hold (minimumReleaseAge), so nothing was pushed. ` +
-          `Send deck-released again once the version is a day old. pnpm said:\n${output}`,
+          `The daily run bumps it once the version is a day old. pnpm said:\n${output}`,
       );
     }
     throw new Error(`pnpm install failed, so nothing was pushed. pnpm said:\n${output}`);
   }
-  const bypassed = [...new Set(changes.map((change) => change.name))].filter((name) => isExcluded(name, release.version, patterns)).sort();
-  return { changes, bypassed };
+  return { changes };
 }

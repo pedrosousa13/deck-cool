@@ -1,103 +1,22 @@
 import { AxeBuilder } from "@axe-core/playwright";
-import { chromium, type Browser, type Page, type Response } from "playwright";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { fileURLToPath } from "node:url";
+import type { Page } from "playwright";
+import { describe, expect, test, vi } from "vitest";
+import { browserHarness, type VisitOptions } from "@deck-cool/site-kit/browser-test";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
-import { serveSite, type ServedSite } from "./serve-site.ts";
 
 // Drives the built site (build.global-setup.ts) in Chromium, served with the
 // headers in the build's _headers file, so each page and its islands run
 // under the CSP. Needs Playwright's Chromium: `pnpm exec playwright install chromium`.
 
-declare global {
-  interface Window {
-    /** CSP violations the page reported, set by the init script in visit(). */
-    cspViolations?: string[];
-  }
-}
-
 // A page brings each deck into view before it checks, and axe reads a long page.
 vi.setConfig({ testTimeout: 30_000 });
 
-let site: ServedSite;
-let browser: Browser;
-
-beforeAll(async () => {
-  site = await serveSite();
-  browser = await chromium.launch();
-});
-
-afterAll(async () => {
-  await browser?.close();
-  await site?.close();
-});
+const site = browserHarness(fileURLToPath(new URL("..", import.meta.url)));
+/** Each visit waits until the network is idle, so the islands' scripts have loaded. */
+const visit = (path: string, options: VisitOptions) => site.visit(path, { waitUntil: "networkidle", ...options });
 
 const PAGES = ["/", "/examples/"] as const;
-
-interface Visit {
-  page: Page;
-  response: Response | null;
-  /** Requests the page made to another origin. Each was aborted. */
-  offOrigin: string[];
-  /** CSP violations, from the event and from the console. */
-  violations: () => Promise<string[]>;
-  /** Console messages about the Permissions-Policy header. */
-  permissionsPolicy: string[];
-  /** Uncaught errors on the page. */
-  errors: string[];
-}
-
-async function visit(
-  path: string,
-  options: {
-    width: number;
-    reducedMotion: "reduce" | "no-preference";
-    /** Lay the page out as a phone does, honouring the viewport meta tag. */
-    isMobile?: boolean;
-  },
-): Promise<Visit> {
-  const context = await browser.newContext({
-    viewport: { width: options.width, height: 900 },
-    reducedMotion: options.reducedMotion,
-    isMobile: options.isMobile ?? false,
-  });
-  const offOrigin: string[] = [];
-  await context.route(
-    (url) => url.origin !== site.origin,
-    (route) => {
-      offOrigin.push(route.request().url());
-      return route.abort();
-    },
-  );
-  // An init script is not subject to the page's CSP.
-  await context.addInitScript(() => {
-    const seen: string[] = [];
-    window.cspViolations = seen;
-    window.addEventListener("securitypolicyviolation", (event) => {
-      seen.push(`${event.effectiveDirective} ${event.blockedURI}`);
-    });
-  });
-  const page = await context.newPage();
-  const logged: string[] = [];
-  const permissionsPolicy: string[] = [];
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (/Content.Security.Policy/i.test(message.text())) logged.push(message.text());
-    if (/Permissions.Policy/i.test(message.text())) permissionsPolicy.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
-  const response = await page.goto(`${site.origin}${path}`, { waitUntil: "networkidle" });
-  return {
-    page,
-    response,
-    offOrigin,
-    permissionsPolicy,
-    errors,
-    violations: async () => [
-      ...logged,
-      ...(await page.evaluate(() => window.cspViolations ?? ["the CSP listener never ran"])),
-    ],
-  };
-}
 
 /**
  * Brings every island into view, so each one that hydrates when visible does,

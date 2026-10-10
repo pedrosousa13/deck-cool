@@ -3,67 +3,19 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { decks, umbrella } from "@deck-cool/brand/decks";
+import { pagedeck, umbrella } from "@deck-cool/brand/decks";
+import { everyResponse, isRecord, present, readManifest, text } from "@deck-cool/site-kit/build-test";
+import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { DOCS_ORIGIN, PATHS, REPO } from "../components/links.ts";
 import { formatBytes, utf8Bytes } from "./bytes.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 import { PICKER, PRODUCT } from "./product.ts";
-import { headersFor, parseHeaders } from "./serve-site.ts";
 import { SKINS } from "./skins.ts";
 
 // Reads the build that build.global-setup.ts writes.
 
 const SITE = fileURLToPath(new URL("..", import.meta.url));
 const BRAND = fileURLToPath(new URL("../../../packages/brand/public/", import.meta.url));
-const pagedeck = decks.find((deck) => deck.name === "pagedeck");
-if (pagedeck === undefined) throw new Error("the decks module has no pagedeck");
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
-
-/** Narrows away `null` and `undefined`, failing the test when the value is missing. */
-function present<T>(value: T | null | undefined, what: string): T {
-  if (value == null) throw new Error(`${what} is missing`);
-  return value;
-}
-
-interface ManifestPage {
-  path: string;
-  output: string;
-  components: string[];
-}
-
-/** manifest.json's pages and files, checked as they are read. */
-function readManifest(): { pages: ManifestPage[]; files: string[]; notFound: unknown[] } {
-  const value: unknown = JSON.parse(readFileSync(`${SITE}site/manifest.json`, "utf8"));
-  if (
-    !isRecord(value) ||
-    !Array.isArray(value.pages) ||
-    !Array.isArray(value.files) ||
-    !isRecord(value.routing) ||
-    !Array.isArray(value.routing.trees)
-  ) {
-    throw new Error("manifest.json has no pages, files or routing.trees");
-  }
-  return {
-    pages: value.pages.map((page: unknown) => {
-      if (!isRecord(page) || typeof page.path !== "string" || typeof page.output !== "string") {
-        throw new Error("a manifest page has no path or output");
-      }
-      const components = Array.isArray(page.components) ? page.components : [];
-      return {
-        path: page.path,
-        output: page.output,
-        components: components.map((component: unknown) =>
-          present(isRecord(component) && typeof component.name === "string" ? component.name : undefined, "a component's name"),
-        ),
-      };
-    }),
-    files: value.files.map((file: unknown) =>
-      present(isRecord(file) && typeof file.path === "string" ? file.path : undefined, "a manifest file's path"),
-    ),
-    notFound: value.routing.trees.map((tree: unknown) => (isRecord(tree) ? tree.notFound : undefined)),
-  };
-}
 
 interface BudgetRow {
   path: string;
@@ -82,7 +34,7 @@ function readBudget(): BudgetRow[] {
   });
 }
 
-const manifest = readManifest();
+const manifest = readManifest(SITE);
 const budget = readBudget();
 const window = new Window();
 
@@ -96,11 +48,6 @@ function html(path: string): string {
 
 function parse(path: string): Document {
   return new window.DOMParser().parseFromString(html(path), "text/html");
-}
-
-/** The element's text, with runs of white space as one space. */
-function text(element: Element | null | undefined): string | undefined {
-  return element?.textContent?.replace(/\s+/g, " ").trim();
 }
 
 function hrefs(scope: Element | Document): (string | null)[] {
@@ -288,14 +235,7 @@ describe("the served headers", () => {
   const rules = parseHeaders(readFileSync(`${SITE}site/_headers`, "utf8"));
   /** Every path the site serves: each page, and each file but the ones the host reads as configuration. */
   const served = [...PAGES, ...manifest.files.filter((path) => !/^\/_(headers|redirects)$/.test(path))];
-  const EVERY_RESPONSE = {
-    [CONTENT_SECURITY_POLICY.name]: CONTENT_SECURITY_POLICY.value,
-    "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Cross-Origin-Opener-Policy": "same-origin",
-    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-  };
+  const EVERY_RESPONSE = everyResponse(CONTENT_SECURITY_POLICY);
 
   test("_headers sends the CSP, the security headers and HSTS on every page and file", () => {
     for (const path of served) {

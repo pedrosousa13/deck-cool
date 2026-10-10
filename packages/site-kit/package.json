@@ -1,0 +1,30 @@
+{
+  "name": "@deck-cool/site-kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./headers": "./src/headers.ts",
+    "./serve-site": "./src/serve-site.ts",
+    "./build": "./src/build.ts",
+    "./build-test": "./src/build-test.ts",
+    "./browser-test": "./src/browser-test.ts",
+    "./live-check": "./src/live-check.ts",
+    "./slidedeck-readme": "./src/slidedeck-readme.ts",
+    "./slidedeck-readme.fixture": "./src/slidedeck-readme.fixture.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pagedeck/core": "0.2.3"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "playwright": "^1.63.0",
+    "vitest": "^4.1.11"
+  }
+}

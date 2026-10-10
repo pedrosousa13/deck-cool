@@ -8,11 +8,12 @@ import type { MarkdownEntry } from "@pagedeck/markdown-loader";
 import { defineSearch } from "@pagedeck/search";
 import { cpSync, realpathSync, rmSync } from "node:fs";
 import { z } from "zod";
+import { HASHED_FILE_HEADERS } from "@deck-cool/site-kit/headers";
 import { DOCS_ORIGIN, PATHS, REPO } from "./components/links.ts";
 import { components, COUNTER, FAMILY_BAR, FOOTER, ISLAND_PAGE, SEARCH, SEARCH_PAGE } from "./src/catalog.ts";
 import { CODE_THEME } from "./src/code-theme.ts";
 import { FEATURES_HEAD, featuresContent, FONTS, SCRIPTS, SOCIAL_IMAGES } from "./src/features.ts";
-import { HASHED_FILE_HEADERS, HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
+import { HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
 import { SERVER_DATA_HEAD, serverDataContent } from "./src/server-data.ts";
 import { SKINS, skins } from "./src/skins.ts";
 

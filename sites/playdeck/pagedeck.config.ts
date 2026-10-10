@@ -9,6 +9,7 @@ import { defineSearch } from "@pagedeck/search";
 import { cpSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { codeToHtml } from "shiki";
 import type { DocsLayoutProps } from "@deck-cool/docs";
+import { HASHED_FILE_HEADERS } from "@deck-cool/site-kit/headers";
 import type { SourceFile } from "./components/examples-page.tsx";
 import { DOCS, ORIGIN, PATHS, REPO } from "./components/links.ts";
 import {
@@ -26,7 +27,7 @@ import {
 } from "./src/catalog.ts";
 import { playdeckChunkNames } from "./src/chunk-names.ts";
 import { iconizeFeaturesTable, scrollTables, stageComparison } from "./src/comparison.ts";
-import { HASHED_FILE_HEADERS, HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
+import { HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
 import { CODE_THEME } from "./src/code-theme.ts";
 import { SKINS, skins } from "./src/skins.ts";
 

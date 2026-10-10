@@ -1,85 +1,15 @@
 import { AxeBuilder } from "@axe-core/playwright";
-import { chromium, type Browser, type Page, type Response } from "playwright";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { fileURLToPath } from "node:url";
+import { describe, expect, test } from "vitest";
+import { browserHarness } from "@deck-cool/site-kit/browser-test";
 import { PATHS } from "../components/links.ts";
 import { RESPONSE_HEADERS } from "./headers.ts";
-import { serveSite, type ServedSite } from "./serve-site.ts";
 
 // Drives the built site (build.global-setup.ts) in Chromium, served with the
 // headers in the build's _headers file, so every page runs under its CSP.
 
-declare global {
-  interface Window {
-    /** CSP violations the page reported, set by the init script in visit(). */
-    cspViolations?: string[];
-  }
-}
-
-let site: ServedSite;
-let browser: Browser;
-
-beforeAll(async () => {
-  site = await serveSite();
-  browser = await chromium.launch();
-});
-
-afterAll(async () => {
-  await browser?.close();
-  await site?.close();
-});
-
-interface Visit {
-  page: Page;
-  response: Response | null;
-  /** Requests the page made to another origin. Each was aborted. */
-  offOrigin: string[];
-  /** CSP violations, from the event and from the console. */
-  violations: () => Promise<string[]>;
-  /** Uncaught errors, such as an island that failed to hydrate. */
-  errors: string[];
-}
-
-async function visit(
-  path: string,
-  options: { width: number; reducedMotion?: "reduce" | "no-preference"; isMobile?: boolean },
-): Promise<Visit> {
-  const context = await browser.newContext({
-    viewport: { width: options.width, height: 900 },
-    reducedMotion: options.reducedMotion ?? "reduce",
-    isMobile: options.isMobile ?? false,
-  });
-  const offOrigin: string[] = [];
-  await context.route(
-    (url) => url.origin !== site.origin,
-    (route) => {
-      offOrigin.push(route.request().url());
-      return route.abort();
-    },
-  );
-  // An init script is not subject to the page's CSP.
-  await context.addInitScript(() => {
-    const seen: string[] = [];
-    window.cspViolations = seen;
-    window.addEventListener("securitypolicyviolation", (event) => {
-      seen.push(`${event.effectiveDirective} ${event.blockedURI}`);
-    });
-  });
-  const page = await context.newPage();
-  const logged: string[] = [];
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (/Content.Security.Policy/i.test(message.text())) logged.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
-  const response = await page.goto(`${site.origin}${path}`, { waitUntil: "load" });
-  return {
-    page,
-    response,
-    offOrigin,
-    errors,
-    violations: async () => [...logged, ...(await page.evaluate(() => window.cspViolations ?? ["the CSP listener never ran"]))],
-  };
-}
+const site = browserHarness(fileURLToPath(new URL("..", import.meta.url)));
+const { visit } = site;
 
 const PAGES = [PATHS.home, PATHS.interactive, PATHS.features, PATHS.serverData, PATHS.search];
 

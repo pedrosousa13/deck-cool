@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
-import { branchOf, bumpManifest, bumpWorkspace, isExcluded, parseRelease, prBody } from "./bump.ts";
+import { branchOf, bumpManifest, bumpWorkspace, findReleases, parseRelease, prBody } from "./bump.ts";
 
 describe("the payload", () => {
   test.each(["slidedeck", "playdeck", "pagedeck"])("accepts %s at a plain version", (deck) => {
@@ -118,37 +118,121 @@ describe("a manifest's bump", () => {
   });
 });
 
-describe("minimumReleaseAgeExclude", () => {
-  test.each<[string, string, string, boolean]>([
-    ["@pagedeck/*", "@pagedeck/core", "0.3.0", true],
-    ["@pagedeck/*", "@slidedeck/core", "0.3.0", false],
-    ["@pagedeck/core", "@pagedeck/core", "0.3.0", true],
-    ["@pagedeck/core", "@pagedeck/content", "0.3.0", false],
-    ["@pagedeck/core@0.3.0 || 0.3.1", "@pagedeck/core", "0.3.1", true],
-    ["@pagedeck/core@0.3.0 || 0.3.1", "@pagedeck/core", "0.3.2", false],
-  ])("%s, for %s@%s, is %s", (pattern, name, version, expected) => {
-    expect(isExcluded(name, version, [pattern])).toBe(expected);
-  });
-});
-
 describe("the PR body", () => {
   const changes = [
     { file: "sites/page/package.json", name: "@pagedeck/core", from: "0.2.3", to: "0.3.0" },
     { file: "packages/docs/package.json", name: "@pagedeck/core", from: "0.2.3", to: "0.3.0" },
   ];
 
-  test("lists every change", () => {
-    const body = prBody({ deck: "pagedeck", version: "0.3.0" }, changes, []);
+  test("lists every change, and says the hold applied", () => {
+    const body = prBody({ deck: "pagedeck", version: "0.3.0" }, changes);
     expect(body).toContain("| `sites/page/package.json` | `@pagedeck/core` | 0.2.3 | 0.3.0 |");
     expect(body).toContain("| `packages/docs/package.json` | `@pagedeck/core` | 0.2.3 | 0.3.0 |");
     expect(body).toContain("pnpm's release-age hold applied");
+    expect(body).not.toContain("bypassed");
+  });
+});
+
+describe("the daily run", () => {
+  const HOUR = 60 * 60 * 1000;
+  const now = new Date("2026-10-09T06:17:00Z");
+  const manifests = [
+    JSON.stringify({ name: "a", dependencies: { "@pagedeck/core": "0.2.3", "@pagedeck/content": "0.2.3" } }),
+    JSON.stringify({ name: "b", devDependencies: { "@pagedeck/islands": "0.2.3", "@slidedeck/docs": "workspace:*" } }),
+  ];
+
+  /** A fetch that answers for each package name in `latest`, and records what it was asked for. */
+  function npm(latest: Readonly<Record<string, { version: string; published: Date }>>) {
+    const asked: string[] = [];
+    const fetch = async (input: string | URL | Request): Promise<Response> => {
+      const url = String(input);
+      asked.push(url);
+      const name = decodeURIComponent(url.slice("https://registry.npmjs.org/".length));
+      const entry = latest[name];
+      if (entry === undefined) return new Response("{}", { status: 404 });
+      return Response.json({ name, "dist-tags": { latest: entry.version }, time: { [entry.version]: entry.published.toISOString() } });
+    };
+    return { asked, fetch };
+  }
+  const options = (fetch: typeof globalThis.fetch) => ({ registry: "https://registry.npmjs.org/", fetch, now, holdMinutes: 1440 });
+  const ago = (hours: number) => new Date(now.getTime() - hours * HOUR);
+  /** npm's answer for every @pagedeck/* package the manifests use, with `rest` in front. */
+  const pagedeck = (version: string, published: Date, rest: Readonly<Record<string, { version: string; published: Date }>> = {}) => ({
+    "@pagedeck/content": { version, published },
+    "@pagedeck/core": { version, published },
+    "@pagedeck/islands": { version, published },
+    ...rest,
   });
 
-  test("says when minimumReleaseAgeExclude bypasses the hold, and proposes removing the exclusion", () => {
-    const body = prBody({ deck: "pagedeck", version: "0.3.0" }, changes, ["@pagedeck/core"]);
-    expect(body).toContain("The release-age hold was bypassed for `@pagedeck/core`");
-    expect(body).toContain("remove `@pagedeck/*` from `minimumReleaseAgeExclude`");
-    expect(body).not.toContain("pnpm's release-age hold applied");
+  test("finds nothing newer, and asks npm about every package of the decks the workspace uses", async () => {
+    const { asked, fetch } = npm(pagedeck("0.2.3", ago(48)));
+    expect(await findReleases(manifests, options(fetch))).toEqual([
+      { kind: "unused", deck: "slidedeck" },
+      { kind: "unused", deck: "playdeck" },
+      { kind: "current", deck: "pagedeck", version: "0.2.3" },
+    ]);
+    expect(asked).toEqual([
+      "https://registry.npmjs.org/@pagedeck%2fcontent",
+      "https://registry.npmjs.org/@pagedeck%2fcore",
+      "https://registry.npmjs.org/@pagedeck%2fislands",
+    ]);
+  });
+
+  test("skips a newer version that is still inside the hold", async () => {
+    const { fetch } = npm(pagedeck("0.3.0", ago(2)));
+    expect((await findReleases(manifests, options(fetch))).at(-1)).toEqual({ kind: "young", deck: "pagedeck", version: "0.3.0", published: ago(2) });
+  });
+
+  test("bumps a newer version that has passed the hold", async () => {
+    const { fetch } = npm(pagedeck("0.3.0", ago(25)));
+    expect((await findReleases(manifests, options(fetch))).at(-1)).toEqual({ kind: "bump", deck: "pagedeck", version: "0.3.0" });
+  });
+
+  test("bumps a workspace that is half bumped: one package at the latest, another below it", async () => {
+    const mixed = [JSON.stringify({ name: "a", dependencies: { "@pagedeck/content": "0.2.3", "@pagedeck/core": "0.3.0" } })];
+    const { fetch } = npm(pagedeck("0.3.0", ago(48)));
+    expect((await findReleases(mixed, options(fetch))).at(-1)).toEqual({ kind: "bump", deck: "pagedeck", version: "0.3.0" });
+  });
+
+  test("takes the highest latest among the deck's packages, and reads the hold from that one", async () => {
+    const { fetch } = npm(pagedeck("0.3.0", ago(48), { "@pagedeck/islands": { version: "0.3.1", published: ago(2) } }));
+    expect((await findReleases(manifests, options(fetch))).at(-1)).toEqual({ kind: "young", deck: "pagedeck", version: "0.3.1", published: ago(2) });
+  });
+
+  test("fails on a registry error for any of the deck's packages", async () => {
+    const { fetch } = npm({ "@pagedeck/content": { version: "0.3.0", published: ago(48) }, "@pagedeck/islands": { version: "0.3.0", published: ago(48) } });
+    await expect(findReleases(manifests, options(fetch))).rejects.toThrow(
+      "npm did not answer for @pagedeck/core: https://registry.npmjs.org/@pagedeck%2fcore returned HTTP 404",
+    );
+  });
+
+  test("fails on a registry error, naming the package and the status", async () => {
+    const { fetch } = npm({});
+    await expect(findReleases(manifests, options(fetch))).rejects.toThrow(
+      "npm did not answer for @pagedeck/content: https://registry.npmjs.org/@pagedeck%2fcontent returned HTTP 404",
+    );
+  });
+
+  test("fails when the registry cannot be reached", async () => {
+    const fetch = async (): Promise<Response> => {
+      throw new TypeError("fetch failed");
+    };
+    await expect(findReleases(manifests, options(fetch))).rejects.toThrow(
+      "npm did not answer for @pagedeck/content: https://registry.npmjs.org/@pagedeck%2fcontent: fetch failed",
+    );
+  });
+
+  test.each<[string, object]>([
+    ["a latest version that is not plain", { "dist-tags": { latest: "0.3.0-rc.1" }, time: { "0.3.0-rc.1": "2026-10-01T00:00:00Z" } }],
+    ["no latest version", { "dist-tags": {}, time: {} }],
+  ])("fails on %s", async (_name, packument) => {
+    const fetch = async (): Promise<Response> => Response.json(packument);
+    await expect(findReleases(manifests, options(fetch))).rejects.toThrow(/^npm's latest @pagedeck\/content is .*, which is not a plain version/);
+  });
+
+  test("fails when npm gives no publish time for the version", async () => {
+    const fetch = async (): Promise<Response> => Response.json({ "dist-tags": { latest: "0.3.0" }, time: {} });
+    await expect(findReleases(manifests, options(fetch))).rejects.toThrow("npm gives no publish time for @pagedeck/content 0.3.0");
   });
 });
 
@@ -249,8 +333,8 @@ describe("a workspace's bump", () => {
   const packageManager = (JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")) as { packageManager: string })
     .packageManager;
 
-  /** A workspace of two packages, installed at 1.0.0, whose pnpm-workspace.yaml excludes `exclude`. */
-  async function workspace(exclude: readonly string[] = []): Promise<string> {
+  /** A workspace of two packages, installed at 1.0.0. */
+  async function workspace(): Promise<string> {
     const root = mkdtempSync(join(dir, "workspace-"));
     workspaces.push(root);
     const write = (file: string, value: object) => {
@@ -260,11 +344,7 @@ describe("a workspace's bump", () => {
     write("package.json", { name: "root", private: true, packageManager });
     write("sites/a/package.json", { name: "a", private: true, dependencies: { "@slidedeck/core": "1.0.0", "@pagedeck/core": "1.0.0" } });
     write("packages/b/package.json", { name: "b", private: true, devDependencies: { "@slidedeck/docs": "1.0.0" } });
-    const excluded = exclude.map((pattern) => `\n  - '${pattern}'`).join("");
-    writeFileSync(
-      join(root, "pnpm-workspace.yaml"),
-      `packages:\n  - sites/*\n  - packages/*\n${exclude.length === 0 ? "" : `minimumReleaseAgeExclude:${excluded}\n`}`,
-    );
+    writeFileSync(join(root, "pnpm-workspace.yaml"), "packages:\n  - sites/*\n  - packages/*\n");
     // Not execFileSync: the registry answers on this process's event loop.
     await promisify(execFile)("pnpm", ["install"], { cwd: root, env: { ...process.env, ...env } });
     return root;
@@ -292,7 +372,7 @@ describe("a workspace's bump", () => {
     const root = await workspace();
     await bumpWorkspace(root, { deck: "slidedeck", version: "1.1.0" }, env);
     const lockfile = read(root, "pnpm-lock.yaml");
-    expect(await bumpWorkspace(root, { deck: "slidedeck", version: "1.1.0" }, env)).toEqual({ changes: [], bypassed: [] });
+    expect(await bumpWorkspace(root, { deck: "slidedeck", version: "1.1.0" }, env)).toEqual({ changes: [] });
     expect(read(root, "pnpm-lock.yaml")).toBe(lockfile);
   });
 
@@ -311,7 +391,19 @@ describe("a workspace's bump", () => {
 
   test("changes nothing for a deck the workspace does not use", { timeout: 60_000 }, async () => {
     const root = await workspace();
-    expect(await bumpWorkspace(root, { deck: "playdeck", version: "1.1.0" }, env)).toEqual({ changes: [], bypassed: [] });
+    expect(await bumpWorkspace(root, { deck: "playdeck", version: "1.1.0" }, env)).toEqual({ changes: [] });
+  });
+
+  test("cli.ts find bumps nothing, and writes a notice, for versions inside the hold", { timeout: 60_000 }, async () => {
+    const root = await workspace();
+    const outputs = join(root, "github-output");
+    const { stdout } = await promisify(execFile)(process.execPath, [new URL("./cli.ts", import.meta.url).pathname, "find"], {
+      cwd: root,
+      env: { ...process.env, ...env, GITHUB_OUTPUT: outputs },
+    });
+    expect(stdout).toContain("::notice title=Held back::slidedeck 1.2.0 was published at");
+    expect(stdout).toContain("::notice title=Held back::pagedeck 1.2.0 was published at");
+    expect(read(root, "github-output")).toBe("releases=[]\n");
   });
 
   test("fails on a version younger than the release-age hold, and excludes nothing", { timeout: 60_000 }, async () => {
@@ -321,12 +413,5 @@ describe("a workspace's bump", () => {
       /slidedeck 1\.2\.0 is younger than pnpm's release-age hold \(minimumReleaseAge\)/,
     );
     expect(read(root, "pnpm-workspace.yaml")).toBe(yaml);
-  });
-
-  test("bumps a young version that minimumReleaseAgeExclude lists, and says the hold was bypassed", { timeout: 60_000 }, async () => {
-    const root = await workspace(["@slidedeck/*"]);
-    const result = await bumpWorkspace(root, { deck: "slidedeck", version: "1.2.0" }, env);
-    expect(result.changes).toHaveLength(2);
-    expect(result.bypassed).toEqual(["@slidedeck/core", "@slidedeck/docs"]);
   });
 });

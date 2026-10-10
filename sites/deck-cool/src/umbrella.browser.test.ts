@@ -1,104 +1,30 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { decks } from "@deck-cool/brand/decks";
-import { chromium, type Browser, type Page, type Response } from "playwright";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
+import { describe, expect, test } from "vitest";
+import { browserHarness } from "@deck-cool/site-kit/browser-test";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
-import { serveSite, type ServedSite } from "./serve-site.ts";
 
 // Drives the built home page (build.global-setup.ts) in Chromium, served with
 // the headers in the build's _headers file, so the page runs under its CSP.
 
-declare global {
-  interface Window {
-    /** CSP violations the page reported, set by the init script in visit(). */
-    cspViolations?: string[];
-  }
-}
-
-let site: ServedSite;
-let browser: Browser;
-
-beforeAll(async () => {
-  site = await serveSite();
-  browser = await chromium.launch();
-});
-
-afterAll(async () => {
-  await browser?.close();
-  await site?.close();
-});
-
-interface Visit {
-  page: Page;
-  response: Response | null;
-  /** Requests the page made to another origin. Each was aborted. */
-  offOrigin: string[];
-  /** CSP violations, from the event and from the console. */
-  violations: () => Promise<string[]>;
-  /** Console messages about the Permissions-Policy header. */
-  permissionsPolicy: string[];
-}
-
-async function visit(options: {
-  width: number;
-  reducedMotion: "reduce" | "no-preference";
-  /** Lay the page out as a phone does, honouring the viewport meta tag. */
-  isMobile?: boolean;
-}): Promise<Visit> {
-  const context = await browser.newContext({
-    viewport: { width: options.width, height: 900 },
-    reducedMotion: options.reducedMotion,
-    isMobile: options.isMobile ?? false,
-  });
-  const offOrigin: string[] = [];
-  await context.route(
-    (url) => url.origin !== site.origin,
-    (route) => {
-      offOrigin.push(route.request().url());
-      return route.abort();
-    },
-  );
-  // An init script is not subject to the page's CSP.
-  await context.addInitScript(() => {
-    const seen: string[] = [];
-    window.cspViolations = seen;
-    window.addEventListener("securitypolicyviolation", (event) => {
-      seen.push(`${event.effectiveDirective} ${event.blockedURI}`);
-    });
-  });
-  const page = await context.newPage();
-  const logged: string[] = [];
-  const permissionsPolicy: string[] = [];
-  page.on("console", (message) => {
-    if (/Content.Security.Policy/i.test(message.text())) logged.push(message.text());
-    if (/Permissions.Policy/i.test(message.text())) permissionsPolicy.push(message.text());
-  });
-  const response = await page.goto(`${site.origin}/`, { waitUntil: "load" });
-  return {
-    page,
-    response,
-    offOrigin,
-    permissionsPolicy,
-    violations: async () => [
-      ...logged,
-      ...(await page.evaluate(() => window.cspViolations ?? ["the CSP listener never ran"])),
-    ],
-  };
-}
+const site = browserHarness(fileURLToPath(new URL("..", import.meta.url)));
+const { visit } = site;
 
 describe("the umbrella site in a browser", () => {
   test("the home page is served with the CSP the build writes", async () => {
-    const { response } = await visit({ width: 1280, reducedMotion: "reduce" });
+    const { response } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     expect(await response?.headerValue(CONTENT_SECURITY_POLICY.name)).toBe(CONTENT_SECURITY_POLICY.value);
   });
 
   test("the browser recognizes every feature the Permissions-Policy names", async () => {
-    const { permissionsPolicy } = await visit({ width: 1280, reducedMotion: "reduce" });
+    const { permissionsPolicy } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     expect(permissionsPolicy).toEqual([]);
   });
 
   test("the harness sees a CSP violation when there is one", async () => {
-    const { page, violations } = await visit({ width: 1280, reducedMotion: "reduce" });
+    const { page, violations } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     await page.evaluate(() => {
       const style = document.createElement("style");
       style.textContent = "body { color: red }";
@@ -108,24 +34,24 @@ describe("the umbrella site in a browser", () => {
   });
 
   test.each([390, 1280])("at %ipx, axe finds no violations, nothing leaves the origin and the CSP holds", async (width) => {
-    const { page, offOrigin, violations } = await visit({ width, reducedMotion: "reduce" });
+    const { page, offOrigin, violations } = await visit("/", { width, reducedMotion: "reduce" });
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     expect(offOrigin).toEqual([]);
     expect(await violations()).toEqual([]);
   });
 
   test.each([390, 1280])("at %ipx, the page does not scroll sideways", async (width) => {
-    const { page } = await visit({ width, reducedMotion: "reduce" });
+    const { page } = await visit("/", { width, reducedMotion: "reduce" });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
 
   test("on a phone, the page lays out at the phone's width, not a desktop one", async () => {
-    const { page } = await visit({ width: 390, reducedMotion: "reduce", isMobile: true });
+    const { page } = await visit("/", { width: 390, reducedMotion: "reduce", isMobile: true });
     expect(await page.evaluate(() => window.innerWidth)).toBe(390);
   });
 
   test.each(decks)("a click anywhere on $name's card follows its link, except on the install command", async (deck) => {
-    const { page, offOrigin } = await visit({ width: 1280, reducedMotion: "reduce" });
+    const { page, offOrigin } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     const card = page.locator(`#${deck.name}`);
     await card.scrollIntoViewIfNeeded();
     /** What a click at the middle of the element lands on. */
@@ -153,7 +79,7 @@ describe("the umbrella site in a browser", () => {
   });
 
   test("with prefers-reduced-motion: reduce, nothing on the page moves, hovered or not", async () => {
-    const { page } = await visit({ width: 1280, reducedMotion: "reduce" });
+    const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     const card = page.locator("main article").first();
     await card.hover();
     expect(await page.evaluate(() => document.getAnimations())).toEqual([]);
@@ -184,7 +110,7 @@ describe("the umbrella site in a browser", () => {
   });
 
   test("with motion allowed, the icons animate", async () => {
-    const { page } = await visit({ width: 1280, reducedMotion: "no-preference" });
+    const { page } = await visit("/", { width: 1280, reducedMotion: "no-preference" });
     // playdeck's bars never hold still, so two pictures apart differ.
     const playdeck = page.locator("#playdeck img");
     const first = (await playdeck.screenshot()).toString("base64");
