@@ -229,9 +229,8 @@ describe("the playdeck site in a browser", () => {
 
   // CONTEXT.md's figure for playdeck: 0 requests to YouTube or Vimeo before
   // play. No page here mounts either provider yet (#52's demos do), so this
-  // holds the stronger claim, the one the home page's figure makes: before a
-  // press, a player requests nothing from any other origin, and loads no
-  // provider.
+  // holds a stronger claim that implies it: before a press, a player requests
+  // nothing from any other origin, and loads no provider.
   const SINTEL = "/durian/trailer/sintel_trailer-720p.mp4";
   describe.each([
     { name: "home page's Velvet", path: PATHS.home, scope: ".pd-skin__stage.velvet", press: "Play video", clip: SINTEL },

@@ -88,12 +88,11 @@ test.each(decks)("$name's card copy is the board's, word for word", (deck) => {
 });
 
 // CONTEXT.md's "One figure per deck". slidedeck's is the size its README
-// measures at @slidedeck/react 1.0.3. playdeck's names no provider: its site
-// plays neither YouTube nor Vimeo yet, and its test checks every other host.
+// measures at @slidedeck/react 1.0.3.
 test("each deck has one figure", () => {
   expect(Object.fromEntries(decks.map((deck) => [deck.name, deck.figure]))).toEqual({
     slidedeck: { value: "8.84 KB", label: "for a carousel with Prev and Next", note: "min+gzip, React external" },
-    playdeck: { value: "0", label: "requests to a video host before play" },
+    playdeck: { value: "0", label: "requests to YouTube or Vimeo before play" },
     pagedeck: { value: "0 B", label: "of JavaScript on a page with nothing interactive" },
   });
 });

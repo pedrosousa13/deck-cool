@@ -468,11 +468,11 @@ describe("the home page", () => {
     ]);
     expect([...(proof?.querySelectorAll(".pd-proof__figure > p") ?? [])].map(text)).toEqual([
       "0",
-      "requests to a video host before play",
+      "requests to YouTube or Vimeo before play",
       "Measured on this page. Both players below wait for a press, and this site's tests fail if anything reaches another host before it.",
     ]);
     // deck.cool's card says the same: both read the decks module.
-    expect(playdeck.figure).toEqual({ value: "0", label: "requests to a video host before play" });
+    expect(playdeck.figure).toEqual({ value: "0", label: "requests to YouTube or Vimeo before play" });
     expect(links(proof)).toEqual([]);
   });
 

@@ -142,8 +142,9 @@ export default function HomePage({
             ))}
           </ul>
         </div>
-        {/* The claim this site's browser test checks: before a press, nothing
-            on this page reaches another host. */}
+        {/* The figure is CONTEXT.md's. This site's browser test checks a
+            stronger claim: before a press, nothing on this page reaches
+            another host. */}
         <div className="pd-proof__figure">
           <p>{playdeck.figure.value}</p>
           <p>{playdeck.figure.label}</p>
