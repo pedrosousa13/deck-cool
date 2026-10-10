@@ -109,7 +109,7 @@ main :is(.fw-button, .fw-demo button, .fw-picker button, .consent-banner__accept
   color: var(--ground-page);
 }
 
-/* The server-data page's table, which scrolls sideways on a narrow screen. */
+/* The content page's table, which scrolls sideways on a narrow screen. */
 .fw-table {
   max-width: none;
   overflow-x: auto;
@@ -722,7 +722,7 @@ main .fw-search__result {
   line-height: 1.3;
 }
 
-/* The server-data page: its figures, and the variant picker. */
+/* The content page: its figures, and the variant picker. */
 .fw-figures {
   padding: 8px 24px 16px;
   border-radius: 28px;

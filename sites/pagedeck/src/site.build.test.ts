@@ -56,7 +56,7 @@ function hrefs(scope: Element | Document): (string | null)[] {
   return [...scope.querySelectorAll("a")].map((a) => a.getAttribute("href"));
 }
 
-const PAGES = [PATHS.home, PATHS.search, PATHS.features, PATHS.interactive, PATHS.serverData];
+const PAGES = [PATHS.home, PATHS.search, PATHS.features, PATHS.interactive, PATHS.content];
 
 test("the site is the landing's four pages and the docs' search page", () => {
   expect(manifest.pages.map((page) => page.path).sort()).toEqual([...PAGES].sort());
@@ -70,7 +70,7 @@ describe("budgets, measured and pinned", () => {
     [PATHS.home]: "0b",
     [PATHS.interactive]: "60kb",
     [PATHS.features]: "60kb",
-    [PATHS.serverData]: "59kb",
+    [PATHS.content]: "59kb",
     [PATHS.search]: "59kb",
   };
 
@@ -100,7 +100,7 @@ describe("budgets, measured and pinned", () => {
       [PATHS.home]: [],
       [PATHS.interactive]: ["counter"],
       [PATHS.features]: ["consent_banner", "island_idle", "island_load", "island_visible", "search"],
-      [PATHS.serverData]: ["variant_picker"],
+      [PATHS.content]: ["variant_picker"],
       [PATHS.search]: ["search"],
     });
   });
@@ -144,7 +144,7 @@ describe("every page", () => {
       ["Docs", `${DOCS_ORIGIN}/`],
       ["Features", PATHS.features],
       ["Island demo", PATHS.interactive],
-      ["Server data", PATHS.serverData],
+      ["Server data", PATHS.content],
       ["Search", PATHS.search],
       ["GitHub", REPO],
     ]);
@@ -390,7 +390,7 @@ describe("the home page", () => {
       const teaser = present(stages[0]?.querySelector("article.teaser"), "the teaser");
       expect(text(teaser.querySelector("h3"))).toBe(PRODUCT.name);
       expect([...teaser.querySelectorAll("p")].map(text)).toEqual([PRODUCT.tagline, PICKER.price]);
-      expect(links(teaser)).toEqual([["See the whole entry", PATHS.serverData]]);
+      expect(links(teaser)).toEqual([["See the whole entry", PATHS.content]]);
     });
 
     test("shows beside each skin the source file the stylesheet is compiled from", () => {
@@ -422,15 +422,15 @@ describe("the home page", () => {
     test("links the live demos under the skins", () => {
       expect(links(section()?.querySelector(".fw-skins__more") ?? undefined)).toEqual([
         ["See an island ›", PATHS.interactive],
-        ["See the server data ›", PATHS.serverData],
+        ["See the server data ›", PATHS.content],
       ]);
     });
   });
 
-  test("small: HTML first, budgets that hold, and data that stays on the server, with /server-data's own figures", () => {
+  test("small: HTML first, budgets that hold, and data that stays on the server, with /content's own figures", () => {
     const section = band("Small, leans on the browser.");
     const props = present(
-      parse(PATHS.serverData).querySelector('[data-fw-component="variant_picker"]')?.getAttribute("data-fw-props"),
+      parse(PATHS.content).querySelector('[data-fw-component="variant_picker"]')?.getAttribute("data-fw-props"),
       "the variant picker's props",
     );
     const read = formatBytes(utf8Bytes(JSON.stringify(PRODUCT)));
@@ -447,11 +447,11 @@ describe("the home page", () => {
       [
         "Your data stays on the server",
         [
-          `A server component reads the whole CMS entry when the site builds. On /server-data it reads ${read} and sends the browser ${sent}.`,
+          `A server component reads the whole CMS entry when the site builds. On /content it reads ${read} and sends the browser ${sent}.`,
         ],
       ],
     ]);
-    expect(links(section)).toEqual([["See it on /server-data ›", PATHS.serverData]]);
+    expect(links(section)).toEqual([["See it on /content ›", PATHS.content]]);
   });
 
   test("agents: just React, typed, and a build that stops on a mistake", () => {

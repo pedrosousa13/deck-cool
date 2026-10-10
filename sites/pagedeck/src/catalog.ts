@@ -19,7 +19,7 @@ export const FONT_SPECIMEN = "font_specimen";
 export const SOCIAL_CARD = "social_card";
 // Registered, because a client-reference proxy stands in only for a registered
 // "use client" module.
-export const SERVER_DATA_PAGE = "server_data_page";
+export const CONTENT_PAGE = "content_page";
 export const VARIANT_PICKER = "variant_picker";
 export const SEARCH_PAGE = "search_page";
 export const FAMILY_BAR = "familyBar";
@@ -45,7 +45,7 @@ export const components: BuildSection["components"] = {
   [RESPONSIVE_IMAGE]: "./components/responsive_image.tsx",
   [FONT_SPECIMEN]: "./components/font_specimen.tsx",
   [SOCIAL_CARD]: "./components/social_card.tsx",
-  [SERVER_DATA_PAGE]: "./components/server_data_page.tsx",
+  [CONTENT_PAGE]: "./components/content_page.tsx",
   [VARIANT_PICKER]: "./components/variant_picker.tsx",
   [SEARCH_PAGE]: "./components/search-page.tsx",
   [FAMILY_BAR]: "./components/family-bar.tsx",

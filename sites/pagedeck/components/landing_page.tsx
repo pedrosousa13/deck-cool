@@ -66,14 +66,14 @@ const accessible = [
   { heading: "Nothing typed is lost", body: "Text typed into search before it hydrates is kept, caret and all." },
 ] as const;
 
-/** One teaser, set from the CMS entry /server-data reads. Both skins render this same markup. */
+/** One teaser, set from the CMS entry /content reads. Both skins render this same markup. */
 function Teaser() {
   return (
     <article className="teaser">
       <h3>{PRODUCT.name}</h3>
       <p>{PRODUCT.tagline}</p>
       <p>{PICKER.price}</p>
-      <a href={PATHS.serverData}>See the whole entry</a>
+      <a href={PATHS.content}>See the whole entry</a>
     </article>
   );
 }
@@ -168,7 +168,7 @@ export default function LandingPage({ skins }: { skins: readonly Skin[] }) {
           <a className="fw-button" href={PATHS.interactive}>
             See an island ›
           </a>
-          <a className="fw-button" href={PATHS.serverData}>
+          <a className="fw-button" href={PATHS.content}>
             See the server data ›
           </a>
         </div>
@@ -199,11 +199,11 @@ export default function LandingPage({ skins }: { skins: readonly Skin[] }) {
           <li className="fw-tile">
             <h3>Your data stays on the server</h3>
             <p className="fw-tile__body">
-              A server component reads the whole CMS entry when the site builds. On /server-data it reads {read} and
+              A server component reads the whole CMS entry when the site builds. On /content it reads {read} and
               sends the browser {sent}.
             </p>
-            <a className="fw-more" href={PATHS.serverData}>
-              See it on /server-data ›
+            <a className="fw-more" href={PATHS.content}>
+              See it on /content ›
             </a>
           </li>
         </ul>

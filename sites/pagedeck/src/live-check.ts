@@ -5,7 +5,7 @@ import { RESPONSE_HEADERS } from "./headers.ts";
 export const LIVE_SITE: LiveSite = {
   headers: RESPONSE_HEADERS,
   /** Every page, and the embed demo's script, none content-hashed. */
-  served: ["/", "/interactive/", "/features/", "/server-data/", "/docs/search/", "/embed/demo-embed.js"],
+  served: ["/", "/interactive/", "/features/", "/content/", "/docs/search/", "/embed/demo-embed.js"],
   /** The one sheet, which `/` links, and the subset font's, which only `/features/` links. */
   sheets: [
     { page: "/", directory: "/assets/" },

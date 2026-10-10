@@ -3,7 +3,7 @@ import { PICKER, PRODUCT } from "../src/product.ts";
 import { PAGE } from "./shell.ts";
 import VariantPicker from "./variant_picker.tsx";
 
-export default function ServerDataPage({
+export default function ContentPage({
   title,
   intro,
   figures,

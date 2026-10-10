@@ -1,5 +1,5 @@
 import type { PageContent, PageHead } from "@pagedeck/core";
-import { SERVER_DATA_PAGE } from "./catalog.ts";
+import { CONTENT_PAGE } from "./catalog.ts";
 
 const COPY = {
   title: "A large CMS entry, and the few bytes of it that ship",
@@ -21,16 +21,16 @@ const COPY = {
   },
 } as const;
 
-export const SERVER_DATA_HEAD: PageHead = {
+export const CONTENT_HEAD: PageHead = {
   title: COPY.title,
   description: COPY.description,
 };
 
-export function serverDataContent(): PageContent {
+export function contentContent(): PageContent {
   return {
     tree: [
       {
-        component: SERVER_DATA_PAGE,
+        component: CONTENT_PAGE,
         props: {
           title: COPY.title,
           intro: COPY.intro,

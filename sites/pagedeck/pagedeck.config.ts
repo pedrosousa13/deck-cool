@@ -14,7 +14,7 @@ import { components, COUNTER, FAMILY_BAR, FOOTER, ISLAND_PAGE, SEARCH, SEARCH_PA
 import { CODE_THEME } from "./src/code-theme.ts";
 import { FEATURES_HEAD, featuresContent, FONTS, SCRIPTS, SOCIAL_IMAGES } from "./src/features.ts";
 import { HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
-import { SERVER_DATA_HEAD, serverDataContent } from "./src/server-data.ts";
+import { CONTENT_HEAD, contentContent } from "./src/content.ts";
 import { SKINS, skins } from "./src/skins.ts";
 
 const LOCALE = "en";
@@ -46,7 +46,7 @@ const BAR_LINKS = [
   { label: "Docs", href: `${DOCS_ORIGIN}/` },
   { label: "Features", href: PATHS.features },
   { label: "Island demo", href: PATHS.interactive },
-  { label: "Server data", href: PATHS.serverData },
+  { label: "Server data", href: PATHS.content },
   { label: "Search", href: PATHS.search },
   { label: "GitHub", href: REPO },
 ];
@@ -57,7 +57,7 @@ const BUDGET = {
   "/**": "0b",
   [PATHS.interactive]: "60kb",
   [PATHS.features]: "60kb",
-  [PATHS.serverData]: "59kb",
+  [PATHS.content]: "59kb",
   [PATHS.search]: "59kb",
 } as const;
 
@@ -118,7 +118,7 @@ function entryOf(page: Page, store: ContentStoreReader): Entry<DocumentEntry> | 
 
 function contentOf(page: Page, store: ContentStoreReader): PageContent {
   if (page.path === PATHS.features) return featuresContent(page);
-  if (page.path === PATHS.serverData) return serverDataContent();
+  if (page.path === PATHS.content) return contentContent();
   if (page.path === PATHS.interactive) {
     return {
       tree: [
@@ -153,7 +153,7 @@ function contentOf(page: Page, store: ContentStoreReader): PageContent {
 
 function headOf(page: Page, store: ContentStoreReader): PageHead | undefined {
   if (page.path === PATHS.features) return FEATURES_HEAD;
-  if (page.path === PATHS.serverData) return SERVER_DATA_HEAD;
+  if (page.path === PATHS.content) return CONTENT_HEAD;
   if (page.path === PATHS.interactive) return { title: ISLAND.title, description: ISLAND.description };
   if (page.path === PATHS.search) return { title: SEARCH_COPY.title, description: SEARCH_COPY.description };
   const entry = entryOf(page, store);
@@ -170,7 +170,7 @@ export default defineConfig({
       locales: defineLocales({ en: { label: "English", direction: "ltr" } }),
       sources: [
         fromCollection(pages, { route: documentRoute }),
-        ...[PATHS.interactive, PATHS.features, PATHS.serverData, PATHS.search].map((path) =>
+        ...[PATHS.interactive, PATHS.features, PATHS.content, PATHS.search].map((path) =>
           singlePage(path.slice(1, -1).split("/")),
         ),
       ],

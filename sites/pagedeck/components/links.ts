@@ -12,6 +12,6 @@ export const PATHS = {
   home: "/",
   interactive: "/interactive/",
   features: "/features/",
-  serverData: "/server-data/",
+  content: "/content/",
   search: "/docs/search/",
 } as const;

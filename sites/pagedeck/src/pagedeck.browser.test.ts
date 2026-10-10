@@ -11,7 +11,7 @@ import { RESPONSE_HEADERS } from "./headers.ts";
 const site = browserHarness(fileURLToPath(new URL("..", import.meta.url)));
 const { visit } = site;
 
-const PAGES = [PATHS.home, PATHS.interactive, PATHS.features, PATHS.serverData, PATHS.search];
+const PAGES = [PATHS.home, PATHS.interactive, PATHS.features, PATHS.content, PATHS.search];
 
 describe("the pagedeck site in a browser", () => {
   test.each(PAGES)("%s is served with every header the build writes", async (path) => {
