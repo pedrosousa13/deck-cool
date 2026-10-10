@@ -2,7 +2,8 @@
  * A skin's stylesheet, folded at the foot of the skin's tile
  * (src/skin-sheet.tsx). The summary names the skin and its length, and its
  * chevron turns as the sheet opens. Open, the sheet scrolls sideways inside
- * itself, never the page.
+ * itself, never the page. Its one motion is under
+ * prefers-reduced-motion: no-preference.
  */
 .skin-sheet {
   min-width: 0;
@@ -36,11 +37,16 @@
   border-right: 2px solid var(--text-secondary);
   border-bottom: 2px solid var(--text-secondary);
   transform: translateY(-2px) rotate(45deg);
-  transition: transform .3s var(--ease);
 }
 
 .skin-sheet[open] summary::after {
   transform: translateY(2px) rotate(225deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skin-sheet summary::after {
+    transition: transform .3s var(--ease);
+  }
 }
 
 /* Inset: the tile clips what falls outside it. */
