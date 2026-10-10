@@ -1,5 +1,5 @@
 import { AxeBuilder } from "@axe-core/playwright";
-import { chromium, type Browser, type Page, type Response } from "playwright";
+import { chromium, type Browser, type Locator, type Page, type Response } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { PATHS } from "../components/links.ts";
 import { MEDIA_ORIGINS } from "./csp.ts";
@@ -203,11 +203,14 @@ describe("the playdeck site in a browser", () => {
   });
 
   // CONTEXT.md's figure for playdeck: 0 requests to YouTube or Vimeo before
-  // play. The home page's two players embed one each, and this holds a
+  // play. Each of the home page's three players embeds one, and this holds a
   // stronger claim that implies it: before a press, a player requests nothing
   // from any other origin, and loads no provider. After it, each frames its
   // own embed under the CSP. Every off-origin request is still aborted, so
   // YouTube's API is answered here by a stub that only defines YT.Player.
+  // Sprite Fright's frame: its still is 2048x858, and Vimeo reports the same.
+  const FILM_RATIO = 2048 / 858;
+  const ratio = (locator: Locator) => locator.evaluate((element) => element.clientWidth / element.clientHeight);
   describe.each([
     {
       name: "showcase",
@@ -231,8 +234,8 @@ describe("the playdeck site in a browser", () => {
       reached: ["https://player.vimeo.com/video/640499893?"],
     },
   ])("the home page's $name player", ({ scope, provider, frame, reached }) => {
-    test(`requests nothing off the origin, and loads no provider, until it is pressed; then frames ${provider} under the CSP`, { timeout: 30_000 }, async () => {
-      const { page, offOrigin, scripts, violations, errors } = await visit(PATHS.home, { width: 1280 });
+    test.each([390, 1280])(`at %ipx, requests nothing off the origin, and loads no provider, until it is pressed; then frames ${provider} under the CSP, at the film's ratio`, { timeout: 30_000 }, async (width) => {
+      const { page, offOrigin, scripts, violations, errors } = await visit(PATHS.home, { width });
       await page.route("https://www.youtube.com/iframe_api", (route) => {
         offOrigin.push(route.request().url());
         return route.fulfill({
@@ -252,10 +255,17 @@ describe("the playdeck site in a browser", () => {
       const poster = page.locator(`${scope} img[data-playdeck-part="poster-image"]`);
       await expect.poll(() => poster.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
       expect(new URL(await poster.evaluate((img: HTMLImageElement) => img.currentSrc)).origin).toBe(site.origin);
+      // The still fills the player at the film's own ratio, so nothing crops it.
+      const viewport = page.locator(`${scope} [data-playdeck-part="viewport"]`);
+      expect(await ratio(viewport)).toBeCloseTo(FILM_RATIO, 1);
+      expect(await ratio(poster)).toBeCloseTo(FILM_RATIO, 1);
 
       await page.locator(scope).getByRole("button", { name: "Play video", exact: true }).click();
       const iframe = page.locator(`${scope} iframe`);
       await expect.poll(async () => (await iframe.getAttribute("src"))?.startsWith(frame)).toBe(true);
+      // The embed fills the same box, so the provider draws no bars above or below the film.
+      expect(await ratio(viewport)).toBeCloseTo(FILM_RATIO, 1);
+      expect(await ratio(iframe)).toBeCloseTo(FILM_RATIO, 1);
       await expect.poll(() => offOrigin.map((url) => reached.find((prefix) => url.startsWith(prefix)) ?? url)).toEqual(reached);
       // Its own provider, fetched by the press.
       const own = new RegExp(`^/assets/_playdeck-provider-${provider}-[A-Za-z0-9_-]{8}\\.js$`);

@@ -21,13 +21,20 @@ const STILL = {
 
 /**
  * The still for each place the player stands, `sizes` being the player's
- * width there. A skin is 416px once the skins sit side by side, from 870px,
- * and the page less its gutters below that; it is far down the page, so its
- * still loads lazily. The showcase, under the hero, fills the 936px measure.
+ * width there, as measured in Chromium. A skin is the page less 84px of
+ * gutters up to 734px, and less 108px from 735px, where the stage's padding
+ * grows. From 864px the skins sit side by side, each half the page less 96px,
+ * until they stop at 416px from 1024px. A skin is far down the page, so its
+ * still loads lazily. The showcase, under the hero, is the page less 44px of
+ * gutters, until it stops at 980px from 1024px.
  */
 const POSTERS = {
-  skin: { ...STILL, sizes: "(min-width: 870px) 416px, calc(100vw - 84px)", loading: "lazy" },
-  showcase: { ...STILL, sizes: "(min-width: 980px) 936px, calc(100vw - 44px)" },
+  skin: {
+    ...STILL,
+    sizes: "(min-width: 1024px) 416px, (min-width: 864px) calc(50vw - 96px), (min-width: 735px) calc(100vw - 108px), calc(100vw - 84px)",
+    loading: "lazy",
+  },
+  showcase: { ...STILL, sizes: "(min-width: 1024px) 980px, calc(100vw - 44px)" },
 } as const satisfies Record<string, Player.ResponsivePoster>;
 
 /**

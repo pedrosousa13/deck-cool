@@ -1,5 +1,6 @@
 .broadcast [data-playdeck-part="viewport"] {
-  aspect-ratio: var(--playdeck-media-aspect-ratio, 16 / 9);
+  box-sizing: content-box;
+  aspect-ratio: var(--playdeck-media-aspect-ratio, 2048 / 858);
   border: 4px solid #000;
   background: #ffd60a;
   color: #000;

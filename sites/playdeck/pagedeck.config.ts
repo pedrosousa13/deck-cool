@@ -96,7 +96,9 @@ const BAR_LINKS = [
 ];
 
 // Measured, not chosen: each is the page's size rounded up to a whole
-// kilobyte. Re-measure rather than raise one.
+// kilobyte. Re-measure rather than raise one. The home page's counts its eager
+// chunks only, not the chunks its players load when they come into view; the
+// maintainer ruled the budget is not a constraint on that page.
 const BUDGET = {
   "/**": "0b",
   [PATHS.home]: "59kb",

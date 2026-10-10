@@ -1,9 +1,10 @@
 import type { HeaderField } from "@pagedeck/core";
 
 /**
- * Where each clip on /examples plays from, the one origin a page here loads
- * from that is not its own. A player fetches nothing until a reader presses
- * play, so before that press no page reaches it.
+ * Where each clip on /examples plays from. The home page's players reach
+ * YouTube and Vimeo instead, through EMBED_FRAMES and EMBED_SCRIPTS. A player
+ * fetches nothing until a reader presses play, so before that press no page
+ * reaches any of these origins.
  */
 export const MEDIA_ORIGINS = [
   // The Blender Foundation's download host. Both archetype players play an
@@ -21,13 +22,17 @@ export const MEDIA_ORIGINS = [
 export const EMBED_SCRIPTS = ["https://www.youtube.com/iframe_api", "https://www.youtube.com/s/player/"] as const;
 
 /**
- * The embeds the home page's two players frame once pressed: YouTube's
+ * The embeds the home page's three players frame once pressed: YouTube's
  * privacy-enhanced host, playdeck's default, and Vimeo's player. Each player
  * shows this site's own still, so neither provider's image host is needed.
  */
 export const EMBED_FRAMES = ["https://www.youtube-nocookie.com", "https://player.vimeo.com"] as const;
 
 /**
+ * One policy for every page: `_headers` sends it under `/*`, and Cloudflare
+ * would combine a second, overlapping CSP with it strictest-wins. So the
+ * YouTube and Vimeo grants the home page needs apply site-wide, deliberately.
+ *
  * Scripts, stylesheets, images, the captions and the search index come from
  * the site itself, the clips from MEDIA_ORIGINS, the embeds from EMBED_FRAMES
  * and EMBED_SCRIPTS, and everything else is refused. Wistia and HLS's blob:

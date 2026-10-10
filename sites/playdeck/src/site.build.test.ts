@@ -458,7 +458,7 @@ describe("the home page", () => {
     expect(showcase.querySelector('[data-playdeck-part="viewport"] button[data-playdeck-part="activation"]')).not.toBeNull();
     const poster = present(showcase.querySelector('img[data-playdeck-part="poster-image"]'), "the showcase's poster");
     expect(poster.getAttribute("srcset")).toBe("/sprite-fright-poster-1024w.webp 1024w, /sprite-fright-poster-2048w.webp 2048w");
-    expect(poster.getAttribute("sizes")).toBe("(min-width: 980px) 936px, calc(100vw - 44px)");
+    expect(poster.getAttribute("sizes")).toBe("(min-width: 1024px) 980px, calc(100vw - 44px)");
     // Near the top of the page, so not lazy.
     expect(poster.hasAttribute("loading")).toBe(false);
     expect(showcase.querySelectorAll("video[src], source[src], iframe")).toHaveLength(0);
@@ -580,7 +580,9 @@ describe("the home page", () => {
         const poster = present(skin.querySelector('[data-playdeck-part="poster"] img[data-playdeck-part="poster-image"]'), "a poster");
         expect(poster.getAttribute("src")).toBe("/sprite-fright-poster-1024w.webp");
         expect(poster.getAttribute("srcset")).toBe("/sprite-fright-poster-1024w.webp 1024w, /sprite-fright-poster-2048w.webp 2048w");
-        expect(poster.getAttribute("sizes")).toBe("(min-width: 870px) 416px, calc(100vw - 84px)");
+        expect(poster.getAttribute("sizes")).toBe(
+          "(min-width: 1024px) 416px, (min-width: 864px) calc(50vw - 96px), (min-width: 735px) calc(100vw - 108px), calc(100vw - 84px)",
+        );
         expect(poster.getAttribute("loading")).toBe("lazy");
         expect(poster.getAttribute("alt")).toBe("");
       }
@@ -589,9 +591,9 @@ describe("the home page", () => {
       }
     });
 
-    test("says neither player loads before a press, and credits the film", () => {
+    test("says no player on the page loads before a press, and credits the film", () => {
       expect(text(section()?.querySelector(".pd-band__note"))).toBe(
-        "Neither player fetches its clip or its provider until you press play. Both play Sprite Fright, © Blender Studio, licensed CC BY 4.0, from the studio's own uploads to YouTube and Vimeo.",
+        "No player on this page reaches YouTube or Vimeo until you press play. All three play Sprite Fright, © Blender Studio, licensed CC BY 4.0, from the studio's own uploads to YouTube and Vimeo.",
       );
       expect(links(section()?.querySelector(".pd-band__note") ?? undefined)).toEqual([
         ["CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"],

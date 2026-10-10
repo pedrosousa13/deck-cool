@@ -183,7 +183,7 @@ export default function HomePage({
           ))}
         </div>
         <p className="pd-band__note">
-          Neither player fetches its clip or its provider until you press play. Both play <em>Sprite Fright</em>, ©
+          No player on this page reaches YouTube or Vimeo until you press play. All three play <em>Sprite Fright</em>, ©
           Blender Studio, licensed{" "}
           <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">
             CC BY 4.0

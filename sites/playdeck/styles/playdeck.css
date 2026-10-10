@@ -195,8 +195,11 @@ main .pd-more:hover {
 .pd-showcase {
   margin: 0 max(22px, calc((100% - 980px) / 2)) 96px;
 }
+/* Sprite Fright's own frame, 2048 by 858, so neither its still nor YouTube's
+   embed after a press draws bars above and below the film. YouTube reports
+   no ratio of its own, so the fallback is what the player keeps. */
 .pd-showcase [data-playdeck-part="viewport"] {
-  aspect-ratio: var(--playdeck-media-aspect-ratio, 16 / 9);
+  aspect-ratio: var(--playdeck-media-aspect-ratio, 2048 / 858);
   border-radius: 28px;
   background: #000;
   box-shadow: 0 0 0 1px var(--rule), 0 32px 96px rgb(217 33 79 / .18);

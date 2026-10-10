@@ -1,5 +1,5 @@
 .velvet [data-playdeck-part="viewport"] {
-  aspect-ratio: var(--playdeck-media-aspect-ratio, 16 / 9);
+  aspect-ratio: var(--playdeck-media-aspect-ratio, 2048 / 858);
   overflow: hidden;
   border-radius: 28px;
   background: radial-gradient(circle at 25% 15%, #7b3fa8, #2a0f45 55%, #12061f);
