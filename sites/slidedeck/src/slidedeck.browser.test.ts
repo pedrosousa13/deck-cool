@@ -20,7 +20,9 @@ const PAGES = ["/", "/examples/"] as const;
 
 /**
  * Brings every island into view, so each one that hydrates when visible does,
- * then back to the top once their scripts have loaded.
+ * then back to the top once every deck runs: its engine marks the slides in
+ * view with data-in-view. The visit already waited for network idle, so a
+ * second wait for it returns at once, before a deck's script has arrived.
  */
 async function hydrated(page: Page) {
   await page.evaluate(async () => {
@@ -29,7 +31,7 @@ async function hydrated(page: Page) {
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
   });
-  await page.waitForLoadState("networkidle");
+  await page.locator('[aria-roledescription="carousel"]:not(:has([data-in-view]))').first().waitFor({ state: "detached" });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
