@@ -12,6 +12,6 @@ export const PATHS = {
   home: "/",
   interactive: "/interactive/",
   features: "/features/",
-  content: "/content/",
+  cmsDemo: "/content/",
   search: "/docs/search/",
 } as const;

@@ -21,12 +21,12 @@ const COPY = {
   },
 } as const;
 
-export const CONTENT_HEAD: PageHead = {
+export const CMS_DEMO_HEAD: PageHead = {
   title: COPY.title,
   description: COPY.description,
 };
 
-export function contentContent(): PageContent {
+export function cmsDemoContent(): PageContent {
   return {
     tree: [
       {

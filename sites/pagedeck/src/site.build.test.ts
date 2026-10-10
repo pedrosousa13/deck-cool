@@ -56,7 +56,7 @@ function hrefs(scope: Element | Document): (string | null)[] {
   return [...scope.querySelectorAll("a")].map((a) => a.getAttribute("href"));
 }
 
-const PAGES = [PATHS.home, PATHS.search, PATHS.features, PATHS.interactive, PATHS.content];
+const PAGES = [PATHS.home, PATHS.search, PATHS.features, PATHS.interactive, PATHS.cmsDemo];
 
 test("the site is the landing's four pages and the docs' search page", () => {
   expect(manifest.pages.map((page) => page.path).sort()).toEqual([...PAGES].sort());
@@ -70,7 +70,7 @@ describe("budgets, measured and pinned", () => {
     [PATHS.home]: "0b",
     [PATHS.interactive]: "60kb",
     [PATHS.features]: "60kb",
-    [PATHS.content]: "59kb",
+    [PATHS.cmsDemo]: "59kb",
     [PATHS.search]: "59kb",
   };
 
@@ -100,7 +100,7 @@ describe("budgets, measured and pinned", () => {
       [PATHS.home]: [],
       [PATHS.interactive]: ["counter"],
       [PATHS.features]: ["consent_banner", "island_idle", "island_load", "island_visible", "search"],
-      [PATHS.content]: ["variant_picker"],
+      [PATHS.cmsDemo]: ["variant_picker"],
       [PATHS.search]: ["search"],
     });
   });
@@ -144,7 +144,7 @@ describe("every page", () => {
       ["Docs", `${DOCS_ORIGIN}/`],
       ["Features", PATHS.features],
       ["Interactive", PATHS.interactive],
-      ["Your content", PATHS.content],
+      ["Your content", PATHS.cmsDemo],
       ["Search", PATHS.search],
       ["GitHub", REPO],
     ]);
@@ -390,7 +390,7 @@ describe("the home page", () => {
       const teaser = present(stages[0]?.querySelector("article.teaser"), "the teaser");
       expect(text(teaser.querySelector("h3"))).toBe(PRODUCT.name);
       expect([...teaser.querySelectorAll("p")].map(text)).toEqual([PRODUCT.tagline, PICKER.price]);
-      expect(links(teaser)).toEqual([["See the whole product", PATHS.content]]);
+      expect(links(teaser)).toEqual([["See the whole product", PATHS.cmsDemo]]);
     });
 
     test("shows beside each skin the source file the stylesheet is compiled from", () => {
@@ -422,7 +422,7 @@ describe("the home page", () => {
     test("links the live demos under the skins", () => {
       expect(links(section()?.querySelector(".fw-skins__more") ?? undefined)).toEqual([
         ["See an interactive page ›", PATHS.interactive],
-        ["See how content ships ›", PATHS.content],
+        ["See how content ships ›", PATHS.cmsDemo],
       ]);
     });
   });
@@ -430,7 +430,7 @@ describe("the home page", () => {
   test("small: HTML first, budgets that hold, and only what the page shows ships, with the content page's own figures", () => {
     const section = band("Small, leans on the browser.");
     const props = present(
-      parse(PATHS.content).querySelector('[data-fw-component="variant_picker"]')?.getAttribute("data-fw-props"),
+      parse(PATHS.cmsDemo).querySelector('[data-fw-component="variant_picker"]')?.getAttribute("data-fw-props"),
       "the variant picker's props",
     );
     const read = formatBytes(utf8Bytes(JSON.stringify(PRODUCT)));
@@ -451,7 +451,7 @@ describe("the home page", () => {
         ],
       ],
     ]);
-    expect(links(section)).toEqual([["See the content demo ›", PATHS.content]]);
+    expect(links(section)).toEqual([["See the content demo ›", PATHS.cmsDemo]]);
   });
 
   test("agents: just React, typed, and a build that stops on a mistake", () => {
@@ -506,7 +506,7 @@ describe("the home page", () => {
 // #72: every page outside /docs is named after what it shows, in words a
 // designer or someone new to React understands.
 describe("the pages outside the docs", () => {
-  const LANDING = [PATHS.home, PATHS.features, PATHS.interactive, PATHS.content];
+  const LANDING = [PATHS.home, PATHS.features, PATHS.interactive, PATHS.cmsDemo];
 
   test.each([
     [
@@ -520,7 +520,7 @@ describe("the pages outside the docs", () => {
       "One button you can press, on a page that is otherwise plain HTML. Only this page loads the JavaScript the button needs, and pagedeck's home page still ships none.",
     ],
     [
-      PATHS.content,
+      PATHS.cmsDemo,
       "Bring all your content. Ship only what the page shows.",
       "pagedeck reads a whole product entry from a CMS while it builds the site, writes what the page shows as plain HTML, and sends the browser only the few fields the colour and size picker needs.",
     ],
@@ -537,7 +537,7 @@ describe("the pages outside the docs", () => {
       "This page has one button that counts your presses. Everything else is plain HTML, finished before you arrived. The button is the only part that needs JavaScript, the code that lets a page react to you, so this page loads that code and the home page still loads none. Developers call a part like this an island: a small interactive spot in a page of plain HTML.",
     ],
     [
-      PATHS.content,
+      PATHS.cmsDemo,
       "Your CMS, the place your team writes and edits content, can hold far more than any one page shows. This jacket's entry has variants, stock, reviews, SEO fields and private notes. pagedeck read all of it once, while it built this site, and wrote what you see as plain HTML. Your browser received only the few fields the colour and size picker needs. The figures show how much.",
     ],
     [
@@ -584,7 +584,7 @@ describe("the pages outside the docs", () => {
   });
 
   test("the content page keeps the entry's private notes off the page", () => {
-    expect(html(PATHS.content)).not.toContain("SENTINEL");
+    expect(html(PATHS.cmsDemo)).not.toContain("SENTINEL");
   });
 });
 

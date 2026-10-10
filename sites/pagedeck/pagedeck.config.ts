@@ -14,7 +14,7 @@ import { components, COUNTER, FAMILY_BAR, FOOTER, ISLAND_PAGE, SEARCH, SEARCH_PA
 import { CODE_THEME } from "./src/code-theme.ts";
 import { FEATURES_HEAD, featuresContent, FONTS, SCRIPTS, SOCIAL_IMAGES } from "./src/features.ts";
 import { HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
-import { CONTENT_HEAD, contentContent } from "./src/content.ts";
+import { CMS_DEMO_HEAD, cmsDemoContent } from "./src/cms-demo.ts";
 import { SKINS, skins } from "./src/skins.ts";
 
 const LOCALE = "en";
@@ -46,7 +46,7 @@ const BAR_LINKS = [
   { label: "Docs", href: `${DOCS_ORIGIN}/` },
   { label: "Features", href: PATHS.features },
   { label: "Interactive", href: PATHS.interactive },
-  { label: "Your content", href: PATHS.content },
+  { label: "Your content", href: PATHS.cmsDemo },
   { label: "Search", href: PATHS.search },
   { label: "GitHub", href: REPO },
 ];
@@ -57,7 +57,7 @@ const BUDGET = {
   "/**": "0b",
   [PATHS.interactive]: "60kb",
   [PATHS.features]: "60kb",
-  [PATHS.content]: "59kb",
+  [PATHS.cmsDemo]: "59kb",
   [PATHS.search]: "59kb",
 } as const;
 
@@ -118,7 +118,7 @@ function entryOf(page: Page, store: ContentStoreReader): Entry<DocumentEntry> | 
 
 function contentOf(page: Page, store: ContentStoreReader): PageContent {
   if (page.path === PATHS.features) return featuresContent(page);
-  if (page.path === PATHS.content) return contentContent();
+  if (page.path === PATHS.cmsDemo) return cmsDemoContent();
   if (page.path === PATHS.interactive) {
     return {
       tree: [
@@ -153,7 +153,7 @@ function contentOf(page: Page, store: ContentStoreReader): PageContent {
 
 function headOf(page: Page, store: ContentStoreReader): PageHead | undefined {
   if (page.path === PATHS.features) return FEATURES_HEAD;
-  if (page.path === PATHS.content) return CONTENT_HEAD;
+  if (page.path === PATHS.cmsDemo) return CMS_DEMO_HEAD;
   if (page.path === PATHS.interactive) return { title: INTERACTIVE.title, description: INTERACTIVE.description };
   if (page.path === PATHS.search) return { title: SEARCH_COPY.title, description: SEARCH_COPY.description };
   const entry = entryOf(page, store);
@@ -170,7 +170,7 @@ export default defineConfig({
       locales: defineLocales({ en: { label: "English", direction: "ltr" } }),
       sources: [
         fromCollection(pages, { route: documentRoute }),
-        ...[PATHS.interactive, PATHS.features, PATHS.content, PATHS.search].map((path) =>
+        ...[PATHS.interactive, PATHS.features, PATHS.cmsDemo, PATHS.search].map((path) =>
           singlePage(path.slice(1, -1).split("/")),
         ),
       ],

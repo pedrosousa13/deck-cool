@@ -73,7 +73,7 @@ function Teaser() {
       <h3>{PRODUCT.name}</h3>
       <p>{PRODUCT.tagline}</p>
       <p>{PICKER.price}</p>
-      <a href={PATHS.content}>See the whole product</a>
+      <a href={PATHS.cmsDemo}>See the whole product</a>
     </article>
   );
 }
@@ -168,7 +168,7 @@ export default function LandingPage({ skins }: { skins: readonly Skin[] }) {
           <a className="fw-button" href={PATHS.interactive}>
             See an interactive page ›
           </a>
-          <a className="fw-button" href={PATHS.content}>
+          <a className="fw-button" href={PATHS.cmsDemo}>
             See how content ships ›
           </a>
         </div>
@@ -203,7 +203,7 @@ export default function LandingPage({ skins }: { skins: readonly Skin[] }) {
               pagedeck reads your whole CMS entry while it builds the site, and sends the browser only what the page
               needs. On the content demo it reads {read} and sends the browser {sent} of data.
             </p>
-            <a className="fw-more" href={PATHS.content}>
+            <a className="fw-more" href={PATHS.cmsDemo}>
               See the content demo ›
             </a>
           </li>

@@ -5,7 +5,7 @@ const LINKS = [
   ["Docs", `${DOCS_ORIGIN}/`],
   ["Features", PATHS.features],
   ["Interactive", PATHS.interactive],
-  ["Your content", PATHS.content],
+  ["Your content", PATHS.cmsDemo],
   ["GitHub", REPO],
 ] as const;
 
