@@ -458,7 +458,7 @@ main .fw-family .fw-more {
   flex-direction: column;
 }
 
-/* The island page's demo, and each feature's. */
+/* The interactive page's demo, and each feature's. */
 .fw-demo,
 .fw-feature__demo {
   display: grid;

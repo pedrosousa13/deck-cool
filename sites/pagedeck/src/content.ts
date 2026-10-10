@@ -2,21 +2,21 @@ import type { PageContent, PageHead } from "@pagedeck/core";
 import { CONTENT_PAGE } from "./catalog.ts";
 
 const COPY = {
-  title: "A large CMS entry, and the few bytes of it that ship",
+  title: "Bring all your content. Ship only what the page shows.",
   description:
-    "A server component reads a whole CMS product entry at build time, renders part of it as HTML, and hands one interactive component only the fields it needs.",
+    "pagedeck reads a whole product entry from a CMS while it builds the site, writes what the page shows as plain HTML, and sends the browser only the few fields the colour and size picker needs.",
   intro:
-    "The server component on this page read a whole product entry from the CMS when the site was built: variants, stock, reviews, SEO fields and editorial notes. It rendered part of it as HTML and gave the one interactive component three fields. The figures say how much of the entry reached your browser as data.",
+    "Your CMS, the place your team writes and edits content, can hold far more than any one page shows. This jacket's entry has variants, stock, reviews, SEO fields and private notes. pagedeck read all of it once, while it built this site, and wrote what you see as plain HTML. Your browser received only the few fields the colour and size picker needs. The figures show how much.",
   figures: {
-    read: "What the server component read: the whole entry, serialized as JSON.",
-    sent: "What reached the browser as data: the variant picker's props, serialized into its island marker.",
+    read: "Read from the CMS while the site was built: the whole entry, as JSON.",
+    sent: "Sent to your browser as data: only what the colour and size picker needs.",
   },
   explainer: {
     heading: "What you are looking at",
     body: [
-      "The server component ran once, at build time, on the build machine. It read the whole entry, wrote the description, the specs and the review count into this page as HTML, and was never sent to your browser.",
-      "The variant picker is the one interactive component. The server component renders it from its own code, and the build replaces it with a client reference that writes the island marker. Its props are the only product data on this page, serialized into that marker: the SKU, the price and each variant's id, colour and size.",
-      "There is no page-level data blob. The rest of the entry, stock by warehouse, barcodes, costs, media, reviews and notes, stayed on the build machine.",
+      "pagedeck built this page once, before anyone visited. It read the jacket's whole entry and wrote the description, the specs and the review count into the page as plain HTML. The code that did that, a React server component, ran on the machine that built the site and is never sent to your browser.",
+      "The colour and size picker is the one part you can use. Developers call a part like this an island: it arrives as HTML, then its JavaScript starts so it can respond to you. It receives only its own fields, the SKU, the price and each variant's id, colour and size, and those are the only product data on this page.",
+      "There is no hidden copy of the entry anywhere in the page. Stock by warehouse, barcodes, costs, media, reviews and private notes stayed on the machine that built the site.",
     ],
   },
 } as const;

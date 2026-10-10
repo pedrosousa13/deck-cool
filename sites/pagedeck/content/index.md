@@ -1,6 +1,6 @@
 ---
 title: Zero JavaScript until a page needs it
-description: "Like Astro, if Astro were made for React: islands, zero JavaScript by default, and React components all the way down."
+description: "Build your site in React and it reaches visitors as plain HTML: fast pages, your own design, and JavaScript only where a page needs it."
 ---
 
 # Zero JavaScript until a page needs it

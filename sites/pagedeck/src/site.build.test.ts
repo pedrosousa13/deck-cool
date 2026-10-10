@@ -143,8 +143,8 @@ describe("every page", () => {
     ).toEqual([
       ["Docs", `${DOCS_ORIGIN}/`],
       ["Features", PATHS.features],
-      ["Island demo", PATHS.interactive],
-      ["Server data", PATHS.content],
+      ["Interactive", PATHS.interactive],
+      ["Your content", PATHS.content],
       ["Search", PATHS.search],
       ["GitHub", REPO],
     ]);
@@ -295,11 +295,11 @@ describe("the home page", () => {
   const band = (heading: string) =>
     sections().find((section) => text(section.querySelector("h2")) === heading);
 
-  test("is titled with the claim, and described by the Astro line", () => {
+  test("is titled with the claim, and described in plain words", () => {
     const doc = parse(PATHS.home);
     expect(doc.title).toBe("Pagedeck: Zero JavaScript until a page needs it");
     expect(doc.head.querySelector('meta[name="description"]')?.getAttribute("content")).toBe(
-      "Like Astro, if Astro were made for React: islands, zero JavaScript by default, and React components all the way down.",
+      "Build your site in React and it reaches visitors as plain HTML: fast pages, your own design, and JavaScript only where a page needs it.",
     );
   });
 
@@ -322,7 +322,7 @@ describe("the home page", () => {
     expect(text(hero?.querySelector("h1"))).toBe(pagedeck.claim);
     expect([...(hero?.querySelectorAll("p") ?? [])].map(text)).toEqual([
       "Like Astro, if Astro were made for React.",
-      'Write it in React, style it with your own CSS, or hand it to your agent: every page ships as plain HTML, and only the components you mark "use client" wake up in the browser.',
+      "Build it in React, style it with your own CSS, or hand it to your agent. Every page reaches your visitors as finished HTML, and only the parts you make interactive bring any JavaScript.",
     ]);
     expect(text(hero?.querySelector(".fw-install code"))).toBe(pagedeck.install);
     // The docs link goes to the docs' own Worker until #53.
@@ -334,9 +334,9 @@ describe("the home page", () => {
     expect(main().textContent).not.toMatch(/Using an agent|markdown|llms\.txt/i);
   });
 
-  test("the proof: islands, zero JavaScript by default and React all the way down, beside the one figure this build measured", () => {
+  test("the proof: interactive only where you need it, zero JavaScript by default and React all the way down, beside the one figure this build measured", () => {
     const proof = sections()[1];
-    expect(text(proof?.querySelector("h2"))).toBe("Islands, like Astro. React all the way down.");
+    expect(text(proof?.querySelector("h2"))).toBe("As light as plain HTML. Built like a React app.");
     expect(
       [...(proof?.querySelectorAll(".fw-proof__points li") ?? [])].map((point) => [
         text(point.querySelector("h3")),
@@ -344,23 +344,23 @@ describe("the home page", () => {
       ]),
     ).toEqual([
       [
-        "Islands",
-        'Start a component with "use client" once, in its own file, not at every place you use it. Each page that renders it gets it as an island, and no other page pays for it.',
+        "Interactive only where you need it",
+        'Mark a component "use client" once, in its own file. Every page that uses it comes alive there, and every page that does not stays plain HTML. Developers call these parts islands.',
       ],
-      ["Zero JavaScript by default", "A page with nothing interactive ships plain HTML and CSS, without one script tag."],
+      ["Zero JavaScript by default", "A page with nothing to click, type or play ships plain HTML and CSS, without a single script."],
       [
         "React all the way down",
-        "Pages, layouts and islands are all React components. There is no template language to learn and no wrapper file to write.",
+        "Pages, layouts and interactive parts are all React components. There is no template language to learn and no wrapper file to write.",
       ],
     ]);
     const figure = [...(proof?.querySelectorAll(".fw-proof__figure > p") ?? [])].map(text);
     expect(figure).toEqual([
       pagedeck.figure.value,
       pagedeck.figure.label,
-      "This page, measured by its own build. One byte more fails the build.",
+      "This page, measured when the site was built. One byte more and the build fails.",
     ]);
     expect(pagedeck.figure.value).toBe(formatBytes(budget.find((row) => row.path === PATHS.home)?.actual ?? Number.NaN));
-    expect(links(proof)).toEqual([["See what one island costs ›", PATHS.interactive]]);
+    expect(links(proof)).toEqual([["See one interactive page, and what it costs ›", PATHS.interactive]]);
   });
 
   test("the four quality sections, in the brief's order", () => {
@@ -378,7 +378,7 @@ describe("the home page", () => {
 
     test("says the markup is your own", () => {
       expect(text(section()?.querySelector(".fw-band__text p"))).toBe(
-        "pagedeck ships no CSS, no theme and no part names to learn: the markup is your own React. Here is one component, rendered twice from the same CMS entry. Only the stylesheet changes, and neither one costs a byte of JavaScript.",
+        "pagedeck brings no CSS and no theme, so there is nothing to undo: the markup is your own React. Here is one product card, drawn twice from the same content. Only the stylesheet changes, and neither look costs a byte of JavaScript.",
       );
     });
 
@@ -390,7 +390,7 @@ describe("the home page", () => {
       const teaser = present(stages[0]?.querySelector("article.teaser"), "the teaser");
       expect(text(teaser.querySelector("h3"))).toBe(PRODUCT.name);
       expect([...teaser.querySelectorAll("p")].map(text)).toEqual([PRODUCT.tagline, PICKER.price]);
-      expect(links(teaser)).toEqual([["See the whole entry", PATHS.content]]);
+      expect(links(teaser)).toEqual([["See the whole product", PATHS.content]]);
     });
 
     test("shows beside each skin the source file the stylesheet is compiled from", () => {
@@ -421,13 +421,13 @@ describe("the home page", () => {
 
     test("links the live demos under the skins", () => {
       expect(links(section()?.querySelector(".fw-skins__more") ?? undefined)).toEqual([
-        ["See an island ›", PATHS.interactive],
-        ["See the server data ›", PATHS.content],
+        ["See an interactive page ›", PATHS.interactive],
+        ["See how content ships ›", PATHS.content],
       ]);
     });
   });
 
-  test("small: HTML first, budgets that hold, and data that stays on the server, with /content's own figures", () => {
+  test("small: HTML first, budgets that hold, and only what the page shows ships, with the content page's own figures", () => {
     const section = band("Small, leans on the browser.");
     const props = present(
       parse(PATHS.content).querySelector('[data-fw-component="variant_picker"]')?.getAttribute("data-fw-props"),
@@ -439,19 +439,19 @@ describe("the home page", () => {
       "The browser already knows how to show a page. pagedeck hands it finished HTML and steps aside, so the only JavaScript on a page is the JavaScript that page asked for.",
     );
     expect(tiles(section)).toEqual([
-      ["HTML first", ["Every page renders to HTML when the site builds, so your words are on screen before a single script runs."]],
+      ["HTML first", ["Every page becomes finished HTML before anyone visits, so your words are on screen before a single script runs."]],
       [
         "Budgets that hold",
         ["Give each page a JavaScript budget, and the build fails when a page ships one byte more. This page's budget is 0 B."],
       ],
       [
-        "Your data stays on the server",
+        "Only what the page shows ships",
         [
-          `A server component reads the whole CMS entry when the site builds. On /content it reads ${read} and sends the browser ${sent}.`,
+          `pagedeck reads your whole CMS entry while it builds the site, and sends the browser only what the page needs. On the content demo it reads ${read} and sends the browser ${sent} of data.`,
         ],
       ],
     ]);
-    expect(links(section)).toEqual([["See it on /content ›", PATHS.content]]);
+    expect(links(section)).toEqual([["See the content demo ›", PATHS.content]]);
   });
 
   test("agents: just React, typed, and a build that stops on a mistake", () => {
@@ -462,7 +462,7 @@ describe("the home page", () => {
     expect(tiles(section)).toEqual([
       [
         "Just React",
-        ['Pages are React components, and islands use React\'s own "use client". An agent that knows React already knows how to build here.'],
+        ['Pages are React components, and interactive parts use React\'s own "use client". An agent that knows React already knows how to build here.'],
       ],
       [
         "Typed from the config down",
@@ -482,12 +482,12 @@ describe("the home page", () => {
   test("accessible: pagedeck's three tested claims, and nothing about motion", () => {
     const section = band("Accessible by default.");
     expect(text(section?.querySelector(".fw-band__text p"))).toBe(
-      "pagedeck looks after landmarks and search for you, for the keyboard and the screen reader alike. Each line below is backed by a test in pagedeck's own repo.",
+      "pagedeck looks after page structure and search for you, for keyboard and screen reader users alike. Each line below is backed by a test in pagedeck's own repo.",
     );
     expect(tiles(section)).toEqual([
       ["One main landmark", ["Every page gets exactly one main landmark. A component that renders a second fails the build."]],
       ["Search from the keyboard", ["Search is a combobox: arrow keys walk the results, Enter follows one, Escape closes them."]],
-      ["Nothing typed is lost", ["Text typed into search before it hydrates is kept, caret and all."]],
+      ["Nothing typed is lost", ["Type into search before its script has loaded, and your text is kept, caret and all."]],
     ]);
     expect(links(section)).toEqual([["Try the search ›", `${PATHS.features}#search`]]);
     expect(section?.textContent).not.toMatch(/motion/i);
@@ -501,8 +501,90 @@ describe("the home page", () => {
     expect(links(family)).toEqual([["Meet the family ›", umbrella.url]]);
   });
 
-  test("uses no em dash anywhere", () => {
-    expect(html(PATHS.home)).not.toMatch(/\u2014|&mdash;/);
+});
+
+// #72: every page outside /docs is named after what it shows, in words a
+// designer or someone new to React understands.
+describe("the pages outside the docs", () => {
+  const LANDING = [PATHS.home, PATHS.features, PATHS.interactive, PATHS.content];
+
+  test.each([
+    [
+      PATHS.features,
+      "Every feature, running on this page",
+      "Everything pagedeck does, each explained in a few sentences and running live: interactive parts that start when you choose, search, embeds that wait for consent, images sized for each screen, a trimmed font, a link preview and more than one language.",
+    ],
+    [
+      PATHS.interactive,
+      "Interactive only where you need it",
+      "One button you can press, on a page that is otherwise plain HTML. Only this page loads the JavaScript the button needs, and pagedeck's home page still ships none.",
+    ],
+    [
+      PATHS.content,
+      "Bring all your content. Ship only what the page shows.",
+      "pagedeck reads a whole product entry from a CMS while it builds the site, writes what the page shows as plain HTML, and sends the browser only the few fields the colour and size picker needs.",
+    ],
+  ])("%s is titled and headed %j, and described in plain words", (path, title, description) => {
+    const doc = parse(path);
+    expect(doc.title).toBe(title);
+    expect(text(doc.querySelector("main h1"))).toBe(title);
+    expect(doc.head.querySelector('meta[name="description"]')?.getAttribute("content")).toBe(description);
+  });
+
+  test.each([
+    [
+      PATHS.interactive,
+      "This page has one button that counts your presses. Everything else is plain HTML, finished before you arrived. The button is the only part that needs JavaScript, the code that lets a page react to you, so this page loads that code and the home page still loads none. Developers call a part like this an island: a small interactive spot in a page of plain HTML.",
+    ],
+    [
+      PATHS.content,
+      "Your CMS, the place your team writes and edits content, can hold far more than any one page shows. This jacket's entry has variants, stock, reviews, SEO fields and private notes. pagedeck read all of it once, while it built this site, and wrote what you see as plain HTML. Your browser received only the few fields the colour and size picker needs. The figures show how much.",
+    ],
+    [
+      PATHS.features,
+      "Each section says what one feature gives you, then runs it right here. The boxes come alive, the search box searches, and the embed waits for your permission. The only JavaScript on this page is the code those demos need.",
+    ],
+  ])("%s opens by saying what the reader gets", (path, intro) => {
+    expect(text(parse(path).querySelector("main .fw-hero__lede"))).toBe(intro);
+  });
+
+  // The words readers did not know. Body copy may use one with a plain
+  // explanation beside it; a name or a heading may not use it at all.
+  const JARGON = /server data|island|hydrat|build time|build-time|\bSSG\b|static site/i;
+
+  test.each(LANDING)("%s keeps jargon out of its name, its description and its headings", (path) => {
+    const doc = parse(path);
+    const names = [
+      doc.title,
+      doc.head.querySelector('meta[name="description"]')?.getAttribute("content") ?? "",
+      ...[...doc.querySelectorAll(".family-bar__links a, footer a")].map(text),
+      ...[...doc.querySelectorAll("main h1, main h2, main h3")].map(text),
+    ];
+    expect(names.filter((name) => JARGON.test(name ?? ""))).toEqual([]);
+  });
+
+  test.each(LANDING)("%s keeps jargon out of its paths", (path) => {
+    expect(path).not.toMatch(/server-data|island/);
+  });
+
+  test.each(LANDING)("%s uses no em dash anywhere", (path) => {
+    expect(html(path)).not.toMatch(/\u2014|&mdash;/);
+  });
+
+  test("the features page heads each section with what it gives you", () => {
+    expect([...parse(PATHS.features).querySelectorAll("main section.fw-feature > .fw-feature__text > h2")].map(text)).toEqual([
+      "Interactive when you choose",
+      "Search",
+      "Embeds that wait for consent",
+      "Images sized for every screen",
+      "Fonts cut to what you use",
+      "Link previews, drawn for you",
+      "One site, many languages",
+    ]);
+  });
+
+  test("the content page keeps the entry's private notes off the page", () => {
+    expect(html(PATHS.content)).not.toContain("SENTINEL");
   });
 });
 
@@ -512,11 +594,6 @@ describe("the features page", () => {
     expect(ids).toEqual(["islands", "search", "consent", "images", "fonts", "social-cards", "i18n"]);
   });
 
-  test("keeps the landing's description, which names the subset font", () => {
-    expect(parse(PATHS.features).head.querySelector('meta[name="description"]')?.getAttribute("content")).toBe(
-      "Pagedeck's features, each explained in a few sentences and running live: islands under three hydration strategies, search, a consent-gated embed, responsive images, a subset font, a social card and locales.",
-    );
-  });
 
   test("subsets the font for the specimen alone: no other page links or preloads it", () => {
     for (const path of PAGES) {

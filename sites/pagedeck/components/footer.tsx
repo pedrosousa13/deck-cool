@@ -4,8 +4,8 @@ const LINKS = [
   ["Home", PATHS.home],
   ["Docs", `${DOCS_ORIGIN}/`],
   ["Features", PATHS.features],
-  ["Island demo", PATHS.interactive],
-  ["Server data", PATHS.content],
+  ["Interactive", PATHS.interactive],
+  ["Your content", PATHS.content],
   ["GitHub", REPO],
 ] as const;
 

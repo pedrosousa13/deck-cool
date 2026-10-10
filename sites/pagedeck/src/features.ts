@@ -41,35 +41,35 @@ const EMBED_MOUNT = "embed-demo";
 const COPY = {
   title: "Every feature, running on this page",
   description:
-    "Pagedeck's features, each explained in a few sentences and running live: islands under three hydration strategies, search, a consent-gated embed, responsive images, a subset font, a social card and locales.",
+    "Everything pagedeck does, each explained in a few sentences and running live: interactive parts that start when you choose, search, embeds that wait for consent, images sized for each screen, a trimmed font, a link preview and more than one language.",
   intro:
-    "Each section says what one feature does and then runs it here. The islands hydrate, the search box searches, and the embed waits for your consent. The only JavaScript on this page belongs to the islands it demonstrates.",
+    "Each section says what one feature gives you, then runs it right here. The boxes come alive, the search box searches, and the embed waits for your permission. The only JavaScript on this page is the code those demos need.",
   islands: {
-    heading: "Islands and hydration",
+    heading: "Interactive when you choose",
     body: [
-      'A component marked "use client" is rendered to HTML at build time and then hydrated in the browser. Its registry row says when: load hydrates as soon as the page\'s script runs, idle waits until the browser has nothing else to do, and visible waits until the component scrolls into view.',
-      'Each box shows when it hydrated, counted from the moment the page opened. The last box is the same component without "use client". It gets no island marker and no script, so its text never changes.',
+      'A component you mark "use client" arrives as plain HTML first, then its JavaScript starts so it can respond to you. Developers call that start hydration. You choose when it happens: load starts it right away, idle waits until the browser has nothing else to do, and visible waits until you scroll to it.',
+      'Each box shows when it started, counted from the moment the page opened. The last box is the same component without "use client". It ships no JavaScript, so its text never changes.',
     ],
-    docs: "Fold strategy: how hydration modes are tuned",
-    waiting: "Server HTML. Not hydrated yet.",
-    hydrated: "Hydrated {seconds} s after the page opened.",
-    staticWaiting: "Server HTML. It ships no JavaScript, so it never hydrates.",
+    docs: "Choosing when each component starts",
+    waiting: "Plain HTML. Not started yet.",
+    hydrated: "Started {seconds} s after the page opened.",
+    staticWaiting: "Plain HTML. It ships no JavaScript, so it never starts.",
   },
   search: {
     heading: "Search",
     body: [
-      "At build time, @pagedeck/search indexes the text of every page on this site into a few small static files. The box is an island that hydrates on idle and fetches nothing until you focus it.",
-      'Try "island", "budget" or "consent".',
+      "When pagedeck builds your site, it writes the words of every page into a few small files. The search box downloads nothing until you click into it, then finds pages as you type.",
+      'Try "budget", "consent" or "font".',
     ],
     docs: "Site search",
     label: "Search this site",
     emptyLabel: "No page on this site matches that.",
   },
   consent: {
-    heading: "Consent-gated embeds",
+    heading: "Embeds that wait for consent",
     body: [
-      "A third-party embed is declared as a script with the facade strategy and a consent category. The page ships a button in its place. Pressing the button loads the script, and only if the category is granted.",
-      "Here the embed is a small script on this site's own origin, standing in for a vendor's, so the demo contacts nobody. The panel is the reference consent banner. Press the button first to see the gate refuse, then accept and press it again.",
+      "A video, map or chat widget from another company can start tracking your visitors the moment it loads. pagedeck puts a button in its place, and loads the real thing only once the visitor has agreed. In code, that is one script entry with a consent category.",
+      "Here the embed is a small script from this site, standing in for another company's, so the demo contacts nobody. The panel is pagedeck's sample consent banner. Press the button first to see it refuse, then accept and press it again.",
     ],
     docs: "Third-party scripts: facades and consent",
     banner: {
@@ -84,38 +84,38 @@ const COPY = {
       '<button type="button" class="fw-embed__load">Load the embed</button><p class="fw-embed__denied">Not granted yet: pressing loads nothing until you accept in the panel above.</p>',
   },
   images: {
-    heading: "Responsive images",
+    heading: "Images sized for every screen",
     body: [
-      "imageAttributes turns one source into a srcset, a sizes value and loading hints, through the site's own URL template. The browser picks the candidate.",
+      "Give pagedeck one picture, and it offers the browser several sizes of it. A phone can download a small file and a large screen a sharp one, and the browser picks.",
       "Each file below has its width drawn on it, so the picture shows which one your browser chose. Widen or narrow the window and reload to see it choose another.",
     ],
     docs: "Images",
     alt: "A drafting grid with the chosen candidate's width drawn on it in large type",
   },
   fonts: {
-    heading: "Subset fonts",
+    heading: "Fonts cut to what you use",
     body: [
-      "build.fonts hands each declared face to a subsetting adapter and writes its @font-face rule, with a metric-adjusted fallback so the swap does not move the text.",
-      "This site's own type is system fonts, so this face is loaded for the specimen and nothing else. It is scoped to this page with pages, so this page links its stylesheet and preloads it, and the other pages here do neither.",
+      "pagedeck trims a font file down to the characters your pages need, and sets a fallback font sized to match, so the text does not jump when the real font arrives.",
+      "This site's own text uses your device's fonts, so this face is here for the sample below and nothing else. Only this page downloads it, and the other pages here never do.",
     ],
     docs: "Fonts",
     sample:
       "Fira Sans, cut down to printable ASCII: 0123456789 and every letter from A to z. A page that sets no text in this face never downloads it.",
   },
   social: {
-    heading: "Social cards",
+    heading: "Link previews, drawn for you",
     body: [
-      "build.socialImages draws a card for a page at build time, and the page's <head> names it as og:image, with the width and height the renderer measured. This page has one; the other pages of this site do not.",
-      "The build draws cards before it renders pages, so a component can show its own page's card. The image below is this page's card, read with useSocialCard: the same file the og:image tag names.",
+      "When someone shares a page in a chat or on social media, the picture in the preview is the page's social card. pagedeck draws one while it builds the site, and names it in the page's head as og:image. This page has one, and the other pages of this site do not.",
+      "The image below is this page's card, the same file the og:image tag names. A component can show it because pagedeck draws the cards before it writes the pages.",
     ],
     docs: "Page head: cards the build draws",
     missing:
       "No card here: pagedeck dev draws no cards. Run pagedeck build to see this page's card.",
   },
   i18n: {
-    heading: "Locales",
+    heading: "One site, many languages",
     body: [
-      "This site publishes one locale. pagedeck can publish several from one build, and each version of a page then carries a canonical link and hreflang links to the others.",
+      "This site is in one language. pagedeck can publish several from the same project, and each version of a page then points to the others with canonical and hreflang links, so search engines know which version is for which reader.",
     ],
     docs: "Canonicals and hreflang",
   },

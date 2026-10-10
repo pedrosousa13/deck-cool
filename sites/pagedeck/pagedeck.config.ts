@@ -20,13 +20,13 @@ import { SKINS, skins } from "./src/skins.ts";
 const LOCALE = "en";
 const TEMPLATE = "landing_page";
 
-// The landing's island page.
-const ISLAND = {
-  title: "One island, and the bill for it",
+// The interactive page: one island, charged to this page alone.
+const INTERACTIVE = {
+  title: "Interactive only where you need it",
   description:
-    "Pagedeck's landing site, second page: one interactive component, bundled and loaded for this page alone, while the front page still ships no JavaScript.",
+    "One button you can press, on a page that is otherwise plain HTML. Only this page loads the JavaScript the button needs, and pagedeck's home page still ships none.",
   intro:
-    "This page carries a single interactive component. Everything else on it is HTML the build wrote. The other page of this site still ships no JavaScript at all — an island is planned, bundled and loaded per page, so it is charged to the page that asked for it.",
+    "This page has one button that counts your presses. Everything else is plain HTML, finished before you arrived. The button is the only part that needs JavaScript, the code that lets a page react to you, so this page loads that code and the home page still loads none. Developers call a part like this an island: a small interactive spot in a page of plain HTML.",
   label: "Press me",
 } as const;
 
@@ -45,8 +45,8 @@ const SEARCH_COPY = {
 const BAR_LINKS = [
   { label: "Docs", href: `${DOCS_ORIGIN}/` },
   { label: "Features", href: PATHS.features },
-  { label: "Island demo", href: PATHS.interactive },
-  { label: "Server data", href: PATHS.content },
+  { label: "Interactive", href: PATHS.interactive },
+  { label: "Your content", href: PATHS.content },
   { label: "Search", href: PATHS.search },
   { label: "GitHub", href: REPO },
 ];
@@ -124,8 +124,8 @@ function contentOf(page: Page, store: ContentStoreReader): PageContent {
       tree: [
         {
           component: ISLAND_PAGE,
-          props: { title: ISLAND.title, intro: ISLAND.intro },
-          children: [{ component: COUNTER, props: { label: ISLAND.label } }],
+          props: { title: INTERACTIVE.title, intro: INTERACTIVE.intro },
+          children: [{ component: COUNTER, props: { label: INTERACTIVE.label } }],
         },
       ],
     };
@@ -154,7 +154,7 @@ function contentOf(page: Page, store: ContentStoreReader): PageContent {
 function headOf(page: Page, store: ContentStoreReader): PageHead | undefined {
   if (page.path === PATHS.features) return FEATURES_HEAD;
   if (page.path === PATHS.content) return CONTENT_HEAD;
-  if (page.path === PATHS.interactive) return { title: ISLAND.title, description: ISLAND.description };
+  if (page.path === PATHS.interactive) return { title: INTERACTIVE.title, description: INTERACTIVE.description };
   if (page.path === PATHS.search) return { title: SEARCH_COPY.title, description: SEARCH_COPY.description };
   const entry = entryOf(page, store);
   return entry === undefined
