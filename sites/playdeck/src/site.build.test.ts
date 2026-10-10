@@ -151,7 +151,8 @@ describe("budgets, measured and pinned", () => {
   // Spelled again rather than imported, so a limit raised in the config fails here.
   // Each is the page's measured size rounded up to a whole kilobyte.
   const PINNED: Record<string, string> = {
-    // The two skinned players: one island, rendered twice.
+    // Eager chunks only: the two players hydrate on sight. The browser test
+    // pins the page's 84kb once they have.
     [PATHS.home]: "59kb",
     [PATHS.examples]: "88kb",
     [PATHS.comparison]: "0b",
@@ -440,12 +441,8 @@ describe("the home page", () => {
     expect(text(hero?.querySelector("code.pd-install__command"))).toBe("pnpm add @playdeck/react");
     // No copy island: one click selects the command.
     expect(hero?.querySelectorAll("button, [data-fw-component]")).toHaveLength(0);
-    // The docs as the call to action, and the examples as a quieter third.
-    expect(links(hero)).toEqual([
-      ["Read the docs", DOCS.start],
-      ["See it in action ›", PATHS.examples],
-    ]);
-    expect([...(hero?.querySelectorAll(".pd-intro__actions a") ?? [])].map((a) => a.className)).toEqual(["pd-button", "pd-more"]);
+    expect(links(hero)).toEqual([["Read the docs", DOCS.start]]);
+    expect(hero?.querySelector(".pd-intro__actions a")?.className).toBe("pd-button");
   });
 
   // CONTEXT.md: the "plain markdown" line waits until @playdeck/docs is on npm.
@@ -470,11 +467,13 @@ describe("the home page", () => {
       ],
     ]);
     expect([...(proof?.querySelectorAll(".pd-proof__figure > p") ?? [])].map(text)).toEqual([
-      playdeck.figure.value,
+      "0",
       "requests to a video host before play",
       "Measured on this page. Both players below wait for a press, and this site's tests fail if anything reaches another host before it.",
     ]);
-    expect(links(proof)).toEqual([["See the examples ›", PATHS.examples]]);
+    // deck.cool's card says the same: both read the decks module.
+    expect(playdeck.figure).toEqual({ value: "0", label: "requests to a video host before play" });
+    expect(links(proof)).toEqual([]);
   });
 
   test("the four quality sections, in the brief's order", () => {
@@ -514,9 +513,11 @@ describe("the home page", () => {
       expect(main().querySelectorAll("video[src], source[src], iframe")).toHaveLength(0);
     });
 
-    test("folds each skin's source into a closed <details>, named and counted in its summary", () => {
-      const sources = skins().map((skin) => present(skin.querySelector("details.pd-skin__source"), "a skin's source"));
+    test("folds each skin's source into the brand kit's closed <details>, named and counted in its summary", () => {
+      const sources = skins().map((skin) => present(skin.querySelector("details.skin-sheet"), "a skin's source"));
       expect(sources.map((source) => source.hasAttribute("open"))).toEqual([false, false]);
+      // A stylesheet is no answer to a search.
+      expect(sources.map((source) => source.getAttribute("data-fw-search"))).toEqual(["ignore", "ignore"]);
       expect(sources.map((source) => text(source.querySelector(":scope > summary")))).toEqual(
         SKINS.map((skin) => `${skin.name} CSS · ${readFileSync(`${SITE}${skin.file}`, "utf8").trim().split("\n").length} lines`),
       );
@@ -527,7 +528,9 @@ describe("the home page", () => {
         const pre = present(skin.querySelector("details > div > pre.shiki"), "a skin's highlighted source");
         expect(pre.getAttribute("aria-label")).toBe(`${SKINS[at]?.name} CSS`);
         expect(pre.getAttribute("tabindex")).toBe("0");
-        expect(pre.querySelectorAll('.line span[style*="color"]').length).toBeGreaterThan(0);
+        const colours = new Set([...pre.querySelectorAll("code span[style]")].map((span) => span.getAttribute("style")));
+        expect(colours.size).toBeGreaterThan(1);
+        for (const colour of colours) expect(colour).toMatch(/^color:#[0-9a-f]{6}$/i);
       }
     });
 
@@ -611,7 +614,11 @@ describe("the home page", () => {
       ["Clean under axe", "axe finds no violations in any state of the reference player."],
       ["Calm under reduced motion", "A viewer who asks for reduced motion gets no autoplay, unless you opt out."],
     ]);
-    expect(links(section)).toEqual([["Try the examples ›", PATHS.examples]]);
+    expect(links(section)).toEqual([]);
+  });
+
+  test("links the examples once, under the skins", () => {
+    expect(hrefs(main()).filter((href) => href === PATHS.examples)).toHaveLength(1);
   });
 
   test("closes with one line back to deck.cool", () => {

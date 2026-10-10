@@ -346,10 +346,12 @@ main .pd-more:hover {
   min-height: 1lh;
 }
 
-/* Two skins: one player, the same markup twice, each sheet shown below it. */
+/* Two skins: one player, the same markup twice, each sheet folded below it. */
 .pd-skins {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+  /* Each tile as tall as its own sheet, open or closed. */
+  align-items: start;
   gap: 20px;
 }
 .pd-skin {
@@ -370,53 +372,6 @@ main .pd-more:hover {
 .pd-skin__stage {
   min-width: 0;
   padding: 24px 32px 32px;
-}
-/* Each skin's source, folded until opened. */
-.pd-skin__source {
-  margin-top: auto;
-  border-top: 1px solid var(--rule);
-}
-.pd-skin__source > summary {
-  display: flex;
-  align-items: center;
-  min-height: 56px;
-  padding: 0 32px;
-  color: var(--text-secondary);
-  font-size: 15px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  list-style: none;
-  cursor: pointer;
-}
-.pd-skin__source > summary:hover {
-  color: var(--text);
-}
-.pd-skin__source > summary:focus-visible {
-  outline: 2px solid var(--text-link);
-  outline-offset: -2px;
-}
-/* A disclosure triangle, drawn, that turns when the source is open. */
-.pd-skin__source > summary::-webkit-details-marker {
-  display: none;
-}
-.pd-skin__source > summary::before {
-  content: "";
-  width: 0;
-  height: 0;
-  margin-right: 12px;
-  border-block: 5px solid transparent;
-  border-inline-start: 7px solid currentcolor;
-}
-.pd-skin__source[open] > summary::before {
-  rotate: 90deg;
-}
-.pd-skin__source .shiki {
-  max-height: 32rem;
-  padding: 0 32px 32px;
-  overflow: auto;
-  border-radius: 0;
-  font-size: 13px;
-  scrollbar-width: thin;
 }
 
 /* One line back to deck.cool. */
@@ -460,8 +415,8 @@ main .pd-family .pd-more {
   }
   .pd-skin figcaption,
   .pd-skin__stage,
-  .pd-skin__source > summary,
-  .pd-skin__source .shiki {
+  .pd-skin .skin-sheet summary,
+  .pd-skin .skin-sheet pre {
     padding-inline: 20px;
   }
 }

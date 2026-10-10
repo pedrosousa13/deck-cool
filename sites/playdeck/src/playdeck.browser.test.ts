@@ -1,10 +1,14 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { chromium, type Browser, type Page, type Response } from "playwright";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { brotliCompressSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { PATHS } from "../components/links.ts";
 import { MEDIA_ORIGINS } from "./csp.ts";
 import { RESPONSE_HEADERS } from "./headers.ts";
 import { serveSite, type ServedSite } from "./serve-site.ts";
+import { SKINS } from "./skins.ts";
 
 // Drives the built site (build.global-setup.ts) in Chromium, served with the
 // headers in the build's _headers file, so every page runs under its CSP.
@@ -191,6 +195,36 @@ describe("the playdeck site in a browser", () => {
     }
     expect((await new AxeBuilder({ page }).include(".pd-skins").analyze()).violations).toEqual([]);
     expect(await violations()).toEqual([]);
+  });
+
+  // Pagedeck's budget counts only the chunks a page loads eagerly, and the home
+  // page's players hydrate on "visible". This counts what the budget cannot:
+  // every script the page has loaded once both players have hydrated, before a
+  // press, weighed as the budget weighs a chunk (brotli at its default quality).
+  // Measured, then rounded up to a whole kilobyte: re-measure rather than raise it.
+  test("the home page ships 84kb of JavaScript before a press, its players hydrated", async () => {
+    const { page, scripts } = await visit(PATHS.home, { width: 1280 });
+    await page.waitForLoadState("networkidle");
+    for (const skin of SKINS) {
+      await page.locator(`.pd-skin__stage.${skin.className}`).scrollIntoViewIfNeeded();
+      await page.locator(`.pd-skin__stage.${skin.className} [data-playdeck-part="viewport"][data-idle]`).waitFor();
+    }
+    await page.waitForLoadState("networkidle");
+    const bytes = [...new Set(scripts)]
+      .map((path) => brotliCompressSync(readFileSync(fileURLToPath(new URL(`../site${path}`, import.meta.url)))).byteLength)
+      .reduce((sum, each) => sum + each, 0);
+    const limit = 84 * 1024;
+    expect(bytes).toBeLessThanOrEqual(limit);
+    expect(limit - bytes).toBeLessThan(2048);
+  });
+
+  test("an open skin's source scrolls inside itself at 390px, never the page", async () => {
+    const { page } = await visit(PATHS.home, { width: 390 });
+    const source = page.getByLabel("Broadcast CSS", { exact: true });
+    await page.locator("summary", { hasText: "Broadcast CSS ·" }).click();
+    await expect.poll(() => source.isVisible()).toBe(true);
+    expect(await source.evaluate((element) => getComputedStyle(element).overflowX)).toBe("auto");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 
   // CONTEXT.md's figure for playdeck: 0 requests to YouTube or Vimeo before

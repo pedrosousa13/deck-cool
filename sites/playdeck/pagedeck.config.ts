@@ -27,13 +27,10 @@ import {
 import { playdeckChunkNames } from "./src/chunk-names.ts";
 import { iconizeFeaturesTable, scrollTables, stageComparison } from "./src/comparison.ts";
 import { HASHED_FILE_HEADERS, HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
+import { CODE_THEME } from "./src/code-theme.ts";
 import { SKINS, skins } from "./src/skins.ts";
 
 const LOCALE = "en";
-
-// Dark only, as the brand is. The `-default` theme's every token clears 4.5:1,
-// where `github-dark`'s do not all.
-const CODE_THEME = "github-dark-default";
 
 /** The home page: CONTEXT.md's "The landing pages' message". */
 const HOME = {
@@ -102,8 +99,9 @@ const BAR_LINKS = [
 // kilobyte. Re-measure rather than raise one.
 const BUDGET = {
   "/**": "0b",
-  // The players hydrate on "visible": the budget counts the chunks a page
-  // loads eagerly, and each player's own code arrives when it scrolls into view.
+  // The players hydrate on "visible", and the budget counts only the chunks a
+  // page loads eagerly. With both players hydrated the page has loaded 84kb
+  // before a press, which playdeck.browser.test.ts measures and pins.
   [PATHS.home]: "59kb",
   [PATHS.examples]: "88kb",
   [PATHS.search]: "60kb",
@@ -140,16 +138,9 @@ function singlePage(route: Route): PageSource<Record<string, never>> {
   };
 }
 
-/**
- * `code`, highlighted as the markdown loader highlights a fence. A `label`
- * names the <pre>, which is a tab stop because it scrolls.
- */
-function highlight(code: string, lang: string, label?: string): Promise<string> {
-  return codeToHtml(code, {
-    lang,
-    theme: CODE_THEME,
-    transformers: label === undefined ? [] : [{ pre: (node) => void (node.properties["aria-label"] = label) }],
-  });
+/** `code`, highlighted as the markdown loader highlights a fence. */
+function highlight(code: string, lang: string): Promise<string> {
+  return codeToHtml(code, { lang, theme: CODE_THEME });
 }
 
 /** The version of @playdeck/react this site installs, which the home page's hero names. */
@@ -167,7 +158,7 @@ async function homeContent(): Promise<PageContent> {
         component: HOME_PAGE,
         props: {
           version: playdeckVersion(),
-          skins: await Promise.all(skins().map(async (skin) => ({ ...skin, html: await highlight(skin.css, "css", `${skin.name} CSS`) }))),
+          skins: skins(),
           quickstart: await highlight(HOME.quickstart, "tsx"),
         },
       },
@@ -277,6 +268,7 @@ export default defineConfig({
     css: [
       "./node_modules/@deck-cool/brand/styles/brand.css",
       "./node_modules/@deck-cool/brand/styles/family-bar.css",
+      "./node_modules/@deck-cool/brand/styles/skin-sheet.css",
       "./styles/playdeck.css",
       "./styles/archetype-streaming-service.css",
       "./styles/archetype-course-platform.css",

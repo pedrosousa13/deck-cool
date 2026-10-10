@@ -2,8 +2,9 @@
 // of deck.cool's home page. A server component: it ships no JavaScript of its
 // own. Its one player is an island, rendered once per skin.
 import { decks, umbrella, type Deck } from "@deck-cool/brand/decks";
+import { SkinSheet } from "@deck-cool/brand/skin-sheet";
 import { unescapedHtml } from "@pagedeck/core/tree";
-import type { ShownSkin } from "../src/skins.ts";
+import type { Skin } from "../src/skins.ts";
 import { DOCS, PATHS } from "./links.ts";
 import SkinPlayer from "./skin-player.tsx";
 
@@ -102,7 +103,7 @@ export default function HomePage({
   quickstart,
 }: {
   version: string;
-  skins: readonly ShownSkin[];
+  skins: readonly Skin[];
   /** The README's quickstart, highlighted at build time. */
   quickstart: string;
 }) {
@@ -127,9 +128,6 @@ export default function HomePage({
           <a className="pd-button" href={DOCS.start}>
             Read the docs
           </a>
-          <a className="pd-more" href={PATHS.examples}>
-            See it in action ›
-          </a>
         </div>
       </section>
 
@@ -145,19 +143,15 @@ export default function HomePage({
             ))}
           </ul>
         </div>
-        {/* The decks module's figure is "requests to YouTube or Vimeo". This
-            site plays neither yet, so the label is the claim its browser test
-            checks: before a press, nothing on this page reaches another host. */}
+        {/* The claim this site's browser test checks: before a press, nothing
+            on this page reaches another host. */}
         <div className="pd-proof__figure">
           <p>{playdeck.figure.value}</p>
-          <p>requests to a video host before play</p>
+          <p>{playdeck.figure.label}</p>
           <p>
             Measured on this page. Both players below wait for a press, and this site's tests fail if anything reaches
             another host before it.
           </p>
-          <a className="pd-more" href={PATHS.examples}>
-            See the examples ›
-          </a>
         </div>
       </section>
 
@@ -177,13 +171,7 @@ export default function HomePage({
               <div className={`pd-skin__stage ${skin.className}`}>
                 <SkinPlayer />
               </div>
-              {/* Folded until opened, with no script: a native <details>. */}
-              <details className="pd-skin__source">
-                <summary>
-                  {skin.name} CSS · {skin.css.split("\n").length} lines
-                </summary>
-                <div data-fw-search="ignore" {...unescapedHtml(skin.html)} />
-              </details>
+              <SkinSheet name={skin.name} css={skin.css} html={skin.html} />
             </figure>
           ))}
         </div>
@@ -227,9 +215,6 @@ export default function HomePage({
             playdeck takes care of the keyboard, focus and screen readers for you. Each line below is backed by a test
             in playdeck's own repo.
           </p>
-          <a className="pd-more" href={PATHS.examples}>
-            Try the examples ›
-          </a>
         </div>
         <Tiles tiles={accessible} />
       </section>
