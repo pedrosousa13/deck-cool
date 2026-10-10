@@ -23,7 +23,7 @@ const pagedeck = find("pagedeck");
 const points = [
   {
     heading: "Interactive only where you need it",
-    body: 'Mark a component "use client" once, in its own file. Every page that uses it comes alive there, and every page that does not stays plain HTML. Developers call these parts islands.',
+    body: 'Mark a component "use client" once, in its own file. Every page that uses it comes alive there, and every page that does not stays plain HTML.',
   },
   {
     heading: "Zero JavaScript by default",
@@ -41,12 +41,12 @@ const agents = [
     body: 'Pages are React components, and interactive parts use React\'s own "use client". An agent that knows React already knows how to build here.',
   },
   {
-    heading: "Typed from the config down",
-    body: "pagedeck is written in TypeScript and ships its types, so your editor and your agent see every option.",
+    heading: "Every option spelled out",
+    body: "pagedeck is written in TypeScript and ships its types, so your editor and your agent know every option and flag a wrong one as it is written, before the page is built.",
   },
   {
     heading: "Mistakes stop the build",
-    body: "Ship more JavaScript than a page's budget, link to a page that does not exist, or render a second main landmark, and the build stops. Your agent hears about it before your readers do.",
+    body: "Ship more JavaScript than a page's budget, link to a page that does not exist, or give a page a second main area, and the build stops. Your agent hears about it before your readers do.",
   },
 ] as const;
 
@@ -56,14 +56,17 @@ const agents = [
  */
 const accessible = [
   {
-    heading: "One main landmark",
-    body: "Every page gets exactly one main landmark. A component that renders a second fails the build.",
+    heading: "One main area per page",
+    body: "Screen readers let people jump straight to a page's main content. Every page gets exactly one main area to jump to (its main landmark), and a component that adds a second fails the build.",
   },
   {
     heading: "Search from the keyboard",
-    body: "Search is a combobox: arrow keys walk the results, Enter follows one, Escape closes them.",
+    body: "Search works from the keyboard alone: arrow keys move through the results, Enter opens one and Escape closes the list. It follows the pattern screen readers expect (a combobox).",
   },
-  { heading: "Nothing typed is lost", body: "Type into search before its script has loaded, and your text is kept, caret and all." },
+  {
+    heading: "Nothing typed is lost",
+    body: "Start typing before search is ready, and your text is kept, cursor position and all.",
+  },
 ] as const;
 
 /** One teaser, set from the CMS entry the content page reads. Both skins render this same markup. */
@@ -198,10 +201,11 @@ export default function LandingPage({ skins }: { skins: readonly Skin[] }) {
             </p>
           </li>
           <li className="fw-tile">
-            <h3>Only what the page shows ships</h3>
+            <h3>Send only what the page shows</h3>
             <p className="fw-tile__body">
               pagedeck reads your whole CMS entry while it builds the site, and sends the browser only what the page
-              needs. On the content demo it reads {read} and sends the browser {sent} of data.
+              needs. On the content demo it reads {read} and sends the browser just {sent}, so a phone has far less to
+              download.
             </p>
             <a className="fw-more" href={PATHS.cmsDemo}>
               See the content demo ›

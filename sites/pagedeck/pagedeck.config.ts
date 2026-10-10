@@ -45,8 +45,8 @@ const SEARCH_COPY = {
 const BAR_LINKS = [
   { label: "Docs", href: `${DOCS_ORIGIN}/` },
   { label: "Features", href: PATHS.features },
-  { label: "Interactive", href: PATHS.interactive },
-  { label: "Your content", href: PATHS.cmsDemo },
+  { label: "Interactive demo", href: PATHS.interactive },
+  { label: "Content demo", href: PATHS.cmsDemo },
   { label: "Search", href: PATHS.search },
   { label: "GitHub", href: REPO },
 ];

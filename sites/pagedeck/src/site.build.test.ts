@@ -143,8 +143,8 @@ describe("every page", () => {
     ).toEqual([
       ["Docs", `${DOCS_ORIGIN}/`],
       ["Features", PATHS.features],
-      ["Interactive", PATHS.interactive],
-      ["Your content", PATHS.cmsDemo],
+      ["Interactive demo", PATHS.interactive],
+      ["Content demo", PATHS.cmsDemo],
       ["Search", PATHS.search],
       ["GitHub", REPO],
     ]);
@@ -345,7 +345,7 @@ describe("the home page", () => {
     ).toEqual([
       [
         "Interactive only where you need it",
-        'Mark a component "use client" once, in its own file. Every page that uses it comes alive there, and every page that does not stays plain HTML. Developers call these parts islands.',
+        'Mark a component "use client" once, in its own file. Every page that uses it comes alive there, and every page that does not stays plain HTML.',
       ],
       ["Zero JavaScript by default", "A page with nothing to click, type or play ships plain HTML and CSS, without a single script."],
       [
@@ -427,7 +427,7 @@ describe("the home page", () => {
     });
   });
 
-  test("small: HTML first, budgets that hold, and only what the page shows ships, with the content page's own figures", () => {
+  test("small: HTML first, budgets that hold, and send only what the page shows, with the content page's own figures", () => {
     const section = band("Small, leans on the browser.");
     const props = present(
       parse(PATHS.cmsDemo).querySelector('[data-fw-component="variant_picker"]')?.getAttribute("data-fw-props"),
@@ -445,16 +445,16 @@ describe("the home page", () => {
         ["Give each page a JavaScript budget, and the build fails when a page ships one byte more. This page's budget is 0 B."],
       ],
       [
-        "Only what the page shows ships",
+        "Send only what the page shows",
         [
-          `pagedeck reads your whole CMS entry while it builds the site, and sends the browser only what the page needs. On the content demo it reads ${read} and sends the browser ${sent} of data.`,
+          `pagedeck reads your whole CMS entry while it builds the site, and sends the browser only what the page needs. On the content demo it reads ${read} and sends the browser just ${sent}, so a phone has far less to download.`,
         ],
       ],
     ]);
     expect(links(section)).toEqual([["See the content demo ›", PATHS.cmsDemo]]);
   });
 
-  test("agents: just React, typed, and a build that stops on a mistake", () => {
+  test("agents: just React, every option spelled out, and a build that stops on a mistake", () => {
     const section = band("Built for agents.");
     expect(text(section?.querySelector(".fw-band__text p"))).toBe(
       "Whether you write the code or your coding agent does, pagedeck leaves less to guess.",
@@ -465,13 +465,15 @@ describe("the home page", () => {
         ['Pages are React components, and interactive parts use React\'s own "use client". An agent that knows React already knows how to build here.'],
       ],
       [
-        "Typed from the config down",
-        ["pagedeck is written in TypeScript and ships its types, so your editor and your agent see every option."],
+        "Every option spelled out",
+        [
+          "pagedeck is written in TypeScript and ships its types, so your editor and your agent know every option and flag a wrong one as it is written, before the page is built.",
+        ],
       ],
       [
         "Mistakes stop the build",
         [
-          "Ship more JavaScript than a page's budget, link to a page that does not exist, or render a second main landmark, and the build stops. Your agent hears about it before your readers do.",
+          "Ship more JavaScript than a page's budget, link to a page that does not exist, or give a page a second main area, and the build stops. Your agent hears about it before your readers do.",
         ],
       ],
     ]);
@@ -485,9 +487,19 @@ describe("the home page", () => {
       "pagedeck looks after page structure and search for you, for keyboard and screen reader users alike. Each line below is backed by a test in pagedeck's own repo.",
     );
     expect(tiles(section)).toEqual([
-      ["One main landmark", ["Every page gets exactly one main landmark. A component that renders a second fails the build."]],
-      ["Search from the keyboard", ["Search is a combobox: arrow keys walk the results, Enter follows one, Escape closes them."]],
-      ["Nothing typed is lost", ["Type into search before its script has loaded, and your text is kept, caret and all."]],
+      [
+        "One main area per page",
+        [
+          "Screen readers let people jump straight to a page's main content. Every page gets exactly one main area to jump to (its main landmark), and a component that adds a second fails the build.",
+        ],
+      ],
+      [
+        "Search from the keyboard",
+        [
+          "Search works from the keyboard alone: arrow keys move through the results, Enter opens one and Escape closes the list. It follows the pattern screen readers expect (a combobox).",
+        ],
+      ],
+      ["Nothing typed is lost", ["Start typing before search is ready, and your text is kept, cursor position and all."]],
     ]);
     expect(links(section)).toEqual([["Try the search ›", `${PATHS.features}#search`]]);
     expect(section?.textContent).not.toMatch(/motion/i);
@@ -500,7 +512,6 @@ describe("the home page", () => {
     );
     expect(links(family)).toEqual([["Meet the family ›", umbrella.url]]);
   });
-
 });
 
 // #72: every page outside /docs is named after what it shows, in words a
@@ -538,7 +549,7 @@ describe("the pages outside the docs", () => {
     ],
     [
       PATHS.cmsDemo,
-      "Your CMS, the place your team writes and edits content, can hold far more than any one page shows. This jacket's entry has variants, stock, reviews, SEO fields and private notes. pagedeck read all of it once, while it built this site, and wrote what you see as plain HTML. Your browser received only the few fields the colour and size picker needs. The figures show how much.",
+      "Your CMS, the place your team writes and edits content, can hold far more than any one page shows. This jacket's entry has variants, stock, reviews, SEO fields and private notes. pagedeck read all of it once, while it built this site, and wrote what you see as plain HTML. Your browser received only the few fields the colour and size picker needs. The figures show how much less your browser had to download, which matters most on a phone.",
     ],
     [
       PATHS.features,
@@ -561,6 +572,31 @@ describe("the pages outside the docs", () => {
       ...[...doc.querySelectorAll("main h1, main h2, main h3")].map(text),
     ];
     expect(names.filter((name) => JARGON.test(name ?? ""))).toEqual([]);
+  });
+
+  // Every block of text in <main>, with no script, one string per paragraph,
+  // list item, cell or heading, cut into sentences.
+  const BLOCKS = "p, li, h1, h2, h3, dt, dd, th, td, legend, label, figcaption, summary, pre";
+  function sentences(path: string): string[] {
+    const main = present(parse(path).querySelector("main"), "<main>");
+    return [...main.querySelectorAll(BLOCKS)]
+      .filter((block) => block.querySelector(BLOCKS) === null)
+      .flatMap((block) => (text(block) ?? "").split(/(?<=[.!?])\s+/));
+  }
+
+  // Body copy may name "island" or "hydration" only in the one sentence that
+  // explains it, and never needs the words below at all.
+  test.each([
+    [PATHS.home, []],
+    [PATHS.features, ["Developers call that start hydration."]],
+    [PATHS.interactive, ["Developers call a part like this an island: a small interactive spot in a page of plain HTML."]],
+    [PATHS.cmsDemo, []],
+  ])("%s names an island or hydration only where it explains it", (path, explained) => {
+    expect(sentences(path).filter((sentence) => /island|hydrat/i.test(sentence))).toEqual(explained);
+  });
+
+  test.each(LANDING)("%s never says server component, JSON or SKU", (path) => {
+    expect(sentences(path).filter((sentence) => /server component|\bJSON\b|\bSKU\b/i.test(sentence))).toEqual([]);
   });
 
   test.each(LANDING)("%s keeps jargon out of its paths", (path) => {
@@ -593,7 +629,6 @@ describe("the features page", () => {
     const ids = [...parse(PATHS.features).querySelectorAll("main section.fw-feature")].map((section) => section.id);
     expect(ids).toEqual(["islands", "search", "consent", "images", "fonts", "social-cards", "i18n"]);
   });
-
 
   test("subsets the font for the specimen alone: no other page links or preloads it", () => {
     for (const path of PAGES) {

@@ -50,7 +50,7 @@ const COPY = {
       'A component you mark "use client" arrives as plain HTML first, then its JavaScript starts so it can respond to you. Developers call that start hydration. You choose when it happens: load starts it right away, idle waits until the browser has nothing else to do, and visible waits until you scroll to it.',
       'Each box shows when it started, counted from the moment the page opened. The last box is the same component without "use client". It ships no JavaScript, so its text never changes.',
     ],
-    docs: "Choosing when each component starts",
+    docs: "Fold strategy",
     waiting: "Plain HTML. Not started yet.",
     hydrated: "Started {seconds} s after the page opened.",
     staticWaiting: "Plain HTML. It ships no JavaScript, so it never starts.",
@@ -58,7 +58,7 @@ const COPY = {
   search: {
     heading: "Search",
     body: [
-      "When pagedeck builds your site, it writes the words of every page into a few small files. The search box downloads nothing until you click into it, then finds pages as you type.",
+      "When pagedeck builds your site, it writes the words of every page into a few small files. The search box downloads nothing until you use it, then finds pages as you type.",
       'Try "budget", "consent" or "font".',
     ],
     docs: "Site search",
@@ -105,7 +105,7 @@ const COPY = {
   social: {
     heading: "Link previews, drawn for you",
     body: [
-      "When someone shares a page in a chat or on social media, the picture in the preview is the page's social card. pagedeck draws one while it builds the site, and names it in the page's head as og:image. This page has one, and the other pages of this site do not.",
+      "When someone shares a page in a chat or on social media, the picture in the preview is the page's social card. pagedeck draws one while it builds the site, and names it in the page's og:image tag, the line chat apps and social sites read to find the picture. This page has one, and the other pages of this site do not.",
       "The image below is this page's card, the same file the og:image tag names. A component can show it because pagedeck draws the cards before it writes the pages.",
     ],
     docs: "Page head: cards the build draws",
@@ -115,7 +115,7 @@ const COPY = {
   i18n: {
     heading: "One site, many languages",
     body: [
-      "This site is in one language. pagedeck can publish several from the same project, and each version of a page then points to the others with canonical and hreflang links, so search engines know which version is for which reader.",
+      "This site is in one language. pagedeck can publish several from the same project, and each version of a page then points to the others with canonical and hreflang links: small tags that tell search engines which address is the main one and which language each version is in.",
     ],
     docs: "Canonicals and hreflang",
   },
@@ -274,10 +274,10 @@ export function featuresContent(page: Page): PageContent {
                 image,
                 alt: COPY.images.alt,
                 facts: [
-                  { label: "srcset", value: candidates.map(([url]) => url).join(", ") },
+                  { label: "srcset (the files on offer)", value: candidates.map(([url]) => url).join(", ") },
                   { label: "widths", value: candidates.map(([, width]) => width).join(", ") },
                   { label: "formats", value: formats.join(", ") },
-                  { label: "sizes", value: image.sizes },
+                  { label: "sizes (how wide it shows)", value: image.sizes },
                   { label: "loading", value: image.loading },
                 ],
               },
@@ -290,7 +290,7 @@ export function featuresContent(page: Page): PageContent {
                 sample: COPY.fonts.sample,
                 facts: [
                   { label: "face", value: "Fira Sans 400" },
-                  { label: "unicode-range", value: "U+0020-007E" },
+                  { label: "unicode-range (characters kept)", value: "U+0020-007E" },
                   { label: "fallback", value: "Helvetica, Arial, size-adjusted" },
                 ],
               },
