@@ -232,7 +232,9 @@
 }
 
 /* The site's own links, and the Install pill. On a narrow screen the links
-   scroll sideways, and the padding keeps room for their focus rings. */
+   scroll sideways, and the padding keeps room for their focus rings. When
+   they overflow, the edge they scroll toward fades out, so a link cut off at
+   the edge reads as more to scroll (#55). */
 .family-bar__links {
   min-width: 0;
   margin: -4px;
@@ -244,6 +246,47 @@
   gap: 22px;
   font-size: 13px;
   white-space: nowrap;
+}
+/* On a narrow screen, the right edge fades: with motion reduced, and where
+   scroll-driven animations are missing. Only the right edge, as the brief
+   asks: without a scroll timeline the mask cannot tell when the list has
+   left its start, and a fixed fade at the start would cover the first link
+   at rest. The end padding, the fade's width plus room for a focus ring, lets
+   the last link scroll out from under it. 734px is the bar's phone
+   breakpoint, as for the decks' single column: deck.cool's three links fit
+   above it, so the fade has nothing to cover there. */
+@media (max-width: 734px) {
+  .family-bar__links {
+    padding-right: 28px;
+    mask-image: linear-gradient(to left, transparent, #000 24px);
+  }
+}
+/* Where the browser has scroll-driven animations, the fade follows the
+   scroll instead: the start fades in once the list leaves it, and the end
+   fades out as the list reaches it. The animation runs only while the list
+   can scroll, so when the links fit there is no mask at any width. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .family-bar__links {
+      padding-right: 4px;
+      mask-image: none;
+      animation: family-bar-fade var(--ease) both;
+      animation-timeline: scroll(self inline);
+    }
+  }
+}
+/* A focused link shows its whole ring. Chromium does not scroll a focused
+   link that is partly in view, and scroll-padding and scroll-margin do not
+   change that, so the ring would stay cut off at the edge. A snap point on
+   the focused link does: the list snaps it to the middle, or as far as the
+   list scrolls. The fade gives way too, so nothing covers the ring. */
+.family-bar__links:has(a:focus-visible) {
+  scroll-snap-type: x mandatory;
+  mask-image: none;
+  animation: none;
+}
+.family-bar__links li:has(> a:focus-visible) {
+  scroll-snap-align: center;
 }
 .family-bar__links a {
   color: var(--text-secondary);
@@ -332,6 +375,30 @@
   }
 }
 
+/* A fade per edge, each a mask layer 24px wider than the links: at -24px the
+   start's fade is out of view and the end's is in, at 0 the other way round.
+   The start fades in over the first tenth of the scroll, and the end fades
+   out over the last tenth, each on the brand's curve. */
+@keyframes family-bar-fade {
+  from {
+    mask-image: linear-gradient(to right, transparent, #000 24px), linear-gradient(to left, transparent, #000 24px);
+    mask-size: calc(100% + 24px) 100%;
+    mask-repeat: no-repeat;
+    mask-composite: intersect;
+    mask-position: -24px 0, -24px 0;
+  }
+  10%,
+  90% {
+    mask-position: 0 0, -24px 0;
+  }
+  to {
+    mask-image: linear-gradient(to right, transparent, #000 24px), linear-gradient(to left, transparent, #000 24px);
+    mask-size: calc(100% + 24px) 100%;
+    mask-repeat: no-repeat;
+    mask-composite: intersect;
+    mask-position: 0 0, 0 0;
+  }
+}
 @keyframes family-bar-roll {
   from { transform: translateY(22px); }
 }

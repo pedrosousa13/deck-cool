@@ -7,8 +7,13 @@ import { everyResponse, present, readManifest, text } from "@deck-cool/site-kit/
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { NPM } from "../components/links.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
+import { figureValue } from "./facts.ts";
 
 const SITE = fileURLToPath(new URL("..", import.meta.url));
+// slidedeck's built site, which the cross-site test below reads. The root
+// vitest.config.ts's global setup builds every site first, so this file needs
+// the whole workspace's run, not deck.cool's build alone.
+const SLIDEDECK_SITE = fileURLToPath(new URL("../../slidedeck/", import.meta.url));
 const BRAND = fileURLToPath(new URL("../../../packages/brand/public/", import.meta.url));
 
 interface BudgetReport {
@@ -203,8 +208,20 @@ describe("each deck's card", () => {
     expect(paragraphs).toEqual([deck.kind, deck.claim, deck.description]);
     expect(text(card?.querySelector("code"))).toBe(deck.install);
     const figure = [...(card?.querySelectorAll(".card__figure > p") ?? [])].map(text);
-    const { value, label, note } = deck.figure;
+    const { label, note } = deck.figure;
+    const value = figureValue(deck);
     expect(figure).toEqual(note === undefined ? [value, label] : [value, label, note]);
+  });
+
+  // The format, not the value: a bump PR brings a new size, and both pages follow it.
+  test("slidedeck's card shows the size slidedeck's home page shows, from its README", () => {
+    const card = text(home().querySelector("#slidedeck .card__figure > p"));
+    expect(card).toMatch(/^\d+(\.\d+)? (B|KB|kB|MB)$/);
+    const slidedeckHome = new window.DOMParser().parseFromString(
+      readFileSync(`${SLIDEDECK_SITE}site/index.html`, "utf8"),
+      "text/html",
+    );
+    expect(text(slidedeckHome.querySelector(".home-proof__figure > p"))).toBe(card);
   });
 
   test.each(decks)("$name's card links to its site", (deck) => {

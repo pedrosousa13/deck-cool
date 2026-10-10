@@ -1,5 +1,8 @@
-// Facts the landing page reads from the package README at build time, so the
-// page says what the README says and `compare:check` keeps both honest.
+// What the sites read from the installed @slidedeck/react at build time, its
+// README and its version, so each page says what the README says and
+// `compare:check` keeps both honest: slidedeck's home page and deck.cool's
+// slidedeck card read the same figure.
+import { readFileSync } from "node:fs";
 
 /** A row of the README's comparison, its cells as the README writes them. */
 export interface Library {
@@ -94,4 +97,28 @@ export function fence(readme: string, heading: string): string {
     throw new Error(`The README has no code block under "## ${heading}".`);
   }
   return code;
+}
+
+/** Slidedeck's min+gzip size, as the README's comparison measures it: "8.84 KB". */
+export function slidedeckSize(readme: string): string {
+  return slidedeckRow(comparison(readme)).size;
+}
+
+/** A file of the @slidedeck/react installed in `site`, the site's directory. */
+function readInstalled(site: URL, file: string): string {
+  try {
+    return readFileSync(new URL(`node_modules/${SLIDEDECK}/${file}`, site), "utf8");
+  } catch (error) {
+    throw new Error(`The site at ${site.pathname} has no ${SLIDEDECK} installed: add it to its dependencies.`, { cause: error });
+  }
+}
+
+/** The README of the @slidedeck/react installed in `site`, the site's directory. */
+export function readSlidedeckReadme(site: URL): string {
+  return readInstalled(site, "README.md");
+}
+
+/** The version of the @slidedeck/react installed in `site`, as its package.json gives it. */
+export function readSlidedeckVersion(site: URL): string {
+  return (JSON.parse(readInstalled(site, "package.json")) as { version: string }).version;
 }

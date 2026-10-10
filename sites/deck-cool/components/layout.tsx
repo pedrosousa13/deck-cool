@@ -1,4 +1,5 @@
 import { decks, umbrella } from "@deck-cool/brand/decks";
+import { figureValue } from "../src/facts.ts";
 
 interface Props {
   title: string;
@@ -121,7 +122,7 @@ export default function Layout({ title }: Props) {
               </a>
             </div>
             <div className="card__figure">
-              <p>{deck.figure.value}</p>
+              <p>{figureValue(deck)}</p>
               <p>{deck.figure.label}</p>
               {deck.figure.note === undefined ? null : <p>{deck.figure.note}</p>}
             </div>

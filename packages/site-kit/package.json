@@ -9,7 +9,9 @@
     "./build": "./src/build.ts",
     "./build-test": "./src/build-test.ts",
     "./browser-test": "./src/browser-test.ts",
-    "./live-check": "./src/live-check.ts"
+    "./live-check": "./src/live-check.ts",
+    "./slidedeck-readme": "./src/slidedeck-readme.ts",
+    "./slidedeck-readme.fixture": "./src/slidedeck-readme.fixture.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

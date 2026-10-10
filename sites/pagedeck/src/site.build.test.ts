@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { decks, umbrella } from "@deck-cool/brand/decks";
+import { pagedeck, umbrella } from "@deck-cool/brand/decks";
 import { everyResponse, isRecord, present, readManifest, text } from "@deck-cool/site-kit/build-test";
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { DOCS_ORIGIN, PATHS, REPO } from "../components/links.ts";
@@ -16,8 +16,6 @@ import { SKINS } from "./skins.ts";
 
 const SITE = fileURLToPath(new URL("..", import.meta.url));
 const BRAND = fileURLToPath(new URL("../../../packages/brand/public/", import.meta.url));
-const pagedeck = decks.find((deck) => deck.name === "pagedeck");
-if (pagedeck === undefined) throw new Error("the decks module has no pagedeck");
 
 interface BudgetRow {
   path: string;
