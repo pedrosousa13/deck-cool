@@ -15,7 +15,7 @@ export interface SkinSheetProps {
  */
 export function SkinSheet({ name, css, html }: SkinSheetProps) {
   const label = `${name} CSS`;
-  if (!html.startsWith("<pre ")) throw new Error(`${label}: the highlighted sheet is not one <pre>`);
+  if (!html.startsWith("<pre ") || !html.endsWith("</pre>")) throw new Error(`${label}: the highlighted sheet is not one <pre>`);
   return (
     <details className="skin-sheet" data-fw-search="ignore">
       <summary>{`${label} · ${css.split("\n").length} lines`}</summary>

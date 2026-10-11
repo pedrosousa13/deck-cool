@@ -1,4 +1,4 @@
-import { createMarkdownRenderer } from "@pagedeck/markdown-loader";
+import { highlighter } from "@deck-cool/site-kit/highlight";
 import { readFileSync } from "node:fs";
 import { CODE_THEME } from "./code-theme.ts";
 
@@ -14,13 +14,12 @@ export const SKINS = [
 
 export type Skin = (typeof SKINS)[number] & { readonly css: string; readonly html: string };
 
-const renderer = await createMarkdownRenderer({ languages: ["css"], theme: CODE_THEME });
+const highlight = await highlighter("css", CODE_THEME);
 
 const highlighted = await Promise.all(
   SKINS.map(async (skin) => {
     const css = readFileSync(new URL(`../${skin.file}`, import.meta.url), "utf8").trim();
-    const { html } = await renderer.render(`\`\`\`css\n${css}\n\`\`\`\n`, skin.file);
-    return { ...skin, css, html };
+    return { ...skin, css, html: await highlight(css, skin.file) };
   }),
 );
 

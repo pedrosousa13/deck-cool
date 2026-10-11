@@ -87,12 +87,15 @@ export function slidedeckRow(libraries: readonly Library[]): Library {
   return row;
 }
 
-/** The first code block under the README's `## heading`, without its fence. */
+/**
+ * The first code block under the README's `## heading`, without its fence. A
+ * fence closes at a line of as many backticks or more, as CommonMark has it.
+ */
 export function fence(readme: string, heading: string): string {
   const section = readme
     .split(/^## /m)
     .find((part) => part.startsWith(`${heading}\n`));
-  const code = section && /^```\w*\n([^]*?)\n```$/m.exec(section)?.[1];
+  const code = section && /^(`{3,})\w*\n([^]*?)\n\1`*$/m.exec(section)?.[2];
   if (code === undefined) {
     throw new Error(`The README has no code block under "## ${heading}".`);
   }

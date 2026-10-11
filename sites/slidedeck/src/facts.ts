@@ -2,7 +2,7 @@
 // @slidedeck/react's README and package.json when the site builds. Never
 // retyped: a new release, with a new `pnpm compare` measurement, changes the
 // page on the next build.
-import { createMarkdownRenderer } from "@pagedeck/markdown-loader";
+import { highlighter } from "@deck-cool/site-kit/highlight";
 import { fence, readSlidedeckReadme, readSlidedeckVersion, slidedeckSize } from "@deck-cool/site-kit/slidedeck-readme";
 
 const SITE = new URL("../", import.meta.url);
@@ -30,9 +30,5 @@ export const install = fence(readme, "Install");
 /** The theme the site's code is highlighted in: dark, as the site is. */
 export const CODE_THEME = "github-dark-default";
 
-const renderer = await createMarkdownRenderer({ languages: ["tsx"], theme: CODE_THEME });
-
 /** The README's quickstart, highlighted, as HTML. */
-export const quickstart = (
-  await renderer.render(`\`\`\`tsx\n${fence(readme, "Quickstart")}\n\`\`\`\n`, "@slidedeck/react/README.md")
-).html;
+export const quickstart = await (await highlighter("tsx", CODE_THEME))(fence(readme, "Quickstart"), "@slidedeck/react/README.md");
