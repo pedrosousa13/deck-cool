@@ -8,3 +8,7 @@ packages:
 allowBuilds:
   esbuild: false
   workerd: false
+# satori pins fflate 0.7.3, which GHSA-px8p-9vwx-vf98 covers. Remove this
+# override once satori stops pinning 0.7.3.
+overrides:
+  fflate: 0.7.5
