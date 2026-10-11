@@ -11,6 +11,8 @@ import { REPOSITORY } from "../components/links.ts";
 import { umbrella } from "@deck-cool/brand/decks";
 import { slidedeck } from "../components/slidedeck.ts";
 import { CONTENT_SECURITY_POLICY, DECK_STYLE_HASHES } from "./csp.ts";
+import { DEMOS } from "./demos.ts";
+import { DOCS_NAV } from "./docs-pages.ts";
 import { install, size, version } from "./facts.ts";
 import { SKINS } from "./skins.ts";
 import { SITE_ORIGIN } from "./seo.ts";
@@ -36,18 +38,8 @@ const DOCS_PAGES = [
 
 const PAGES = [...OWN_PAGES, ...DOCS_PAGES] as const;
 
-/** The installed @slidedeck/docs, which the docs pages are built from. */
-const DOCS = fileURLToPath(new URL("../node_modules/@slidedeck/docs/", import.meta.url));
-
-/** Each page in nav.json, in order: its file, its address and the demos it marks. */
-const NAV = (JSON.parse(readFileSync(`${DOCS}nav.json`, "utf8")) as { label: string; pages: string[] }[])
-  .flatMap((group) => group.pages)
-  .map((file) => {
-    const route = file.replace(/(^|\/)index\.md$|\.md$/, "");
-    const path = `/docs/${route === "" ? "" : `${route}/`}`;
-    const demos = [...readFileSync(`${DOCS}${file}`, "utf8").matchAll(/^<!-- demo:([\w-]+) -->$/gm)].map(([, name]) => name);
-    return { file, path, html: `${path.slice(1)}index.html`, demos };
-  });
+/** Every page the site builds, by path: its own, then every docs page in nav.json's order. */
+const ALL_PATHS = [...OWN_PAGES.map(([path]) => path), ...DOCS_NAV.map(({ path }) => path)];
 
 const window = new Window();
 
@@ -75,12 +67,12 @@ const budget = (JSON.parse(readFileSync(`${SITE}.pagedeck/budget-report.json`, "
 
 describe("the JavaScript budget", () => {
   test("covers every page", () => {
-    expect(budget.map((page) => page.path).sort()).toEqual([...OWN_PAGES.map(([path]) => path), ...NAV.map(({ path }) => path)].sort());
+    expect(budget.map((page) => page.path).sort()).toEqual([...ALL_PATHS].sort());
   });
 
   // A page's budget is what it ships, rounded up to the next KB: a page that
   // ships more breaks the build, and one that ships much less needs its budget lowered.
-  test.each([...OWN_PAGES.map(([path]) => path), ...NAV.map(({ path }) => path)])("%s ships the islands it renders, within a KB of its budget", (path) => {
+  test.each(ALL_PATHS)("%s ships the islands it renders, within a KB of its budget", (path) => {
     const page = present(
       budget.find((each) => each.path === path),
       `${path}'s budget`,
@@ -542,7 +534,7 @@ describe("every page", () => {
 test("the search index holds the site's pages and every docs page, within what one keystroke may fetch", () => {
   const index = `${OUT}/search/en/`;
   const documents = JSON.parse(readFileSync(`${index}documents.json`, "utf8")) as { path: string; title?: string }[];
-  expect(documents.map(({ path }) => path).sort()).toEqual(["/", "/examples/", ...NAV.map(({ path }) => path)].sort());
+  expect(documents.map(({ path }) => path).sort()).toEqual([...ALL_PATHS].sort());
   const bytes = readdirSync(index).reduce((total, file) => total + statSync(`${index}${file}`).size, 0);
   expect(bytes).toBeLessThanOrEqual(QUERY_CAP);
 });
@@ -550,7 +542,7 @@ test("the search index holds the site's pages and every docs page, within what o
 test("the sitemap and robots.txt name slide.deck.cool", () => {
   const sitemap = readFileSync(`${OUT}/sitemap-en.xml`, "utf8");
   expect([...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, loc]) => loc).sort()).toEqual(
-    [`${SITE_ORIGIN}/`, `${SITE_ORIGIN}/examples/`, ...NAV.map(({ path }) => `${SITE_ORIGIN}${path}`)].sort(),
+    ALL_PATHS.map((path) => `${SITE_ORIGIN}${path}`).sort(),
   );
   expect(readFileSync(`${OUT}/robots.txt`, "utf8")).toContain(`Sitemap: ${SITE_ORIGIN}/sitemap.xml`);
 });
@@ -610,11 +602,11 @@ describe("the docs, from @slidedeck/docs", () => {
 
   // slidedeck's READMEs link https://slide.deck.cool/docs/.
   test("serves /docs/, the docs' first page", () => {
-    expect(NAV[0]?.path).toBe("/docs/");
+    expect(DOCS_NAV[0]?.path).toBe("/docs/");
     expect(existsSync(`${OUT}/docs/index.html`)).toBe(true);
   });
 
-  test.each(NAV)("$path renders with each demo it marks, in order, rendered on the server", ({ html, demos }) => {
+  test.each(DOCS_NAV)("$path renders with each demo it marks, in order, rendered on the server", ({ html, demos }) => {
     const doc = parse(html);
     expect(demosOn(doc)).toEqual(demos);
     for (const island of doc.querySelectorAll("article fw-island")) {
@@ -622,15 +614,13 @@ describe("the docs, from @slidedeck/docs", () => {
     }
   });
 
-  test("marks 22 demos across the docs, each a different one", () => {
-    const demos = NAV.flatMap((page) => page.demos);
-    expect(demos).toHaveLength(22);
-    expect(new Set(demos).size).toBe(22);
+  test("marks each demo the site registers once, and no other", () => {
+    expect(DOCS_NAV.flatMap((page) => page.demos).sort()).toEqual(Object.keys(DEMOS).sort());
   });
 
   test("the sidebar lists every page in nav.json's order, each by its label or else its title", () => {
     const sidebar = present(parse("docs/install/index.html").querySelector('nav[aria-label="Documentation"]'), "the sidebar");
-    expect([...sidebar.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual(NAV.map(({ path }) => path));
+    expect([...sidebar.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual(DOCS_NAV.map(({ path }) => path));
     expect(text(sidebar.querySelector('a[href="/docs/"]'))).toBe("Introduction");
     expect(text(sidebar.querySelector('a[href="/docs/install/"]'))).toBe("Install");
   });
@@ -643,7 +633,7 @@ describe("the docs, from @slidedeck/docs", () => {
   });
 
   test("a page with no demo ships the search island alone, and every such page ships the same", () => {
-    const plain = NAV.filter(({ demos }) => demos.length === 0);
+    const plain = DOCS_NAV.filter(({ demos }) => demos.length === 0);
     expect(plain.length).toBeGreaterThan(0);
     for (const { html } of plain) {
       expect([...parse(html).querySelectorAll("fw-island")].map((island) => island.getAttribute("data-fw-component"))).toEqual(["search"]);

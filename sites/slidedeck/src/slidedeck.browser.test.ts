@@ -1,10 +1,11 @@
 import { AxeBuilder } from "@axe-core/playwright";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Page } from "playwright";
 import { describe, expect, test, vi } from "vitest";
 import { browserHarness, islandsHydrated } from "@deck-cool/site-kit/browser-test";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
+import { DEMOS } from "./demos.ts";
+import { DOCS_NAV } from "./docs-pages.ts";
 
 // Drives the built site (build.global-setup.ts) in Chromium, served with the
 // headers in the build's _headers file, so each page and its islands run
@@ -19,11 +20,8 @@ const { visit } = site;
 // The docs pages, one with a demo and one without, as site.build.test.ts covers them.
 const PAGES = ["/", "/examples/", "/docs/quickstart/", "/docs/install/"] as const;
 
-/** Every docs page that marks a demo, by its address. */
-const DEMO_PAGES = (JSON.parse(readFileSync(new URL("../node_modules/@slidedeck/docs/nav.json", import.meta.url), "utf8")) as { pages: string[] }[])
-  .flatMap((group) => group.pages)
-  .filter((file) => /^<!-- demo:/m.test(readFileSync(new URL(`../node_modules/@slidedeck/docs/${file}`, import.meta.url), "utf8")))
-  .map((file) => `/docs/${file.replace(/(^|\/)index\.md$|\.md$/, "")}/`.replace("//", "/"));
+/** Every docs page that marks a demo. */
+const DEMO_PAGES = DOCS_NAV.filter(({ demos }) => demos.length > 0);
 
 /**
  * Waits until every island has hydrated, the search box among them, and every
@@ -191,12 +189,12 @@ describe("search in a browser", () => {
 });
 
 describe("the docs' demos in a browser", () => {
-  test("every docs page with a demo is marked so in nav.json's pages", () => {
-    expect(DEMO_PAGES.length).toBeGreaterThan(10);
+  test("the pages visited below carry every demo the site registers", () => {
+    expect(DEMO_PAGES.flatMap(({ demos }) => demos).sort()).toEqual(Object.keys(DEMOS).sort());
   });
 
   // Every demo island runs under the CSP, loads nothing from another origin, and no script fails.
-  test.each(DEMO_PAGES)("%s's demos run, under the CSP, with nothing off the origin, and axe finds no violations", async (path) => {
+  test.each(DEMO_PAGES)("$path's demos run, under the CSP, with nothing off the origin, and axe finds no violations", async ({ path }) => {
     const { page, offOrigin, violations, errors } = await visit(path, { width: 1280, reducedMotion: "reduce" });
     await hydrated(page);
     expect(await page.locator("article [data-slidedeck-slide][data-in-view]").count()).toBeGreaterThan(0);
@@ -208,7 +206,7 @@ describe("the docs' demos in a browser", () => {
     expect(errors).toEqual([]);
   });
 
-  test.each(DEMO_PAGES)("at 390px, %s does not scroll sideways", async (path) => {
+  test.each(DEMO_PAGES)("at 390px, $path does not scroll sideways", async ({ path }) => {
     const { page } = await visit(path, { width: 390, reducedMotion: "reduce" });
     await hydrated(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
