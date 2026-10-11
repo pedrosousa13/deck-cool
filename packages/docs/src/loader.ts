@@ -1,4 +1,5 @@
 import type { Loader } from "@pagedeck/content";
+import type { TrailingSlash } from "@pagedeck/core";
 import { createMarkdownRenderer } from "@pagedeck/markdown-loader";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -77,13 +78,20 @@ function entryPath(base: string, file: string): string {
   return [...segments(base), ...segments(file.slice(0, -EXTENSION.length))].join("/");
 }
 
-/** The address a page is served at, under the site's trailing-slash policy. */
-function hrefOf(options: DocsOptions, file: string): string {
-  const parts = segments(entryPath(options.base, file));
+/**
+ * The address a page is served at, from its file in the docs package, under the site's base
+ * and trailing-slash policy: `guides/layout.md` under `/docs` is `/docs/guides/layout/`.
+ */
+export function docsHref(base: string, file: string, trailingSlash: TrailingSlash = "always"): string {
+  const parts = segments(entryPath(base, file));
   if (parts.at(-1) === "index") parts.pop();
   if (parts.length === 0) return "/";
   const path = `/${parts.join("/")}`;
-  return (options.trailingSlash ?? "always") === "always" ? `${path}/` : path;
+  return trailingSlash === "always" ? `${path}/` : path;
+}
+
+function hrefOf(options: DocsOptions, file: string): string {
+  return docsHref(options.base, file, options.trailingSlash);
 }
 
 const NAV = "nav.json";

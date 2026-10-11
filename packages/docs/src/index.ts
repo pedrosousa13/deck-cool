@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { contentRootOf, createDocsLoader } from "./loader.ts";
 import type { DocsPage } from "./loader.ts";
 
+export { docsHref } from "./loader.ts";
 export type { DocsPage, NavGroup } from "./loader.ts";
 
 /** A component as `build.components` declares one: a module path, or `{ path, hydrate }`. */

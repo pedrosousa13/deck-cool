@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
-import { defineDocs } from "./index.ts";
+import { defineDocs, docsHref } from "./index.ts";
 import type { DocsOptions } from "./index.ts";
 import { unsafeMarkup } from "./page.ts";
 
@@ -73,6 +73,16 @@ async function sync(from: URL, overrides: Partial<DocsOptions> = {}) {
     store.close();
   }
 }
+
+describe("docsHref", () => {
+  test("gives a page's address from its file, as the contract's routes table does", () => {
+    expect(docsHref("/docs", "index.md")).toBe("/docs/");
+    expect(docsHref("/docs", "guides/layout.md")).toBe("/docs/guides/layout/");
+    expect(docsHref("/docs", "guides/index.md")).toBe("/docs/guides/");
+    expect(docsHref("/docs", "guides/layout.md", "never")).toBe("/docs/guides/layout");
+    expect(docsHref("/", "index.md")).toBe("/");
+  });
+});
 
 describe("a fixture that follows the contract", () => {
   test("syncs one entry per page, at its route under the base", async () => {
