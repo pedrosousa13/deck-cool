@@ -1,6 +1,6 @@
 import type { Loader } from "@pagedeck/content";
 import { createMarkdownRenderer } from "@pagedeck/markdown-loader";
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, posix, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -212,6 +212,8 @@ export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
 
     const contentRoot = contentRootOf(options.from);
     rmSync(contentRoot, { recursive: true, force: true });
+    // build.passthrough refuses a contentRoot that does not exist, so a package with no images has one too.
+    mkdirSync(contentRoot, { recursive: true });
     if (existsSync(join(root, "assets"))) {
       cpSync(join(root, "assets"), join(contentRoot, ...segments(options.base), "assets"), { recursive: true });
     }

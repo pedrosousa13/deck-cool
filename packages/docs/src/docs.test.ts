@@ -1,7 +1,7 @@
 import { listEntries, openStore, syncCollection, syncCollectionSince } from "@pagedeck/content";
 import { describeError } from "@pagedeck/core";
 import type { Page } from "@pagedeck/core";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -19,8 +19,8 @@ afterEach(() => {
 
 /**
  * A site directory holding a copy of the fixture docs package at
- * node_modules/@example/docs, with `edits` applied (a file mapped to undefined
- * is removed). Returns the URL of the site's would-be config file.
+ * node_modules/@example/docs, with `edits` applied (a file or directory mapped
+ * to undefined is removed). Returns the URL of the site's would-be config file.
  */
 function site(edits: Readonly<Record<string, string | undefined>> = {}): URL {
   const dir = mkdtempSync(join(tmpdir(), "docs-loader-"));
@@ -28,7 +28,7 @@ function site(edits: Readonly<Record<string, string | undefined>> = {}): URL {
   const docs = join(dir, "node_modules", "@example", "docs");
   cpSync(FIXTURE, docs, { recursive: true });
   for (const [file, text] of Object.entries(edits)) {
-    if (text === undefined) rmSync(join(docs, file));
+    if (text === undefined) rmSync(join(docs, file), { recursive: true });
     else {
       mkdirSync(dirname(join(docs, file)), { recursive: true });
       writeFileSync(join(docs, file), text);
@@ -194,6 +194,13 @@ describe("a fixture that follows the contract", () => {
     expect(readFileSync(join(docs.contentRoot, "docs/assets/grid.svg"), "utf8")).toBe(
       readFileSync(new URL("assets/grid.svg", FIXTURE), "utf8"),
     );
+  });
+
+  test("makes the content root for a package with no images, which build.passthrough needs to exist", async () => {
+    const layout = LAYOUT.replace("![The layout grid](../assets/grid.svg)\n", "");
+    const from = site({ assets: undefined, "guides/layout.md": layout });
+    const { docs } = await sync(from);
+    expect(existsSync(docs.contentRoot)).toBe(true);
   });
 
   test("syncs incrementally (pagedeck sync --incremental) as it syncs in full", async () => {
