@@ -74,10 +74,11 @@ describe("the package", () => {
     }
   });
 
-  test("takes @playdeck/react and every provider from npm at 1.3.0, and Pagedeck at 0.2.3", () => {
+  test("takes @playdeck/react, every provider and the docs from npm at 1.3.0, and Pagedeck at 0.2.3", () => {
     const playdeckPackages = Object.entries(all).filter(([name]) => name.startsWith("@playdeck/"));
     expect(Object.fromEntries(playdeckPackages)).toEqual({
       "@playdeck/core": "1.3.0",
+      "@playdeck/docs": "1.3.0",
       "@playdeck/provider-hls": "1.3.0",
       "@playdeck/provider-native": "1.3.0",
       "@playdeck/provider-vimeo": "1.3.0",
@@ -88,9 +89,9 @@ describe("the package", () => {
     for (const [name, version] of Object.entries(all)) if (name.startsWith("@pagedeck/")) expect(version, name).toBe("0.2.3");
   });
 
-  test("depends on none of the old site's styling, and not on @playdeck/docs", () => {
+  test("depends on none of the old site's styling", () => {
     const names = Object.keys(all).join(" ");
-    expect(names).not.toMatch(/tailwind|radix|cmdk|class-variance-authority|clsx|lucide|@fontsource|@playdeck\/docs/);
+    expect(names).not.toMatch(/tailwind|radix|cmdk|class-variance-authority|clsx|lucide|@fontsource/);
   });
 });
 

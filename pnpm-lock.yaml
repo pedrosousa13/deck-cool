@@ -238,6 +238,9 @@ importers:
       '@playdeck/core':
         specifier: 1.3.0
         version: 1.3.0
+      '@playdeck/docs':
+        specifier: 1.3.0
+        version: 1.3.0
       '@playdeck/provider-hls':
         specifier: 1.3.0
         version: 1.3.0
@@ -846,6 +849,9 @@ packages:
 
   '@playdeck/core@1.3.0':
     resolution: {integrity: sha512-04ijf00dijaWLeAr/PUqA+tag4ZhlhZoSADLyW681ROaBAoEaumsyc1SvM4d5TAV0eIwpXeSwKfkc8M6ydsygQ==}
+
+  '@playdeck/docs@1.3.0':
+    resolution: {integrity: sha512-Wargz/7uvFiK15Y6GYRkSJTLfU6KpFJmGqLHgED6WC1mnkJT8mpxAQovciODuWvfUvVs9K1t0piLk+u59oZqnQ==}
 
   '@playdeck/provider-hls@1.3.0':
     resolution: {integrity: sha512-9Z3tAoiTXahQYb2sEpE4hzJW3ZnpvFKUUsd1nGOIf0ahLX7OpPIeDVCz52viM7VHp6VAMazc390Obyr8FeyN6w==}
@@ -2544,6 +2550,8 @@ snapshots:
       - yaml
 
   '@playdeck/core@1.3.0': {}
+
+  '@playdeck/docs@1.3.0': {}
 
   '@playdeck/provider-hls@1.3.0':
     dependencies:
