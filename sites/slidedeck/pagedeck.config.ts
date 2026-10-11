@@ -75,10 +75,10 @@ export default defineConfig({
       after: [{ component: "footer" }],
     }),
     // One hashed sheet under /assets/, linked from every page's <head>, in this
-    // order, the Theme demo's sheet after the site's, the home page's two skins last. The brand's sheets by their real
-    // paths: on a site with islands, Pagedeck 0.2.3 puts a sheet in the core
-    // chunk only when its path is the one the bundler resolves, and a path
-    // through node_modules' link is not.
+    // order: the Theme demo's sheet after the site's, the home page's two skins
+    // last. The brand's sheets by their real paths: on a site with islands,
+    // Pagedeck 0.2.3 puts a sheet in the core chunk only when its path is the
+    // one the bundler resolves, and a path through node_modules' link is not.
     css: [
       brandSheet("brand.css"),
       brandSheet("family-bar.css"),

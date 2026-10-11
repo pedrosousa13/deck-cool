@@ -32,7 +32,6 @@ const links = (scope: Element | null | undefined) =>
   [...(scope?.querySelectorAll("a") ?? [])].map((a) => [a.textContent, a.getAttribute("href")]);
 
 describe("the docs layout", () => {
-  // build.head titles and describes the page, from src/seo.ts, with its share card.
   test("leaves the page's title and description to build.head", () => {
     const page = render("/docs/install/");
     expect(page.querySelector("title")).toBeNull();
