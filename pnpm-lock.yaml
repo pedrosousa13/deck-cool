@@ -308,6 +308,9 @@ importers:
       '@resvg/resvg-js':
         specifier: 2.6.2
         version: 2.6.2
+      '@slidedeck/docs':
+        specifier: 1.0.3
+        version: 1.0.3
       '@slidedeck/react':
         specifier: 1.0.3
         version: 1.0.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -1188,6 +1191,9 @@ packages:
 
   '@slidedeck/core@1.0.3':
     resolution: {integrity: sha512-OxAWLuRYXr5ZKvUQ5BbbKjp5aOLbgz3qnvHtsqchGYRD1/8wjVC+C9f7+GZmAs+WuFU+9SiqfbEtwC9pTlOgbw==}
+
+  '@slidedeck/docs@1.0.3':
+    resolution: {integrity: sha512-U7mWdnJzkkCNROzPjOeCeO85nimJJ8nE0kSKzv9R8zYY2AlDjrt3sgWva01k8+/GLvGkrAoachDoRfi/JzRXmQ==}
 
   '@slidedeck/react@1.0.3':
     resolution: {integrity: sha512-ZmhuOx+d0aEnQ5HVSaHZ9ufgxpPgBcxVJ6+4AIbdQHDiCNoJmOLqUV9GYomO/vVT3NL1CyeQTDel8HWQKdW7Gg==}
@@ -2773,6 +2779,8 @@ snapshots:
   '@sindresorhus/is@7.2.0': {}
 
   '@slidedeck/core@1.0.3': {}
+
+  '@slidedeck/docs@1.0.3': {}
 
   '@slidedeck/react@1.0.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:

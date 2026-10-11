@@ -19,6 +19,7 @@
     "@pagedeck/markdown-loader": "0.2.3",
     "@pagedeck/search": "0.2.3",
     "@resvg/resvg-js": "2.6.2",
+    "@slidedeck/docs": "1.0.3",
     "@slidedeck/react": "1.0.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
