@@ -614,6 +614,15 @@ describe("the docs, from @slidedeck/docs", () => {
     }
   });
 
+  // The layout and the demos are the site's own words, unlike the prose they frame. A demo
+  // writes some only once it runs, so their source is read.
+  test.each(["components/docs-page.tsx", ...readdirSync(`${SITE}components/demos`).map((file) => `components/demos/${file}`)])(
+    "%s uses no em dash",
+    (file) => {
+      expect(readFileSync(`${SITE}${file}`, "utf8")).not.toMatch(/—|&mdash;/);
+    },
+  );
+
   test("marks each demo the site registers once, and no other", () => {
     expect(DOCS_NAV.flatMap((page) => page.demos).sort()).toEqual(Object.keys(DEMOS).sort());
   });

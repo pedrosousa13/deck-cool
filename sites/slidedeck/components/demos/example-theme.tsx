@@ -4,7 +4,7 @@ import * as Deck from "@slidedeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
 // The controls in theme.css's plain look, with a few of its --deck-* tokens
-// set on `.example-theme`. styles/slidedeck.css imports the theme, in a layer,
+// set on `.example-theme`. styles/demo-theme.css imports the theme, in a layer,
 // and applies it to this example alone.
 export default function Theme() {
   return (

@@ -16,7 +16,7 @@ function PhotoControls() {
         Previous photo
       </button>
       <span>
-        {count !== null && `${twoDigits(index + 1)} — ${twoDigits(count)}`}
+        {count !== null && `${twoDigits(index + 1)} / ${twoDigits(count)}`}
       </span>
       <button type="button" disabled={!canNext} onClick={next}>
         Next photo
