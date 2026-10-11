@@ -15,7 +15,7 @@ test("the decks are exactly slidedeck, playdeck and pagedeck", () => {
 test("each deck links to its site", () => {
   expect(decks.map((deck) => deck.url)).toEqual([
     "https://slide.deck.cool",
-    "https://playdeck.video",
+    "https://play.deck.cool",
     "https://page.deck.cool",
   ]);
 });

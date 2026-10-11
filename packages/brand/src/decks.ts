@@ -92,7 +92,7 @@ export const playdeck: Deck<LiteralFigure> = {
     "React primitives and hooks over native video, HLS, YouTube, Vimeo and Wistia. The same six lines drive all five.",
   install: "pnpm add @playdeck/react",
   figure: { value: "0", label: "requests to YouTube or Vimeo before play" },
-  url: "https://playdeck.video",
+  url: "https://play.deck.cool",
   accent: { fill: "#d9214f", text: "#ff5c86" },
   icons: icons("playdeck"),
 };

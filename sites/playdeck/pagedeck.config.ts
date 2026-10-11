@@ -239,8 +239,8 @@ export default defineConfig({
   collections: [comparison],
   build: {
     adapter: cloudflarePages(),
-    // Every page names its own path here as canonical: playdeck.video stays
-    // canonical when the site is also served at play.deck.cool (CONTEXT.md).
+    // Every page names its own path here as canonical: play.deck.cool is
+    // playdeck's canonical address (CONTEXT.md).
     origin: ORIGIN,
     pages: definePages({
       locales: defineLocales({ en: { label: "English", direction: "ltr" } }),

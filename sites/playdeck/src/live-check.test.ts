@@ -19,19 +19,19 @@ test("the build, served with its _headers, passes every check but the ones only 
   }
 });
 
-test("a page whose canonical link is its own path on playdeck.video passes", () => {
-  expect(checkCanonical("/examples/", '<link rel="canonical" href="https://playdeck.video/examples/">')).toEqual([]);
+test("a page whose canonical link is its own path on play.deck.cool passes", () => {
+  expect(checkCanonical("/examples/", '<link rel="canonical" href="https://play.deck.cool/examples/">')).toEqual([]);
 });
 
 test("a page with no canonical link fails", () => {
   expect(checkCanonical("/examples/", "<head></head>")).toEqual([
-    "/examples/: no canonical link, expected https://playdeck.video/examples/",
+    "/examples/: no canonical link, expected https://play.deck.cool/examples/",
   ]);
 });
 
-test("a page that names itself as canonical, not playdeck.video, fails", () => {
-  expect(checkCanonical("/examples/", '<link rel="canonical" href="https://play.deck.cool/examples/">')).toEqual([
-    "/examples/: canonical is https://play.deck.cool/examples/, expected https://playdeck.video/examples/",
+test("a page that names playdeck.video as canonical, not play.deck.cool, fails", () => {
+  expect(checkCanonical("/examples/", '<link rel="canonical" href="https://playdeck.video/examples/">')).toEqual([
+    "/examples/: canonical is https://playdeck.video/examples/, expected https://play.deck.cool/examples/",
   ]);
 });
 

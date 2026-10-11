@@ -259,9 +259,9 @@ Two things Cloudflare does on the zone are known, and the maintainer accepted bo
 
 ## playdeck at play.deck.cool
 
-`sites/playdeck` is served at `https://play.deck.cool` by a fourth Worker, `play-deck-cool`, on the same `deck.cool` zone. Every page names its own path on `https://playdeck.video` as canonical, as `CONTEXT.md` says: `playdeck.video` stays the canonical address.
+`sites/playdeck` is served at `https://play.deck.cool` by a fourth Worker, `play-deck-cool`, on the same `deck.cool` zone. Every page names its own path on `https://play.deck.cool` as canonical, as `CONTEXT.md` says.
 
-**playdeck.video is deferred to #65.** `playdeck.video` is still served by the Worker `playdeck`, which pedrosousa13/playdeck's `deploy-site.yml` deploys. This repo does not touch that Worker, that zone or that workflow. Moving `playdeck.video` to this build is #65.
+**playdeck.video redirects here after #52.** `playdeck.video` is still served by the Worker `playdeck`, which pedrosousa13/playdeck's `deploy-site.yml` deploys. It also serves playdeck's docs, so it stays up until #52 moves them to `/docs`. Then #65 adds a 301 redirect from `playdeck.video` to `play.deck.cool`, which must match `http://` too, and retires that Worker. Until then, this repo does not touch that Worker, that zone or that workflow.
 
 Every section above applies, with these differences:
 
@@ -299,7 +299,7 @@ pnpm --filter @sites/playdeck check-live                      # https://play.dec
 pnpm --filter @sites/playdeck check-live https://example.com  # any other origin
 ```
 
-`check-live` fetches `/`, `/examples/`, `/guides/comparison/`, `/docs/search/` and `/archetype-captions.vtt`, and fails unless each answers `200` with every header in `sites/playdeck/src/headers.ts`, at its exact value, and no `immutable`. The CSP, and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, are among those headers. It fails unless each page's `<link rel="canonical">` is the same path on `https://playdeck.video`. It then checks the hashed stylesheet that `/` links, as deck.cool's check does. It fails unless `/manifest.json` and `/no-such-page/` answer `404`, and unless `http://play.deck.cool/` answers `301` to `https://play.deck.cool/`. `sites/playdeck/src/live-check.test.ts` runs the same checks against the build served locally.
+`check-live` fetches `/`, `/examples/`, `/guides/comparison/`, `/docs/search/` and `/archetype-captions.vtt`, and fails unless each answers `200` with every header in `sites/playdeck/src/headers.ts`, at its exact value, and no `immutable`. The CSP, and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, are among those headers. It fails unless each page's `<link rel="canonical">` is its own path on `https://play.deck.cool`. It then checks the hashed stylesheet that `/` links, as deck.cool's check does. It fails unless `/manifest.json` and `/no-such-page/` answer `404`, and unless `http://play.deck.cool/` answers `301` to `https://play.deck.cool/`. `sites/playdeck/src/live-check.test.ts` runs the same checks against the build served locally.
 
 `src/live-check.ts` lists this site's paths and holds the canonical check, which site-kit runs on each page it fetches. The other checks are site-kit's, as deck.cool's are.
 

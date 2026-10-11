@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest";
 import { playdeck, umbrella } from "@deck-cool/brand/decks";
 import { everyResponse, isRecord, present, readManifest, text } from "@deck-cool/site-kit/build-test";
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
-import { DOCS, ORIGIN, PATHS, REPO } from "../components/links.ts";
+import { DOCS, PATHS, REPO } from "../components/links.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 import { SKINS } from "./skins.ts";
 
@@ -157,10 +157,10 @@ describe("every page", () => {
     expect(doc.documentElement.getAttribute("lang")).toBe("en");
   });
 
-  // CONTEXT.md: playdeck.video stays canonical, so play.deck.cool names it.
-  test.each(PAGES)("%s names the same path on playdeck.video as canonical", (path) => {
+  // CONTEXT.md: play.deck.cool is playdeck's canonical address.
+  test.each(PAGES)("%s names its own path on play.deck.cool as canonical", (path) => {
     const canonical = [...parse(path).head.querySelectorAll('link[rel="canonical"]')].map((link) => link.getAttribute("href"));
-    expect(canonical).toEqual([`${ORIGIN}${path}`]);
+    expect(canonical).toEqual([`https://play.deck.cool${path}`]);
   });
 
   test.each(PAGES)("%s opens with the Family bar, set to playdeck, and closes with the footer", (path) => {

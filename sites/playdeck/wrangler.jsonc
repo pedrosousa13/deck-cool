@@ -5,7 +5,7 @@
   // Not a secret: an account ID grants nothing without a token.
   "account_id": "c0bf36f52ec4652dabdacd6538b54983",
   "compatibility_date": "2026-10-01",
-  // One address: play.deck.cool, and no workers.dev one. playdeck.video waits for #65.
+  // One address: play.deck.cool, and no workers.dev one. playdeck.video is the old Worker's until #65 redirects it here.
   "workers_dev": false,
   "routes": [{ "pattern": "play.deck.cool", "custom_domain": true }],
   "assets": {

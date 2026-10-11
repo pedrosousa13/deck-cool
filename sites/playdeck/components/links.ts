@@ -2,7 +2,7 @@
 export const REPO = "https://github.com/pedrosousa13/playdeck";
 
 /** playdeck's canonical site. Every page here names its own path on it as canonical (CONTEXT.md). */
-export const ORIGIN = "https://playdeck.video";
+export const ORIGIN = "https://play.deck.cool";
 
 /**
  * playdeck's docs, where they are today: the Astro site at playdeck.video.
@@ -10,7 +10,7 @@ export const ORIGIN = "https://playdeck.video";
  * pages exist, the build's link check refuses a /docs/ link.
  */
 export const DOCS = {
-  start: `${ORIGIN}/start/`,
+  start: "https://playdeck.video/start/",
 } as const;
 
 /** Each page this site builds, at the path playdeck.video serves it at today. */
