@@ -44,6 +44,17 @@ export interface BrowserHarness {
   visit(path: string, options?: VisitOptions): Promise<Visit>;
 }
 
+/** The part of React's root fiber that islandsHydrated reads. */
+interface ReactRootFiber {
+  stateNode: { current: { memoizedState: { isDehydrated: boolean } } };
+}
+
+/**
+ * How long islandsHydrated waits before it names the islands still
+ * dehydrated: under vitest's default test timeout of 5 s, so it fails first.
+ */
+const HYDRATION_DEADLINE_MS = 4_000;
+
 /**
  * Brings each island into view in turn, so one that hydrates when visible
  * does, and waits until every island on the page has hydrated, then scrolls
@@ -53,9 +64,14 @@ export interface BrowserHarness {
  * same check React makes before it dispatches an event. The build's HTML
  * carries neither. A wait for network idle is no such signal: once the page
  * has gone idle, it returns at once, before a late island's script arrives.
+ *
+ * It reads react-dom 19's private root state, the __reactContainer$ expando
+ * and isDehydrated, because @pagedeck/islands' runtime sets no hydration
+ * marker of its own. A React upgrade that renames them makes it throw at the
+ * deadline, naming every island, rather than pass.
  */
 export async function islandsHydrated(page: Page): Promise<void> {
-  await page.evaluate(async () => {
+  await page.evaluate(async (deadline) => {
     const hydrated = (island: Element) => {
       const key = Object.keys(island).find((name) => name.startsWith("__reactContainer$"));
       const root = key === undefined ? undefined : (island as unknown as Record<string, ReactRootFiber>)[key];
@@ -65,24 +81,24 @@ export async function islandsHydrated(page: Page): Promise<void> {
     const show = (island: Element) =>
       [...island.children].find((child) => child.getClientRects().length > 0)?.scrollIntoView({ block: "center" });
     const frames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const waiting = () => [...document.querySelectorAll("fw-island")].find((island) => !hydrated(island));
+    const waiting = () => [...document.querySelectorAll("fw-island")].filter((island) => !hydrated(island));
+    const until = performance.now() + deadline;
     // Two frames in view each, so their scripts load side by side; then each
-    // one still waiting, until none is.
+    // one still waiting, until none is or the deadline passes.
     for (const island of document.querySelectorAll("fw-island")) {
       show(island);
       await frames();
     }
-    for (let island = waiting(); island !== undefined; island = waiting()) {
-      show(island);
+    for (let left = waiting(); left.length > 0; left = waiting()) {
+      if (performance.now() > until) {
+        const names = left.map((island) => island.getAttribute("data-fw-component") ?? "an unnamed island");
+        throw new Error(`${String(left.length)} island(s) did not hydrate within ${String(deadline)} ms: ${names.join(", ")}`);
+      }
+      show(left[0] as Element);
       await frames();
     }
     window.scrollTo(0, 0);
-  });
-}
-
-/** The part of React's root fiber that islandsHydrated reads. */
-interface ReactRootFiber {
-  stateNode: { current: { memoizedState: { isDehydrated: boolean } } };
+  }, HYDRATION_DEADLINE_MS);
 }
 
 /**

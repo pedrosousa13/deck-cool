@@ -33,7 +33,7 @@ describe("the pagedeck site in a browser", () => {
   describe.each([390, 1280])("at %ipx", (width) => {
     test.each(PAGES)("%s: axe finds no violations, nothing leaves the origin, the CSP holds and no error is thrown", async (path) => {
       const { page, offOrigin, violations, errors } = await visit(path, { width });
-      // Let the idle and visible islands hydrate before axe reads the page.
+      // Let every island hydrate before axe reads the page.
       await islandsHydrated(page);
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       expect(offOrigin).toEqual([]);
