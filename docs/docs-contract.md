@@ -37,7 +37,19 @@ description: How slidedeck sizes a slide to its container.
 A slide fills the width of its container...
 ```
 
-The site shows `title` as the page's heading, so do not open the body with a `#` heading: the first one is dropped. Other fields are allowed, and the site ignores them.
+The site shows `title` as the page's heading, so do not open the body with a `#` heading: the first one is dropped.
+
+`label` is optional: a shorter name for the page in the site's navigation, such as `Introduction` for a page titled `slidedeck`. With no `label`, the navigation shows the `title`.
+
+```md
+---
+title: slidedeck
+label: Introduction
+description: Documentation for slidedeck.
+---
+```
+
+Other fields are allowed, and the site ignores them.
 
 ## `nav.json`
 
@@ -50,7 +62,7 @@ An ordered list of groups. Each group has a `label` and an ordered list of `page
 ]
 ```
 
-The site's navigation shows the groups and pages in this order. Every page must be in `nav.json` once, and every path in `nav.json` must be a page.
+The site's navigation shows the groups and pages in this order, each page by its `label` or, with none, its `title`. Every page must be in `nav.json` once, and every path in `nav.json` must be a page.
 
 ## Routes
 

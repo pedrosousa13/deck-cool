@@ -23,6 +23,7 @@ export interface DocsPage {
 
 export interface NavGroup {
   readonly label: string;
+  /** Each page's `title` here is what the nav names it: its `label`, or else its title. */
   readonly pages: readonly { readonly title: string; readonly href: string }[];
 }
 
@@ -216,11 +217,12 @@ export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
     }
 
     const byFile = new Map(pages.map((page) => [page.file, page]));
+    const labels = new Map(scanned.map((page) => [page.file, page.label]));
     const navGroups = nav.groups.map((group) => ({
       label: group.label,
       pages: group.pages.flatMap((file) => {
         const page = byFile.get(file);
-        return page === undefined ? [] : [{ title: page.title, href: page.href }];
+        return page === undefined ? [] : [{ title: labels.get(file) ?? page.title, href: page.href }];
       }),
     }));
     const changed = [];

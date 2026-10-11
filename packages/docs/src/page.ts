@@ -29,6 +29,8 @@ export interface ScannedPage {
   /** Empty when missing, which is a fault. */
   readonly title: string;
   readonly description: string;
+  /** What the nav names the page: its optional `label`, or else its title. */
+  readonly label: string;
   /** The body with every relative link and image pointed at its address on the site. */
   readonly body: string;
   readonly faults: readonly Fault[];
@@ -113,6 +115,7 @@ export function scanPage(file: string, text: string, context: PageContext): Scan
   };
   const title = required("title", "<the page's title>");
   const description = required("description", "<one sentence on the page>");
+  const label = typeof frontmatter.label === "string" && frontmatter.label.trim() !== "" ? frontmatter.label : title;
 
   // marked keeps a label's first definition and drops the rest without a token, so every
   // definition is recorded as it is read.
@@ -226,7 +229,7 @@ export function scanPage(file: string, text: string, context: PageContext): Scan
   for (const { start, end, text } of rewrites.sort((a, b) => b.start - a.start)) {
     rewritten = rewritten.slice(0, start) + text + rewritten.slice(end);
   }
-  return { file, title, description, body: rewritten, faults };
+  return { file, title, description, label, body: rewritten, faults };
 }
 
 /** Cuts rendered HTML at each demo marker. A marker in a code block is escaped, so it is not cut. */

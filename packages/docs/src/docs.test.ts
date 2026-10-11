@@ -107,6 +107,16 @@ describe("a fixture that follows the contract", () => {
     for (const entry of entries) expect(entry.data.nav, entry.path).toEqual(expected);
   });
 
+  test("names a page in the nav by its label, when it has one, and keeps its title", async () => {
+    const { entries } = await sync(site({ "install.md": "---\ntitle: Install slidedeck\nlabel: Install\ndescription: How.\n---\n\nText.\n" }));
+    const install = entries.find((entry) => entry.path === "docs/install");
+    expect(install?.data.title).toBe("Install slidedeck");
+    expect(install?.data.nav[0]?.pages).toEqual([
+      { title: "Example", href: "/docs/" },
+      { title: "Install", href: "/docs/install/" },
+    ]);
+  });
+
   test("rewrites relative .md links, inline and by reference, to routes", async () => {
     const { entries } = await sync(site());
     const html = (path: string) => entries.find((entry) => entry.path === path)?.data.body.map((part) => part.kind === "html" ? part.html : "").join("");
