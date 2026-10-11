@@ -54,18 +54,20 @@ const settled = (page: Page) =>
   );
 
 interface Frame {
+  /** performance.now() when the frame was recorded, in ms. */
+  at: number;
   sheet: { top: number; left: number; width: number; height: number };
   shade: { top: number; left: number; width: number; height: number };
 }
 
 declare global {
   interface Window {
-    /** The sheet's and the shade's boxes on each frame of a close, set by recordClose(). */
+    /** The time and the sheet's and the shade's boxes on each frame of a close, set by recordClose(). */
     closeFrames?: Promise<Frame[]>;
   }
 }
 
-/** Records the sheet's and the shade's boxes on every frame, from now until the panel is hidden. */
+/** Records the time and the sheet's and the shade's boxes on every frame, from now until the panel is hidden. */
 const recordClose = (page: Page) =>
   page.evaluate(() => {
     window.closeFrames = new Promise((resolve) => {
@@ -79,7 +81,7 @@ const recordClose = (page: Page) =>
       const panel = document.querySelector("header [popover]");
       const look = () => {
         if (panel === null || getComputedStyle(panel).display === "none") return resolve(frames);
-        frames.push({ sheet: rect(".family-bar__sheet"), shade: rect(".family-bar__shade") });
+        frames.push({ at: performance.now(), sheet: rect(".family-bar__sheet"), shade: rect(".family-bar__shade") });
         requestAnimationFrame(look);
       };
       requestAnimationFrame(look);
@@ -274,8 +276,11 @@ describe("the Family bar's switcher in a browser", () => {
     else await page.mouse.click(width / 2, shade.y + shade.height / 2);
     const frames = await page.evaluate(() => window.closeFrames ?? Promise.reject(new Error("not recording")));
 
-    // The exit runs for .45s, so a broken frame has many chances to show.
-    expect(frames.length).toBeGreaterThan(5);
+    // The exit runs for .45s. A loaded runner renders fewer frames, so count
+    // time, not frames: the frames seen must span most of the exit, 300ms,
+    // which leaves 150ms for a late first frame and an early last one.
+    expect(frames.length).toBeGreaterThanOrEqual(2);
+    expect((frames.at(-1)?.at ?? 0) - (frames[0]?.at ?? 0)).toBeGreaterThanOrEqual(300);
     for (const frame of frames) {
       expect(frame.sheet).toEqual({ top: sheet.y, left: sheet.x, width: sheet.width, height: sheet.height });
       expect(frame.shade).toEqual({ top: shade.y, left: shade.x, width: shade.width, height: shade.height });
