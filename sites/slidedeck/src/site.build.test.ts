@@ -70,16 +70,30 @@ describe("the JavaScript budget", () => {
     expect(budget.map((page) => page.path).sort()).toEqual([...ALL_PATHS].sort());
   });
 
-  // A page's budget is what it ships, rounded up to the next KB: a page that
-  // ships more breaks the build, and one that ships much less needs its budget lowered.
-  test.each(ALL_PATHS)("%s ships the islands it renders, within a KB of its budget", (path) => {
-    const page = present(
+  const pageBudget = (path: string) =>
+    present(
       budget.find((each) => each.path === path),
       `${path}'s budget`,
     );
+  const demoPaths = DOCS_NAV.filter(({ demos }) => demos.length > 0).map(({ path }) => path);
+
+  // A page's budget is what it ships, rounded up to the next KB: a page that
+  // ships more breaks the build, and one that ships much less needs its budget lowered.
+  test.each(ALL_PATHS.filter((path) => !demoPaths.includes(path)))("%s ships the islands it renders, within a KB of its budget", (path) => {
+    const page = pageBudget(path);
     expect(page.actual).toBeGreaterThan(0);
     expect(page.limit - page.actual).toBeGreaterThanOrEqual(0);
     expect(page.limit - page.actual).toBeLessThan(1024);
+  });
+
+  // So a docs release that moves a demo to another page still builds.
+  test("the docs pages with demos share one budget, which the largest of them fills to within a KB", () => {
+    const pages = demoPaths.map(pageBudget);
+    expect(new Set(pages.map((page) => page.limit)).size).toBe(1);
+    const limit = pages[0]?.limit ?? 0;
+    const largest = Math.max(...pages.map((page) => page.actual));
+    expect(limit - largest).toBeGreaterThanOrEqual(0);
+    expect(limit - largest).toBeLessThan(1024);
   });
 });
 

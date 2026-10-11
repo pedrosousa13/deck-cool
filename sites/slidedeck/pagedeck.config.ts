@@ -23,6 +23,29 @@ const pages = defineCollection({
   schema: false,
 });
 
+/** The docs pages that mark a demo, in @slidedeck/docs 1.0.3. */
+const DOCS_DEMO_PAGES = [
+  "/docs/guides/autoplay/",
+  "/docs/guides/drag/",
+  "/docs/guides/effects/",
+  "/docs/guides/focal-slide/",
+  "/docs/guides/layout/",
+  "/docs/guides/loop/",
+  "/docs/guides/pages/",
+  "/docs/guides/progress/",
+  "/docs/guides/the-index/",
+  "/docs/guides/theme/",
+  "/docs/guides/vertical-and-rtl/",
+  "/docs/quickstart/",
+  "/docs/recipes/centred-ends/",
+  "/docs/recipes/custom-controls/",
+  "/docs/recipes/middle-slide/",
+  "/docs/recipes/per-breakpoint/",
+  "/docs/recipes/size-a-curve/",
+  "/docs/reference/hooks/",
+  "/docs/reference/primitives/",
+];
+
 // slidedeck's docs, from the @slidedeck/docs this site pins, under /docs.
 const docs = defineDocs({
   from: import.meta.url,
@@ -115,26 +138,11 @@ export default defineConfig({
       "/examples/": "61kb",
       // A docs page with no demo ships the search island alone.
       "/docs/**": "61kb",
-      // A docs page with demos ships slidedeck and each of its demos too.
-      "/docs/guides/autoplay/": "70kb",
-      "/docs/guides/drag/": "70kb",
-      "/docs/guides/effects/": "71kb",
-      "/docs/guides/focal-slide/": "70kb",
-      "/docs/guides/layout/": "70kb",
-      "/docs/guides/loop/": "70kb",
-      "/docs/guides/pages/": "70kb",
-      "/docs/guides/progress/": "70kb",
-      "/docs/guides/the-index/": "70kb",
-      "/docs/guides/theme/": "70kb",
-      "/docs/guides/vertical-and-rtl/": "70kb",
-      "/docs/quickstart/": "70kb",
-      "/docs/recipes/centred-ends/": "70kb",
-      "/docs/recipes/custom-controls/": "70kb",
-      "/docs/recipes/middle-slide/": "70kb",
-      "/docs/recipes/per-breakpoint/": "71kb",
-      "/docs/recipes/size-a-curve/": "70kb",
-      "/docs/reference/hooks/": "70kb",
-      "/docs/reference/primitives/": "70kb",
+      // A docs page with demos ships slidedeck and its demos too. Budget globs
+      // cannot pick out the pages with a demo, so each is listed. They share
+      // one budget, the largest one's, so a release that moves or adds a demo
+      // among these pages still builds; a demo on another page needs it listed.
+      ...Object.fromEntries(DOCS_DEMO_PAGES.map((path) => [path, "71kb"])),
     },
     adapter: cloudflarePages(),
   },
