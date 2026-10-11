@@ -2,7 +2,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import { fileURLToPath } from "node:url";
 import type { Locator } from "playwright";
 import { describe, expect, test } from "vitest";
-import { browserHarness } from "@deck-cool/site-kit/browser-test";
+import { browserHarness, islandsHydrated } from "@deck-cool/site-kit/browser-test";
 import { PATHS } from "../components/links.ts";
 import { MEDIA_ORIGINS } from "./csp.ts";
 import { RESPONSE_HEADERS } from "./headers.ts";
@@ -39,7 +39,7 @@ describe("the playdeck site in a browser", () => {
     test.each(PAGES)("%s: axe finds no violations, nothing leaves the origin, the CSP holds and no error is thrown", { timeout: 90_000 }, async (path) => {
       const { page, offOrigin, violations, errors } = await visit(path, { width });
       // Let the islands hydrate before axe reads the page.
-      await page.waitForLoadState("networkidle");
+      await islandsHydrated(page);
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       expect(offOrigin).toEqual([]);
       expect(await violations()).toEqual([]);
@@ -48,21 +48,21 @@ describe("the playdeck site in a browser", () => {
 
     test.each(PAGES)("%s does not scroll sideways", async (path) => {
       const { page } = await visit(path, { width });
-      await page.waitForLoadState("networkidle");
+      await islandsHydrated(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     });
   });
 
   test.each(PAGES)("%s on a phone lays out at the phone's width, not a desktop one, and does not scroll sideways", async (path) => {
     const { page } = await visit(path, { width: 390, isMobile: true });
-    await page.waitForLoadState("networkidle");
+    await islandsHydrated(page);
     expect(await page.evaluate(() => window.innerWidth)).toBe(390);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 
   test.each(PAGES)("%s: with prefers-reduced-motion: reduce, nothing moves", async (path) => {
     const { page } = await visit(path, { width: 1280, reducedMotion: "reduce" });
-    await page.waitForLoadState("networkidle");
+    await islandsHydrated(page);
     await page.locator(".family-bar__links a").first().hover();
     expect(await page.evaluate(() => document.getAnimations().map((animation) => animation.constructor.name))).toEqual([]);
   });
@@ -165,12 +165,10 @@ describe("the playdeck site in a browser", () => {
           body: "window.YT = { Player: function () {} }; window.onYouTubeIframeAPIReady();",
         });
       });
-      await page.waitForLoadState("networkidle");
-      await page.mouse.wheel(0, 4000);
-      await page.waitForLoadState("networkidle");
+      // Every island hydrated, so anything that loads on sight has loaded.
+      await islandsHydrated(page);
       await page.locator(scope).scrollIntoViewIfNeeded();
       await page.locator(`${scope} [data-playdeck-part="viewport"][data-idle]`).waitFor();
-      await page.waitForLoadState("networkidle");
       expect(offOrigin).toEqual([]);
       expect(scripts.filter((path) => /_playdeck-provider-/.test(path))).toEqual([]);
       // The still is this site's, and has loaded.
@@ -208,15 +206,12 @@ describe("the playdeck site in a browser", () => {
   ])("the $name player", ({ path, scope, press, clip }) => {
     test("requests nothing off the origin, and loads no provider, until it is pressed; then plays its clip under the CSP", async () => {
       const { page, offOrigin, scripts, violations, errors } = await visit(path, { width: 1280 });
-      await page.waitForLoadState("networkidle");
-      // Scrolled past both players, so anything that loads on sight has loaded.
-      await page.mouse.wheel(0, 4000);
-      await page.waitForLoadState("networkidle");
-      // Then back to this one, until it has hydrated: a viewport writes
+      // Every island hydrated, so anything that loads on sight has loaded.
+      await islandsHydrated(page);
+      // Then back to this one, until its player is ready: a viewport writes
       // data-idle from an effect, which the server's HTML does not carry.
       await page.locator(scope).first().scrollIntoViewIfNeeded();
       await page.locator(`${scope} [data-playdeck-part="viewport"][data-idle]`).first().waitFor();
-      await page.waitForLoadState("networkidle");
       expect(offOrigin).toEqual([]);
       const before = [...scripts];
       const provider = /^\/assets\/_playdeck-provider-native-[A-Za-z0-9_-]{8}\.js$/;
@@ -239,6 +234,7 @@ describe("the playdeck site in a browser", () => {
 
   test("the docs' search finds a page, and follows it", async () => {
     const { page, violations } = await visit(PATHS.search, { width: 1280 });
+    await islandsHydrated(page);
     const box = page.getByRole("combobox", { name: "Search the site" });
     await box.fill("vidstack");
     const results = page.getByRole("option");

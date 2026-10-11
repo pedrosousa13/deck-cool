@@ -2,7 +2,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import { fileURLToPath } from "node:url";
 import type { Page } from "playwright";
 import { describe, expect, test, vi } from "vitest";
-import { browserHarness, type VisitOptions } from "@deck-cool/site-kit/browser-test";
+import { browserHarness, islandsHydrated } from "@deck-cool/site-kit/browser-test";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 
 // Drives the built site (build.global-setup.ts) in Chromium, served with the
@@ -13,26 +13,17 @@ import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 vi.setConfig({ testTimeout: 30_000 });
 
 const site = browserHarness(fileURLToPath(new URL("..", import.meta.url)));
-/** Each visit waits until the network is idle. An island that hydrates when visible has not loaded yet: hydrated() waits for those. */
-const visit = (path: string, options: VisitOptions) => site.visit(path, { waitUntil: "networkidle", ...options });
+const { visit } = site;
 
 const PAGES = ["/", "/examples/"] as const;
 
 /**
- * Brings every island into view, so each one that hydrates when visible does,
- * then back to the top once every deck runs: its engine marks the slides in
- * view with data-in-view. The visit already waited for network idle, so a
- * second wait for it returns at once, before a deck's script has arrived.
+ * Waits until every island has hydrated, the search box among them, and every
+ * deck runs: its engine marks the slides in view with data-in-view.
  */
 async function hydrated(page: Page) {
-  await page.evaluate(async () => {
-    for (const island of document.querySelectorAll("fw-island")) {
-      island.querySelector("[aria-roledescription], input")?.scrollIntoView({ block: "center" });
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-    }
-  });
+  await islandsHydrated(page);
   await page.locator('[aria-roledescription="carousel"]:not(:has([data-in-view]))').first().waitFor({ state: "detached" });
-  await page.evaluate(() => window.scrollTo(0, 0));
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 

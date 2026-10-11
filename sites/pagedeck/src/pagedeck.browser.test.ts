@@ -1,7 +1,7 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { browserHarness } from "@deck-cool/site-kit/browser-test";
+import { browserHarness, islandsHydrated } from "@deck-cool/site-kit/browser-test";
 import { PATHS } from "../components/links.ts";
 import { RESPONSE_HEADERS } from "./headers.ts";
 
@@ -34,7 +34,7 @@ describe("the pagedeck site in a browser", () => {
     test.each(PAGES)("%s: axe finds no violations, nothing leaves the origin, the CSP holds and no error is thrown", async (path) => {
       const { page, offOrigin, violations, errors } = await visit(path, { width });
       // Let the idle and visible islands hydrate before axe reads the page.
-      await page.waitForLoadState("networkidle");
+      await islandsHydrated(page);
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       expect(offOrigin).toEqual([]);
       expect(await violations()).toEqual([]);
@@ -101,6 +101,7 @@ describe("the pagedeck site in a browser", () => {
   test("the island page's counter hydrates under the CSP and counts presses", async () => {
     const { page, violations } = await visit(PATHS.interactive, { width: 1280 });
     const output = page.locator("main output");
+    await islandsHydrated(page);
     await page.getByRole("button", { name: "Press me" }).click();
     await expect.poll(() => output.textContent()).toBe("Pressed 1 times");
     expect(await violations()).toEqual([]);
@@ -108,6 +109,7 @@ describe("the pagedeck site in a browser", () => {
 
   test("the docs' search finds a page, and follows it", async () => {
     const { page, violations } = await visit(PATHS.search, { width: 1280 });
+    await islandsHydrated(page);
     const box = page.getByRole("combobox", { name: "Search the documentation" });
     await box.fill("island");
     const results = page.getByRole("option");
@@ -129,7 +131,7 @@ describe("the pagedeck site in a browser", () => {
 
   test("the features page's embed loads only after consent, under the CSP", async () => {
     const { page, violations } = await visit(PATHS.features, { width: 1280 });
-    await page.waitForLoadState("networkidle");
+    await islandsHydrated(page);
     const loaded = page.locator('[data-embed="loaded"]');
     await page.getByRole("button", { name: "Load the embed" }).click();
     expect(await loaded.count()).toBe(0);

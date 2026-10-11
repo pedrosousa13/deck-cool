@@ -45,6 +45,47 @@ export interface BrowserHarness {
 }
 
 /**
+ * Brings each island into view in turn, so one that hydrates when visible
+ * does, and waits until every island on the page has hydrated, then scrolls
+ * back to the top. The island runtime hydrates each <fw-island> with React's
+ * hydrateRoot, which keeps its root on the element under a __reactContainer$
+ * key; the root stops being dehydrated once React commits the hydration, the
+ * same check React makes before it dispatches an event. The build's HTML
+ * carries neither. A wait for network idle is no such signal: once the page
+ * has gone idle, it returns at once, before a late island's script arrives.
+ */
+export async function islandsHydrated(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const hydrated = (island: Element) => {
+      const key = Object.keys(island).find((name) => name.startsWith("__reactContainer$"));
+      const root = key === undefined ? undefined : (island as unknown as Record<string, ReactRootFiber>)[key];
+      return root?.stateNode.current.memoizedState.isDehydrated === false;
+    };
+    // To its first child with a box: the marker has none, nor has a <style> in it.
+    const show = (island: Element) =>
+      [...island.children].find((child) => child.getClientRects().length > 0)?.scrollIntoView({ block: "center" });
+    const frames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const waiting = () => [...document.querySelectorAll("fw-island")].find((island) => !hydrated(island));
+    // Two frames in view each, so their scripts load side by side; then each
+    // one still waiting, until none is.
+    for (const island of document.querySelectorAll("fw-island")) {
+      show(island);
+      await frames();
+    }
+    for (let island = waiting(); island !== undefined; island = waiting()) {
+      show(island);
+      await frames();
+    }
+    window.scrollTo(0, 0);
+  });
+}
+
+/** The part of React's root fiber that islandsHydrated reads. */
+interface ReactRootFiber {
+  stateNode: { current: { memoizedState: { isDehydrated: boolean } } };
+}
+
+/**
  * Serves the site the build wrote under `site`, its directory, with the
  * headers in its _headers file, and launches Chromium, for the test file that
  * calls it. Both close after the file's tests. Needs Playwright's Chromium:
