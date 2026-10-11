@@ -12,6 +12,8 @@ import type { BodyPart, Fault } from "./page.ts";
 export interface DocsPage {
   readonly title: string;
   readonly description: string;
+  /** What the nav names the page: its optional `label`, or else its title. */
+  readonly label: string;
   /** The page's file in the docs package, such as `guides/layout.md`. */
   readonly file: string;
   /** The address the site serves the page at, such as `/docs/guides/layout/`. */
@@ -212,6 +214,7 @@ export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
       pages.push({
         title: page.title,
         description: page.description,
+        label: page.label,
         file: page.file,
         href: hrefOf(options, page.file),
         body: splitAtDemos(rendered.html),
@@ -227,12 +230,11 @@ export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
     }
 
     const byFile = new Map(pages.map((page) => [page.file, page]));
-    const labels = new Map(scanned.map((page) => [page.file, page.label]));
     const navGroups = nav.groups.map((group) => ({
       label: group.label,
       pages: group.pages.flatMap((file) => {
         const page = byFile.get(file);
-        return page === undefined ? [] : [{ title: labels.get(file) ?? page.title, href: page.href }];
+        return page === undefined ? [] : [{ title: page.label, href: page.href }];
       }),
     }));
     const changed = [];
