@@ -160,6 +160,7 @@ describe("every page", () => {
   // CONTEXT.md: play.deck.cool is playdeck's canonical address.
   test.each(PAGES)("%s names its own path on play.deck.cool as canonical", (path) => {
     const canonical = [...parse(path).head.querySelectorAll('link[rel="canonical"]')].map((link) => link.getAttribute("href"));
+    // A literal, so the test does not just compare ORIGIN with itself.
     expect(canonical).toEqual([`https://play.deck.cool${path}`]);
   });
 

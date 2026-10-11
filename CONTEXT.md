@@ -23,7 +23,7 @@ Made by the maintainer on 2026-10-08.
   | --- | --- |
   | Umbrella | `deck.cool` |
   | slidedeck | `slide.deck.cool` |
-  | playdeck | `play.deck.cool`. `playdeck.video` is to 301-redirect to it once #52 lands (ruled 2026-10-10, #65) |
+  | playdeck | `play.deck.cool`. `playdeck.video` will 301 to it after #52 (ruled 2026-10-10, #65) |
   | pagedeck | `page.deck.cool`, with its landing page and docs merged into one site and the docs under `/docs` |
 
   Cloudflare's free certificate covers one subdomain level (`*.deck.cool`), so no deck gets a second level such as `docs.page.deck.cool`.

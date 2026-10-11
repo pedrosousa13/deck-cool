@@ -261,7 +261,7 @@ Two things Cloudflare does on the zone are known, and the maintainer accepted bo
 
 `sites/playdeck` is served at `https://play.deck.cool` by a fourth Worker, `play-deck-cool`, on the same `deck.cool` zone. Every page names its own path on `https://play.deck.cool` as canonical, as `CONTEXT.md` says.
 
-**playdeck.video redirects here after #52.** `playdeck.video` is still served by the Worker `playdeck`, which pedrosousa13/playdeck's `deploy-site.yml` deploys. It also serves playdeck's docs, so it stays up until #52 moves them to `/docs`. Then #65 adds a 301 redirect from `playdeck.video` to `play.deck.cool`, which must match `http://` too, and retires that Worker. Until then, this repo does not touch that Worker, that zone or that workflow.
+**playdeck.video will redirect here after #52.** `playdeck.video` is still served by the Worker `playdeck`. pedrosousa13/playdeck's `deploy-site.yml` deploys it. That Worker also serves playdeck's docs. It stays up until #52 moves them to `/docs`. Then #65 adds a 301 redirect from `playdeck.video` to `play.deck.cool` and retires the Worker. The redirect must match `http://` too. Until then, this repo does not touch that Worker, that zone or that workflow.
 
 Every section above applies, with these differences:
 
