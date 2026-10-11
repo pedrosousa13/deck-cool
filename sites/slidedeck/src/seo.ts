@@ -1,9 +1,11 @@
 // What a page tells search engines and share cards, all from the page itself:
-// its title, and the `description` in its frontmatter.
+// its title, and the `description` in its frontmatter. A docs page's comes
+// from @slidedeck/docs.
 
 import { getEntry, type Collection, type ContentStoreReader } from "@pagedeck/content";
 import type { JsonLdNode, Page, PageHead, SocialImageInputs } from "@pagedeck/core";
 import type { MarkdownEntry } from "@pagedeck/markdown-loader";
+import type { DocsPage } from "@deck-cool/docs";
 import { REPOSITORY } from "../components/links.ts";
 
 /**
@@ -15,11 +17,23 @@ export const SITE_ORIGIN = "https://slide.deck.cool";
 
 interface Described {
   title: string;
+  /** What the tab and search results show, where it differs from the title. */
+  tabTitle?: string;
   description: string | undefined;
 }
 
-function describe(page: Page, store: ContentStoreReader, pages: Collection<MarkdownEntry>): Described | undefined {
-  if (page.entry === undefined || page.collection !== pages.name) return undefined;
+function describe(
+  page: Page,
+  store: ContentStoreReader,
+  pages: Collection<MarkdownEntry>,
+  docs: Collection<DocsPage>,
+): Described | undefined {
+  if (page.entry === undefined) return undefined;
+  if (page.collection === docs.name) {
+    const doc = getEntry(store, docs, page.entry)?.data;
+    return doc === undefined ? undefined : { title: doc.title, tabTitle: `${doc.title} · slidedeck docs`, description: doc.description };
+  }
+  if (page.collection !== pages.name) return undefined;
   const entry = getEntry(store, pages, page.entry)?.data;
   if (entry === undefined) return undefined;
   const description = entry.frontmatter["description"];
@@ -44,12 +58,17 @@ function sourceCode(description: string | undefined): JsonLdNode {
 }
 
 /** build.head: the title, the description and, on the home page, the structured data. */
-export function headOf(page: Page, store: ContentStoreReader, pages: Collection<MarkdownEntry>): PageHead | undefined {
-  const described = describe(page, store, pages);
+export function headOf(
+  page: Page,
+  store: ContentStoreReader,
+  pages: Collection<MarkdownEntry>,
+  docs: Collection<DocsPage>,
+): PageHead | undefined {
+  const described = describe(page, store, pages, docs);
   if (described === undefined) return undefined;
-  const { title, description } = described;
+  const { title, tabTitle, description } = described;
   return {
-    title,
+    title: tabTitle ?? title,
     ...(description === undefined ? {} : { description }),
     ...(page.path === "/" ? { jsonLd: sourceCode(description) } : {}),
   };
@@ -60,8 +79,9 @@ export function socialInputsOf(
   page: Page,
   store: ContentStoreReader,
   pages: Collection<MarkdownEntry>,
+  docs: Collection<DocsPage>,
 ): SocialImageInputs | undefined {
-  const described = describe(page, store, pages);
+  const described = describe(page, store, pages, docs);
   return described === undefined ? undefined : { headline: described.title };
 }
 
