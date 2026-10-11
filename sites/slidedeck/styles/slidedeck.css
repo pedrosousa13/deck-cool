@@ -1584,3 +1584,261 @@ main .docs-sidebar a {
     padding: 20px;
   }
 }
+
+/* The docs' demos (components/demos/): each in a frame, its slides tiles. */
+
+.docs-demo {
+  margin: 8px 0 40px;
+  padding: 28px;
+  border: 1px solid var(--rule);
+  border-radius: 28px;
+}
+
+/* Border-box, so a recipe's padding stays inside the deck's width. */
+.docs-demo [data-slidedeck-viewport] {
+  box-sizing: border-box;
+  border-radius: 20px;
+}
+
+.docs-demo [data-slidedeck-slide] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 200px;
+  border-radius: 20px;
+  background-color: var(--tile);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+
+.docs-demo [data-slidedeck-counter] {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* A demo's own controls, built on Deck.useDeck(): the deck controls' pills. */
+.docs-controls {
+  display: flex;
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.docs-controls [role="group"] {
+  display: flex;
+  gap: 4px;
+}
+
+.docs-controls button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background-color: var(--control);
+  color: var(--control-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.docs-controls button:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+.docs-controls button[aria-current="true"] {
+  background-color: var(--text);
+  color: var(--ground-page);
+}
+
+.docs-controls button:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+}
+
+/* Each demo's CSS: the docs page's own, on a class of the demo's deck. */
+
+/* Layout, Drag and right to left: two and a half in view, centred. */
+.example-layout [data-slidedeck-viewport] {
+  gap: 16px;
+}
+
+.example-layout [data-slidedeck-slide] {
+  width: calc((100% - 2 * 16px) / 2.5);
+  scroll-snap-align: center;
+}
+
+/* Focal slide: three in view, centred; the focal one outlined. */
+.example-focal [data-slidedeck-viewport] {
+  gap: 16px;
+}
+
+.example-focal [data-slidedeck-slide] {
+  width: calc((100% - 2 * 16px) / 3);
+  scroll-snap-align: center;
+  cursor: pointer;
+}
+
+.example-focal [data-slidedeck-slide][data-focal] {
+  outline: 3px solid var(--text-link);
+  outline-offset: -3px;
+}
+
+/* Loop: part of each neighbour in view, so the seam shows. */
+.example-loop [data-slidedeck-viewport] {
+  gap: 16px;
+}
+
+.example-loop [data-slidedeck-slide] {
+  width: 70%;
+  scroll-snap-align: center;
+}
+
+/* Vertical: the viewport's height, which each slide fills. */
+.example-vertical [data-slidedeck-viewport] {
+  height: 240px;
+}
+
+.example-vertical [data-slidedeck-slide] {
+  min-height: 0;
+}
+
+/* Pages: three slides to a page from 640px. */
+.example-pages [data-slidedeck-viewport] {
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .example-pages [data-slidedeck-slide] {
+    width: calc((100% - 2 * 16px) / 3);
+  }
+
+  .example-pages [data-slidedeck-slide]:nth-child(3n + 1) {
+    scroll-snap-align: start;
+  }
+
+  .example-pages [data-slidedeck-slide]:not(:nth-child(3n + 1)) {
+    scroll-snap-align: none;
+  }
+}
+
+/* Progress: smaller with distance from the focal slide. Two and a half
+   slides to the deck's width, each centred, the first and last too, so the
+   first slide rests at progress 0, as the server HTML starts it. */
+.example-progress {
+  container-type: inline-size;
+  --slide-width: calc((100cqi - 2 * 16px) / 2.5);
+}
+
+.example-progress [data-slidedeck-viewport] {
+  gap: 16px;
+  /* Half the viewport less half a slide, at each end. */
+  padding-inline: calc(50% - var(--slide-width) / 2);
+}
+
+.example-progress [data-slidedeck-slide] {
+  width: var(--slide-width);
+  scroll-snap-align: center;
+  /* abs() spelled with max() for older browsers. */
+  scale: calc(1 - min(max(var(--deck-slide-progress, 0), -1 * var(--deck-slide-progress, 0)), 1) * .2);
+  transform-origin: center;
+}
+
+/* Curve: cards on an arc of 3 slides, with room for the slides that are not
+   faded out at rest. */
+.example-curve [data-slidedeck-viewport],
+.example-curve-size [data-slidedeck-viewport] {
+  --deck-curve-radius: 3;
+  gap: 16px;
+  padding-inline: calc(50% - 80px);
+}
+
+.example-curve [data-slidedeck-viewport] {
+  padding-block: 7px 150px;
+}
+
+.example-curve [data-slidedeck-slide],
+.example-curve-size [data-slidedeck-slide] {
+  width: 160px;
+  min-height: 0;
+  background: none;
+  scroll-snap-align: center;
+}
+
+.example-curve .card,
+.example-curve-size .card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 200px;
+  border-radius: 20px;
+  background-color: var(--tile);
+}
+
+/* Size a curve: the recipe's room, for a slide about to fade out. */
+.example-curve-size [data-slidedeck-viewport] {
+  padding-block: 7px 460px;
+}
+
+/* Centre the first and last slide. */
+.example-centred-ends {
+  --slide-width: 280px;
+}
+
+.example-centred-ends [data-slidedeck-viewport] {
+  gap: 16px;
+  padding-inline: calc(50% - var(--slide-width) / 2);
+}
+
+.example-centred-ends [data-slidedeck-slide] {
+  width: var(--slide-width);
+  scroll-snap-align: center;
+}
+
+/* Highlight the middle slide in view: centred. */
+.example-middle-centred [data-slidedeck-viewport],
+.example-middle-by-progress [data-slidedeck-viewport] {
+  gap: 16px;
+}
+
+.example-middle-centred [data-slidedeck-slide] {
+  width: calc((100% - 2 * 16px) / 3);
+  scroll-snap-align: center;
+}
+
+.example-middle-centred [data-slidedeck-slide][data-focal] {
+  outline: 3px solid var(--text-link);
+  outline-offset: -3px;
+}
+
+/* Highlight the middle slide in view: by progress. */
+.example-middle-by-progress [data-slidedeck-slide] {
+  width: calc((100% - 2 * 16px) / 3);
+  --from-middle: min(max(var(--deck-slide-progress, 0) - 1, 1 - var(--deck-slide-progress, 0)), 1);
+  outline: 3px solid color-mix(in srgb, var(--text-link) calc((1 - var(--from-middle)) * 100%), transparent);
+  outline-offset: -3px;
+}
+
+/* Per breakpoint: three in view from 768px; below it, fade. */
+@media (min-width: 768px) {
+  .example-per-breakpoint [data-slidedeck-viewport] {
+    gap: 16px;
+  }
+
+  .example-per-breakpoint [data-slidedeck-slide] {
+    width: calc((100% - 2 * 16px) / 3);
+  }
+}
+
+@media (max-width: 400px) {
+  .docs-demo {
+    padding: 20px 16px;
+  }
+}
