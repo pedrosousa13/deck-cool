@@ -232,6 +232,49 @@ export function scanPage(file: string, text: string, context: PageContext): Scan
   return { file, title, description, label, body: rewritten, faults };
 }
 
+// What the renderer writes from markdown, with Shiki's highlighted code. Any other element or
+// attribute came from raw HTML.
+const ALLOWED_TAGS = new Set(
+  "a blockquote br code del em h1 h2 h3 h4 h5 h6 hr img input li ol p pre span strong table tbody td th thead tr ul".split(" "),
+);
+const ALLOWED_ATTRIBUTES = new Set("align alt checked class disabled href id src start style tabindex title type".split(" "));
+// Attributes in double quotes, as the renderer writes them: a value holds no < or >.
+const TAG = /<\/?([a-z][a-z0-9]*)((?:\s+[a-z-]+(?:="[^"<>]*")?)*)\s*>/y;
+const ATTRIBUTE = /\s+([a-z-]+)(?:="([^"]*)")?/g;
+const DEMO_MARKER = /<!-- demo:[A-Za-z0-9_-]+ -->/y;
+
+/**
+ * A URL a browser cannot read as script: no `&`, which could spell a scheme as a character
+ * reference, no space or control character, which a browser strips, and an allowed scheme or none.
+ */
+function safeUrl(url: string): boolean {
+  if (/[\x00-\x20&]/.test(url)) return false;
+  const scheme = SCHEME.exec(url)?.[1];
+  return scheme === undefined || ALLOWED_SCHEMES.has(scheme.toLowerCase());
+}
+
+/**
+ * The first markup in rendered HTML that markdown does not write, or undefined. Every `<` the
+ * renderer writes opens a tag, since it escapes text and attribute values, so each is read here:
+ * a demo marker, or an element and attributes it writes, with a safe `href` and `src`.
+ */
+export function unsafeMarkup(html: string): string | undefined {
+  for (let at = html.indexOf("<"); at !== -1; at = html.indexOf("<", at + 1)) {
+    DEMO_MARKER.lastIndex = at;
+    if (DEMO_MARKER.test(html)) continue;
+    const close = html.indexOf(html.startsWith("<!--", at) ? "-->" : ">", at);
+    const markup = close === -1 ? html.slice(at) : html.slice(at, html.indexOf(">", close) + 1);
+    TAG.lastIndex = at;
+    const tag = TAG.exec(html);
+    if (tag === null || !ALLOWED_TAGS.has(tag[1] ?? "")) return markup;
+    for (const [, name = "", value = ""] of (tag[2] ?? "").matchAll(ATTRIBUTE)) {
+      if (!ALLOWED_ATTRIBUTES.has(name)) return markup;
+      if ((name === "href" || name === "src") && !safeUrl(value)) return markup;
+    }
+  }
+  return undefined;
+}
+
 /** Cuts rendered HTML at each demo marker. A marker in a code block is escaped, so it is not cut. */
 export function splitAtDemos(html: string): BodyPart[] {
   const parts: BodyPart[] = [];

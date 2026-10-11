@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import { defineDocs } from "./index.ts";
 import type { DocsOptions } from "./index.ts";
+import { unsafeMarkup } from "./page.ts";
 
 const FIXTURE = new URL("../fixtures/example-docs/", import.meta.url);
 
@@ -564,5 +565,77 @@ describe("the content callback", () => {
       "Page /about/: is not a docs page — render it with build.content only for pages from the docs collection",
     );
     store.close();
+  });
+});
+
+// Docs HTML reaches the page through dangerouslySetInnerHTML, and the docs come from npm.
+// The scan refuses raw HTML in the markdown, and DocsProse checks the rendered HTML again, so a
+// page cannot inject script even where the scan and the renderer read the markdown differently.
+describe("the rendered HTML", () => {
+  test("a page with <script>, an onerror= attribute and a javascript: link fails the build and stores none of them", async () => {
+    const hostile = "<script>alert(1)</script>\n\nPress <img src=x onerror=alert(2)> it.\n\n[go](javascript:alert(3))\n";
+    const from = site({ "guides/demos.md": DEMOS.replace("Press the button.", hostile) });
+    const docs = defineDocs(options(from));
+    const store = openStore(fileURLToPath(new URL("content.db", from)));
+    const report = await failure(syncCollection(store, docs.collection));
+    expect(report).toContain("<script>alert(1)</script>");
+    expect(report).toContain("onerror=alert(2)");
+    expect(report).toContain("javascript:alert(3)");
+    expect(listEntries(store, docs.collection)).toEqual([]);
+    store.close();
+  });
+
+  test("allows everything the renderer writes from markdown, and the demo marker", async () => {
+    const markdown = [
+      "## A heading",
+      "",
+      "Some *em*, **strong**, ~~gone~~, `code`, a [link](https://example.com/ \"Title\") and https://example.com/bare.",
+      "",
+      "![An image](../assets/grid.svg \"Grid\")",
+      "",
+      "> A quote,\n> over two lines.",
+      "",
+      "3. three\n4. four",
+      "",
+      "- [x] done\n- [ ] not yet",
+      "",
+      "| Left | Right |\n| :--- | ----: |\n| a | b |",
+      "",
+      "---",
+      "",
+      "Line  \nbreak.",
+      "",
+      "<!-- demo:counter -->",
+      "",
+      "```sh\nnpm install example\n```",
+      "",
+      "```\n<script>plain</script>\n```",
+    ].join("\n");
+    const { entries } = await sync(site({ "guides/layout.md": `---\ntitle: Layout\ndescription: All of it.\n---\n\n${markdown}\n` }));
+    const layout = entries.find((entry) => entry.path === "docs/guides/layout");
+    expect(layout?.data.body.map((part) => part.kind)).toEqual(["html", "demo", "html"]);
+  });
+
+  test.each([
+    ["a script element", "<p>a</p><script>alert(1)</script>", "<script>"],
+    ["an element markdown does not write", '<iframe src="https://example.com/"></iframe>', '<iframe src="https://example.com/">'],
+    ["an event handler", '<img src="x.png" onerror="alert(1)">', '<img src="x.png" onerror="alert(1)">'],
+    ["an unquoted event handler", "<img src=x onerror=alert(1)>", "<img src=x onerror=alert(1)>"],
+    ["a javascript: link", '<a href="javascript:alert(1)">go</a>', '<a href="javascript:alert(1)">'],
+    ["a javascript: link behind a space", '<a href=" javascript:alert(1)">go</a>', '<a href=" javascript:alert(1)">'],
+    ["a scheme spelled with a character reference", '<a href="javascript&#58;alert(1)">go</a>', '<a href="javascript&#58;alert(1)">'],
+    ["a data: image", '<img src="data:image/svg+xml,x" alt="">', '<img src="data:image/svg+xml,x" alt="">'],
+    ["a comment that is not a demo marker", "<!-- a note --><p>a</p>", "<!-- a note -->"],
+    ["a tag the check cannot read", '<p class="a"b>x</p>', '<p class="a"b>'],
+  ])("refuses %s", (_name, html, markup) => {
+    expect(unsafeMarkup(html)).toBe(markup);
+  });
+
+  test("passes Shiki's highlighted code and plain markdown", () => {
+    const html =
+      '<h2 id="a">A</h2>\n<p><a href="/docs/install/#x" title="T">x</a> <a href="mailto:me@example.com">m</a></p>\n' +
+      '<pre class="shiki github-dark" style="background-color:#24292e" tabindex="0"><code><span class="line"><span style="color:#E1E4E8">&#x3C;b></span></span></code></pre>\n' +
+      "<!-- demo:counter -->\n";
+    expect(unsafeMarkup(html)).toBeUndefined();
   });
 });
