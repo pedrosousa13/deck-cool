@@ -30,5 +30,7 @@ export const install = fence(readme, "Install");
 /** The theme the site's code is highlighted in: dark, as the site is. */
 export const CODE_THEME = "github-dark-default";
 
+const highlight = await highlighter("tsx", CODE_THEME);
+
 /** The README's quickstart, highlighted, as HTML. */
-export const quickstart = await (await highlighter("tsx", CODE_THEME))(fence(readme, "Quickstart"), "@slidedeck/react/README.md");
+export const quickstart = await highlight(fence(readme, "Quickstart"), "@slidedeck/react/README.md");

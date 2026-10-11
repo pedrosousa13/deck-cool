@@ -89,6 +89,11 @@ test("fence reads the first code block of a section, by the section's heading", 
   expect(() => fence(readme(table), 'Install')).toThrow(/Install/);
 });
 
+test("fence closes a block of N backticks at the first unindented line of N or more", () => {
+  const readme = ["## Quickstart", "", "```tsx", "<Deck.Root />", "````", "<img src=x onerror=alert(1)>", "```", ""].join("\n");
+  expect(fence(readme, "Quickstart")).toBe("<Deck.Root />");
+});
+
 test("slidedeckSize is slidedeck's Min+gzip cell, whatever the README says", () => {
   expect(slidedeckSize(fixtureReadme("12.34 KB"))).toBe("12.34 KB");
   expect(slidedeckSize(fixtureReadme("7.5 KB"))).toBe("7.5 KB");

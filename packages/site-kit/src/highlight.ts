@@ -1,9 +1,8 @@
 // Code a site shows highlighted at build time: a skin's stylesheet, the
-// README's quickstart. It goes through the same renderer as the sites'
-// markdown, so it looks the same, but that renderer passes raw HTML through.
-// So the fence must hold whatever the code says: CommonMark closes a backtick
-// fence only at a line of as many backticks or more, and this fence is one
-// longer than the code's longest run.
+// README's quickstart. It goes through the sites' markdown renderer, so it
+// looks the same. That renderer passes raw HTML through. The fence is one
+// backtick longer than the code's longest run, so no line of the code can
+// close it.
 import { createMarkdownRenderer, type MarkdownRendererOptions } from "@pagedeck/markdown-loader";
 
 /** Highlights code in one language and theme: the code in, one `<pre>` out, as Shiki writes it. */

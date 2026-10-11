@@ -24,7 +24,8 @@ const text = (html: string) =>
 
 test("a skin's CSS is one highlighted <pre>, whatever lines of backticks or HTML it holds", async () => {
   const css = `.paper {\n  color: red;\n}\n${HOSTILE}\n.after { color: blue; }`;
-  const html = await (await highlighter("css", "github-dark-default"))(css, "styles/skins/hostile.css");
+  const highlight = await highlighter("css", "github-dark-default");
+  const html = await highlight(css, "styles/skins/hostile.css");
   expectOnePre(html);
   expect(text(html)).toBe(css);
 });
@@ -34,12 +35,8 @@ test("the README's quickstart is one highlighted <pre>, whatever lines of backti
   const readme = ["# @slidedeck/react", "", "## Quickstart", "", "`````tsx", quickstart, "`````", "", "## Next", ""].join("\n");
   const code = fence(readme, "Quickstart");
   expect(code).toBe(quickstart);
-  const html = await (await highlighter("tsx", "github-dark-default"))(code, "@slidedeck/react/README.md");
+  const highlight = await highlighter("tsx", "github-dark-default");
+  const html = await highlight(code, "@slidedeck/react/README.md");
   expectOnePre(html);
   expect(text(html)).toBe(quickstart);
-});
-
-test("fence closes a block at a line of as many backticks or more, as CommonMark does", () => {
-  const readme = ["## Quickstart", "", "```tsx", "<Deck.Root />", "````", PAYLOAD, "```", ""].join("\n");
-  expect(fence(readme, "Quickstart")).toBe("<Deck.Root />");
 });

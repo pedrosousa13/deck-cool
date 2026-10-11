@@ -89,7 +89,7 @@ export function slidedeckRow(libraries: readonly Library[]): Library {
 
 /**
  * The first code block under the README's `## heading`, without its fence. A
- * fence closes at a line of as many backticks or more, as CommonMark has it.
+ * fence of N backticks closes at the first unindented line of N or more.
  */
 export function fence(readme: string, heading: string): string {
   const section = readme
