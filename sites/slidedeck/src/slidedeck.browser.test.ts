@@ -13,7 +13,7 @@ import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 vi.setConfig({ testTimeout: 30_000 });
 
 const site = browserHarness(fileURLToPath(new URL("..", import.meta.url)));
-/** Each visit waits until the network is idle, so the islands' scripts have loaded. */
+/** Each visit waits until the network is idle. An island that hydrates when visible has not loaded yet: hydrated() waits for those. */
 const visit = (path: string, options: VisitOptions) => site.visit(path, { waitUntil: "networkidle", ...options });
 
 const PAGES = ["/", "/examples/"] as const;
