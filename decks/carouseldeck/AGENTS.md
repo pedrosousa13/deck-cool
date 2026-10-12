@@ -2,7 +2,13 @@
 
 ## Before landing anything
 
-Run one command, from the repo root, and land only on green:
+Run one command, and land only on green. From deck-cool's root:
+
+```sh
+pnpm --dir decks/carouseldeck verify
+```
+
+Or from `decks/carouseldeck/`:
 
 ```sh
 pnpm verify
@@ -111,13 +117,13 @@ nothing, then:
   releases. Then it deploys carousel.deck.cool at the released commit, with
   `deploy-carouseldeck.yml`.
 
-**The first publish**, 1.2.0, uses the `NPM_TOKEN` secret: npm sets a trusted
-publisher per package, so a package must exist first. After it, on
-npmjs.com add a trusted publisher to each of the four packages: GitHub
-Actions, `pedrosousa13` / `deck-cool` / `release.yml`, no environment. Then
-delete the `NPM_TOKEN` secret. Later releases publish over OIDC. Without the
-secret, a run that would publish a package not yet on npm fails at "Check a
-credential can publish", before anything is published.
+**The first publish**, 1.2.0, used the `NPM_TOKEN` secret: npm sets a trusted
+publisher per package, so a package has to exist first. Each of the four
+packages now has a trusted publisher on npmjs.com: GitHub Actions,
+`pedrosousa13` / `deck-cool` / `release.yml`, no environment. The
+`NPM_TOKEN` secret is gone; releases publish over OIDC. A run that would
+publish a package not yet on npm still fails at "Check a credential can
+publish", before anything is published.
 
 ## Docs
 

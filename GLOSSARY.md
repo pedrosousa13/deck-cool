@@ -25,8 +25,7 @@ framework-neutral core holds the engine; the React package holds the
 primitives a consumer composes. The project's language separates what a
 consumer composes (primitives), where the scroller can rest (snap points,
 pages), which slide the deck is about (current, focal), and what carouseldeck
-publishes for CSS to read (progress). Its own ADRs are at
-`decks/carouseldeck/docs/adr/`.
+publishes for CSS to read (progress).
 
 Two terms below collide with ones defined above. Inside carouseldeck, **Deck**
 means one carousel instance, not a package in the family. And **Page** means a
