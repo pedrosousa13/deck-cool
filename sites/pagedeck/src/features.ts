@@ -13,7 +13,7 @@ import { defineImages, imageAttributes, urlTemplate } from "@pagedeck/core/image
 import type { ImagesSetting } from "@pagedeck/core/images";
 import { defineFontSubset } from "@pagedeck/font-subset";
 import { defineSocialImage } from "@pagedeck/social-image";
-import { DOCS_ORIGIN, PATHS } from "../components/links.ts";
+import { DOCS, PATHS } from "../components/links.ts";
 import {
   CONSENT_BANNER,
   EMBED_FRAME,
@@ -186,7 +186,7 @@ export const FEATURES_HEAD: PageHead = {
 /** `path` is a docs page's path, with no leading or trailing slash, then any `#fragment`. */
 function docs(path: string, label: string) {
   const [page, fragment] = path.split("#");
-  return { href: `${DOCS_ORIGIN}/${page}/${fragment === undefined ? "" : `#${fragment}`}`, label };
+  return { href: `${DOCS.start}${page}/${fragment === undefined ? "" : `#${fragment}`}`, label };
 }
 
 function section(

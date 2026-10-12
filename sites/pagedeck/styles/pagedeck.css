@@ -438,8 +438,10 @@ main .fw-family .fw-more {
   }
 }
 
-/* Highlighted code. `!important` wins over the highlighter's inline ground. */
-.shiki {
+/* Highlighted code, and a docs block the highlighter leaves plain. `!important`
+   wins over the highlighter's inline ground. */
+.shiki,
+.fw-prose pre {
   margin: 0;
   padding: 20px 24px;
   overflow-x: auto;
@@ -933,6 +935,32 @@ main .fw-docnav a[aria-current="page"] {
 }
 .fw-prose pre {
   margin: 24px 0;
+}
+/* The docs' tables, each in a region that scrolls sideways. */
+.fw-prose .fw-table {
+  margin: 24px 0;
+  border-radius: 18px;
+  background: var(--ground-tile);
+}
+.fw-prose .fw-table table {
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.fw-prose .fw-table :is(th, td) {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+}
+.fw-prose .fw-table th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fw-prose .fw-table tr:last-child td {
+  border-bottom: 0;
 }
 
 .fw-pager {

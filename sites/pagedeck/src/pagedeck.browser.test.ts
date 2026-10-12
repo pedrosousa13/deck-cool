@@ -2,7 +2,8 @@ import { AxeBuilder } from "@axe-core/playwright";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { browserHarness, islandsHydrated } from "@deck-cool/site-kit/browser-test";
-import { PATHS } from "../components/links.ts";
+import { DOCS, PATHS } from "../components/links.ts";
+import { DOCS_NAV } from "./docs-pages.ts";
 import { RESPONSE_HEADERS } from "./headers.ts";
 
 // Drives the built site (build.global-setup.ts) in Chromium, served with the
@@ -11,7 +12,9 @@ import { RESPONSE_HEADERS } from "./headers.ts";
 const site = browserHarness(fileURLToPath(new URL("..", import.meta.url)));
 const { visit } = site;
 
-const PAGES = [PATHS.home, PATHS.interactive, PATHS.features, PATHS.cmsDemo, PATHS.search];
+// Two docs pages, the first and one with tables, as site.build.test.ts covers
+// them. @pagedeck/docs 0.2.3 marks no demo, so no docs page has one.
+const PAGES = [PATHS.home, PATHS.interactive, PATHS.features, PATHS.cmsDemo, PATHS.search, DOCS.start, DOCS.siteConfig];
 
 describe("the pagedeck site in a browser", () => {
   test.each(PAGES)("%s is served with every header the build writes", async (path) => {
@@ -107,10 +110,31 @@ describe("the pagedeck site in a browser", () => {
     expect(await violations()).toEqual([]);
   });
 
+  // The docs' tables and blocks are as wide as their content, so every page is checked, not two.
+  test("at 390px, no docs page scrolls sideways", { timeout: 120_000 }, async () => {
+    const wide: string[] = [];
+    for (const { path } of DOCS_NAV) {
+      const { page } = await visit(path, { width: 390 });
+      if ((await page.evaluate(() => document.documentElement.scrollWidth)) > 390) wide.push(path);
+    }
+    expect(wide).toEqual([]);
+  });
+
+  // A fence with no language renders as a plain <pre>.
+  test("an unhighlighted block sits on the same tile as a highlighted one", async () => {
+    const { page } = await visit(DOCS.siteConfig, { width: 1280 });
+    const look = (selector: string) =>
+      page.locator(selector).first().evaluate((pre) => {
+        const style = getComputedStyle(pre);
+        return [style.backgroundColor, style.padding, style.borderRadius, style.fontSize, style.lineHeight, style.overflowX];
+      });
+    expect(await look(".fw-prose pre:not(.shiki)")).toEqual(await look(".fw-prose pre.shiki"));
+  });
+
   test("the docs' search finds a page, and follows it", async () => {
     const { page, violations } = await visit(PATHS.search, { width: 1280 });
     await islandsHydrated(page);
-    const box = page.getByRole("combobox", { name: "Search the documentation" });
+    const box = page.getByRole("combobox", { name: "Search pagedeck" });
     await box.fill("island");
     const results = page.getByRole("option");
     await expect.poll(() => results.count()).toBeGreaterThan(0);

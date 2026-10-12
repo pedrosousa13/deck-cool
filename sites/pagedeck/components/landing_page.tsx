@@ -3,7 +3,7 @@ import { SkinSheet } from "@deck-cool/brand/skin-sheet";
 import { formatBytes, utf8Bytes } from "../src/bytes.ts";
 import { PICKER, PRODUCT } from "../src/product.ts";
 import type { Skin } from "../src/skins.ts";
-import { DOCS_ORIGIN, PATHS } from "./links.ts";
+import { DOCS, PATHS } from "./links.ts";
 
 /**
  * The maintainer's lead on #48: "like Astro, if Astro were made for React".
@@ -111,7 +111,7 @@ export default function LandingPage({ skins }: { skins: readonly Skin[] }) {
           <div className="fw-install">
             <code>{pagedeck.install}</code>
           </div>
-          <a className="fw-button" href={`${DOCS_ORIGIN}/`}>
+          <a className="fw-button" href={DOCS.start}>
             Read the docs
           </a>
         </div>

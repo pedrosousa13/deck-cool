@@ -4,11 +4,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { pagedeck, umbrella } from "@deck-cool/brand/decks";
+import { demoComponent } from "@deck-cool/docs";
 import { everyResponse, isRecord, present, readManifest, text } from "@deck-cool/site-kit/build-test";
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
-import { DOCS_ORIGIN, PATHS, REPO } from "../components/links.ts";
+import { DOCS, PATHS, REPO } from "../components/links.ts";
 import { formatBytes, utf8Bytes } from "./bytes.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
+import { DEMOS } from "./demos.ts";
+import { DOCS_NAV } from "./docs-pages.ts";
 import { PICKER, PRODUCT } from "./product.ts";
 import { SKINS } from "./skins.ts";
 
@@ -54,10 +57,19 @@ function hrefs(scope: Element | Document): (string | null)[] {
   return [...scope.querySelectorAll("a")].map((a) => a.getAttribute("href"));
 }
 
-const PAGES = [PATHS.home, PATHS.search, PATHS.features, PATHS.interactive, PATHS.cmsDemo];
+/** The site's own pages. */
+const OWN_PAGES = [PATHS.home, PATHS.search, PATHS.features, PATHS.interactive, PATHS.cmsDemo];
 
-test("the site is the landing's four pages and the docs' search page", () => {
-  expect(manifest.pages.map((page) => page.path).sort()).toEqual([...PAGES].sort());
+/**
+ * Two docs pages, the first and one with tables, which the tests of every page
+ * cover too. @pagedeck/docs 0.2.3 marks no demo, so neither has one.
+ */
+const DOCS_PAGES = [DOCS.start, DOCS.siteConfig];
+
+const PAGES = [...OWN_PAGES, ...DOCS_PAGES];
+
+test("the site is the landing's four pages, the docs' search page and every page in the docs' nav.json", () => {
+  expect(manifest.pages.map((page) => page.path).sort()).toEqual([...OWN_PAGES, ...DOCS_NAV.map(({ path }) => path)].sort());
 });
 
 describe("budgets, measured and pinned", () => {
@@ -70,6 +82,8 @@ describe("budgets, measured and pinned", () => {
     [PATHS.features]: "60kb",
     [PATHS.cmsDemo]: "59kb",
     [PATHS.search]: "59kb",
+    [DOCS.start]: "0b",
+    [DOCS.siteConfig]: "0b",
   };
 
   test("every page has its pinned limit, and stays within it", () => {
@@ -92,6 +106,16 @@ describe("budgets, measured and pinned", () => {
     expect(parse(PATHS.home).querySelectorAll("script, link[rel=modulepreload]")).toHaveLength(0);
   });
 
+  // The layout has no search island: search is a page of its own.
+  test("every docs page with no demo ships 0 B of JavaScript, and no script at all", () => {
+    const plain = DOCS_NAV.filter(({ demos }) => demos.length === 0);
+    expect(plain.map(({ path }) => path)).toEqual(expect.arrayContaining(DOCS_PAGES));
+    for (const { path } of plain) {
+      expect(budget.find((row) => row.path === path)?.actual, path).toBe(0);
+      expect(parse(path).querySelectorAll("script, link[rel=modulepreload]"), path).toHaveLength(0);
+    }
+  });
+
   test("each page with islands carries only its own", () => {
     const islands = Object.fromEntries(manifest.pages.map((page) => [page.path, [...page.components].sort()]));
     expect(islands).toEqual({
@@ -100,6 +124,7 @@ describe("budgets, measured and pinned", () => {
       [PATHS.features]: ["consent_banner", "island_idle", "island_load", "island_visible", "search"],
       [PATHS.cmsDemo]: ["variant_picker"],
       [PATHS.search]: ["search"],
+      ...Object.fromEntries(DOCS_NAV.map(({ path, demos }) => [path, demos.map(demoComponent).sort()])),
     });
   });
 });
@@ -139,13 +164,27 @@ describe("every page", () => {
     expect(
       [...bar.querySelectorAll(".family-bar__links a")].map((a) => [text(a), a.getAttribute("href")]),
     ).toEqual([
-      ["Docs", `${DOCS_ORIGIN}/`],
+      ["Docs", DOCS.start],
       ["Features", PATHS.features],
       ["Interactive demo", PATHS.interactive],
       ["Content demo", PATHS.cmsDemo],
       ["Search", PATHS.search],
       ["GitHub", REPO],
     ]);
+  });
+
+  // The docs are this site's own now, so nothing links pagedeck's old Workers.
+  test.each(PAGES)("%s links the docs under /docs, at pages and anchors this build makes, and no workers.dev host", (path) => {
+    const doc = parse(path);
+    const built = new Set(manifest.pages.map((page) => page.path));
+    expect(hrefs(present(doc.querySelector("footer"), "the footer"))).toContain(DOCS.start);
+    for (const href of hrefs(doc)) {
+      if (!href?.startsWith("/docs/")) continue;
+      const [page = "", fragment] = href.split("#");
+      expect(built.has(page), href).toBe(true);
+      if (fragment !== undefined) expect(parse(page).getElementById(fragment), href).not.toBeNull();
+    }
+    expect(hrefs(doc).filter((href) => /workers\.dev/.test(href ?? ""))).toEqual([]);
   });
 
   // GLOSSARY.md: a package site links its own deck's repo, never the maintainer's profile.
@@ -323,8 +362,7 @@ describe("the home page", () => {
       "Build it in React, style it with your own CSS, or hand it to your agent. Every page reaches your visitors as finished HTML, and only the parts you make interactive bring any JavaScript.",
     ]);
     expect(text(hero?.querySelector(".fw-install code"))).toBe(pagedeck.install);
-    // The docs link goes to the docs' own Worker until #53.
-    expect(links(hero)).toEqual([["Read the docs", `${DOCS_ORIGIN}/`]]);
+    expect(links(hero)).toEqual([["Read the docs", DOCS.start]]);
   });
 
   // GLOSSARY.md: the "plain markdown" line waits until @pagedeck/docs is on npm.
@@ -643,16 +681,123 @@ describe("the features page", () => {
 });
 
 describe("the docs' search page", () => {
-  test("is headed Search, under the docs layout, with the search island", () => {
+  test("is headed Search, under the docs layout with the docs' nav, with the search island", () => {
     const doc = parse(PATHS.search);
     expect(doc.title).toBe("Search");
-    // The docs' grid, with no nav until #53 brings the docs.
-    expect(doc.querySelector('main .fw-docs nav[aria-label="Documentation"]')).toBeNull();
+    const nav = present(doc.querySelector('main .fw-docs nav[aria-label="Documentation"]'), "the docs' nav");
+    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ path }) => path));
     expect(text(doc.querySelector("main .fw-docs .fw-doc > h1"))).toBe("Search");
     expect(doc.querySelector('main [data-fw-component="search"] input')).not.toBeNull();
   });
 
-  test("the index is built", () => {
+  // #53: the index holds the landing pages too, so the box names the whole site.
+  test("labels its box Search pagedeck", () => {
+    expect(html(PATHS.search)).toContain("&quot;label&quot;:&quot;Search pagedeck&quot;");
+  });
+
+  test("the index is built, and holds every page", () => {
     expect(manifest.files).toEqual(expect.arrayContaining(["/search/en/index.json", "/search/en/documents.json"]));
+    const documents = JSON.parse(readFileSync(`${SITE}site/search/en/documents.json`, "utf8")) as { path: string }[];
+    expect(documents.map(({ path }) => path).sort()).toEqual(manifest.pages.map((page) => page.path).sort());
+  });
+});
+
+describe("the docs, from @pagedeck/docs", () => {
+  /** The demos a built page renders, by component, in order. */
+  const demosOn = (doc: Document) => [...doc.querySelectorAll("article [data-fw-component]")].map((island) => island.getAttribute("data-fw-component"));
+
+  test("takes the docs from npm at 0.2.3, the version of every @pagedeck package", () => {
+    const pkg = JSON.parse(readFileSync(`${SITE}package.json`, "utf8")) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies["@pagedeck/docs"]).toBe("0.2.3");
+    for (const [name, version] of Object.entries(pkg.dependencies)) if (name.startsWith("@pagedeck/")) expect(version, name).toBe("0.2.3");
+  });
+
+  test.each(DOCS_NAV)("$path renders with each demo it marks, in order", ({ path, demos }) => {
+    expect(demosOn(parse(path))).toEqual(demos.map(demoComponent));
+  });
+
+  test("marks each demo the site registers once, and no other", () => {
+    expect(DOCS_NAV.flatMap((page) => page.demos).sort()).toEqual(Object.keys(DEMOS).sort());
+  });
+
+  // The docs come from npm: no page of them may run script or load from another origin.
+  test.each(DOCS_NAV)("$path carries no script, <style> or inline handler, and loads nothing from another origin", ({ path }) => {
+    const doc = parse(path);
+    expect(doc.querySelectorAll("script, style, iframe, object, embed"), path).toHaveLength(0);
+    for (const element of doc.querySelectorAll("*")) {
+      for (const { name, value } of element.attributes) {
+        expect(name, element.tagName).not.toMatch(/^on/);
+        // An <a> navigates; every other URL is fetched by the page itself.
+        if (["src", "srcset", "poster", "data"].includes(name) || (name === "href" && element.tagName !== "A")) {
+          expect(value, `${element.tagName} ${name}`).toMatch(/^\/(?!\/)/);
+        }
+      }
+    }
+  });
+
+  test("the nav lists every page in nav.json's order, and marks the current one", () => {
+    const nav = present(parse(DOCS.start).querySelector('nav[aria-label="Documentation"]'), "the docs' nav");
+    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ path }) => path));
+    expect(nav.querySelector('[aria-current="page"]')?.getAttribute("href")).toBe(DOCS.start);
+  });
+
+  test("titles each page once, as its heading", () => {
+    const doc = parse(DOCS.siteConfig);
+    expect(doc.querySelectorAll("title")).toHaveLength(1);
+    expect(doc.title).toBe("Site config");
+    expect([...doc.querySelectorAll("main h1")].map(text)).toEqual(["Site config"]);
+  });
+
+  test("puts each table in a named region the keyboard can scroll, and lets it scroll each plain block", () => {
+    const prose = present(parse(DOCS.siteConfig).querySelector("main .fw-prose"), "the page's prose");
+    const tables = [...prose.querySelectorAll("table")];
+    expect(tables.length).toBeGreaterThan(0);
+    for (const table of tables) {
+      const region = present(table.parentElement, "the table's region");
+      expect([region.className, region.getAttribute("role"), region.getAttribute("tabindex")]).toEqual(["fw-table", "region", "0"]);
+      expect(region.getAttribute("aria-label")).not.toBe("");
+    }
+    for (const pre of prose.querySelectorAll("pre")) expect(pre.getAttribute("tabindex")).toBe("0");
+  });
+
+  // The layout and the demos are the site's own words, unlike the prose they frame.
+  test.each(["components/docs-page.tsx", "components/docs-nav.tsx"])("%s uses no em dash", (file) => {
+    expect(readFileSync(`${SITE}${file}`, "utf8")).not.toMatch(/\u2014|&mdash;/);
+  });
+});
+
+// The figures pagedeck's docs quote from this site's own build. pagedeck's
+// repo checks the ones its how-to guides quote from its own starter and CMS
+// example, which this site does not build.
+describe("the figures the docs quote", () => {
+  const source = (file: string) => readFileSync(`${SITE}node_modules/@pagedeck/docs/${file}`, "utf8").replace(/\s+/g, " ");
+  const props = () =>
+    present(
+      parse(PATHS.cmsDemo).querySelector('[data-fw-component="variant_picker"]')?.getAttribute("data-fw-props"),
+      "the variant picker's props",
+    );
+
+  // index.md and explanation/why-this-site-ships-no-javascript.md.
+  test("no docs page loads JavaScript, and the search page, the one that does, loads its island when the browser is idle", () => {
+    expect(source("index.md")).toContain("No page on this site loads any JavaScript.");
+    expect(source("explanation/why-this-site-ships-no-javascript.md")).toContain("It loads when the browser is idle");
+    for (const { path } of DOCS_NAV) expect(budget.find((row) => row.path === path)?.actual, path).toBe(0);
+    const scripted = manifest.pages.filter((page) => page.path.startsWith("/docs/") && page.components.length > 0);
+    expect(scripted.map((page) => page.path)).toEqual([PATHS.search]);
+    expect(parse(PATHS.search).querySelector('[data-fw-component="search"]')?.getAttribute("data-fw-mode")).toBe("idle");
+  });
+
+  // reference/javascript-budgets.md, "Island props".
+  test("the content demo reads a 67 kB entry and passes its island 2.3 kB", () => {
+    expect(source("reference/javascript-budgets.md")).toContain("A server component can read a 67 kB CMS entry and pass an island only the 2.3 kB it renders");
+    expect(Math.round(utf8Bytes(JSON.stringify(PRODUCT)) / 1000)).toBe(67);
+    expect(formatBytes(utf8Bytes(props()))).toBe("2.3 kB");
+  });
+
+  test("the variant picker's props, which set the 3kb default, are 2296 B", () => {
+    expect(source("reference/javascript-budgets.md")).toContain(
+      "**The default is `3kb`**, and it applies to every site that does not declare `islandPropsBudget`, with or without a `budget`. It is the largest island props on the sites in this repository, 2296 B for the landing site's variant picker",
+    );
+    expect(utf8Bytes(props())).toBe(2296);
   });
 });

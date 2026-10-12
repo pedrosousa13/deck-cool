@@ -13,7 +13,7 @@ function neighbours(nav: DocsLayoutProps["nav"], href: string) {
 /**
  * The layout every docs page renders into: @deck-cool/docs hands it the page's
  * title, description, address and the whole nav, and the page's body as its
- * children. #53 names it as defineDocs' layout.
+ * children. pagedeck.config.ts names it as defineDocs' layout.
  */
 export default function DocsPage({ title, description, href, nav, children }: DocsLayoutProps & { children?: ReactNode }) {
   const { previous, next } = neighbours(nav, href);

@@ -1,5 +1,5 @@
 import { cloudflarePages } from "@pagedeck/adapter-cloudflare-pages";
-import { defineCollection, getEntry } from "@pagedeck/content";
+import { defineCollection, getEntry, listEntries } from "@pagedeck/content";
 import type { Collection, ContentStoreReader, Entry } from "@pagedeck/content";
 import { defineConfig, defineLocales, definePages, fromCollection } from "@pagedeck/core";
 import type { Page, PageContent, PageHead, PageSource, Route } from "@pagedeck/core";
@@ -8,10 +8,13 @@ import type { MarkdownEntry } from "@pagedeck/markdown-loader";
 import { defineSearch } from "@pagedeck/search";
 import { cpSync, realpathSync, rmSync } from "node:fs";
 import { z } from "zod";
+import { defineDocs } from "@deck-cool/docs";
 import { HASHED_FILE_HEADERS } from "@deck-cool/site-kit/headers";
-import { DOCS_ORIGIN, PATHS, REPO } from "./components/links.ts";
-import { components, COUNTER, FAMILY_BAR, FOOTER, ISLAND_PAGE, SEARCH, SEARCH_PAGE } from "./src/catalog.ts";
+import { DOCS, PATHS, REPO } from "./components/links.ts";
+import { components, COUNTER, DOCS_PAGE, FAMILY_BAR, FOOTER, ISLAND_PAGE, SEARCH, SEARCH_PAGE } from "./src/catalog.ts";
 import { CODE_THEME } from "./src/code-theme.ts";
+import { DEMOS } from "./src/demos.ts";
+import { docsProse } from "./src/docs-prose.ts";
 import { FEATURES_HEAD, featuresContent, FONTS, SCRIPTS, SOCIAL_IMAGES } from "./src/features.ts";
 import { HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
 import { CMS_DEMO_HEAD, cmsDemoContent } from "./src/cms-demo.ts";
@@ -30,20 +33,21 @@ const INTERACTIVE = {
   label: "Press me",
 } as const;
 
-// The docs-site's search page, under /docs. #53 adds the docs it searches.
+// The docs' search page, under /docs. Its index holds the landing pages too
+// (#53), so a search for "islands" finds the island demo as well.
 const SEARCH_COPY = {
   title: "Search",
   description:
-    "Search Pagedeck's documentation by keyword, with pages that match in their title ranked above pages that match only in their body.",
+    "Search pagedeck's site and documentation by keyword, with pages that match in their title ranked above pages that match only in their body.",
   intro:
-    "Search every page of this documentation. Results are ranked by where the words appear — a title match comes before a body match.",
-  label: "Search the documentation",
+    "Search every page of this site. Results are ranked by where the words appear — a title match comes before a body match.",
+  label: "Search pagedeck",
   emptyLabel: "No page matches those words.",
 } as const;
 
 /** The Family bar's links, after the switcher and the name. */
 const BAR_LINKS = [
-  { label: "Docs", href: `${DOCS_ORIGIN}/` },
+  { label: "Docs", href: DOCS.start },
   { label: "Features", href: PATHS.features },
   { label: "Interactive demo", href: PATHS.interactive },
   { label: "Content demo", href: PATHS.cmsDemo },
@@ -59,6 +63,9 @@ const BUDGET = {
   [PATHS.features]: "60kb",
   [PATHS.cmsDemo]: "59kb",
   [PATHS.search]: "59kb",
+  // A docs page ships nothing: search is a page of its own. @pagedeck/docs
+  // 0.2.3 marks no demo; a page that marks one needs its own budget here.
+  "/docs/**": "0b",
 } as const;
 
 /**
@@ -104,6 +111,18 @@ function documentRoute(entry: Entry<DocumentEntry>): Route {
   return entry.path === "index" ? "/" : entry.path.split("/");
 }
 
+// pagedeck's docs, from the @pagedeck/docs this site pins, under /docs.
+const docs = defineDocs({
+  from: import.meta.url,
+  package: "@pagedeck/docs",
+  base: "/docs",
+  layout: DOCS_PAGE,
+  demos: DEMOS,
+  languages: ["css", "html", "js", "json", "sh", "toml", "ts", "tsx"],
+  theme: CODE_THEME,
+  prose: docsProse,
+});
+
 /** A page with no entry behind it, at `route`. `instances` annotates its parameter, which would otherwise infer as `unknown`. */
 function singlePage(route: Route): PageSource<Record<string, never>> {
   return {
@@ -112,8 +131,9 @@ function singlePage(route: Route): PageSource<Record<string, never>> {
   };
 }
 
+/** The home page's entry. A docs page's entry is in the docs' collection, not this one. */
 function entryOf(page: Page, store: ContentStoreReader): Entry<DocumentEntry> | undefined {
-  return page.entry === undefined ? undefined : getEntry(store, pages, page.entry);
+  return page.collection !== pages.name || page.entry === undefined ? undefined : getEntry(store, pages, page.entry);
 }
 
 function contentOf(page: Page, store: ContentStoreReader): PageContent {
@@ -135,8 +155,7 @@ function contentOf(page: Page, store: ContentStoreReader): PageContent {
       tree: [
         {
           component: SEARCH_PAGE,
-          // No docs yet, so no nav: #53 passes the docs' nav.json here.
-          props: { title: SEARCH_COPY.title, intro: SEARCH_COPY.intro, nav: [] },
+          props: { title: SEARCH_COPY.title, intro: SEARCH_COPY.intro, nav: listEntries(store, docs.collection)[0]?.data.nav ?? [] },
           children: [
             { component: SEARCH, props: { locale: LOCALE, label: SEARCH_COPY.label, emptyLabel: SEARCH_COPY.emptyLabel } },
           ],
@@ -144,6 +163,7 @@ function contentOf(page: Page, store: ContentStoreReader): PageContent {
       ],
     };
   }
+  if (page.collection !== pages.name) return docs.content(page, store);
   const entry = entryOf(page, store);
   if (entry === undefined) {
     throw new Error(`Page ${page.path}: has no stored entry — run pagedeck sync before pagedeck build`);
@@ -156,6 +176,7 @@ function headOf(page: Page, store: ContentStoreReader): PageHead | undefined {
   if (page.path === PATHS.cmsDemo) return CMS_DEMO_HEAD;
   if (page.path === PATHS.interactive) return { title: INTERACTIVE.title, description: INTERACTIVE.description };
   if (page.path === PATHS.search) return { title: SEARCH_COPY.title, description: SEARCH_COPY.description };
+  // A docs page's title and description are the docs layout's.
   const entry = entryOf(page, store);
   return entry === undefined
     ? undefined
@@ -163,19 +184,20 @@ function headOf(page: Page, store: ContentStoreReader): PageHead | undefined {
 }
 
 export default defineConfig({
-  collections: [pages],
+  collections: [pages, docs.collection],
   build: {
     adapter: cloudflarePages(),
     pages: definePages({
       locales: defineLocales({ en: { label: "English", direction: "ltr" } }),
       sources: [
         fromCollection(pages, { route: documentRoute }),
+        docs.pages,
         ...[PATHS.interactive, PATHS.features, PATHS.cmsDemo, PATHS.search].map((path) =>
           singlePage(path.slice(1, -1).split("/")),
         ),
       ],
     }),
-    components,
+    components: { ...components, ...docs.components },
     content: contentOf,
     head: headOf,
     // The Family bar before <main> and the footer after it, so they are the
@@ -196,7 +218,8 @@ export default defineConfig({
       "./styles/pagedeck.css",
       ...SKINS.map((skin) => `./${skin.file}`),
     ].map((sheet) => realpathSync(sheet)),
-    passthrough: { root: stagePublic() },
+    // The brand's icons and the site's own files; and the docs' images.
+    passthrough: { root: stagePublic(), contentRoot: docs.contentRoot },
     routing: {
       headers: [
         { prefix: "/", set: [...RESPONSE_HEADERS] },

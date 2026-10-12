@@ -24,7 +24,7 @@ export const VARIANT_PICKER = "variant_picker";
 export const SEARCH_PAGE = "search_page";
 export const FAMILY_BAR = "familyBar";
 export const FOOTER = "footer";
-/** The layout every docs page renders into, which #53 hands to defineDocs. */
+/** The layout every docs page renders into, which pagedeck.config.ts hands to defineDocs. */
 export const DOCS_PAGE = "docsPage";
 
 export const components: BuildSection["components"] = {

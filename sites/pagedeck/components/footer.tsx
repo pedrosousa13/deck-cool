@@ -1,8 +1,8 @@
-import { DOCS_ORIGIN, PATHS, REPO } from "./links.ts";
+import { DOCS, PATHS, REPO } from "./links.ts";
 
 const LINKS = [
   ["Home", PATHS.home],
-  ["Docs", `${DOCS_ORIGIN}/`],
+  ["Docs", DOCS.start],
   ["Features", PATHS.features],
   ["Interactive demo", PATHS.interactive],
   ["Content demo", PATHS.cmsDemo],

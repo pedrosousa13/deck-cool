@@ -4,8 +4,8 @@ import { expect, test } from "vitest";
 import type { DocsLayoutProps } from "@deck-cool/docs";
 import DocsPage from "../components/docs-page.tsx";
 
-// The layout #53 renders every docs page into, through @deck-cool/docs. No page
-// uses it yet, so it is rendered here with a nav in nav.json's shape.
+// The layout every docs page renders into, through @deck-cool/docs, rendered
+// here with a nav in nav.json's shape.
 
 const NAV: DocsLayoutProps["nav"] = [
   { label: "Overview", pages: [{ title: "Pagedeck", href: "/docs/" }] },

@@ -2,10 +2,13 @@
 export const REPO = "https://github.com/pedrosousa13/pagedeck";
 
 /**
- * pagedeck's live docs, on their own Worker until #53 moves them to /docs here.
- * Until the pages exist, the build's link check refuses a /docs/ link.
+ * pagedeck's docs, under /docs, from @pagedeck/docs: index.md is /docs/, and
+ * the site config reference is a page with tables and plain blocks.
  */
-export const DOCS_ORIGIN = "https://pagedeck-docs.pedrodsousa.workers.dev";
+export const DOCS = {
+  start: "/docs/",
+  siteConfig: "/docs/reference/site-config/",
+} as const;
 
 /** Each page this site builds. */
 export const PATHS = {
