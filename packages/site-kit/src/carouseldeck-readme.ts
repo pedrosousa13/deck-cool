@@ -149,5 +149,14 @@ export function readCarouseldeckRelease(site: URL): Release {
       version: (JSON.parse(readInstalled(site, "package.json")) as { version: string }).version,
     };
   }
-  return { readme: git(site, "show", `${tag}:${README}`), version: tag.slice(CAROUSELDECK.length + 1) };
+  let readme: string;
+  try {
+    readme = git(site, "show", `${tag}:${README}`);
+  } catch (error) {
+    throw new Error(
+      `The site at ${site.pathname} cannot read ${README} at ${tag}: the checkout needs the tag's history (fetch-depth: 0, or fetch the tags).`,
+      { cause: error },
+    );
+  }
+  return { readme, version: tag.slice(CAROUSELDECK.length + 1) };
 }

@@ -172,6 +172,18 @@ describe("readCarouseldeckRelease", () => {
     expect(() => readCarouseldeckRelease(site)).toThrow(/no @carouseldeck\/react installed/);
   });
 
+  test("names the site and the tag when git cannot show the README at the tag", () => {
+    const site = makeRepo();
+    writeFileSync(join(repo, "other.md"), "No README here.");
+    git("add", "-A");
+    git("commit", "-q", "-m", "no readme");
+    git("tag", "@carouseldeck/react@1.2.0");
+
+    expect(() => readCarouseldeckRelease(site)).toThrow(
+      new RegExp(`site at ${site.pathname}.*@carouseldeck/react@1\\.2\\.0.*fetch-depth: 0`),
+    );
+  });
+
   test("outside a git repo, fails rather than guessing", () => {
     repo = mkdtempSync(join(tmpdir(), "site-"));
     const site = pathToFileURL(`${repo}/`);
