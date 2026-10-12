@@ -1,7 +1,8 @@
-// What the sites read from the installed @slidedeck/react at build time, its
-// README and its version, so each page says what the README says and
-// `compare:check` keeps both honest: slidedeck's home page and deck.cool's
-// slidedeck card read the same figure.
+// What the sites read about @carouseldeck/react's latest release at build time,
+// its README and its version, so each page says what the README says and
+// `compare:check` keeps both honest: carouseldeck's home page and deck.cool's
+// carouseldeck card read the same figure (ADR 0002).
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 /** A row of the README's comparison, its cells as the README writes them. */
@@ -16,8 +17,11 @@ export interface Library {
   api: string;
 }
 
-/** Slidedeck's package, as the comparison names it. */
-export const SLIDEDECK = '@slidedeck/react';
+/** carouseldeck's package, as the comparison and its release tags name it. */
+export const CAROUSELDECK = '@carouseldeck/react';
+
+/** The package's README, from the repo's root. */
+export const README = 'decks/carouseldeck/packages/react/README.md';
 
 const START = '<!-- comparison:start -->';
 const END = '<!-- comparison:end -->';
@@ -78,11 +82,11 @@ export function comparison(readme: string): Library[] {
   });
 }
 
-/** Slidedeck's own row of the comparison. */
-export function slidedeckRow(libraries: readonly Library[]): Library {
-  const row = libraries.find((library) => library.library === SLIDEDECK);
+/** carouseldeck's own row of the comparison. */
+export function carouseldeckRow(libraries: readonly Library[]): Library {
+  const row = libraries.find((library) => library.library === CAROUSELDECK);
   if (row === undefined) {
-    throw new Error(`The README's comparison has no row for ${SLIDEDECK}.`);
+    throw new Error(`The README's comparison has no row for ${CAROUSELDECK}.`);
   }
   return row;
 }
@@ -102,26 +106,48 @@ export function fence(readme: string, heading: string): string {
   return code;
 }
 
-/** Slidedeck's min+gzip size, as the README's comparison measures it: "8.84 KB". */
-export function slidedeckSize(readme: string): string {
-  return slidedeckRow(comparison(readme)).size;
+/** carouseldeck's min+gzip size, as the README's comparison measures it: "8.86 KB". */
+export function carouseldeckSize(readme: string): string {
+  return carouseldeckRow(comparison(readme)).size;
 }
 
-/** A file of the @slidedeck/react installed in `site`, the site's directory. */
+/** What a site says about the release: its README, and its version as "1.2.0". */
+export interface Release {
+  readme: string;
+  version: string;
+}
+
+const git = (cwd: URL, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
+/** The highest `@carouseldeck/react@MAJOR.MINOR.PATCH` tag in the repo `site` is in, or none. */
+function latestTag(site: URL): string | undefined {
+  return git(site, "tag", "--list", `${CAROUSELDECK}@*`, "--sort=-v:refname")
+    .split("\n")
+    .find((tag) => /^\d+\.\d+\.\d+$/.test(tag.slice(CAROUSELDECK.length + 1)));
+}
+
+/** A file of the @carouseldeck/react installed in `site`, the site's directory. */
 function readInstalled(site: URL, file: string): string {
   try {
-    return readFileSync(new URL(`node_modules/${SLIDEDECK}/${file}`, site), "utf8");
+    return readFileSync(new URL(`node_modules/${CAROUSELDECK}/${file}`, site), "utf8");
   } catch (error) {
-    throw new Error(`The site at ${site.pathname} has no ${SLIDEDECK} installed: add it to its dependencies.`, { cause: error });
+    throw new Error(`The site at ${site.pathname} has no ${CAROUSELDECK} installed: add it to its dependencies.`, { cause: error });
   }
 }
 
-/** The README of the @slidedeck/react installed in `site`, the site's directory. */
-export function readSlidedeckReadme(site: URL): string {
-  return readInstalled(site, "README.md");
-}
-
-/** The version of the @slidedeck/react installed in `site`, as its package.json gives it. */
-export function readSlidedeckVersion(site: URL): string {
-  return (JSON.parse(readInstalled(site, "package.json")) as { version: string }).version;
+/**
+ * The latest carouseldeck release, as the repo `site` is in tags it: the
+ * README at the tag, with `git show`, so a page matches npm and not unreleased
+ * work. Until the first release is tagged (#114), the package installed in
+ * `site`, the site's directory. CI must fetch the tags, or it reads that.
+ */
+export function readCarouseldeckRelease(site: URL): Release {
+  const tag = latestTag(site);
+  if (tag === undefined) {
+    return {
+      readme: readInstalled(site, "README.md"),
+      version: (JSON.parse(readInstalled(site, "package.json")) as { version: string }).version,
+    };
+  }
+  return { readme: git(site, "show", `${tag}:${README}`), version: tag.slice(CAROUSELDECK.length + 1) };
 }

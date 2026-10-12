@@ -11,8 +11,8 @@
     "./build-test": "./src/build-test.ts",
     "./browser-test": "./src/browser-test.ts",
     "./live-check": "./src/live-check.ts",
-    "./slidedeck-readme": "./src/slidedeck-readme.ts",
-    "./slidedeck-readme.fixture": "./src/slidedeck-readme.fixture.ts"
+    "./carouseldeck-readme": "./src/carouseldeck-readme.ts",
+    "./carouseldeck-readme.fixture": "./src/carouseldeck-readme.fixture.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

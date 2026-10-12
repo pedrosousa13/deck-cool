@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { highlighter } from "./highlight.ts";
-import { fence } from "./slidedeck-readme.ts";
+import { fence } from "./carouseldeck-readme.ts";
 
 const PAYLOAD = "<img src=x onerror=alert(1)><script>alert(2)</script>";
 const HOSTILE = ["```", "````", PAYLOAD].join("\n");
@@ -31,12 +31,12 @@ test("a skin's CSS is one highlighted <pre>, whatever lines of backticks or HTML
 });
 
 test("the README's quickstart is one highlighted <pre>, whatever lines of backticks or HTML it holds", async () => {
-  const quickstart = `import * as Deck from '@slidedeck/react';\n${HOSTILE}\n<Deck.Root />`;
-  const readme = ["# @slidedeck/react", "", "## Quickstart", "", "`````tsx", quickstart, "`````", "", "## Next", ""].join("\n");
+  const quickstart = `import * as Deck from '@carouseldeck/react';\n${HOSTILE}\n<Deck.Root />`;
+  const readme = ["# @carouseldeck/react", "", "## Quickstart", "", "`````tsx", quickstart, "`````", "", "## Next", ""].join("\n");
   const code = fence(readme, "Quickstart");
   expect(code).toBe(quickstart);
   const highlight = await highlighter("tsx", "github-dark-default");
-  const html = await highlight(code, "@slidedeck/react/README.md");
+  const html = await highlight(code, "@carouseldeck/react/README.md");
   expectOnePre(html);
   expect(text(html)).toBe(quickstart);
 });
