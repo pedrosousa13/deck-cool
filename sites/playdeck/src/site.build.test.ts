@@ -4,9 +4,11 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { playdeck, umbrella } from "@deck-cool/brand/decks";
+import { demoComponent } from "@deck-cool/docs";
 import { everyResponse, isRecord, present, readManifest, text } from "@deck-cool/site-kit/build-test";
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { DOCS, PATHS, REPO } from "../components/links.ts";
+import { COURSE_PLATFORM, STREAMING_SERVICE } from "./catalog.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 import { DEMOS } from "./demos.ts";
 import { DOCS_NAV } from "./docs-pages.ts";
@@ -161,9 +163,9 @@ describe("budgets, measured and pinned", () => {
     expect(islands).toEqual({
       [PATHS.home]: ["skin_player"],
       // The docs' two demos, which are the two archetypes.
-      [PATHS.examples]: ["docsDemo:course-platform", "docsDemo:streaming-service"],
+      [PATHS.examples]: [COURSE_PLATFORM, STREAMING_SERVICE],
       [PATHS.search]: ["search"],
-      ...Object.fromEntries(DOCS_NAV.map(({ path, demos }) => [path, demos.map((name) => `docsDemo:${name}`).sort()])),
+      ...Object.fromEntries(DOCS_NAV.map(({ path, demos }) => [path, demos.map(demoComponent).sort()])),
     });
   });
 });
@@ -671,10 +673,10 @@ describe("the examples page", () => {
 
   test("renders each player dormant, on the server, inside its own section", () => {
     const streaming = present(
-      main().querySelector('#streaming-service ~ .pd-stage [data-fw-component="docsDemo:streaming-service"]'),
+      main().querySelector(`#streaming-service ~ .pd-stage [data-fw-component="${STREAMING_SERVICE}"]`),
       "the streaming player",
     );
-    const course = present(main().querySelector('#course-platform ~ .pd-stage [data-fw-component="docsDemo:course-platform"]'), "the course player");
+    const course = present(main().querySelector(`#course-platform ~ .pd-stage [data-fw-component="${COURSE_PLATFORM}"]`), "the course player");
     expect(streaming.querySelector('button[aria-label="Play from the beginning"]')).not.toBeNull();
     expect(streaming.querySelector('button[aria-label="Resume from 0:18"]')).not.toBeNull();
     expect(course.querySelector('button[aria-label="Start the lesson"]')).not.toBeNull();
@@ -785,9 +787,8 @@ describe("the docs' search page", () => {
 });
 
 describe("the docs, from @playdeck/docs", () => {
-  /** The demos a built page renders, by name, in order. */
-  const demosOn = (doc: Document) =>
-    [...doc.querySelectorAll("article [data-fw-component]")].map((island) => island.getAttribute("data-fw-component")?.replace(/^docsDemo:/, ""));
+  /** The demos a built page renders, by component, in order. */
+  const demosOn = (doc: Document) => [...doc.querySelectorAll("article [data-fw-component]")].map((island) => island.getAttribute("data-fw-component"));
 
   // The docs have no index.md, so /docs/ has no page of its own.
   test("/docs/ redirects to the docs' first page", () => {
@@ -797,7 +798,7 @@ describe("the docs, from @playdeck/docs", () => {
 
   test.each(DOCS_NAV)("$path renders with each demo it marks, in order, rendered on the server and dormant", ({ path, demos }) => {
     const doc = parse(path);
-    expect(demosOn(doc)).toEqual(demos);
+    expect(demosOn(doc)).toEqual(demos.map(demoComponent));
     for (const island of doc.querySelectorAll("article [data-fw-component]")) {
       expect(island.querySelector('[data-playdeck-part="viewport"]'), island.outerHTML.slice(0, 120)).not.toBeNull();
     }

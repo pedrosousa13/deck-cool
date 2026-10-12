@@ -52,7 +52,8 @@ export interface Docs {
 const COLLECTION = "docs";
 const PROSE = "docsProse";
 
-function demoComponent(name: string): string {
+/** The `build.components` key of the demo `name`, as defineDocs registers it. */
+export function demoComponent(name: string): string {
   return `docsDemo:${name}`;
 }
 

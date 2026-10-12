@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
-import { defineDocs, docsHref, unsafeMarkup } from "./index.ts";
+import { defineDocs, demoComponent, docsHref, unsafeMarkup } from "./index.ts";
 import type { DocsOptions } from "./index.ts";
 
 const FIXTURE = new URL("../fixtures/example-docs/", import.meta.url);
@@ -564,6 +564,13 @@ describe("the content callback", () => {
         { component: "docsProse", props: { html: "<p>That was the demo.</p>\n" } },
       ],
     });
+    store.close();
+  });
+
+  test("names each demo's component as demoComponent gives it", async () => {
+    const { docs, store } = await synced();
+    expect(demoComponent("counter")).toBe("docsDemo:counter");
+    expect(Object.keys(docs.components)).toContain(demoComponent("counter"));
     store.close();
   });
 

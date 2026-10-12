@@ -1,11 +1,12 @@
+import { demoComponent } from "@deck-cool/docs";
 import type { BuildSection } from "@pagedeck/core";
 
 // Each component's name in build.components.
 export const HOME_PAGE = "home_page";
 export const EXAMPLES_PAGE = "examples_page";
 /** The docs' two demos, which defineDocs registers from src/demos.ts under these names; the examples page renders them too. */
-export const STREAMING_SERVICE = "docsDemo:streaming-service";
-export const COURSE_PLATFORM = "docsDemo:course-platform";
+export const STREAMING_SERVICE = demoComponent("streaming-service");
+export const COURSE_PLATFORM = demoComponent("course-platform");
 /** The home page's one player, which it renders once per skin. */
 export const SKIN_PLAYER = "skin_player";
 export const PROSE = "prose";
