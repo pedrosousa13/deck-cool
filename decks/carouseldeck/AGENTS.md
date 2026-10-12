@@ -48,7 +48,7 @@ there says.
 added to the list runs in CI with no second list to update. CI does not
 replace running `pnpm verify` locally; it catches the time you forgot.
 
-`all-gates` is the one check to require in branch protection: it fails if a
+`verify` is the one check main requires: it fails if a
 gate job failed or was cancelled, and passes if each passed or was skipped as
 the change did not need it. `release.yml` still runs the whole `pnpm verify`
 in one job before it publishes.
