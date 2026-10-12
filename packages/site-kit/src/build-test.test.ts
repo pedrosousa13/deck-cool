@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { everyResponse, present, readManifest, text } from "./build-test.ts";
+import { everyResponse, pagesWithEmDashes, present, readManifest, text } from "./build-test.ts";
 
 test("present returns a value, and fails on null or undefined, naming what is missing", () => {
   expect(present(0, "zero")).toBe(0);
@@ -62,5 +62,29 @@ describe("readManifest", () => {
     expect(() => readManifest(dir)).toThrow("a manifest page has no path or output");
     write({ pages: [], files: [{}], routing: { trees: [] } });
     expect(() => readManifest(dir)).toThrow("a manifest file's path is missing");
+  });
+});
+
+describe("pagesWithEmDashes", () => {
+  const dir = mkdtempSync(join(tmpdir(), "site-kit-em-dash-"));
+  const page = (file: string, html: string) => {
+    mkdirSync(join(dir, "site", file, ".."), { recursive: true });
+    writeFileSync(join(dir, "site", file), html);
+  };
+  page("index.html", "<p>Clean, with an en dash: 1\u20132.</p>");
+  page("a/index.html", "<p>One \u2014 two</p>");
+  page("b/c/index.html", "<p>One &mdash; two</p>");
+  page("404.html", "<title>Not found \u2014 Site</title>");
+  page("examples/index.html", "<p>Kept \u2014 as ported</p>");
+  page("examples.css", "/* \u2014 not a page */");
+
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  test("names each page whose HTML holds an em dash, as the character or &mdash;", () => {
+    expect(pagesWithEmDashes(dir)).toEqual(["/404.html", "/a/", "/b/c/", "/examples/"]);
+  });
+
+  test("skips each page under an exempt path", () => {
+    expect(pagesWithEmDashes(dir, ["/examples/"])).toEqual(["/404.html", "/a/", "/b/c/"]);
   });
 });

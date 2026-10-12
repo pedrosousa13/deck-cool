@@ -1,5 +1,5 @@
 import type { HeaderField } from "@pagedeck/core";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
@@ -28,6 +28,22 @@ export interface Manifest {
   files: string[];
   /** Each routing tree's declared 404 page. */
   notFound: unknown[];
+}
+
+/**
+ * Each built page under `site/` whose HTML holds an em dash, as `—` or
+ * `&mdash;`, by its path: `/a/` for `a/index.html`, sorted. A page under one
+ * of the `exempt` paths is skipped.
+ */
+export function pagesWithEmDashes(site: string, exempt: readonly string[] = []): string[] {
+  const out = join(site, "site");
+  return readdirSync(out, { recursive: true, encoding: "utf8" })
+    .filter((file) => file.endsWith(".html"))
+    .map((file) => ({ file, path: `/${file.replace(/(^|\/)index\.html$/, "$1")}` }))
+    .filter(({ path }) => !exempt.some((prefix) => path.startsWith(prefix)))
+    .filter(({ file }) => /\u2014|&mdash;/.test(readFileSync(join(out, file), "utf8")))
+    .map(({ path }) => path)
+    .sort();
 }
 
 /** The site's built manifest.json: its pages, its files and each tree's 404 page, checked as they are read. */
