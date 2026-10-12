@@ -1,0 +1,222 @@
+name: Deploy carouseldeck
+
+# carouseldeck's site shows its latest release (ADR 0002), so it publishes only
+# a released commit, never an unreleased main:
+#
+# - release.yml calls this workflow (workflow_call) with the commit it just
+#   released and tagged. That call publishes that commit.
+# - A manual run on main with `apply` publishes the latest
+#   `@carouseldeck/react@X.Y.Z` tag. Before the first release there is none,
+#   and the run fails and publishes nothing.
+# - A push that changes the site, the deck's packages, a shared package or the
+#   install builds the site at that push and runs `wrangler deploy --dry-run`,
+#   which uses no credential and sends nothing to Cloudflare. So does a manual
+#   run without `apply`.
+#
+# A publish goes to carousel.deck.cool from the production environment, then
+# checks the live site. Runbook: docs/deploy.md.
+on:
+  push:
+    paths:
+      - sites/carouseldeck/**
+      - decks/carouseldeck/packages/**
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/deploy-carouseldeck.yml
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Publish the latest carouseldeck release to carousel.deck.cool. Off is a dry run of this branch that lists the upload and sends nothing."
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      sha:
+        description: "The released commit to publish, as a full SHA. It must carry an @carouseldeck/react@X.Y.Z tag."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# A publishing run is never cancelled: wrangler uploads the assets before it
+# publishes the version that serves them.
+concurrency:
+  group: deploy-carouseldeck-${{ (inputs.apply || inputs.sha) && 'apply' || github.ref }}
+  cancel-in-progress: ${{ !(inputs.apply || inputs.sha) }}
+
+jobs:
+  # Every run that does not publish: no environment, no secret.
+  dry-run:
+    if: ${{ !(github.repository == 'pedrosousa13/deck-cool' && github.ref == 'refs/heads/main' && (inputs.apply || inputs.sha)) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sites/carouseldeck
+    # No secret here: a job-level `env:` reaches every action and install script.
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      # Every tag, so the home page reads the latest release's README, as a
+      # publish does.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # Puts the pnpm named in package.json's packageManager on the path.
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      # The site, and the deck packages it uses from the workspace.
+      - run: pnpm --filter "@sites/carouseldeck..." build
+        working-directory: .
+
+      - name: Refuse a publish off main
+        if: ${{ inputs.apply || inputs.sha }}
+        run: |
+          echo "::error title=Not published::A publish runs only on main in pedrosousa13/deck-cool, and this run is on ${GITHUB_REF} in ${GITHUB_REPOSITORY}. Nothing was published."
+          exit 1
+
+      - name: Check the Worker without publishing
+        run: pnpm exec wrangler deploy --dry-run
+
+  # Picks the commit to publish, from the tags. No environment and no secret.
+  release:
+    if: ${{ github.repository == 'pedrosousa13/deck-cool' && github.ref == 'refs/heads/main' && (inputs.apply || inputs.sha) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # A release is a commit on main with an @carouseldeck/react@X.Y.Z tag.
+      # release.yml names the commit, and a manual run takes the latest tag.
+      - name: Pick the release
+        id: pick
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          release_tags() {
+            grep -E '^@carouseldeck/react@[0-9]+\.[0-9]+\.[0-9]+$' || true
+          }
+          if [ -n "$SHA" ]; then
+            if ! [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error title=Not published::The sha input is not a full commit SHA. Nothing was published."
+              exit 1
+            fi
+            tag=$(git tag --points-at "$SHA" | release_tags | head -n 1)
+            if [ -z "$tag" ]; then
+              echo "::error title=Not published::Commit $SHA carries no @carouseldeck/react@X.Y.Z tag, so it is not a release. Nothing was published."
+              exit 1
+            fi
+          else
+            tag=$(git tag --list '@carouseldeck/react@*' --sort=-v:refname | release_tags | head -n 1)
+            if [ -z "$tag" ]; then
+              echo "::error title=Not published::There is no @carouseldeck/react@X.Y.Z tag yet, so there is no release to publish. Nothing was published. The first release publishes the site itself."
+              exit 1
+            fi
+          fi
+          sha=$(git rev-parse "refs/tags/$tag^{commit}")
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo "::error title=Not published::$tag is not on main. Nothing was published."
+            exit 1
+          fi
+          echo "Publishing $tag, commit $sha."
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  # Builds the release to publish. No environment and no secret: the build runs
+  # dependency code, so it runs in a job that never holds the Cloudflare token.
+  build:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Every tag, so the home page reads the release's README.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      # Puts the pnpm named in package.json's packageManager on the path.
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The site, and the deck packages it uses from the workspace.
+      - run: pnpm --filter "@sites/carouseldeck..." build
+      # site/ holds .assetsignore, which wrangler reads, so hidden files go too.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: carouseldeck-site
+          path: sites/carouseldeck/site/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: [release, build]
+    # Holds CLOUDFLARE_API_TOKEN, and deploys from main only. It publishes the
+    # build job's site/ and builds nothing itself.
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sites/carouseldeck
+    # No secret here: a job-level `env:` reaches every action and install script.
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.sha }}
+          persist-credentials: false
+      # Puts the pnpm named in package.json's packageManager on the path.
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      # For wrangler. pnpm runs a dependency's build script only if allowBuilds
+      # allows it, and it allows none.
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carouseldeck-site
+          path: sites/carouseldeck/site/
+
+      - name: Publish the Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error title=Not published::The production environment has no CLOUDFLARE_API_TOKEN secret. Nothing was published. Add it (docs/deploy.md) and run again with apply."
+            exit 1
+          fi
+          pnpm exec wrangler deploy
+
+      # A first deploy waits for the custom domain's certificate.
+      - name: Check the live site, for up to five minutes
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if pnpm check-live; then exit 0; fi
+            echo "Attempt $attempt failed; retrying in 30 s."
+            sleep 30
+          done
+          exit 1

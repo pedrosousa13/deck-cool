@@ -36,9 +36,12 @@ jobs:
     env:
       WRANGLER_SEND_METRICS: "false"
     steps:
+      # Every tag: deck.cool's carouseldeck card reads the README at the latest
+      # carouseldeck release tag (ADR 0002).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       # Puts the pnpm named in package.json's packageManager on the path.
       - run: corepack enable
         working-directory: .
@@ -69,9 +72,12 @@ jobs:
       run:
         working-directory: sites/deck-cool
     steps:
+      # Every tag: deck.cool's carouseldeck card reads the README at the latest
+      # carouseldeck release tag (ADR 0002).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       # Puts the pnpm named in package.json's packageManager on the path.
       - run: corepack enable
         working-directory: .

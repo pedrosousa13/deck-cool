@@ -10,9 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Every tag: deck.cool's carouseldeck card reads the README at the latest
+      # carouseldeck release tag (ADR 0002).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       # Lints every workflow, and each run: script with the runner's shellcheck. The
       # release binary comes from GitHub, pinned by checksum: Docker Hub rate-limits
       # anonymous pulls from shared runners (#68).
