@@ -792,6 +792,12 @@ describe("the figures the docs quote", () => {
     expect(parse(PATHS.search).querySelector('[data-fw-component="search"]')?.getAttribute("data-fw-mode")).toBe("idle");
   });
 
+  // reference/site-search.md, on the requests search makes.
+  test("this site's policy sets connect-src 'self'", () => {
+    expect(source("reference/site-search.md")).toContain("This site's policy sets `connect-src 'self'`.");
+    expect(CONTENT_SECURITY_POLICY.value.split("; ")).toContain("connect-src 'self'");
+  });
+
   // reference/javascript-budgets.md, "Island props".
   test("the content demo reads a 67 kB entry and passes its island 2.3 kB", () => {
     expect(source("reference/javascript-budgets.md")).toContain("A server component can read a 67 kB CMS entry and pass an island only the 2.3 kB it renders");
