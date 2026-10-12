@@ -130,7 +130,14 @@ importers:
         specifier: 8.3.1
         version: 8.3.1(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1)
 
-  decks/carouseldeck/packages/core: {}
+  decks/carouseldeck/packages/core:
+    devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: 8.3.1
+        version: 8.3.1(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1)
 
   decks/carouseldeck/packages/docs: {}
 
@@ -146,6 +153,12 @@ importers:
       react-dom:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: 8.3.1
+        version: 8.3.1(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1)
 
   decks/carouseldeck/packages/react-18:
     dependencies:
@@ -168,6 +181,9 @@ importers:
       react-dom:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
+      vite:
+        specifier: 8.3.1
+        version: 8.3.1(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1)
 
   decks/carouseldeck/prototypes/scroll-snap:
     devDependencies:
@@ -4528,7 +4544,7 @@ snapshots:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       rolldown: 1.2.5
-      vite: 8.3.3(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1)
+      vite: 8.3.1(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1)
     transitivePeerDependencies:
       - '@babel/template'
       - '@types/node'
