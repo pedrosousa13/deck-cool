@@ -7,7 +7,7 @@ the deck from primitives that work with no stylesheet, and style it with plain
 CSS.
 
 The guides, the reference and the recipes, each with a live deck, are at
-[slide.deck.cool/docs](https://slide.deck.cool/docs/).
+[carousel.deck.cool/docs](https://carousel.deck.cool/docs/).
 
 ## Install
 

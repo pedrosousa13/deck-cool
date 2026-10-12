@@ -8,7 +8,7 @@ pnpm add @carouseldeck/react
 ```
 
 The documentation, with guides, the reference and recipes, each with a live
-deck, is at [slide.deck.cool/docs](https://slide.deck.cool/docs/).
+deck, is at [carousel.deck.cool/docs](https://carousel.deck.cool/docs/).
 Its pages are markdown in [packages/docs](packages/docs), published as
 `@carouseldeck/docs` with each release. The package README,
 [packages/react/README.md](packages/react/README.md), has a quickstart and a
