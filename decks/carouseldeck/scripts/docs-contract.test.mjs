@@ -162,9 +162,9 @@ test('two files cannot share a route', () => {
   ]);
 });
 
-// The demos a page may mark. carouseldeck's site, sites/slidedeck in
-// pedrosousa13/deck-cool, will register each one (deck-cool#51). Agree a new
-// one with the site before a release uses it.
+// The demos a page may mark. carouseldeck's site, sites/carouseldeck,
+// registers each one (sites/carouseldeck/src/demos.ts). Agree a new one with
+// the site before a release uses it.
 const SITE_DEMOS = [
   'autoplay',
   'centred-ends',

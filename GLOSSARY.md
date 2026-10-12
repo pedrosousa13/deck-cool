@@ -4,7 +4,7 @@ deck.cool is the umbrella for a family of small, unstyled React packages, each n
 
 ## Vocabulary
 
-- **Deck**: one package in the family (slidedeck, playdeck, pagedeck). Its site lives here, and its source lives either here or in its own repo.
+- **Deck**: one package in the family (carouseldeck, playdeck, pagedeck). Its site lives here, and its source lives either here or in its own repo.
 - **In-repo deck**: a deck whose source lives in this repo, under `decks/<deck>/`. slidedeck is the first, renamed carouseldeck as it moves in. See ADR 0002.
   _Avoid_: internal deck, monorepo deck
 - **Outside deck**: a deck whose source still lives in its own repo. Its site follows its releases through a bump PR (ADR 0001).
@@ -27,7 +27,7 @@ Made by the maintainer on 2026-10-08.
   | Site | Address |
   | --- | --- |
   | Umbrella | `deck.cool` |
-  | slidedeck | `slide.deck.cool` |
+  | carouseldeck | `carousel.deck.cool` (slidedeck's `slide.deck.cool` until #105 redirects it) |
   | playdeck | `play.deck.cool`. `playdeck.video` 301s to it (ruled 2026-10-10, done 2026-10-12, #65) |
   | pagedeck | `page.deck.cool`, with its landing page and docs merged into one site and the docs under `/docs` |
 
@@ -39,11 +39,11 @@ Made by the maintainer on 2026-10-08.
   | Deck | Arrangement | Accent |
   | --- | --- | --- |
   | deck.cool | three cards, fanned | the three accents below |
-  | slidedeck | three cards in a row, the middle one in front | `#2997ff` |
+  | carouseldeck | three cards in a row, the middle one in front | `#2997ff` |
   | playdeck | three cards stepping down: the outline reads as play | `#ff5c86` |
   | pagedeck | three stacked sections, the middle one lit (the island) | `#3ddc97` |
 
-  Accepted risks: at 16px pagedeck's bars can read as a hamburger menu, and slidedeck's arrangement is close to the stock "view carousel" icon.
+  Accepted risks: at 16px pagedeck's bars can read as a hamburger menu, and carouseldeck's arrangement is close to the stock "view carousel" icon.
 - **Motion.** One easing curve, `cubic-bezier(.32,.72,0,1)`. Every animation holds still under `prefers-reduced-motion`. Only Firefox animates an SVG favicon, so sites ship the still icon as the favicon and animate the icon only inside a page (the Family bar, the umbrella site's cards). pagedeck never animates its favicon by script, because that would cost JavaScript on pages that otherwise ship none.
 - **formdeck is parked.** It is not ready, and stays out of every site and design until the maintainer says it is. Its design is kept in `design/favicons/parked/` and on the canvas: two cards meeting in a check mark, amber `#ffb020` with dark text on amber fills. When it is ready it gets `form.deck.cool`.
 - **The umbrella site links no GitHub profile.** Made by the maintainer on 2026-10-09: the links it had went to the maintainer's personal profile. Each package site links its own deck's repo instead. The umbrella footer keeps its npm link.
@@ -64,8 +64,8 @@ Made by the maintainer on 2026-10-09, in the #33 grilling. It covers deck.cool's
 - **Sections by quality, not by audience.** Every home page has four: unstyled, your look; small, leans on the browser; built for agents; accessible by default.
 - **Accessibility claims need a test.** Each claim points to a test in that deck's repo. A claim with no test stays off the page, and the gap is filed in the deck's repo.
 - **The umbrella states the promise; each deck proves it.** deck.cool says what every deck shares and sends readers to each one. A deck's home page carries its claim, one figure, a demo and its install command, and repeats the promise in one line.
-- **The deck claims stay:** slidedeck "A carousel that lets the browser do the scrolling.", playdeck "A video player you compose, not one you configure.", pagedeck "Zero JavaScript until a page needs it."
-- **One figure per deck:** slidedeck's min+gzip size, as its installed README gives it (8.84 KB in 1.0.3); playdeck 0 requests to YouTube or Vimeo before play; pagedeck 0 B of JavaScript on a page with nothing interactive.
+- **The deck claims stay:** carouseldeck "A carousel that lets the browser do the scrolling.", playdeck "A video player you compose, not one you configure.", pagedeck "Zero JavaScript until a page needs it."
+- **One figure per deck:** carouseldeck's min+gzip size, as its README at the latest release tag gives it (8.84 KB in @slidedeck/react 1.0.3); playdeck 0 requests to YouTube or Vimeo before play; pagedeck 0 B of JavaScript on a page with nothing interactive.
 - **Unstyled is shown, not told.** A deck's home page shows one live component twice, styled two very different ways, with the CSS beside each.
 - **Calls to action:** the install command (copy on click) and "Read the docs". Under them: "Using an agent? Point it at the docs: they're plain markdown."
 - **No agent-docs claim beyond markdown** until pagedeck#34 ships a markdown twin per page and `llms.txt`.

@@ -614,7 +614,7 @@ describe("the docs, from @carouseldeck/docs", () => {
   const demosOn = (doc: Document) =>
     [...doc.querySelectorAll("article fw-island")].map((island) => island.getAttribute("data-fw-component")?.replace(/^docsDemo:/, ""));
 
-  // carouseldeck's READMEs link https://carousel.deck.cool/docs/.
+  // carouseldeck's READMEs link its site's /docs/.
   test("serves /docs/, the docs' first page", () => {
     expect(DOCS_NAV[0]?.href).toBe("/docs/");
     expect(existsSync(`${OUT}/docs/index.html`)).toBe(true);

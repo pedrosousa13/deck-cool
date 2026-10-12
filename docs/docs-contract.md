@@ -4,10 +4,10 @@ This is for a deck's maintainer. It says what a docs package must hold so that t
 
 ## The package
 
-Publish an npm package named `@<deck>/docs` (for example `@slidedeck/docs`) at the same version as the deck's code. It holds markdown, one `nav.json` and images, and no code.
+Publish an npm package named `@<deck>/docs` (for example `@carouseldeck/docs`) at the same version as the deck's code. It holds markdown, one `nav.json` and images, and no code.
 
 ```
-@slidedeck/docs/
+@carouseldeck/docs/
 ├── package.json
 ├── nav.json
 ├── index.md
@@ -31,7 +31,7 @@ Every page opens with a frontmatter block that has a `title` and a `description`
 ```md
 ---
 title: Layout
-description: How slidedeck sizes a slide to its container.
+description: How carouseldeck sizes a slide to its container.
 ---
 
 A slide fills the width of its container...
@@ -39,13 +39,13 @@ A slide fills the width of its container...
 
 The site shows `title` as the page's heading, so do not open the body with a `#` heading: the first one is dropped.
 
-`label` is optional: a shorter name for the page in the site's navigation, such as `Introduction` for a page titled `slidedeck`. With no `label`, the navigation shows the `title`.
+`label` is optional: a shorter name for the page in the site's navigation, such as `Introduction` for a page titled `carouseldeck`. With no `label`, the navigation shows the `title`.
 
 ```md
 ---
-title: slidedeck
+title: carouseldeck
 label: Introduction
-description: Documentation for slidedeck.
+description: Documentation for carouseldeck.
 ---
 ```
 

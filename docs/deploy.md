@@ -5,7 +5,7 @@ The umbrella site (`sites/deck-cool`) is served at `https://deck.cool` by **Work
 wrangler is `sites/deck-cool`'s exact-version dev dependency. Run it as `pnpm exec wrangler` in `sites/deck-cool`, never as `npx wrangler`, which takes whatever version is latest.
 
 
-slidedeck's site (`sites/slidedeck`), pagedeck's (`sites/pagedeck`) and playdeck's (`sites/playdeck`) deploy the same way, each to its own Worker, at `https://slide.deck.cool`, `https://page.deck.cool` and `https://play.deck.cool`. Everything below describes deck.cool; [slidedeck at slide.deck.cool](#slidedeck-at-slidedeckcool), [pagedeck at page.deck.cool](#pagedeck-at-pagedeckcool) and [playdeck at play.deck.cool](#playdeck-at-playdeckcool) list what differs.
+carouseldeck's site (`sites/carouseldeck`), pagedeck's (`sites/pagedeck`) and playdeck's (`sites/playdeck`) deploy the same way, each to its own Worker, at `https://carousel.deck.cool`, `https://page.deck.cool` and `https://play.deck.cool`. carouseldeck's publishes only a release of its deck. Everything below describes deck.cool; [carouseldeck at carousel.deck.cool](#carouseldeck-at-carouseldeckcool), [pagedeck at page.deck.cool](#pagedeck-at-pagedeckcool) and [playdeck at play.deck.cool](#playdeck-at-playdeckcool) list what differs.
 ## What gets deployed
 
 `sites/deck-cool/wrangler.jsonc` declares the Worker:
@@ -134,54 +134,66 @@ A rollback publishes an earlier version as it was. The next run with `apply` dep
 
 Remove the custom domain from the Worker (Workers & Pages → `deck-cool` → Settings → Domains & Routes). That deletes the DNS record Cloudflare created for it. Recreate the records you wrote down before the first deploy. Then take the route out of `wrangler.jsonc`, so the next deploy does not add it again.
 
-## slidedeck at slide.deck.cool
+## carouseldeck at carousel.deck.cool
 
-`sites/slidedeck` is served at `https://slide.deck.cool` by a second Worker, `slidedeck`, on the same `deck.cool` zone. It replaces the Pages project `slidedeck` at `slidedeck.pages.dev`. There are no users yet, so `slidedeck.pages.dev` gets no redirect: the Pages project is deleted.
+`sites/carouseldeck` is served at `https://carousel.deck.cool` by the Worker `carouseldeck`, on the same `deck.cool` zone. It is slidedeck's site, renamed with the deck (#105). It publishes only a carouseldeck release (ADR 0002), so it deploys differently from the other sites.
 
 Every section above applies, with these differences:
 
-- **The config.** `sites/slidedeck/wrangler.jsonc` declares the Worker `slidedeck`, with the route `{ "pattern": "slide.deck.cool", "custom_domain": true }`. The other settings are the same as deck.cool's. wrangler is `sites/slidedeck`'s exact-version dev dependency, at the same version as deck.cool's.
-- **The build.** `_headers` gets its CSP from `sites/slidedeck/src/csp.ts` and the other headers from `sites/slidedeck/src/headers.ts`, the same fields as deck.cool's. The pages' scripts and the stylesheet are content-hashed under `/assets/`, so they are `immutable`. `_redirects` and `.assetsignore` are the same as deck.cool's.
-- **The workflow.** `.github/workflows/deploy-slidedeck.yml` has the same three jobs as `deploy-deck-cool.yml`. A push runs its dry run only when it changes `sites/slidedeck/`, `packages/`, the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` or the workflow itself. A manual run always runs.
-- **The token and the secret.** The publish job uses the same `CLOUDFLARE_API_TOKEN` in the `production` environment. Workers Editor is account-wide, and Workers Routes Write covers every hostname on the `deck.cool` zone, so the token deploys this Worker too.
-- **The zone.** Always Use HTTPS is a zone setting, so it already covers `slide.deck.cool`. deck.cool's HSTS has `includeSubDomains`, and slidedeck's `_headers` sends the same HSTS.
+- **The config.** `sites/carouseldeck/wrangler.jsonc` declares the Worker `carouseldeck`, with the route `{ "pattern": "carousel.deck.cool", "custom_domain": true }`. The other settings are the same as deck.cool's. wrangler is `sites/carouseldeck`'s exact-version dev dependency, at the same version as deck.cool's.
+- **The build.** The site uses `@carouseldeck/react` and `@carouseldeck/docs` from the workspace, so the workflow builds it with `pnpm --filter "@sites/carouseldeck..." build`, which builds the deck packages first. The home page reads the README and version at the latest `@carouseldeck/react@X.Y.Z` tag, with `git show`, so the build checks out every tag. Until the first release is tagged, it reads the workspace's package. `_headers` gets its CSP from `sites/carouseldeck/src/csp.ts` and the other headers from `sites/carouseldeck/src/headers.ts`, the same fields as deck.cool's. The pages' scripts and the stylesheet are content-hashed under `/assets/`, so they are `immutable`. `_redirects` and `.assetsignore` are the same as deck.cool's.
+- **The workflow.** `.github/workflows/deploy-carouseldeck.yml` publishes a released commit, never an unreleased `main`:
+  - `release.yml` calls it as a reusable workflow, with `sha` set to the commit it just released and tagged. The `release` job checks that the commit carries an `@carouseldeck/react@X.Y.Z` tag and is on `main`, then the `build` and `publish` jobs publish it.
+  - A manual run on `main` with `apply` publishes the latest `@carouseldeck/react@X.Y.Z` tag. While there is none, the run fails and publishes nothing.
+  - A push runs the dry run only when it changes `sites/carouseldeck/`, `decks/carouseldeck/packages/`, `packages/`, the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` or the workflow itself. A manual run without `apply` runs it on its branch.
+
+  A publish runs only in `pedrosousa13/deck-cool`, on `main`. A run anywhere else with `apply`, or a call with `sha`, fails in the dry run and publishes nothing. A change to the site or `packages/brand` alone reaches carousel.deck.cool with the deck's next release.
+- **The token and the secret.** The publish job uses the same `CLOUDFLARE_API_TOKEN` in the `production` environment. Workers Editor is account-wide, and Workers Routes Write covers every hostname on the `deck.cool` zone, so the token deploys this Worker too. A reusable workflow's job that names an environment reads that environment's secrets, so `release.yml` passes no secret.
+- **The zone.** Always Use HTTPS is a zone setting, so it already covers `carousel.deck.cool`. deck.cool's HSTS has `includeSubDomains`, and the site's `_headers` sends the same HSTS.
+
+### slide.deck.cool until the first release
+
+slide.deck.cool keeps serving the old Worker `slidedeck`, built from `@slidedeck/react`, until two things happen: the first carouseldeck release (1.2.0, #114) deploys the `carouseldeck` Worker, and the maintainer's DNS and redirect steps on #105 send slide.deck.cool to carousel.deck.cool. Nothing in this repo deploys the `slidedeck` Worker any more.
 
 ### The first deploy
 
-The `slidedeck` Worker does not exist yet (checked 2026-10-09), and Workers Editor can't create a Worker. Do the first deploy one of two ways:
+The `carouseldeck` Worker does not exist yet, and Workers Editor can't create a Worker. The first release's deploy creates it only if the token can, so do one of these first:
 
-- From your machine, after `pnpm exec wrangler login`. This is how deck.cool's Worker was created.
-- From CI, after you give the token Workers → **Admin** for that one run. Take Admin away when the run is done.
+- From your machine, after `pnpm exec wrangler login`, at the release's tag. This is how deck.cool's Worker was created.
+- Give the token Workers → **Admin** for the release's deploy, or for a manual run with `apply` after it. Take Admin away when the run is done.
 
-Before the first deploy, check the zone's DNS records for `slide.deck.cool`. There were none on 2026-10-09, and the Pages project had no custom domain. The custom domain creates its own record, and it cannot be created on a hostname that already has a CNAME record.
+Before the first deploy, check the zone's DNS records for `carousel.deck.cool`. The custom domain creates its own record, and it cannot be created on a hostname that already has a CNAME record.
 
 ```sh
-gh workflow run deploy-slidedeck.yml -R pedrosousa13/deck-cool --ref main               # dry run
-gh workflow run deploy-slidedeck.yml -R pedrosousa13/deck-cool --ref main -f apply=true # publish
+gh workflow run deploy-carouseldeck.yml -R pedrosousa13/deck-cool --ref main               # dry run of main
+gh workflow run deploy-carouseldeck.yml -R pedrosousa13/deck-cool --ref main -f apply=true # publish the latest release
 gh run watch -R pedrosousa13/deck-cool
 ```
 
-From your machine instead:
+From your machine instead, at the release's tag:
 
 ```sh
-cd sites/slidedeck
-pnpm build
+git fetch --tags
+git checkout @carouseldeck/react@1.2.0
+pnpm install --frozen-lockfile
+pnpm --filter "@sites/carouseldeck..." build
+cd sites/carouseldeck
 pnpm exec wrangler deploy --dry-run   # lists the upload; sends nothing
 CLOUDFLARE_API_TOKEN=... pnpm exec wrangler deploy
 ```
 
-### Verifying slidedeck
+### Verifying carouseldeck
 
 ```sh
-pnpm --filter @sites/slidedeck check-live                      # https://slide.deck.cool
-pnpm --filter @sites/slidedeck check-live https://example.com  # any other origin
+pnpm --filter @sites/carouseldeck check-live                      # https://carousel.deck.cool
+pnpm --filter @sites/carouseldeck check-live https://example.com  # any other origin
 ```
 
-`check-live` fetches `/`, `/examples/` and `/icons/slidedeck/still.svg`, and fails unless each answers `200` with every header in `sites/slidedeck/src/headers.ts`, at its exact value, and no `immutable`. The CSP, and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, are among those headers. It then checks the hashed stylesheet that `/` links, as deck.cool's check does. It fails unless `/manifest.json` and `/no-such-page/` answer `404`, and unless `http://slide.deck.cool/` answers `301` to `https://slide.deck.cool/`. `sites/slidedeck/src/live-check.test.ts` runs the same checks against the build served locally.
+`check-live` fetches `/`, `/examples/`, `/docs/` and `/icons/carouseldeck/still.svg`, and fails unless each answers `200` with every header in `sites/carouseldeck/src/headers.ts`, at its exact value, and no `immutable`. The CSP, and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, are among those headers. It then checks the hashed stylesheet that `/` links, as deck.cool's check does. It fails unless `/manifest.json` and `/no-such-page/` answer `404`, and unless `http://carousel.deck.cool/` answers `301` to `https://carousel.deck.cool/`. `sites/carouseldeck/src/live-check.test.ts` runs the same checks against the build served locally.
 
 `src/live-check.ts` lists this site's paths. The checks are site-kit's, as deck.cool's are.
 
-Rolling back, and taking the site off the domain, are the same as for deck.cool, with the Worker `slidedeck` in `sites/slidedeck`.
+Rolling back is the same as for deck.cool, with the Worker `carouseldeck` in `sites/carouseldeck`, at the release's tag. Taking the site off the domain is the same too.
 
 ### Retiring the Pages project
 

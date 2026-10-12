@@ -177,9 +177,10 @@ against the contract with the rules deck.cool's docs loader applies.
 
 ## Site
 
-The site lives in pedrosousa13/deck-cool, as `sites/slidedeck`, and is served
-at https://slide.deck.cool. It will build its docs pages from the published
-`@carouseldeck/docs` once deck-cool#51 lands. This repo deploys nothing.
+The site lives in this repo, as `sites/carouseldeck`, and is served at
+https://carousel.deck.cool. It builds its docs pages from the workspace's
+`@carouseldeck/docs`. A release deploys it: `release.yml` calls
+`deploy-carouseldeck.yml` with the released commit (ADR 0002).
 
 ## Agent skills
 

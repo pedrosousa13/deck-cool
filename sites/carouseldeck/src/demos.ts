@@ -1,8 +1,8 @@
 /**
  * The demos carouseldeck's docs mark, each as `<!-- demo:example-<name> -->`, by
  * name. Each is an island in components/demos/, in a file of the marker's
- * name. carouseldeck's own repo lists the same names, as SITE_DEMOS in
- * scripts/docs-contract.test.mjs: agree a new one there before a release of
+ * name. The deck lists the same names, as SITE_DEMOS in
+ * decks/carouseldeck/scripts/docs-contract.test.mjs: agree a new one there before a release of
  * @carouseldeck/docs marks it.
  */
 const NAMES = [
