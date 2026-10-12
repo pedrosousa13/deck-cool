@@ -87,8 +87,10 @@ main .pd-button:hover {
   color: var(--fill-text);
 }
 
-/* Highlighted code. `!important` wins over the highlighter's inline ground. */
-.shiki {
+/* Highlighted code, and a docs block the highlighter leaves plain. `!important`
+   wins over the highlighter's inline ground. */
+.shiki,
+.pd-prose pre {
   margin: 0;
   padding: 20px 24px;
   overflow-x: auto;
@@ -684,10 +686,6 @@ main .pd-docnav a[aria-current="page"] {
 }
 .pd-prose pre {
   margin: 24px 0;
-}
-/* An unhighlighted block scrolls inside itself, as a highlighted one does. */
-.pd-prose pre:not(.shiki) {
-  overflow-x: auto;
 }
 .pd-prose :target {
   scroll-margin-top: 76px;

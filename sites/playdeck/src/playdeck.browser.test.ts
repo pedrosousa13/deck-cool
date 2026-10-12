@@ -249,6 +249,17 @@ describe("the playdeck site in a browser", () => {
     expect(wide).toEqual([]);
   });
 
+  // A fence with no language, or one the highlighter does not load, renders as a plain <pre>.
+  test("an unhighlighted block sits on the same tile as a highlighted one", async () => {
+    const { page } = await visit("/docs/providers/youtube/", { width: 1280 });
+    const look = (selector: string) =>
+      page.locator(selector).first().evaluate((pre) => {
+        const style = getComputedStyle(pre);
+        return [style.backgroundColor, style.padding, style.borderRadius, style.fontSize, style.lineHeight];
+      });
+    expect(await look(".pd-prose pre:not(.shiki)")).toEqual(await look(".pd-prose pre.shiki"));
+  });
+
   test("the docs pages visited above carry every demo the site registers", () => {
     const visited = DOCS_NAV.filter(({ path }) => PAGES.includes(path));
     expect(visited.flatMap(({ demos }) => demos).sort()).toEqual(Object.keys(DEMOS).sort());
