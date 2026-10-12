@@ -27,7 +27,7 @@ Made by the maintainer on 2026-10-08.
   | Site | Address |
   | --- | --- |
   | Umbrella | `deck.cool` |
-  | carouseldeck | `carousel.deck.cool` (slidedeck's `slide.deck.cool` until #105 redirects it) |
+  | carouseldeck | `carousel.deck.cool` (slidedeck's old `slide.deck.cool` redirects here, #105) |
   | playdeck | `play.deck.cool`. `playdeck.video` 301s to it (ruled 2026-10-10, done 2026-10-12, #65) |
   | pagedeck | `page.deck.cool`, with its landing page and docs merged into one site and the docs under `/docs` |
 

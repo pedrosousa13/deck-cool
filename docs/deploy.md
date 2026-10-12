@@ -151,11 +151,11 @@ Every section above applies, with these differences:
 - **The token and the secret.** The publish job uses the same `CLOUDFLARE_API_TOKEN` in the `production` environment. Workers Editor is account-wide, and Workers Routes Write covers every hostname on the `deck.cool` zone, so the token deploys this Worker too. A reusable workflow's job that names an environment reads that environment's secrets, so `release.yml` passes no secret.
 - **The zone.** Always Use HTTPS is a zone setting, so it already covers `carousel.deck.cool`. deck.cool's HSTS has `includeSubDomains`, and the site's `_headers` sends the same HSTS.
 
-### slide.deck.cool until the first release
+### slide.deck.cool
 
-Until carousel.deck.cool serves, the brand kit's carouseldeck URL, the site's canonical origin and `check-live`'s default origin stay `https://slide.deck.cool`, so no deployed site links a host that does not serve yet. Flip them to carousel.deck.cool once it serves: a step on #105. The publish job checks `https://carousel.deck.cool` explicitly.
+carousel.deck.cool serves carouseldeck. slide.deck.cool 301s there, path and query kept, through a Single Redirect rule on the deck.cool zone (rule a2e54e73…); plain http redirects too, through Always Use HTTPS. The old Worker `slidedeck`, built from `@slidedeck/react`, still has the slide.deck.cool custom domain attached, but the redirect rule runs first, so it never gets a request. It stays attached until the maintainer deletes it. The Pages project `slidedeck` and slidedeck.pages.dev are gone.
 
-slide.deck.cool keeps serving the old Worker `slidedeck`, built from `@slidedeck/react`, until two things happen: the first carouseldeck release (1.2.0, #114) deploys the `carouseldeck` Worker, and the maintainer's DNS and redirect steps on #105 send slide.deck.cool to carousel.deck.cool. Nothing in this repo deploys the `slidedeck` Worker any more.
+carousel.deck.cool's own build is still from the 1.2.0 tag, so its canonical and og:url tags still say slide.deck.cool until the next carouseldeck release redeploys it. The redirect covers that gap: a page that says slide.deck.cool still lands on carousel.deck.cool.
 
 ### The first deploy
 
@@ -184,7 +184,7 @@ CLOUDFLARE_API_TOKEN=... pnpm exec wrangler deploy
 ### Verifying carouseldeck
 
 ```sh
-pnpm --filter @sites/carouseldeck check-live https://carousel.deck.cool  # the default is slide.deck.cool until the flip
+pnpm --filter @sites/carouseldeck check-live https://carousel.deck.cool  # the default origin
 pnpm --filter @sites/carouseldeck check-live https://example.com  # any other origin
 ```
 
@@ -193,23 +193,6 @@ pnpm --filter @sites/carouseldeck check-live https://example.com  # any other or
 `src/live-check.ts` lists this site's paths. The checks are site-kit's, as deck.cool's are.
 
 Rolling back is the same as for deck.cool, with the Worker `carouseldeck` in `sites/carouseldeck`, at the release's tag. Taking the site off the domain is the same too.
-
-### Retiring the Pages project
-
-Delete the Pages project `slidedeck` only after a run with `apply` has published the site and `check-live` passes against `https://slide.deck.cool`. A deletion can't be undone, so the maintainer confirms it first.
-
-The CI token has no Pages permission, so delete the project through the Cloudflare API with a credential that has Pages → Edit on the account (in an agent session, the `cloudflare-api` MCP):
-
-```sh
-curl -X DELETE -H "Authorization: Bearer $TOKEN" \
-  https://api.cloudflare.com/client/v4/accounts/c0bf36f52ec4652dabdacd6538b54983/pages/projects/slidedeck
-```
-
-Or the dashboard: Workers & Pages → `slidedeck` (Pages) → Settings → Delete project. Then check that `slidedeck.pages.dev` no longer answers:
-
-```sh
-curl -sI https://slidedeck.pages.dev/   # no 200
-```
 
 ## pagedeck at page.deck.cool
 
