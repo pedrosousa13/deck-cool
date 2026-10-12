@@ -81,9 +81,8 @@ export const carouseldeck: Deck<ReadmeFigure> = {
     "Native momentum, snapping and focus scrolling. Loop, fade, curve and autoplay as effects you import only when you use them.",
   install: "pnpm add @carouseldeck/react",
   figure: { source: "carouseldeck-readme", label: "for a carousel with Prev and Next", note: "min+gzip, React external" },
-  // slide.deck.cool until carousel.deck.cool serves, then carousel.deck.cool
-  // (a step on #105, docs/deploy.md).
-  url: "https://slide.deck.cool",
+  // carousel.deck.cool. slide.deck.cool redirects here (#105, docs/deploy.md).
+  url: "https://carousel.deck.cool",
   accent: { fill: "#0071e3", text: "#2997ff" },
   icons: icons("carouseldeck"),
 };
