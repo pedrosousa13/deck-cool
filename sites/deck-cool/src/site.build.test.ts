@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { decks, umbrella } from "@deck-cool/brand/decks";
-import { everyResponse, present, readManifest, text } from "@deck-cool/site-kit/build-test";
+import { everyResponse, pagesWithEmDashes, present, readManifest, text } from "@deck-cool/site-kit/build-test";
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { NPM } from "../components/links.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
@@ -29,6 +29,10 @@ test("every page ships 0 B of JavaScript", () => {
   for (const page of report.pages) {
     expect(page, page.path).toMatchObject({ actual: 0 });
   }
+});
+
+test("no page uses an em dash", () => {
+  expect(pagesWithEmDashes(SITE)).toEqual([]);
 });
 
 test("the home page's <head> links the deck-cool icons and one hashed stylesheet, and <body> no icon or stylesheet", () => {
