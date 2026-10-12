@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { pagedeck, umbrella } from "@deck-cool/brand/decks";
 import { demoComponent } from "@deck-cool/docs";
-import { everyResponse, isRecord, present, readManifest, text } from "@deck-cool/site-kit/build-test";
+import { everyResponse, isRecord, pagesWithEmDashes, present, readManifest, text } from "@deck-cool/site-kit/build-test";
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { DOCS, PATHS, REPO } from "../components/links.ts";
 import { formatBytes, utf8Bytes } from "./bytes.ts";
@@ -71,6 +71,11 @@ const PAGES = [...OWN_PAGES, ...DOCS_PAGES];
 
 test("the site is the landing's four pages, the docs' search page and every page in the docs' nav.json", () => {
   expect(manifest.pages.map((page) => page.path).sort()).toEqual([...OWN_PAGES, ...DOCS_NAV.map(({ path }) => path)].sort());
+});
+
+test("no page uses an em dash", () => {
+  // Docs-package pages: their em dashes are upstream's (pedrosousa13/pagedeck#140).
+  expect(pagesWithEmDashes(SITE, DOCS_NAV.map(({ path }) => path))).toEqual([]);
 });
 
 describe("budgets, measured and pinned", () => {
@@ -640,10 +645,6 @@ describe("the pages outside the docs", () => {
     expect(path).not.toMatch(/server-data|island/);
   });
 
-  test.each(LANDING)("%s uses no em dash anywhere", (path) => {
-    expect(html(path)).not.toMatch(/\u2014|&mdash;/);
-  });
-
   test("the features page heads each section with what it gives you", () => {
     expect([...parse(PATHS.features).querySelectorAll("main section.fw-feature > .fw-feature__text > h2")].map(text)).toEqual([
       "Interactive when you choose",
@@ -689,10 +690,6 @@ describe("the docs' search page", () => {
     expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ path }) => path));
     expect(text(doc.querySelector("main .fw-docs .fw-doc > h1"))).toBe("Search");
     expect(doc.querySelector('main [data-fw-component="search"] input')).not.toBeNull();
-  });
-
-  test("uses no em dash", () => {
-    expect(html(PATHS.search)).not.toMatch(/\u2014|&mdash;/);
   });
 
   // #53: the index holds the landing pages too, so the box names the whole site.
