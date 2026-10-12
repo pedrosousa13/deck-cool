@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { playdeck, umbrella } from "@deck-cool/brand/decks";
 import { demoComponent } from "@deck-cool/docs";
-import { everyResponse, isRecord, present, readManifest, text } from "@deck-cool/site-kit/build-test";
+import { everyResponse, isRecord, pagesWithEmDashes, present, readManifest, text } from "@deck-cool/site-kit/build-test";
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { DOCS, PATHS, REPO } from "../components/links.ts";
 import { COURSE_PLATFORM, STREAMING_SERVICE } from "./catalog.ts";
@@ -71,6 +71,16 @@ const PAGES = [...OWN_PAGES, ...DOCS_PAGES];
 
 test("the site is the home page, the examples, the docs' search page and every page in the docs' nav.json", () => {
   expect(manifest.pages.map((page) => page.path).sort()).toEqual([...OWN_PAGES, ...DOCS_NAV.map(({ path }) => path)].sort());
+});
+
+test("no page uses an em dash", () => {
+  const exempt = [
+    // The examples keep playdeck.video's copy as it was ported.
+    PATHS.examples,
+    // Docs-package pages: their em dashes are upstream's (pedrosousa13/playdeck#908).
+    ...DOCS_NAV.map(({ path }) => path),
+  ];
+  expect(pagesWithEmDashes(SITE, exempt)).toEqual([]);
 });
 
 describe("the package", () => {
@@ -646,11 +656,6 @@ describe("the home page", () => {
       "playdeck is part of deck.cool, a family of unstyled React packages that look like you and work like the browser. Meet the family ›",
     );
     expect(links(family)).toEqual([["Meet the family ›", umbrella.url]]);
-  });
-
-  // The home page only: the examples keep playdeck.video's copy as it was ported.
-  test("uses no em dash anywhere", () => {
-    expect(html(PATHS.home)).not.toMatch(/—|&mdash;/);
   });
 
   test("links no page this site drops", () => {
