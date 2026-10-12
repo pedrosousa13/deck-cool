@@ -33,6 +33,8 @@ export interface ScannedPage {
   readonly label: string;
   /** The body with every relative link and image pointed at its address on the site. */
   readonly body: string;
+  /** The demos it marks on lines of their own, by name, in order. */
+  readonly demos: readonly string[];
   readonly faults: readonly Fault[];
 }
 
@@ -102,6 +104,7 @@ export function scanPage(file: string, text: string, context: PageContext): Scan
   const { frontmatter, body } = parseFrontmatter(source, file);
   const faults: Fault[] = [];
   const rewrites: Rewrite[] = [];
+  const demos: string[] = [];
   // The body's first line is this line of the file.
   const firstLine = source.split("\n").length - body.split("\n").length + 1;
   const lineAt = (offset: number) => firstLine + (body.slice(0, offset).match(/\n/g)?.length ?? 0);
@@ -157,7 +160,10 @@ export function scanPage(file: string, text: string, context: PageContext): Scan
         const name = MARKER.exec(token.raw.trim())?.[1];
         if (!token.block || name === undefined) {
           fault(at, "has a demo marker that is not on a line of its own — write it alone on its line, as <!-- demo:<name> -->");
-        } else if (!context.demos.has(name)) {
+          return;
+        }
+        demos.push(name);
+        if (!context.demos.has(name)) {
           const known = [...context.demos].sort().map((demo) => `"${demo}"`).join(", ");
           const fix =
             known === ""
@@ -231,7 +237,7 @@ export function scanPage(file: string, text: string, context: PageContext): Scan
   for (const { start, end, text } of rewrites.sort((a, b) => b.start - a.start)) {
     rewritten = rewritten.slice(0, start) + text + rewritten.slice(end);
   }
-  return { file, title, description, label, body: rewritten, faults };
+  return { file, title, description, label, body: rewritten, demos, faults };
 }
 
 // What the renderer writes from markdown, with Shiki's highlighted code. Any other element or

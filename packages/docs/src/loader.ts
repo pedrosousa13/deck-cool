@@ -7,7 +7,7 @@ import { join, posix, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { DocsOptions } from "./index.ts";
 import { scanPage, splitAtDemos } from "./page.ts";
-import type { BodyPart, Fault } from "./page.ts";
+import type { BodyPart, Fault, PageContext } from "./page.ts";
 
 export interface DocsPage {
   readonly title: string;
@@ -28,6 +28,19 @@ export interface NavGroup {
   readonly label: string;
   /** Each page's `title` here is what the nav names it: its `label`, or else its title. */
   readonly pages: readonly { readonly title: string; readonly href: string }[];
+}
+
+/** What docsNav needs: where the docs package is, and where the site serves it. */
+export type DocsNavOptions = Pick<DocsOptions, "from" | "package" | "base" | "trailingSlash">;
+
+/** A page in nav.json, as the site's build makes it. */
+export interface DocsNavPage {
+  /** The page's file in the docs package, such as `guides/layout.md`. */
+  readonly file: string;
+  /** Its address, such as `/docs/guides/layout/`. */
+  readonly path: string;
+  /** The demos it marks, by name, in order. */
+  readonly demos: readonly string[];
 }
 
 /** nav.json as the contract writes it. */
@@ -92,7 +105,7 @@ export function docsHref(base: string, file: string, trailingSlash: TrailingSlas
   return trailingSlash === "always" ? `${path}/` : path;
 }
 
-function hrefOf(options: DocsOptions, file: string): string {
+function hrefOf(options: DocsNavOptions, file: string): string {
   return docsHref(options.base, file, options.trailingSlash);
 }
 
@@ -187,18 +200,39 @@ function isFile(path: string): boolean {
   return existsSync(path) && statSync(path).isFile();
 }
 
+function pageContext(options: DocsNavOptions, root: string, files: readonly string[], demos: ReadonlySet<string>): PageContext {
+  return {
+    pages: new Set(files),
+    exists: (file: string) => isFile(join(root, file)),
+    hrefOf: (file: string) => hrefOf(options, file),
+    addressOf: (file: string) => `/${[...segments(options.base), file].join("/")}`,
+    demos,
+  };
+}
+
+/**
+ * Each page in the docs package's nav.json, in order, with its address and the demos it
+ * marks: the docs pages a site's build makes, for the site's tests. It checks nav.json as the
+ * build does, and leaves every other check to the build.
+ */
+export function docsNav(options: DocsNavOptions): DocsNavPage[] {
+  const root = resolvePackage(options.package, options.from);
+  const files = pageFiles(root);
+  const nav = readNav(root, new Set(files));
+  if (nav.faults.length > 0) throw problems(options.package, nav.faults);
+  // The site's demos are not known here, so a page's demos are read without the check against them.
+  const context = pageContext(options, root, files, new Set());
+  return nav.groups
+    .flatMap((group) => group.pages)
+    .map((file) => ({ file, path: hrefOf(options, file), demos: scanPage(file, readFileSync(join(root, file), "utf8"), context).demos }));
+}
+
 export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
   const syncAll: Loader<DocsPage>["syncAll"] = async (writer) => {
     const startedAt = Date.now();
     const root = resolvePackage(options.package, options.from);
     const files = pageFiles(root);
-    const context = {
-      pages: new Set(files),
-      exists: (file: string) => isFile(join(root, file)),
-      hrefOf: (file: string) => hrefOf(options, file),
-      addressOf: (file: string) => `/${[...segments(options.base), file].join("/")}`,
-      demos: new Set(Object.keys(options.demos)),
-    };
+    const context = pageContext(options, root, files, new Set(Object.keys(options.demos)));
     const scanned = files.map((file) => scanPage(file, readFileSync(join(root, file), "utf8"), context));
     const nav = readNav(root, context.pages);
     const faults = [...nav.faults, ...routeCollisions(files, context.hrefOf), ...scanned.flatMap((page) => page.faults)];

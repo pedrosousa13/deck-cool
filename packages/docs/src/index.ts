@@ -9,9 +9,9 @@ import { contentRootOf, createDocsLoader } from "./loader.ts";
 import type { DocsPage } from "./loader.ts";
 import { rewriteProse } from "./page.ts";
 
-export { docsHref } from "./loader.ts";
+export { docsHref, docsNav } from "./loader.ts";
 export { scrollableProse } from "./scrollable-prose.ts";
-export type { DocsPage, NavGroup } from "./loader.ts";
+export type { DocsNavOptions, DocsNavPage, DocsPage, NavGroup } from "./loader.ts";
 
 /** A component as `build.components` declares one: a module path, or `{ path, hydrate }`. */
 export type ComponentDeclaration = NonNullable<Parameters<typeof defineConfig>[0]["build"]>["components"][string];

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
-import { defineDocs, demoComponent, docsHref } from "./index.ts";
+import { defineDocs, demoComponent, docsHref, docsNav } from "./index.ts";
 import type { DocsOptions } from "./index.ts";
 import { rewriteProse, unsafeMarkup } from "./page.ts";
 
@@ -81,6 +81,37 @@ describe("docsHref", () => {
     expect(docsHref("/docs", "guides/index.md")).toBe("/docs/guides/");
     expect(docsHref("/docs", "guides/layout.md", "never")).toBe("/docs/guides/layout");
     expect(docsHref("/", "index.md")).toBe("/");
+  });
+});
+
+describe("docsNav", () => {
+  test("gives each page in nav.json's order, with its address and the demos it marks", () => {
+    expect(docsNav({ from: site(), package: "@example/docs", base: "/docs" })).toEqual([
+      { file: "index.md", path: "/docs/", demos: [] },
+      { file: "install.md", path: "/docs/install/", demos: [] },
+      { file: "guides/index.md", path: "/docs/guides/", demos: [] },
+      { file: "guides/layout.md", path: "/docs/guides/layout/", demos: [] },
+      { file: "guides/demos.md", path: "/docs/guides/demos/", demos: ["counter"] },
+    ]);
+  });
+
+  test("gives each page's address under the site's trailingSlash", () => {
+    const pages = docsNav({ from: site(), package: "@example/docs", base: "/docs", trailingSlash: "never" });
+    expect(pages.map(({ path }) => path)).toEqual(["/docs", "/docs/install", "/docs/guides", "/docs/guides/layout", "/docs/guides/demos"]);
+  });
+
+  test("gives a page's demos in order, as the build cuts the page, and not a marker in a code block", () => {
+    const from = site({
+      "guides/demos.md": `${DEMOS}\n<!-- demo:second -->\n\n\`\`\`html\n<!-- demo:quoted -->\n\`\`\`\n`,
+    });
+    const page = docsNav({ from, package: "@example/docs", base: "/docs" }).find(({ file }) => file === "guides/demos.md");
+    expect(page?.demos).toEqual(["counter", "second"]);
+  });
+
+  test("fails on a nav.json the build would refuse", () => {
+    expect(() => docsNav({ from: site({ "nav.json": undefined }), package: "@example/docs", base: "/docs" })).toThrow(
+      'Docs package "@example/docs": 1 problem — fix it in the docs package: nav.json:1 — is missing',
+    );
   });
 });
 
