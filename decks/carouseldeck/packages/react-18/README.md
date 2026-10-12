@@ -3,9 +3,9 @@
 `@carouseldeck/react` built for React 18. It has the same components, props and
 types, from the same source.
 
-**Not published yet.** The package is private. It is first published as
-`@carouseldeck/react-18` in a later release
-(pedrosousa13/deck-cool#105).
+On React 18, install it in place of `@carouseldeck/react` and import from
+`@carouseldeck/react-18`. It is published at the same version as
+`@carouseldeck/react`, from 1.2.0.
 
 ## How it is built
 

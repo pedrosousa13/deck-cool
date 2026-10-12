@@ -102,7 +102,9 @@ Rejected:
 
 #105's decision 7 calls the React 18 build an unpushed prototype on slidedeck's `worktree-react18-and-size` branch. It has since landed: slidedeck's #142 (`d4b76c1`, 2026-10-12) put `packages/react-18` on `main` as `@slidedeck/react-18`, private, at 1.0.3, in the `fixed` group, with its `test:react-18` gate and CI job. Its README and slidedeck's AGENTS.md already say it is first published as `@carouseldeck/react-18` after the move.
 
-So it moves in as it is, renamed `@carouseldeck/react-18`, still private and still in the `fixed` group, so its version keeps step with the others. Its gate moves with it as `carouseldeck-unit-react-18`. It is not published in 1.1.0: #105's "Done when" lists only core, react and docs. Its first publish is a later change that sets `private` to `false`, and, like any first publish, needs the `NPM_TOKEN` secret back for one run.
+So it moves in as it is, renamed `@carouseldeck/react-18`, in the `fixed` group, so its version keeps step with the others. Its gate moves with it as `carouseldeck-unit-react-18`.
+
+It publishes in the first release (maintainer, 2026-10-12, on #114). #114 drops `private`, and it goes out at 1.2.0 with core, react and docs, in the same first publish with the `NPM_TOKEN` secret. So it needs no second token run. This ADR first kept it private and out of the first release, to publish later with the token back for one run.
 
 Rejected:
 

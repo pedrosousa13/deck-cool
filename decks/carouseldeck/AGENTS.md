@@ -83,12 +83,9 @@ prop that React 18 handles differently, `test:react-18` fails: adapt it in
 
 ## Releasing
 
-`@carouseldeck/core`, `@carouseldeck/react` and `@carouseldeck/docs` release together
-at one version (`fixed` in `.changeset/config.json`).
-
-`@carouseldeck/react-18` is in the same `fixed` group but is private, so nothing
-publishes it. It is first published as `@carouseldeck/react-18`, after the
-move into deck-cool (pedrosousa13/deck-cool#105).
+`@carouseldeck/core`, `@carouseldeck/react`, `@carouseldeck/react-18` and
+`@carouseldeck/docs` release together at one version (`fixed` in
+`.changeset/config.json`, at deck-cool's root).
 
 **A change that a consumer of either package can see needs a changeset**: a
 fix, a feature, a changed prop or type, a changed package file. Run
