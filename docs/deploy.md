@@ -159,10 +159,7 @@ slide.deck.cool keeps serving the old Worker `slidedeck`, built from `@slidedeck
 
 ### The first deploy
 
-The `carouseldeck` Worker does not exist yet, and Workers Editor can't create a Worker. The first release's deploy creates it only if the token can, so do one of these first:
-
-- From your machine, after `pnpm exec wrangler login`, at the release's tag. This is how deck.cool's Worker was created.
-- Give the token Workers → **Admin** for the release's deploy, or for a manual run with `apply` after it. Take Admin away when the run is done.
+The `carouseldeck` Worker exists: it was created on 2026-10-12 through the Cloudflare API as a placeholder that answers 404, with its workers.dev address off, because Workers Editor can't create a Worker. The first release's deploy replaces it with the site and attaches carousel.deck.cool.
 
 Before the first deploy, check the zone's DNS records for `carousel.deck.cool`. The custom domain creates its own record, and it cannot be created on a hostname that already has a CNAME record.
 
