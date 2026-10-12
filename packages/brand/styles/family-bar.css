@@ -252,12 +252,13 @@
    asks: without a scroll timeline the mask cannot tell when the list has
    left its start, and a fixed fade at the start would cover the first link
    at rest. The end padding, the fade's width plus room for a focus ring, lets
-   the last link scroll out from under it. 734px is the bar's phone
+   the last link scroll out from under it. Each end padding has a pixel more:
+   the list scrolls whole pixels, and a link's width can end in a fraction. 734px is the bar's phone
    breakpoint, as for the decks' single column: deck.cool's three links fit
    above it, so the fade has nothing to cover there. */
 @media (max-width: 734px) {
   .family-bar__links {
-    padding-right: 28px;
+    padding-right: 29px;
     mask-image: linear-gradient(to left, transparent, #000 24px);
   }
 }
@@ -268,7 +269,7 @@
 @supports (animation-timeline: scroll()) {
   @media (prefers-reduced-motion: no-preference) {
     .family-bar__links {
-      padding-right: 4px;
+      padding-right: 5px;
       mask-image: none;
       animation: family-bar-fade var(--ease) both;
       animation-timeline: scroll(self inline);
