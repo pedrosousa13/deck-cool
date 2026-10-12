@@ -11,20 +11,23 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 import { branchOf, bumpManifest, bumpWorkspace, findReleases, parseRelease, prBody } from "./bump.ts";
 
 describe("the payload", () => {
-  test.each(["slidedeck", "playdeck", "pagedeck"])("accepts %s at a plain version", (deck) => {
+  test.each(["playdeck", "pagedeck"])("accepts %s at a plain version", (deck) => {
     expect(parseRelease(deck, "1.20.3")).toEqual({ deck, version: "1.20.3" });
   });
 
   test.each<[string, unknown]>([
     ["a deck that is not in the family", "formdeck"],
+    // It lives in this repo now, and its release deploys its site (ADR 0002).
+    ["carouseldeck", "carouseldeck"],
+    ["slidedeck, carouseldeck's old name", "slidedeck"],
     ["an empty deck", ""],
     ["no deck", undefined],
-    ["a deck with a path in it", "../slidedeck"],
-    ["a deck with a command in it", "slidedeck; rm -rf /"],
-    ["a deck in capitals", "Slidedeck"],
+    ["a deck with a path in it", "../playdeck"],
+    ["a deck with a command in it", "playdeck; rm -rf /"],
+    ["a deck in capitals", "Playdeck"],
   ])("rejects %s", (_name, deck) => {
     expect(() => parseRelease(deck, "1.2.3")).toThrow(
-      `The payload's deck is ${JSON.stringify(deck)}, which is not a deck — send "slidedeck", "playdeck" or "pagedeck"`,
+      `The payload's deck is ${JSON.stringify(deck)}, which is not a deck — send "playdeck" or "pagedeck"`,
     );
   });
 
@@ -39,7 +42,7 @@ describe("the payload", () => {
     ["a number", 1.2],
     ["no version", undefined],
   ])("rejects %s", (_name, version) => {
-    expect(() => parseRelease("slidedeck", version)).toThrow(
+    expect(() => parseRelease("playdeck", version)).toThrow(
       `The payload's version is ${JSON.stringify(version)}, which is not a plain version — send MAJOR.MINOR.PATCH, such as "1.4.0"`,
     );
   });
@@ -54,67 +57,67 @@ describe("a manifest's bump", () => {
 
   test("sets every @<deck>/* dependency to the exact version, and only those", () => {
     const before = manifest({
-      dependencies: { "@slidedeck/core": "1.0.0", "@pagedeck/core": "0.2.3", slidedeck: "1.0.0" },
-      devDependencies: { "@slidedeck/docs": "^1.0.0" },
-      optionalDependencies: { "@slidedeck/extra": "1.0.0" },
-      peerDependencies: { "@slidedeck/core": "^1.0.0" },
+      dependencies: { "@playdeck/core": "1.0.0", "@pagedeck/core": "0.2.3", playdeck: "1.0.0" },
+      devDependencies: { "@playdeck/docs": "^1.0.0" },
+      optionalDependencies: { "@playdeck/extra": "1.0.0" },
+      peerDependencies: { "@playdeck/core": "^1.0.0" },
     });
-    const { text, changes } = bumpManifest(before, { deck: "slidedeck", version: "1.1.0" });
+    const { text, changes } = bumpManifest(before, { deck: "playdeck", version: "1.1.0" });
     expect(JSON.parse(text)).toEqual({
       name: "@sites/x",
-      dependencies: { "@slidedeck/core": "1.1.0", "@pagedeck/core": "0.2.3", slidedeck: "1.0.0" },
-      devDependencies: { "@slidedeck/docs": "1.1.0" },
-      optionalDependencies: { "@slidedeck/extra": "1.1.0" },
-      peerDependencies: { "@slidedeck/core": "^1.0.0" },
+      dependencies: { "@playdeck/core": "1.1.0", "@pagedeck/core": "0.2.3", playdeck: "1.0.0" },
+      devDependencies: { "@playdeck/docs": "1.1.0" },
+      optionalDependencies: { "@playdeck/extra": "1.1.0" },
+      peerDependencies: { "@playdeck/core": "^1.0.0" },
     });
     expect(text.endsWith("}\n")).toBe(true);
     expect(changes).toEqual([
-      { name: "@slidedeck/core", from: "1.0.0", to: "1.1.0" },
-      { name: "@slidedeck/docs", from: "^1.0.0", to: "1.1.0" },
-      { name: "@slidedeck/extra", from: "1.0.0", to: "1.1.0" },
+      { name: "@playdeck/core", from: "1.0.0", to: "1.1.0" },
+      { name: "@playdeck/docs", from: "^1.0.0", to: "1.1.0" },
+      { name: "@playdeck/extra", from: "1.0.0", to: "1.1.0" },
     ]);
   });
 
   test("bumps a dependency at an older version", () => {
-    const before = manifest({ dependencies: { "@slidedeck/core": "1.9.9" } });
-    expect(bumpManifest(before, { deck: "slidedeck", version: "1.10.0" }).changes).toEqual([
-      { name: "@slidedeck/core", from: "1.9.9", to: "1.10.0" },
+    const before = manifest({ dependencies: { "@playdeck/core": "1.9.9" } });
+    expect(bumpManifest(before, { deck: "playdeck", version: "1.10.0" }).changes).toEqual([
+      { name: "@playdeck/core", from: "1.9.9", to: "1.10.0" },
     ]);
   });
 
   test("refuses a downgrade, naming the package and both versions", () => {
-    const before = manifest({ dependencies: { "@slidedeck/core": "1.10.0" } });
-    expect(() => bumpManifest(before, { deck: "slidedeck", version: "1.9.9" })).toThrow(
-      "@slidedeck/core is at 1.10.0, newer than slidedeck 1.9.9 — a deck-released dispatch never downgrades, so nothing was bumped",
+    const before = manifest({ dependencies: { "@playdeck/core": "1.10.0" } });
+    expect(() => bumpManifest(before, { deck: "playdeck", version: "1.9.9" })).toThrow(
+      "@playdeck/core is at 1.10.0, newer than playdeck 1.9.9 — a deck-released dispatch never downgrades, so nothing was bumped",
     );
   });
 
   test("refuses a downgrade from a range's version", () => {
-    const before = manifest({ devDependencies: { "@slidedeck/docs": "^2.0.0" } });
-    expect(() => bumpManifest(before, { deck: "slidedeck", version: "1.9.9" })).toThrow(
-      "@slidedeck/docs is at ^2.0.0, newer than slidedeck 1.9.9",
+    const before = manifest({ devDependencies: { "@playdeck/docs": "^2.0.0" } });
+    expect(() => bumpManifest(before, { deck: "playdeck", version: "1.9.9" })).toThrow(
+      "@playdeck/docs is at ^2.0.0, newer than playdeck 1.9.9",
     );
   });
 
   test("refuses the whole manifest when one package is newer", () => {
-    const before = manifest({ dependencies: { "@slidedeck/core": "1.0.0", "@slidedeck/docs": "1.3.0" } });
-    expect(() => bumpManifest(before, { deck: "slidedeck", version: "1.2.0" })).toThrow(
-      "@slidedeck/docs is at 1.3.0, newer than slidedeck 1.2.0",
+    const before = manifest({ dependencies: { "@playdeck/core": "1.0.0", "@playdeck/docs": "1.3.0" } });
+    expect(() => bumpManifest(before, { deck: "playdeck", version: "1.2.0" })).toThrow(
+      "@playdeck/docs is at 1.3.0, newer than playdeck 1.2.0",
     );
   });
 
   test("refuses a manifest that is not a JSON object", () => {
-    expect(() => bumpManifest("[]\n", { deck: "slidedeck", version: "1.1.0" })).toThrow("package.json is not a JSON object");
+    expect(() => bumpManifest("[]\n", { deck: "playdeck", version: "1.1.0" })).toThrow("package.json is not a JSON object");
   });
 
   test("leaves a workspace link as it is", () => {
-    const before = manifest({ dependencies: { "@slidedeck/docs": "workspace:*" } });
-    expect(bumpManifest(before, { deck: "slidedeck", version: "1.1.0" })).toEqual({ text: before, changes: [] });
+    const before = manifest({ dependencies: { "@carouseldeck/docs": "workspace:*" } });
+    expect(bumpManifest(before, { deck: "playdeck", version: "1.1.0" })).toEqual({ text: before, changes: [] });
   });
 
   test("changes nothing when every dependency is already at the version", () => {
-    const before = manifest({ dependencies: { "@slidedeck/docs": "1.1.0" } });
-    expect(bumpManifest(before, { deck: "slidedeck", version: "1.1.0" })).toEqual({ text: before, changes: [] });
+    const before = manifest({ dependencies: { "@playdeck/docs": "1.1.0" } });
+    expect(bumpManifest(before, { deck: "playdeck", version: "1.1.0" })).toEqual({ text: before, changes: [] });
   });
 });
 
@@ -138,7 +141,7 @@ describe("the daily run", () => {
   const now = new Date("2026-10-09T06:17:00Z");
   const manifests = [
     JSON.stringify({ name: "a", dependencies: { "@pagedeck/core": "0.2.3", "@pagedeck/content": "0.2.3" } }),
-    JSON.stringify({ name: "b", devDependencies: { "@pagedeck/islands": "0.2.3", "@slidedeck/docs": "workspace:*" } }),
+    JSON.stringify({ name: "b", devDependencies: { "@pagedeck/islands": "0.2.3", "@carouseldeck/docs": "workspace:*" } }),
   ];
 
   /** A fetch that answers for each package name in `latest`, and records what it was asked for. */
@@ -167,7 +170,6 @@ describe("the daily run", () => {
   test("finds nothing newer, and asks npm about every package of the decks the workspace uses", async () => {
     const { asked, fetch } = npm(pagedeck("0.2.3", ago(48)));
     expect(await findReleases(manifests, options(fetch))).toEqual([
-      { kind: "unused", deck: "slidedeck" },
       { kind: "unused", deck: "playdeck" },
       { kind: "current", deck: "pagedeck", version: "0.2.3" },
     ]);
@@ -309,8 +311,8 @@ describe("a workspace's bump", () => {
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "bump-deck-"));
     server = await registry(dir, {
-      "@slidedeck/core": published,
-      "@slidedeck/docs": published,
+      "@playdeck/core": published,
+      "@playdeck/docs": published,
       "@pagedeck/core": published,
     });
     const { port } = server.address() as AddressInfo;
@@ -334,7 +336,7 @@ describe("a workspace's bump", () => {
     .packageManager;
 
   /** A workspace of two packages, installed at 1.0.0. */
-  async function workspace(): Promise<string> {
+  async function workspace(site: Record<string, string> = { "@playdeck/core": "1.0.0", "@pagedeck/core": "1.0.0" }): Promise<string> {
     const root = mkdtempSync(join(dir, "workspace-"));
     workspaces.push(root);
     const write = (file: string, value: object) => {
@@ -342,8 +344,8 @@ describe("a workspace's bump", () => {
       writeFileSync(join(root, file), `${JSON.stringify(value, null, 2)}\n`);
     };
     write("package.json", { name: "root", private: true, packageManager });
-    write("sites/a/package.json", { name: "a", private: true, dependencies: { "@slidedeck/core": "1.0.0", "@pagedeck/core": "1.0.0" } });
-    write("packages/b/package.json", { name: "b", private: true, devDependencies: { "@slidedeck/docs": "1.0.0" } });
+    write("sites/a/package.json", { name: "a", private: true, dependencies: site });
+    write("packages/b/package.json", { name: "b", private: true, devDependencies: { "@playdeck/docs": "1.0.0" } });
     writeFileSync(join(root, "pnpm-workspace.yaml"), "packages:\n  - sites/*\n  - packages/*\n");
     // Not execFileSync: the registry answers on this process's event loop.
     await promisify(execFile)("pnpm", ["install"], { cwd: root, env: { ...process.env, ...env } });
@@ -354,44 +356,44 @@ describe("a workspace's bump", () => {
 
   test("bumps every @<deck>/* dependency in every package, and the lockfile", { timeout: 60_000 }, async () => {
     const root = await workspace();
-    const { changes } = await bumpWorkspace(root, { deck: "slidedeck", version: "1.1.0" }, env);
+    const { changes } = await bumpWorkspace(root, { deck: "playdeck", version: "1.1.0" }, env);
     expect(changes).toEqual([
-      { file: "packages/b/package.json", name: "@slidedeck/docs", from: "1.0.0", to: "1.1.0" },
-      { file: "sites/a/package.json", name: "@slidedeck/core", from: "1.0.0", to: "1.1.0" },
+      { file: "packages/b/package.json", name: "@playdeck/docs", from: "1.0.0", to: "1.1.0" },
+      { file: "sites/a/package.json", name: "@playdeck/core", from: "1.0.0", to: "1.1.0" },
     ]);
     expect(JSON.parse(read(root, "sites/a/package.json"))).toMatchObject({
-      dependencies: { "@slidedeck/core": "1.1.0", "@pagedeck/core": "1.0.0" },
+      dependencies: { "@playdeck/core": "1.1.0", "@pagedeck/core": "1.0.0" },
     });
     const lockfile = read(root, "pnpm-lock.yaml");
-    expect(lockfile).toContain("'@slidedeck/core@1.1.0'");
-    expect(lockfile).toContain("'@slidedeck/docs@1.1.0'");
-    expect(lockfile).not.toContain("'@slidedeck/core@1.0.0'");
+    expect(lockfile).toContain("'@playdeck/core@1.1.0'");
+    expect(lockfile).toContain("'@playdeck/docs@1.1.0'");
+    expect(lockfile).not.toContain("'@playdeck/core@1.0.0'");
   });
 
   test("changes nothing on a repeat", { timeout: 60_000 }, async () => {
     const root = await workspace();
-    await bumpWorkspace(root, { deck: "slidedeck", version: "1.1.0" }, env);
+    await bumpWorkspace(root, { deck: "playdeck", version: "1.1.0" }, env);
     const lockfile = read(root, "pnpm-lock.yaml");
-    expect(await bumpWorkspace(root, { deck: "slidedeck", version: "1.1.0" }, env)).toEqual({ changes: [] });
+    expect(await bumpWorkspace(root, { deck: "playdeck", version: "1.1.0" }, env)).toEqual({ changes: [] });
     expect(read(root, "pnpm-lock.yaml")).toBe(lockfile);
   });
 
   test("refuses a downgrade in any package, and writes nothing", { timeout: 60_000 }, async () => {
     const root = await workspace();
-    await bumpWorkspace(root, { deck: "slidedeck", version: "1.1.0" }, env);
+    await bumpWorkspace(root, { deck: "playdeck", version: "1.1.0" }, env);
     // One package newer than the dispatch, the other older.
-    const site = read(root, "sites/a/package.json").replace('"@slidedeck/core": "1.1.0"', '"@slidedeck/core": "1.0.0"');
+    const site = read(root, "sites/a/package.json").replace('"@playdeck/core": "1.1.0"', '"@playdeck/core": "1.0.0"');
     writeFileSync(join(root, "sites/a/package.json"), site);
     const files = ["sites/a/package.json", "packages/b/package.json", "pnpm-lock.yaml"].map((file) => read(root, file));
-    await expect(bumpWorkspace(root, { deck: "slidedeck", version: "1.0.5" }, env)).rejects.toThrow(
-      "@slidedeck/docs is at 1.1.0, newer than slidedeck 1.0.5",
+    await expect(bumpWorkspace(root, { deck: "playdeck", version: "1.0.5" }, env)).rejects.toThrow(
+      "@playdeck/docs is at 1.1.0, newer than playdeck 1.0.5",
     );
     expect(["sites/a/package.json", "packages/b/package.json", "pnpm-lock.yaml"].map((file) => read(root, file))).toEqual(files);
   });
 
   test("changes nothing for a deck the workspace does not use", { timeout: 60_000 }, async () => {
-    const root = await workspace();
-    expect(await bumpWorkspace(root, { deck: "playdeck", version: "1.1.0" }, env)).toEqual({ changes: [] });
+    const root = await workspace({ "@playdeck/core": "1.0.0" });
+    expect(await bumpWorkspace(root, { deck: "pagedeck", version: "1.1.0" }, env)).toEqual({ changes: [] });
   });
 
   test("cli.ts find bumps nothing, and writes a notice, for versions inside the hold", { timeout: 60_000 }, async () => {
@@ -401,7 +403,7 @@ describe("a workspace's bump", () => {
       cwd: root,
       env: { ...process.env, ...env, GITHUB_OUTPUT: outputs },
     });
-    expect(stdout).toContain("::notice title=Held back::slidedeck 1.2.0 was published at");
+    expect(stdout).toContain("::notice title=Held back::playdeck 1.2.0 was published at");
     expect(stdout).toContain("::notice title=Held back::pagedeck 1.2.0 was published at");
     expect(read(root, "github-output")).toBe("releases=[]\n");
   });
@@ -409,8 +411,8 @@ describe("a workspace's bump", () => {
   test("fails on a version younger than the release-age hold, and excludes nothing", { timeout: 60_000 }, async () => {
     const root = await workspace();
     const yaml = read(root, "pnpm-workspace.yaml");
-    await expect(bumpWorkspace(root, { deck: "slidedeck", version: "1.2.0" }, env)).rejects.toThrow(
-      /slidedeck 1\.2\.0 is younger than pnpm's release-age hold \(minimumReleaseAge\)/,
+    await expect(bumpWorkspace(root, { deck: "playdeck", version: "1.2.0" }, env)).rejects.toThrow(
+      /playdeck 1\.2\.0 is younger than pnpm's release-age hold \(minimumReleaseAge\)/,
     );
     expect(read(root, "pnpm-workspace.yaml")).toBe(yaml);
   });

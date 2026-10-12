@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 
-export const DECKS = ["slidedeck", "playdeck", "pagedeck"] as const;
+export const DECKS = ["playdeck", "pagedeck"] as const;
 export type Deck = (typeof DECKS)[number];
 
 /** What a deck's release workflow sends in its `deck-released` dispatch. */
@@ -30,7 +30,7 @@ function isDeck(value: unknown): value is Deck {
 /** Checks the dispatch's payload, which anyone holding a token for the repo can send. */
 export function parseRelease(deck: unknown, version: unknown): Release {
   if (!isDeck(deck)) {
-    throw new Error(`The payload's deck is ${JSON.stringify(deck)}, which is not a deck — send "slidedeck", "playdeck" or "pagedeck"`);
+    throw new Error(`The payload's deck is ${JSON.stringify(deck)}, which is not a deck — send "playdeck" or "pagedeck"`);
   }
   if (typeof version !== "string" || !PLAIN_VERSION.test(version)) {
     throw new Error(

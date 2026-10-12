@@ -1,7 +1,8 @@
 name: Bump a deck
 
 # A deck's release workflow sends `deck-released` after `npm publish`, with the payload
-# { "deck": "slidedeck" | "playdeck" | "pagedeck", "version": "<MAJOR.MINOR.PATCH>" }.
+# { "deck": "playdeck" | "pagedeck", "version": "<MAJOR.MINOR.PATCH>" }. carouseldeck lives in
+# this repo, and its release deploys its site instead (ADR 0002).
 # This sets every @<deck>/* dependency in the workspace to that version and opens a PR
 # that merges itself once CI passes. A second dispatch for the same version does
 # nothing. AGENTS.md, "Releasing a deck", has the sending side.
