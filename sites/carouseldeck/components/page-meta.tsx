@@ -1,6 +1,6 @@
-import { slidedeck } from "./slidedeck.ts";
+import { carouseldeck } from "./carouseldeck.ts";
 
-const { icons } = slidedeck;
+const { icons } = carouseldeck;
 
 interface Props {
   /** The page's address on the production origin, as its canonical. */
@@ -20,7 +20,7 @@ export default function PageMeta({ url }: Props) {
       <link rel="apple-touch-icon" href={icons.appleTouch} />
       <meta property="og:url" content={url} />
       <meta property="og:type" content="website" />
-      <meta property="og:site_name" content="slidedeck" />
+      <meta property="og:site_name" content="carouseldeck" />
     </>
   );
 }

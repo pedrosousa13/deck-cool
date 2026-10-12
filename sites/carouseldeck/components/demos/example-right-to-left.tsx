@@ -1,6 +1,6 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
 // A deck in a right-to-left context: it starts at the right, and Next moves

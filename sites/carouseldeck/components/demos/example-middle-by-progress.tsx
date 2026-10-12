@@ -1,9 +1,9 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
-// The recipe's second way, styled by progress: styles/slidedeck.css.
+// The recipe's second way, styled by progress: styles/carouseldeck.css.
 export default function MiddleByProgress() {
   return (
     <DemoFrame>

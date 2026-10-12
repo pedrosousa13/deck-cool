@@ -73,7 +73,7 @@ describe.each(PAGES)("%s in a browser", (path) => {
     await hydrated(page);
     await page.mouse.wheel(0, 2000);
     expect(await page.evaluate(() => document.getAnimations().map((animation) => animation.constructor.name))).toEqual([]);
-    for (const toggle of await page.locator("[data-slidedeck-autoplay-toggle]").all()) {
+    for (const toggle of await page.locator("[data-carouseldeck-autoplay-toggle]").all()) {
       expect(await toggle.getAttribute("data-playing")).toBeNull();
     }
   });
@@ -84,7 +84,7 @@ describe("the decks in a browser", () => {
   test("the testimonials' Next keeps the site's deck look: a translucent grey pill", async () => {
     const { page } = await visit("/examples/", { width: 1280, reducedMotion: "reduce" });
     await hydrated(page);
-    const next = page.locator(".testimonials-deck [data-slidedeck-next]");
+    const next = page.locator(".testimonials-deck [data-carouseldeck-next]");
     expect(
       await next.evaluate((button) => {
         const style = getComputedStyle(button);
@@ -97,9 +97,9 @@ describe("the decks in a browser", () => {
     const { page, violations } = await visit("/examples/", { width: 1280, reducedMotion: "reduce" });
     await hydrated(page);
     const deck = page.locator(".testimonials-deck");
-    const current = () => deck.locator('[data-slidedeck-dots] [aria-current="true"]').getAttribute("data-index");
+    const current = () => deck.locator('[data-carouseldeck-dots] [aria-current="true"]').getAttribute("data-index");
     expect(await current()).toBe("0");
-    await deck.locator("[data-slidedeck-next]").click();
+    await deck.locator("[data-carouseldeck-next]").click();
     await expect.poll(current).toBe("1");
     expect(await violations()).toEqual([]);
   });
@@ -108,7 +108,7 @@ describe("the decks in a browser", () => {
   test("one click on the home page's install command selects all of it, and nothing else", async () => {
     const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     await page.locator(".home-install code").click();
-    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("pnpm add @slidedeck/react");
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("pnpm add @carouseldeck/react");
   });
 
   test("the home page's two skins set the same deck in two different faces and grounds, none of it the site's own look", async () => {
@@ -116,8 +116,8 @@ describe("the decks in a browser", () => {
     await hydrated(page);
     const looks = await page.locator(".home-skin__stage").evaluateAll((stages) =>
       stages.map((stage) => {
-        const slide = getComputedStyle(stage.querySelector("[data-slidedeck-slide] > *") ?? stage);
-        const next = getComputedStyle(stage.querySelector("[data-slidedeck-next]") ?? stage);
+        const slide = getComputedStyle(stage.querySelector("[data-carouseldeck-slide] > *") ?? stage);
+        const next = getComputedStyle(stage.querySelector("[data-carouseldeck-next]") ?? stage);
         return { font: slide.fontFamily, ground: slide.backgroundColor, next: next.backgroundColor, radius: next.borderRadius };
       }),
     );
@@ -156,7 +156,7 @@ describe("the decks in a browser", () => {
     const current = (name: string) =>
       page
         .getByRole("region", { name: `${name} deck` })
-        .locator('[data-slidedeck-dots] [aria-current="true"]')
+        .locator('[data-carouseldeck-dots] [aria-current="true"]')
         .getAttribute("data-index");
     await page.getByRole("region", { name: "Stark deck" }).getByRole("button", { name: "Next" }).click();
     await expect.poll(() => current("Stark")).toBe("1");
@@ -172,7 +172,7 @@ describe("search in a browser", () => {
     const box = page.getByRole("combobox", { name: "Search the docs" });
     await box.fill("testimonials");
     const result = page.getByRole("option").first();
-    await expect.poll(() => result.textContent()).toBe("Examples: decks built with slidedeck");
+    await expect.poll(() => result.textContent()).toBe("Examples: decks built with carouseldeck");
     await box.press("ArrowDown");
     await box.press("Enter");
     await page.waitForURL(`${site.origin}/examples/`);
@@ -197,9 +197,9 @@ describe("the docs' demos in a browser", () => {
   test.each(DEMO_PAGES)("$href's demos run, under the CSP, with nothing off the origin, and axe finds no violations", async ({ href }) => {
     const { page, offOrigin, violations, errors } = await visit(href, { width: 1280, reducedMotion: "reduce" });
     await hydrated(page);
-    expect(await page.locator("article [data-slidedeck-slide][data-in-view]").count()).toBeGreaterThan(0);
+    expect(await page.locator("article [data-carouseldeck-slide][data-in-view]").count()).toBeGreaterThan(0);
     // The curve effect fades a slide with its distance from the focal one: the neighbours' faint text is the effect.
-    const faded = ".example-curve [data-slidedeck-slide]:not([data-focal]), .example-curve-size [data-slidedeck-slide]:not([data-focal])";
+    const faded = ".example-curve [data-carouseldeck-slide]:not([data-focal]), .example-curve-size [data-carouseldeck-slide]:not([data-focal])";
     expect((await new AxeBuilder({ page }).include("article").exclude(faded).analyze()).violations).toEqual([]);
     expect(offOrigin).toEqual([]);
     expect(await violations()).toEqual([]);
@@ -213,12 +213,12 @@ describe("the docs' demos in a browser", () => {
   });
 
   // demo-theme.css: theme.css styles the Theme demo's controls, and no other deck's.
-  test("the Theme demo's Next wears slidedeck's theme.css, and another demo's keeps the site's pill", async () => {
+  test("the Theme demo's Next wears carouseldeck's theme.css, and another demo's keeps the site's pill", async () => {
     const nextLook = async (path: string, deck: string) => {
       const { page } = await visit(path, { width: 1280, reducedMotion: "reduce" });
       await hydrated(page);
       return page
-        .locator(`${deck} [data-slidedeck-next]`)
+        .locator(`${deck} [data-carouseldeck-next]`)
         .evaluate((button) => [getComputedStyle(button).borderTopStyle, getComputedStyle(button).backgroundColor]);
     };
     expect(await nextLook("/docs/guides/theme/", ".example-theme")).toEqual(["solid", "rgb(0, 0, 0)"]);

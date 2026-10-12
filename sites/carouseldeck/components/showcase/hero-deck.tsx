@@ -1,7 +1,7 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
-import { fade } from "@slidedeck/react/fade";
+import * as Deck from "@carouseldeck/react";
+import { fade } from "@carouseldeck/react/fade";
 import { SCENES, type Photo } from "./photos.ts";
 
 interface Banner {

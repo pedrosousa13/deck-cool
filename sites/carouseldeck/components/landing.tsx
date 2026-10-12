@@ -4,18 +4,18 @@
 import { umbrella } from "@deck-cool/brand/decks";
 import { SkinSheet } from "@deck-cool/brand/skin-sheet";
 import SkinDeck from "./skin-deck.tsx";
-import { slidedeck } from "./slidedeck.ts";
+import { carouseldeck } from "./carouseldeck.ts";
 import { install, quickstart, size, version } from "../src/facts.ts";
 import { skins } from "../src/skins.ts";
 
-/** Each claim holds for @slidedeck/react's README and its docs' "Layout is CSS" and "Drag". */
+/** Each claim holds for @carouseldeck/react's README and its docs' "Layout is CSS" and "Drag". */
 const points = [
   {
     heading: "A real scroll container",
-    body: "Every deck is a scroll container with CSS scroll snap: touch, trackpad, wheel and keyboard move it natively, and slidedeck adds mouse drag.",
+    body: "Every deck is a scroll container with CSS scroll snap: touch, trackpad, wheel and keyboard move it natively, and carouseldeck adds mouse drag.",
   },
   {
-    heading: "slidedeck keeps count",
+    heading: "carouseldeck keeps count",
     body: "It tracks where the deck comes to rest, and Prev, Next and the dots ask the browser to scroll there.",
   },
   { heading: "Works with no CSS", body: "The quickstart is a working deck before you write a single rule." },
@@ -25,7 +25,7 @@ const points = [
 const browser = [
   {
     heading: "Native scroll snap",
-    body: "Momentum, snapping and focus scrolling are the browser's own. slidedeck tracks where the deck rests and asks the browser to move.",
+    body: "Momentum, snapping and focus scrolling are the browser's own. carouseldeck tracks where the deck rests and asks the browser to move.",
   },
   {
     heading: "Effects you import",
@@ -45,16 +45,16 @@ const agents = [
   },
   {
     heading: "Typed all the way",
-    body: "slidedeck is written in TypeScript and ships its types, so your editor and your agent see every prop.",
+    body: "carouseldeck is written in TypeScript and ships its types, so your editor and your agent see every prop.",
   },
   {
     heading: "Mistakes explain themselves",
-    body: "Pass index and defaultIndex together, or index without onIndexChange, and in development slidedeck says what to pass instead.",
+    body: "Pass index and defaultIndex together, or index without onIndexChange, and in development carouseldeck says what to pass instead.",
   },
 ] as const;
 
 /**
- * Only claims a test in pedrosousa13/slidedeck proves: slidedeck's rows of the
+ * Only claims a test in decks/carouseldeck proves: carouseldeck's rows of the
  * PR for #45 (deck-cool#46), word for word, each with a heading.
  */
 const accessible = [
@@ -88,8 +88,8 @@ export default function Landing() {
   return (
     <>
       <section className="home-intro">
-        <img src={slidedeck.icons.animated} alt="" width="96" height="96" />
-        <p className="home-intro__lead">slidedeck {version}</p>
+        <img src={carouseldeck.icons.animated} alt="" width="96" height="96" />
+        <p className="home-intro__lead">carouseldeck {version}</p>
         <h1>
           A carousel that lets <br />
           <span>the browser do the scrolling.</span>
@@ -114,7 +114,7 @@ export default function Landing() {
 
       <section className="home-proof" aria-labelledby="proof">
         <div className="home-proof__text">
-          <h2 id="proof">The browser scrolls. slidedeck keeps count.</h2>
+          <h2 id="proof">The browser scrolls. carouseldeck keeps count.</h2>
           <ul className="home-proof__points">
             {points.map(({ heading, body }) => (
               <li key={heading}>
@@ -126,10 +126,10 @@ export default function Landing() {
         </div>
         <div className="home-proof__figure">
           <p>{size}</p>
-          <p>{slidedeck.figure.label}</p>
-          <p>{slidedeck.figure.note}</p>
+          <p>{carouseldeck.figure.label}</p>
+          <p>{carouseldeck.figure.note}</p>
           <p>
-            Measured by <code>pnpm compare</code> in slidedeck's repo, and its CI fails when the number goes stale.
+            Measured by <code>pnpm compare</code> in carouseldeck's repo, and its CI fails when the number goes stale.
           </p>
           <a className="home-more" href="/docs/compare/">
             How it is measured ›
@@ -141,9 +141,9 @@ export default function Landing() {
         <div className="home-band__text">
           <h2 id="unstyled">Unstyled, your look.</h2>
           <p>
-            slidedeck needs no stylesheet. Its defaults and its optional theme sit in <code>:where()</code>, so any rule
-            of yours wins. Every part carries a name, like <code>data-slidedeck-next</code> or{" "}
-            <code>data-slidedeck-dots</code>, for your CSS or your tokens to reach. Here is one live deck, shown twice:
+            carouseldeck needs no stylesheet. Its defaults and its optional theme sit in <code>:where()</code>, so any rule
+            of yours wins. Every part carries a name, like <code>data-carouseldeck-next</code> or{" "}
+            <code>data-carouseldeck-dots</code>, for your CSS or your tokens to reach. Here is one live deck, shown twice:
             the markup is the same, and only the CSS changes.
           </p>
         </div>
@@ -169,7 +169,7 @@ export default function Landing() {
         <div className="home-band__text">
           <h2 id="small">Small, leans on the browser.</h2>
           <p>
-            The browser already knows how to scroll. slidedeck builds on that instead of rebuilding it, so a carousel
+            The browser already knows how to scroll. carouseldeck builds on that instead of rebuilding it, so a carousel
             with Prev and Next is {size}, min+gzip, with React external.
           </p>
         </div>
@@ -179,7 +179,7 @@ export default function Landing() {
       <section className="home-band" aria-labelledby="agents">
         <div className="home-band__text">
           <h2 id="agents">Built for agents.</h2>
-          <p>Whether you write the code or your coding agent does, slidedeck leaves less to guess.</p>
+          <p>Whether you write the code or your coding agent does, carouseldeck leaves less to guess.</p>
         </div>
         <Tiles tiles={agents} />
         <div className="home-code" dangerouslySetInnerHTML={{ __html: quickstart }} />
@@ -189,8 +189,8 @@ export default function Landing() {
         <div className="home-band__text">
           <h2 id="accessible">Accessible by default.</h2>
           <p>
-            slidedeck takes care of the keyboard, focus and screen readers for you. Each line below is backed by a test
-            in slidedeck's own repo.
+            carouseldeck takes care of the keyboard, focus and screen readers for you. Each line below is backed by a test
+            in carouseldeck's own repo.
           </p>
           <a className="home-more" href="/examples/">
             Try the examples ›
@@ -201,7 +201,7 @@ export default function Landing() {
 
       <section className="home-family">
         <p>
-          slidedeck is part of deck.cool, a family of unstyled React packages that look like you and work like the
+          carouseldeck is part of deck.cool, a family of unstyled React packages that look like you and work like the
           browser.{" "}
           <a className="home-more" href={umbrella.url}>
             Meet the family ›

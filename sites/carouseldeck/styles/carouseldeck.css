@@ -1,11 +1,11 @@
 /*
- * slide.deck.cool: the home page, the Examples page and its decks, the docs
+ * carousel.deck.cool: the home page, the Examples page and its decks, the docs
  * layout and the search in the Family bar. slidedeck.pages.dev's look, on the
  * brand kit: brand.css's dark palette, type and curve, family-bar.css's bar.
  * Every motion is under prefers-reduced-motion: no-preference, and times
  * itself with --ease.
  *
- * The decks are styled through slidedeck's data attributes and each deck's
+ * The decks are styled through carouseldeck's data attributes and each deck's
  * own classes, never by a slide's position: a loop's copies are slides too.
  */
 
@@ -277,14 +277,14 @@ main :focus-visible,
 
 /*
  * The decks: a pill of dots whose current dot stretches, Prev and Next as
- * pills, and a 44px round play button. Plain CSS on slidedeck's data
+ * pills, and a 44px round play button. Plain CSS on carouseldeck's data
  * attributes, in place of its optional theme.css. None of it reaches the
  * home page's skins, whose own sheets in styles/skins/ style their deck.
  */
 
 /* The root holds the viewport and the controls; they wrap into one centred
    row under the slides. */
-:where(:not(.home-skin__stage *)):has(> [data-slidedeck-viewport]) {
+:where(:not(.home-skin__stage *)):has(> [data-carouseldeck-viewport]) {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -292,12 +292,12 @@ main :focus-visible,
   gap: 12px;
 }
 
-[data-slidedeck-viewport]:where(:not(.home-skin__stage *)) {
+[data-carouseldeck-viewport]:where(:not(.home-skin__stage *)) {
   flex: 0 0 100%;
 }
 
-[data-slidedeck-prev]:where(:not(.home-skin__stage *)),
-[data-slidedeck-next]:where(:not(.home-skin__stage *)) {
+[data-carouseldeck-prev]:where(:not(.home-skin__stage *)),
+[data-carouseldeck-next]:where(:not(.home-skin__stage *)) {
   min-height: 44px;
   padding: 0 18px;
   border: 0;
@@ -309,13 +309,13 @@ main :focus-visible,
   cursor: pointer;
 }
 
-[data-slidedeck-prev]:where(:not(.home-skin__stage *)):disabled,
-[data-slidedeck-next]:where(:not(.home-skin__stage *)):disabled {
+[data-carouseldeck-prev]:where(:not(.home-skin__stage *)):disabled,
+[data-carouseldeck-next]:where(:not(.home-skin__stage *)):disabled {
   opacity: .4;
   cursor: default;
 }
 
-[data-slidedeck-dots]:where(:not(.home-skin__stage *)) {
+[data-carouseldeck-dots]:where(:not(.home-skin__stage *)) {
   display: inline-flex;
   align-items: center;
   padding: 0 7px;
@@ -323,7 +323,7 @@ main :focus-visible,
   background-color: var(--control);
 }
 
-[data-slidedeck-dots]:where(:not(.home-skin__stage *)) [data-index] {
+[data-carouseldeck-dots]:where(:not(.home-skin__stage *)) [data-index] {
   display: flex;
   align-items: center;
   box-sizing: border-box;
@@ -336,7 +336,7 @@ main :focus-visible,
   cursor: pointer;
 }
 
-[data-slidedeck-dots]:where(:not(.home-skin__stage *)) [data-index]::before {
+[data-carouseldeck-dots]:where(:not(.home-skin__stage *)) [data-index]::before {
   content: "";
   flex: 1;
   height: 8px;
@@ -344,17 +344,17 @@ main :focus-visible,
   background-color: var(--dot);
 }
 
-[data-slidedeck-dots]:where(:not(.home-skin__stage *)) [data-index][aria-current="true"] {
+[data-carouseldeck-dots]:where(:not(.home-skin__stage *)) [data-index][aria-current="true"] {
   width: 64px;
 }
 
-[data-slidedeck-dots]:where(:not(.home-skin__stage *)) [data-index][aria-current="true"]::before,
-[data-slidedeck-dots]:where(:not(.home-skin__stage *)) [data-index]:hover::before {
+[data-carouseldeck-dots]:where(:not(.home-skin__stage *)) [data-index][aria-current="true"]::before,
+[data-carouseldeck-dots]:where(:not(.home-skin__stage *)) [data-index]:hover::before {
   background-color: var(--dot-current);
 }
 
 /* The button's text stays its accessible name; the icon is drawn. */
-[data-slidedeck-autoplay-toggle]:where(:not(.home-skin__stage *)) {
+[data-carouseldeck-autoplay-toggle]:where(:not(.home-skin__stage *)) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -371,7 +371,7 @@ main :focus-visible,
 }
 
 /* Stopped: a play triangle. */
-[data-slidedeck-autoplay-toggle]:where(:not(.home-skin__stage *))::before {
+[data-carouseldeck-autoplay-toggle]:where(:not(.home-skin__stage *))::before {
   content: "";
   width: 12px;
   height: 14px;
@@ -381,36 +381,36 @@ main :focus-visible,
 }
 
 /* Playing: two pause bars. */
-[data-slidedeck-autoplay-toggle]:where(:not(.home-skin__stage *))[data-playing]::before {
+[data-carouseldeck-autoplay-toggle]:where(:not(.home-skin__stage *))[data-playing]::before {
   width: 11px;
   margin-left: 0;
   background: linear-gradient(to right, currentColor 0 32%, transparent 32% 68%, currentColor 68%);
   clip-path: none;
 }
 
-:is([data-slidedeck-prev], [data-slidedeck-next], [data-slidedeck-autoplay-toggle], [data-slidedeck-dots] button):where(:not(.home-skin__stage *)):focus-visible {
+:is([data-carouseldeck-prev], [data-carouseldeck-next], [data-carouseldeck-autoplay-toggle], [data-carouseldeck-dots] button):where(:not(.home-skin__stage *)):focus-visible {
   outline: 2px solid var(--text-link);
   outline-offset: 2px;
 }
 
 /* A phone: a deck's controls stay on one row down to 375px; narrower, they wrap. */
 @media (max-width: 400px) {
-  :where(:not(.home-skin__stage *)):has(> [data-slidedeck-viewport]) {
+  :where(:not(.home-skin__stage *)):has(> [data-carouseldeck-viewport]) {
     gap: 8px;
   }
 
-  [data-slidedeck-prev]:where(:not(.home-skin__stage *)),
-  [data-slidedeck-next]:where(:not(.home-skin__stage *)) {
+  [data-carouseldeck-prev]:where(:not(.home-skin__stage *)),
+  [data-carouseldeck-next]:where(:not(.home-skin__stage *)) {
     padding: 0 14px;
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  [data-slidedeck-dots]:where(:not(.home-skin__stage *)) [data-index] {
+  [data-carouseldeck-dots]:where(:not(.home-skin__stage *)) [data-index] {
     transition: width .4s var(--ease);
   }
 
-  [data-slidedeck-dots]:where(:not(.home-skin__stage *)) [data-index]::before {
+  [data-carouseldeck-dots]:where(:not(.home-skin__stage *)) [data-index]::before {
     transition: background-color .3s var(--ease);
   }
 }
@@ -418,18 +418,18 @@ main :focus-visible,
 /* Forced colours drop backgrounds, so the drawn dots and icon take system
    colours, the current dot highlighted. */
 @media (forced-colors: active) {
-  [data-slidedeck-dots]:where(:not(.home-skin__stage *)) [data-index]::before,
-  [data-slidedeck-autoplay-toggle]:where(:not(.home-skin__stage *))::before {
+  [data-carouseldeck-dots]:where(:not(.home-skin__stage *)) [data-index]::before,
+  [data-carouseldeck-autoplay-toggle]:where(:not(.home-skin__stage *))::before {
     forced-color-adjust: none;
     background-color: ButtonText;
   }
 
-  [data-slidedeck-dots]:where(:not(.home-skin__stage *)) [data-index][aria-current="true"]::before,
-  [data-slidedeck-dots]:where(:not(.home-skin__stage *)) [data-index]:hover::before {
+  [data-carouseldeck-dots]:where(:not(.home-skin__stage *)) [data-index][aria-current="true"]::before,
+  [data-carouseldeck-dots]:where(:not(.home-skin__stage *)) [data-index]:hover::before {
     background-color: Highlight;
   }
 
-  [data-slidedeck-autoplay-toggle]:where(:not(.home-skin__stage *))[data-playing]::before {
+  [data-carouseldeck-autoplay-toggle]:where(:not(.home-skin__stage *))[data-playing]::before {
     background: linear-gradient(to right, ButtonText 0 32%, transparent 32% 68%, ButtonText 68%);
   }
 }
@@ -459,7 +459,7 @@ main :focus-visible,
 }
 
 .home-intro .home-intro__lead {
-  color: var(--slidedeck-text);
+  color: var(--carouseldeck-text);
   font-size: 21px;
   font-weight: 600;
   letter-spacing: -.01em;
@@ -521,13 +521,13 @@ main .home-button {
   min-height: 48px;
   padding: 0 26px;
   border-radius: var(--radius-pill);
-  background-color: var(--slidedeck-fill);
+  background-color: var(--carouseldeck-fill);
   color: var(--fill-text);
   text-decoration: none;
 }
 
 main .home-more {
-  color: var(--slidedeck-text);
+  color: var(--carouseldeck-text);
   font-size: 17px;
   text-decoration: none;
 }
@@ -605,7 +605,7 @@ main .home-more:hover {
 }
 
 .home-proof__figure p:first-child {
-  color: var(--slidedeck-text);
+  color: var(--carouseldeck-text);
   font-size: clamp(64px, 13vw, 112px);
   line-height: .95;
   font-weight: 600;
@@ -963,7 +963,7 @@ main .home-family .home-more {
   margin-inline: auto;
 }
 
-.gallery-deck [data-slidedeck-viewport] {
+.gallery-deck [data-carouseldeck-viewport] {
   gap: 16px;
 }
 
@@ -1090,13 +1090,13 @@ main .home-family .home-more {
   --slide-width: min(420px, 78vw);
 }
 
-.testimonials-deck [data-slidedeck-viewport] {
+.testimonials-deck [data-carouseldeck-viewport] {
   box-sizing: border-box;
   gap: 16px;
   padding-inline: calc(50% - var(--slide-width) / 2);
 }
 
-.testimonials-deck [data-slidedeck-slide] {
+.testimonials-deck [data-carouseldeck-slide] {
   width: var(--slide-width);
   scroll-snap-align: center;
 }
@@ -1178,13 +1178,13 @@ main .home-family .home-more {
   margin-inline: auto;
 }
 
-.stories-deck [data-slidedeck-viewport] {
+.stories-deck [data-carouseldeck-viewport] {
   aspect-ratio: 9 / 16;
   border-radius: 36px;
   background-color: #000;
 }
 
-.stories-deck [data-slidedeck-slide] {
+.stories-deck [data-carouseldeck-slide] {
   min-height: 0;
 }
 
@@ -1223,7 +1223,7 @@ main .home-family .home-more {
   font-size: 17px;
 }
 
-.stories-deck [data-slidedeck-counter] {
+.stories-deck [data-carouseldeck-counter] {
   min-width: 48px;
   color: var(--text-secondary);
   font-size: 14px;
@@ -1232,11 +1232,11 @@ main .home-family .home-more {
 
 /* Right to left: cards that start at the right. */
 
-.rtl-deck [data-slidedeck-viewport] {
+.rtl-deck [data-carouseldeck-viewport] {
   gap: 16px;
 }
 
-.rtl-deck [data-slidedeck-slide] {
+.rtl-deck [data-carouseldeck-slide] {
   width: min(280px, 72vw);
 }
 
@@ -1269,13 +1269,13 @@ main .home-family .home-more {
 /* Cover flow: album squares on an arc of radius 5 slides: wide and shallow.
    Room below for the arc's drop and turn while it moves: the faint ends may clip. */
 
-.cover-flow-deck [data-slidedeck-viewport] {
+.cover-flow-deck [data-carouseldeck-viewport] {
   --deck-curve-radius: 5;
   gap: 20px;
   padding-block: 12px 150px;
 }
 
-.cover-flow-deck [data-slidedeck-slide] {
+.cover-flow-deck [data-carouseldeck-slide] {
   width: 260px;
   scroll-snap-align: center;
 }
@@ -1334,12 +1334,12 @@ main .home-family .home-more {
     gap: 6px;
   }
 
-  .testimonials-deck [data-slidedeck-prev],
-  .testimonials-deck [data-slidedeck-next] {
+  .testimonials-deck [data-carouseldeck-prev],
+  .testimonials-deck [data-carouseldeck-next] {
     padding: 0 10px;
   }
 
-  .testimonials-deck [data-slidedeck-dots] [data-index][aria-current="true"] {
+  .testimonials-deck [data-carouseldeck-dots] [data-index][aria-current="true"] {
     width: 40px;
   }
 }
@@ -1350,11 +1350,11 @@ main .home-family .home-more {
     padding-block: 40px;
   }
 
-  .cover-flow-deck [data-slidedeck-viewport] {
+  .cover-flow-deck [data-carouseldeck-viewport] {
     padding-block: 12px 116px;
   }
 
-  .cover-flow-deck [data-slidedeck-slide] {
+  .cover-flow-deck [data-carouseldeck-slide] {
     width: 200px;
   }
 
@@ -1595,12 +1595,12 @@ main .docs-sidebar a {
 }
 
 /* Border-box, so a recipe's padding stays inside the deck's width. */
-.docs-demo [data-slidedeck-viewport] {
+.docs-demo [data-carouseldeck-viewport] {
   box-sizing: border-box;
   border-radius: 20px;
 }
 
-.docs-demo [data-slidedeck-slide] {
+.docs-demo [data-carouseldeck-slide] {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1613,7 +1613,7 @@ main .docs-sidebar a {
   letter-spacing: -.01em;
 }
 
-.docs-demo [data-slidedeck-counter] {
+.docs-demo [data-carouseldeck-counter] {
   color: var(--text-secondary);
   font-size: 14px;
 }
@@ -1665,65 +1665,65 @@ main .docs-sidebar a {
 /* Each demo's CSS: the docs page's own, on a class of the demo's deck. */
 
 /* Layout, Drag and right to left: two and a half in view, centred. */
-.example-layout [data-slidedeck-viewport] {
+.example-layout [data-carouseldeck-viewport] {
   gap: 16px;
 }
 
-.example-layout [data-slidedeck-slide] {
+.example-layout [data-carouseldeck-slide] {
   width: calc((100% - 2 * 16px) / 2.5);
   scroll-snap-align: center;
 }
 
 /* Focal slide: three in view, centred; the focal one outlined. */
-.example-focal [data-slidedeck-viewport] {
+.example-focal [data-carouseldeck-viewport] {
   gap: 16px;
 }
 
-.example-focal [data-slidedeck-slide] {
+.example-focal [data-carouseldeck-slide] {
   width: calc((100% - 2 * 16px) / 3);
   scroll-snap-align: center;
   cursor: pointer;
 }
 
-.example-focal [data-slidedeck-slide][data-focal] {
+.example-focal [data-carouseldeck-slide][data-focal] {
   outline: 3px solid var(--text-link);
   outline-offset: -3px;
 }
 
 /* Loop: part of each neighbour in view, so the seam shows. */
-.example-loop [data-slidedeck-viewport] {
+.example-loop [data-carouseldeck-viewport] {
   gap: 16px;
 }
 
-.example-loop [data-slidedeck-slide] {
+.example-loop [data-carouseldeck-slide] {
   width: 70%;
   scroll-snap-align: center;
 }
 
 /* Vertical: the viewport's height, which each slide fills. */
-.example-vertical [data-slidedeck-viewport] {
+.example-vertical [data-carouseldeck-viewport] {
   height: 240px;
 }
 
-.example-vertical [data-slidedeck-slide] {
+.example-vertical [data-carouseldeck-slide] {
   min-height: 0;
 }
 
 /* Pages: three slides to a page from 640px. */
-.example-pages [data-slidedeck-viewport] {
+.example-pages [data-carouseldeck-viewport] {
   gap: 16px;
 }
 
 @media (min-width: 640px) {
-  .example-pages [data-slidedeck-slide] {
+  .example-pages [data-carouseldeck-slide] {
     width: calc((100% - 2 * 16px) / 3);
   }
 
-  .example-pages [data-slidedeck-slide]:nth-child(3n + 1) {
+  .example-pages [data-carouseldeck-slide]:nth-child(3n + 1) {
     scroll-snap-align: start;
   }
 
-  .example-pages [data-slidedeck-slide]:not(:nth-child(3n + 1)) {
+  .example-pages [data-carouseldeck-slide]:not(:nth-child(3n + 1)) {
     scroll-snap-align: none;
   }
 }
@@ -1736,13 +1736,13 @@ main .docs-sidebar a {
   --slide-width: calc((100cqi - 2 * 16px) / 2.5);
 }
 
-.example-progress [data-slidedeck-viewport] {
+.example-progress [data-carouseldeck-viewport] {
   gap: 16px;
   /* Half the viewport less half a slide, at each end. */
   padding-inline: calc(50% - var(--slide-width) / 2);
 }
 
-.example-progress [data-slidedeck-slide] {
+.example-progress [data-carouseldeck-slide] {
   width: var(--slide-width);
   scroll-snap-align: center;
   /* abs() spelled with max() for older browsers. */
@@ -1752,19 +1752,19 @@ main .docs-sidebar a {
 
 /* Curve: cards on an arc of 3 slides, with room for the slides that are not
    faded out at rest. */
-.example-curve [data-slidedeck-viewport],
-.example-curve-size [data-slidedeck-viewport] {
+.example-curve [data-carouseldeck-viewport],
+.example-curve-size [data-carouseldeck-viewport] {
   --deck-curve-radius: 3;
   gap: 16px;
   padding-inline: calc(50% - 80px);
 }
 
-.example-curve [data-slidedeck-viewport] {
+.example-curve [data-carouseldeck-viewport] {
   padding-block: 7px 150px;
 }
 
-.example-curve [data-slidedeck-slide],
-.example-curve-size [data-slidedeck-slide] {
+.example-curve [data-carouseldeck-slide],
+.example-curve-size [data-carouseldeck-slide] {
   width: 160px;
   min-height: 0;
   background: none;
@@ -1783,7 +1783,7 @@ main .docs-sidebar a {
 }
 
 /* Size a curve: the recipe's room, for a slide about to fade out. */
-.example-curve-size [data-slidedeck-viewport] {
+.example-curve-size [data-carouseldeck-viewport] {
   padding-block: 7px 460px;
 }
 
@@ -1792,34 +1792,34 @@ main .docs-sidebar a {
   --slide-width: 280px;
 }
 
-.example-centred-ends [data-slidedeck-viewport] {
+.example-centred-ends [data-carouseldeck-viewport] {
   gap: 16px;
   padding-inline: calc(50% - var(--slide-width) / 2);
 }
 
-.example-centred-ends [data-slidedeck-slide] {
+.example-centred-ends [data-carouseldeck-slide] {
   width: var(--slide-width);
   scroll-snap-align: center;
 }
 
 /* Highlight the middle slide in view: centred. */
-.example-middle-centred [data-slidedeck-viewport],
-.example-middle-by-progress [data-slidedeck-viewport] {
+.example-middle-centred [data-carouseldeck-viewport],
+.example-middle-by-progress [data-carouseldeck-viewport] {
   gap: 16px;
 }
 
-.example-middle-centred [data-slidedeck-slide] {
+.example-middle-centred [data-carouseldeck-slide] {
   width: calc((100% - 2 * 16px) / 3);
   scroll-snap-align: center;
 }
 
-.example-middle-centred [data-slidedeck-slide][data-focal] {
+.example-middle-centred [data-carouseldeck-slide][data-focal] {
   outline: 3px solid var(--text-link);
   outline-offset: -3px;
 }
 
 /* Highlight the middle slide in view: by progress. */
-.example-middle-by-progress [data-slidedeck-slide] {
+.example-middle-by-progress [data-carouseldeck-slide] {
   width: calc((100% - 2 * 16px) / 3);
   --from-middle: min(max(var(--deck-slide-progress, 0) - 1, 1 - var(--deck-slide-progress, 0)), 1);
   outline: 3px solid color-mix(in srgb, var(--text-link) calc((1 - var(--from-middle)) * 100%), transparent);
@@ -1828,11 +1828,11 @@ main .docs-sidebar a {
 
 /* Per breakpoint: three in view from 768px; below it, fade. */
 @media (min-width: 768px) {
-  .example-per-breakpoint [data-slidedeck-viewport] {
+  .example-per-breakpoint [data-carouseldeck-viewport] {
     gap: 16px;
   }
 
-  .example-per-breakpoint [data-slidedeck-slide] {
+  .example-per-breakpoint [data-carouseldeck-slide] {
     width: calc((100% - 2 * 16px) / 3);
   }
 }

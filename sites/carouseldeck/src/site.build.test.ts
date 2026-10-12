@@ -9,7 +9,7 @@ import { everyResponse, pagesWithEmDashes, present, readManifest, text } from "@
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { REPOSITORY } from "../components/links.ts";
 import { umbrella } from "@deck-cool/brand/decks";
-import { slidedeck } from "../components/slidedeck.ts";
+import { carouseldeck } from "../components/carouseldeck.ts";
 import { CONTENT_SECURITY_POLICY, DECK_STYLE_HASHES } from "./csp.ts";
 import { DEMOS } from "./demos.ts";
 import { DOCS_NAV } from "./docs-pages.ts";
@@ -100,12 +100,12 @@ describe("the JavaScript budget", () => {
 describe.each(PAGES)("%s's <head>", (path, file) => {
   const doc = () => parse(file);
 
-  test("links the slidedeck icons and one hashed stylesheet, and sets the viewport", () => {
+  test("links the carouseldeck icons and one hashed stylesheet, and sets the viewport", () => {
     const head = [...doc().head.querySelectorAll("link")].map((link) => [link.getAttribute("rel"), link.getAttribute("href")]);
     expect(head).toEqual(
       expect.arrayContaining([
-        ["icon", slidedeck.icons.still],
-        ["apple-touch-icon", slidedeck.icons.appleTouch],
+        ["icon", carouseldeck.icons.still],
+        ["apple-touch-icon", carouseldeck.icons.appleTouch],
         ["stylesheet", expect.stringMatching(/^\/assets\/[^/]+\.css$/)],
       ]),
     );
@@ -115,11 +115,11 @@ describe.each(PAGES)("%s's <head>", (path, file) => {
     );
   });
 
-  test("names its canonical and og:url on slide.deck.cool, and describes the page", () => {
+  test("names its canonical and og:url on carousel.deck.cool, and describes the page", () => {
     const head = doc().head;
     expect(head.querySelector('link[rel="canonical"]')?.getAttribute("href")).toBe(`${SITE_ORIGIN}${path}`);
     expect(head.querySelector('meta[property="og:url"]')?.getAttribute("content")).toBe(`${SITE_ORIGIN}${path}`);
-    expect(head.querySelector('meta[property="og:site_name"]')?.getAttribute("content")).toBe("slidedeck");
+    expect(head.querySelector('meta[property="og:site_name"]')?.getAttribute("content")).toBe("carouseldeck");
     const description = head.querySelector('meta[name="description"]')?.getAttribute("content");
     expect(description).toMatch(/^.{60,}$/);
     expect(head.querySelector('meta[property="og:description"]')?.getAttribute("content")).toBe(description);
@@ -136,7 +136,7 @@ describe.each(PAGES)("%s's <head>", (path, file) => {
     expect(head.querySelector('meta[property="og:image:height"]')?.getAttribute("content")).toBe("630");
   });
 
-  test("opens with the Family bar, slidedeck's, with search in it", () => {
+  test("opens with the Family bar, carouseldeck's, with search in it", () => {
     const html = readFileSync(`${OUT}/${file}`, "utf8");
     const at = (needle: string) => {
       const index = html.indexOf(needle);
@@ -144,7 +144,7 @@ describe.each(PAGES)("%s's <head>", (path, file) => {
       return index;
     };
     // Outside <main>, so the header is the page's banner landmark.
-    expect(at('<header class="family-bar" data-deck="slidedeck"')).toBeLessThan(at("<main>"));
+    expect(at('<header class="family-bar" data-deck="carouseldeck"')).toBeLessThan(at("<main>"));
     const bar = present(doc().querySelector("header.family-bar nav"), "the bar's row");
     expect(links(present(bar.querySelector(".family-bar__links"), "the bar's links"))).toEqual([
       ["Docs", "/docs/"],
@@ -168,7 +168,7 @@ describe.each(PAGES)("%s's <head>", (path, file) => {
     }
     const html = readFileSync(`${OUT}/${file}`, "utf8");
     for (const [style, href = "", css = ""] of html.matchAll(/<style([^>]*)>([\s\S]*?)<\/style>/g)) {
-      const name = /^ data-precedence="slidedeck" data-href="([^"]+)"$/.exec(href)?.[1];
+      const name = /^ data-precedence="carouseldeck" data-href="([^"]+)"$/.exec(href)?.[1];
       expect(name, style.slice(0, 120)).toBeDefined();
       const hash = `'sha256-${createHash("sha256").update(css).digest("base64")}'`;
       expect(DECK_STYLE_HASHES[name as keyof typeof DECK_STYLE_HASHES], name).toBe(hash);
@@ -190,7 +190,7 @@ function stylesheet(): string {
   return readFileSync(`${OUT}${href}`, "utf8");
 }
 
-test("the stylesheet holds brand.css, then family-bar.css, then slidedeck.css", () => {
+test("the stylesheet holds brand.css, then family-bar.css, then carouseldeck.css", () => {
   const css = stylesheet();
   // Each sheet's first or last rule.
   const brand = css.indexOf("--ground-page");
@@ -201,8 +201,8 @@ test("the stylesheet holds brand.css, then family-bar.css, then slidedeck.css", 
   expect(bar).toBeLessThan(own);
 });
 
-test("slidedeck.css times every transition with the brand's one easing curve", () => {
-  const css = readFileSync(`${SITE}styles/slidedeck.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+test("carouseldeck.css times every transition with the brand's one easing curve", () => {
+  const css = readFileSync(`${SITE}styles/carouseldeck.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const transitions = [...css.matchAll(/\btransition(?:-timing-function)?:([^;}]+)/g)].map(([, value]) => value?.trim());
   expect(transitions).not.toHaveLength(0);
   for (const value of transitions) {
@@ -229,7 +229,7 @@ test("the social card's font is the build's alone: the site serves no font", () 
 });
 
 test("the icons are the brand's, byte for byte", () => {
-  for (const path of [slidedeck.icons.still, slidedeck.icons.appleTouch]) {
+  for (const path of [carouseldeck.icons.still, carouseldeck.icons.appleTouch]) {
     expect(readFileSync(`${OUT}${path}`).equals(readFileSync(`${BRAND}${path.slice(1)}`)), path).toBe(true);
   }
 });
@@ -250,9 +250,9 @@ describe("the home page", () => {
   const band = (heading: string) => sections().find((section) => text(section.querySelector("h2")) === heading);
 
   test("is titled with the claim", () => {
-    expect(home().title).toBe("slidedeck: a carousel that lets the browser do the scrolling");
+    expect(home().title).toBe("carouseldeck: a carousel that lets the browser do the scrolling");
     expect(home().head.querySelector('meta[name="description"]')?.getAttribute("content")).toBe(
-      "slidedeck is an unstyled React carousel on native CSS scroll snap: the browser scrolls, snaps and focuses, and you style every part with plain CSS.",
+      "carouseldeck is an unstyled React carousel on native CSS scroll snap: the browser scrolls, snaps and focuses, and you style every part with plain CSS.",
     );
   });
 
@@ -270,35 +270,35 @@ describe("the home page", () => {
 
   test("the hero: the version, the claim, one sentence for all three audiences, and the two calls to action", () => {
     const hero = sections()[0];
-    expect(hero?.querySelector("img")?.getAttribute("src")).toBe(slidedeck.icons.animated);
+    expect(hero?.querySelector("img")?.getAttribute("src")).toBe(carouseldeck.icons.animated);
     expect(hero?.querySelector("img")?.getAttribute("alt")).toBe("");
-    expect(text(hero?.querySelector("h1"))).toBe(slidedeck.claim);
+    expect(text(hero?.querySelector("h1"))).toBe(carouseldeck.claim);
     expect([...(hero?.querySelectorAll("p") ?? [])].map(text)).toEqual([
-      `slidedeck ${version}`,
+      `carouseldeck ${version}`,
       "Compose it from a few React components, style every part with your own CSS, or hand it to your agent. The momentum, the snapping and the focus scrolling are the browser's own.",
     ]);
-    expect(text(hero?.querySelector(".home-install code"))).toBe("pnpm add @slidedeck/react");
-    expect(install).toBe("pnpm add @slidedeck/react");
+    expect(text(hero?.querySelector(".home-install code"))).toBe("pnpm add @carouseldeck/react");
+    expect(install).toBe("pnpm add @carouseldeck/react");
     expect(links(hero)).toEqual([
       ["Read the docs", "/docs/"],
       ["See it in action ›", "/examples/"],
     ]);
   });
 
-  // The shapes, not the values: each release of slidedeck brings its own.
-  test("reads the installed @slidedeck/react's version and size", () => {
+  // The shapes, not the values: each release of carouseldeck brings its own.
+  test("reads the installed @carouseldeck/react's version and size", () => {
     expect(version).toMatch(/^\d+\.\d+$/);
     expect(size).toMatch(/^\d+\.\d\d KB$/);
   });
 
-  // GLOSSARY.md: the "plain markdown" line waits until @slidedeck/docs is on npm.
+  // GLOSSARY.md: the "plain markdown" line waits until @carouseldeck/docs is on npm.
   test("makes no claim about markdown docs or llms.txt", () => {
     expect(main().textContent).not.toMatch(/Using an agent|markdown|llms\.txt/i);
   });
 
-  test("the proof: the browser scrolls and slidedeck keeps count, beside the one figure, the README's", () => {
+  test("the proof: the browser scrolls and carouseldeck keeps count, beside the one figure, the README's", () => {
     const proof = sections()[1];
-    expect(text(proof?.querySelector("h2"))).toBe("The browser scrolls. slidedeck keeps count.");
+    expect(text(proof?.querySelector("h2"))).toBe("The browser scrolls. carouseldeck keeps count.");
     expect(
       [...(proof?.querySelectorAll(".home-proof__points li") ?? [])].map((point) => [
         text(point.querySelector("h3")),
@@ -307,19 +307,19 @@ describe("the home page", () => {
     ).toEqual([
       [
         "A real scroll container",
-        "Every deck is a scroll container with CSS scroll snap: touch, trackpad, wheel and keyboard move it natively, and slidedeck adds mouse drag.",
+        "Every deck is a scroll container with CSS scroll snap: touch, trackpad, wheel and keyboard move it natively, and carouseldeck adds mouse drag.",
       ],
       [
-        "slidedeck keeps count",
+        "carouseldeck keeps count",
         "It tracks where the deck comes to rest, and Prev, Next and the dots ask the browser to scroll there.",
       ],
       ["Works with no CSS", "The quickstart is a working deck before you write a single rule."],
     ]);
     expect([...(proof?.querySelectorAll(".home-proof__figure > p") ?? [])].map(text)).toEqual([
       size,
-      slidedeck.figure.label,
-      slidedeck.figure.note,
-      "Measured by pnpm compare in slidedeck's repo, and its CI fails when the number goes stale.",
+      carouseldeck.figure.label,
+      carouseldeck.figure.note,
+      "Measured by pnpm compare in carouseldeck's repo, and its CI fails when the number goes stale.",
     ]);
     expect(links(proof)).toEqual([["How it is measured ›", "/docs/compare/"]]);
   });
@@ -339,7 +339,7 @@ describe("the home page", () => {
 
     test("says it needs no stylesheet, any rule of yours wins, and every part has a name for your CSS", () => {
       expect(text(section()?.querySelector(".home-band__text p"))).toBe(
-        "slidedeck needs no stylesheet. Its defaults and its optional theme sit in :where(), so any rule of yours wins. Every part carries a name, like data-slidedeck-next or data-slidedeck-dots, for your CSS or your tokens to reach. Here is one live deck, shown twice: the markup is the same, and only the CSS changes.",
+        "carouseldeck needs no stylesheet. Its defaults and its optional theme sit in :where(), so any rule of yours wins. Every part carries a name, like data-carouseldeck-next or data-carouseldeck-dots, for your CSS or your tokens to reach. Here is one live deck, shown twice: the markup is the same, and only the CSS changes.",
       );
     });
 
@@ -352,14 +352,14 @@ describe("the home page", () => {
       expect(decks.map((deck) => deck.getAttribute("aria-label"))).toEqual(SKINS.map((skin) => `${skin.name} deck`));
       const markup = decks.map((deck, i) => deck.outerHTML.replace(`aria-label="${SKINS[i]?.name} deck"`, ""));
       expect(markup[0]).toBe(markup[1]);
-      expect([...present(decks[0], "the first deck").querySelectorAll("[data-slidedeck-slide]")].map(text)).toEqual([
+      expect([...present(decks[0], "the first deck").querySelectorAll("[data-carouseldeck-slide]")].map(text)).toEqual([
         "Momentum The browser's own.",
         "Snapping The browser's own.",
         "Focus scrolling The browser's own.",
         "The look Yours.",
       ]);
       for (const part of ["viewport", "prev", "next", "dots", "counter"]) {
-        expect(decks[0]?.querySelector(`[data-slidedeck-${part}]`), part).not.toBeNull();
+        expect(decks[0]?.querySelector(`[data-carouseldeck-${part}]`), part).not.toBeNull();
       }
     });
 
@@ -369,7 +369,7 @@ describe("the home page", () => {
       );
       const css = stylesheet();
       for (const skin of SKINS) {
-        expect(css).toContain(`.${skin.className} [data-slidedeck-next]`);
+        expect(css).toContain(`.${skin.className} [data-carouseldeck-next]`);
         // Every rule is scoped to its skin, so neither sheet reaches the other deck.
         const source = readFileSync(`${SITE}${skin.file}`, "utf8");
         for (const [, list = ""] of source.matchAll(/^([^\s{}@][^{]*)\{/gm)) {
@@ -408,12 +408,12 @@ describe("the home page", () => {
   test("small: native scroll snap, effects you import, and server rendering, with the README's size", () => {
     const section = band("Small, leans on the browser.");
     expect(text(section?.querySelector(".home-band__text p"))).toBe(
-      `The browser already knows how to scroll. slidedeck builds on that instead of rebuilding it, so a carousel with Prev and Next is ${size}, min+gzip, with React external.`,
+      `The browser already knows how to scroll. carouseldeck builds on that instead of rebuilding it, so a carousel with Prev and Next is ${size}, min+gzip, with React external.`,
     );
     expect(tiles(section)).toEqual([
       [
         "Native scroll snap",
-        "Momentum, snapping and focus scrolling are the browser's own. slidedeck tracks where the deck rests and asks the browser to move.",
+        "Momentum, snapping and focus scrolling are the browser's own. carouseldeck tracks where the deck rests and asks the browser to move.",
       ],
       [
         "Effects you import",
@@ -429,7 +429,7 @@ describe("the home page", () => {
   test("agents: a few named parts, typed, with mistakes that explain themselves, and the README's quickstart", () => {
     const section = band("Built for agents.");
     expect(text(section?.querySelector(".home-band__text p"))).toBe(
-      "Whether you write the code or your coding agent does, slidedeck leaves less to guess.",
+      "Whether you write the code or your coding agent does, carouseldeck leaves less to guess.",
     );
     expect(tiles(section)).toEqual([
       [
@@ -438,24 +438,24 @@ describe("the home page", () => {
       ],
       [
         "Typed all the way",
-        "slidedeck is written in TypeScript and ships its types, so your editor and your agent see every prop.",
+        "carouseldeck is written in TypeScript and ships its types, so your editor and your agent see every prop.",
       ],
       [
         "Mistakes explain themselves",
-        "Pass index and defaultIndex together, or index without onIndexChange, and in development slidedeck says what to pass instead.",
+        "Pass index and defaultIndex together, or index without onIndexChange, and in development carouseldeck says what to pass instead.",
       ],
     ]);
     const code = present(section?.querySelector(".home-code pre"), "the quickstart");
     expect(code.getAttribute("tabindex")).toBe("0");
     expect(code.classList.contains("github-dark-default")).toBe(true);
-    expect(code.textContent).toMatch(/^import \* as Deck from '@slidedeck\/react';\n/);
+    expect(code.textContent).toMatch(/^import \* as Deck from '@carouseldeck\/react';\n/);
   });
 
-  // Only the claims a test in pedrosousa13/slidedeck proves: slidedeck's rows of #46's PR body, word for word.
-  test("accessible: slidedeck's five tested claims", () => {
+  // Only the claims a test in decks/carouseldeck proves: carouseldeck's rows of #46's PR body, word for word.
+  test("accessible: carouseldeck's five tested claims", () => {
     const section = band("Accessible by default.");
     expect(text(section?.querySelector(".home-band__text p"))).toBe(
-      "slidedeck takes care of the keyboard, focus and screen readers for you. Each line below is backed by a test in slidedeck's own repo.",
+      "carouseldeck takes care of the keyboard, focus and screen readers for you. Each line below is backed by a test in carouseldeck's own repo.",
     );
     expect(tiles(section)).toEqual([
       ["Named for screen readers", 'A labelled carousel region, each slide a group labelled "n of m".'],
@@ -470,7 +470,7 @@ describe("the home page", () => {
   test("closes with one line back to deck.cool", () => {
     const family = sections()[6];
     expect(text(family?.querySelector("p"))).toBe(
-      "slidedeck is part of deck.cool, a family of unstyled React packages that look like you and work like the browser. Meet the family ›",
+      "carouseldeck is part of deck.cool, a family of unstyled React packages that look like you and work like the browser. Meet the family ›",
     );
     expect(links(present(family, "the line"))).toEqual([["Meet the family ›", umbrella.url]]);
   });
@@ -483,7 +483,7 @@ test("no page uses an em dash", () => {
 
 describe("the Examples page", () => {
   test("is titled as before", () => {
-    expect(examples().title).toBe("Examples: decks built with slidedeck");
+    expect(examples().title).toBe("Examples: decks built with carouseldeck");
   });
 
   test("shows each example in order, its deck rendered on the server", () => {
@@ -535,7 +535,7 @@ describe("every page", () => {
 
   // GLOSSARY.md: each package site links its own deck's repo, never the maintainer's profile.
   test.each(readdirSync(OUT, { recursive: true, encoding: "utf8" }).filter((file) => file.endsWith(".html")))(
-    "%s links nothing on github.com but slidedeck's repo",
+    "%s links nothing on github.com but carouseldeck's repo",
     (file) => {
       const html = readFileSync(`${OUT}/${file}`, "utf8");
       for (const [, href] of html.matchAll(/href="(https?:\/\/(?:[^/"]+\.)?github\.com[^"]*)"/gi)) {
@@ -553,7 +553,7 @@ test("the search index holds the site's pages and every docs page, within what o
   expect(bytes).toBeLessThanOrEqual(QUERY_CAP);
 });
 
-test("the sitemap and robots.txt name slide.deck.cool", () => {
+test("the sitemap and robots.txt name carousel.deck.cool", () => {
   const sitemap = readFileSync(`${OUT}/sitemap-en.xml`, "utf8");
   expect([...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, loc]) => loc).sort()).toEqual(
     ALL_PATHS.map((path) => `${SITE_ORIGIN}${path}`).sort(),
@@ -609,12 +609,12 @@ describe("the served headers", () => {
   });
 });
 
-describe("the docs, from @slidedeck/docs", () => {
+describe("the docs, from @carouseldeck/docs", () => {
   /** The demos a built page renders, by name, in order. */
   const demosOn = (doc: Document) =>
     [...doc.querySelectorAll("article fw-island")].map((island) => island.getAttribute("data-fw-component")?.replace(/^docsDemo:/, ""));
 
-  // slidedeck's READMEs link https://slide.deck.cool/docs/.
+  // carouseldeck's READMEs link https://carousel.deck.cool/docs/.
   test("serves /docs/, the docs' first page", () => {
     expect(DOCS_NAV[0]?.href).toBe("/docs/");
     expect(existsSync(`${OUT}/docs/index.html`)).toBe(true);
@@ -624,7 +624,7 @@ describe("the docs, from @slidedeck/docs", () => {
     const doc = parse(`${href.slice(1)}index.html`);
     expect(demosOn(doc)).toEqual(demos);
     for (const island of doc.querySelectorAll("article fw-island")) {
-      expect(island.querySelector('[aria-roledescription="carousel"] [data-slidedeck-slide]'), island.outerHTML.slice(0, 120)).not.toBeNull();
+      expect(island.querySelector('[aria-roledescription="carousel"] [data-carouseldeck-slide]'), island.outerHTML.slice(0, 120)).not.toBeNull();
     }
   });
 
@@ -651,7 +651,7 @@ describe("the docs, from @slidedeck/docs", () => {
   test("titles each page for the tab, once", () => {
     const doc = parse("docs/install/index.html");
     expect(doc.querySelectorAll("title")).toHaveLength(1);
-    expect(doc.title).toBe("Install · slidedeck docs");
+    expect(doc.title).toBe("Install · carouseldeck docs");
     expect(text(doc.querySelector("article h1"))).toBe("Install");
   });
 

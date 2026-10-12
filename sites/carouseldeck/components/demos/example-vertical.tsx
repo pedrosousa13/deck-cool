@@ -1,9 +1,9 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
-// A vertical deck; styles/slidedeck.css gives its viewport a height.
+// A vertical deck; styles/carouseldeck.css gives its viewport a height.
 export default function Vertical() {
   return (
     <DemoFrame>

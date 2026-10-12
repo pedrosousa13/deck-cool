@@ -1,6 +1,6 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
 // A deck that loops, with part of each neighbour in view.

@@ -1,6 +1,6 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
 // A deck a mouse can drag, as every deck by default.

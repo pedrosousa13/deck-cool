@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
 // A controlled deck, and a button outside it that sets its index.

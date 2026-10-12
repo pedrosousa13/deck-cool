@@ -1,6 +1,6 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
 // The deck the Quickstart's code block builds, written out again here: no

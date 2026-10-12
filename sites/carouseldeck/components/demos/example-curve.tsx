@@ -1,7 +1,7 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
-import { curve } from "@slidedeck/react/curve";
+import * as Deck from "@carouseldeck/react";
+import { curve } from "@carouseldeck/react/curve";
 import DemoFrame from "./demo-frame.tsx";
 
 // Each slide holds one card that fills it: curve draws on a slide's content.

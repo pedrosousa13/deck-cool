@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
-import * as Deck from "@slidedeck/react";
-import { fade } from "@slidedeck/react/fade";
+import * as Deck from "@carouseldeck/react";
+import { fade } from "@carouseldeck/react/fade";
 import DemoFrame from "./demo-frame.tsx";
 
 function useMediaQuery(query: string, initial = false) {

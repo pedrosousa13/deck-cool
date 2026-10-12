@@ -1,4 +1,4 @@
-.stark :has(> [data-slidedeck-viewport]) {
+.stark :has(> [data-carouseldeck-viewport]) {
   position: relative;
   display: flex;
   flex-wrap: wrap;
@@ -8,11 +8,11 @@
   font-family: ui-monospace, Menlo, monospace;
   text-transform: uppercase;
 }
-.stark [data-slidedeck-viewport] {
+.stark [data-carouseldeck-viewport] {
   flex: 0 0 100%;
   border-bottom: 3px solid #000;
 }
-.stark [data-slidedeck-slide] > div {
+.stark [data-carouseldeck-slide] > div {
   display: grid;
   align-content: end;
   gap: 8px;
@@ -21,17 +21,17 @@
   padding: 20px;
   background: #ffd60a;
 }
-.stark [data-slidedeck-slide] strong {
+.stark [data-carouseldeck-slide] strong {
   font-size: 30px;
   line-height: 1;
   letter-spacing: -.04em;
 }
-.stark [data-slidedeck-slide] span {
+.stark [data-carouseldeck-slide] span {
   font-size: 13px;
   letter-spacing: .1em;
 }
-.stark [data-slidedeck-prev],
-.stark [data-slidedeck-next] {
+.stark [data-carouseldeck-prev],
+.stark [data-carouseldeck-next] {
   min-height: 48px;
   padding: 0 14px;
   border: 0;
@@ -44,23 +44,23 @@
   font-weight: 700;
   cursor: pointer;
 }
-.stark [data-slidedeck-prev]:hover:enabled,
-.stark [data-slidedeck-next]:hover:enabled {
+.stark [data-carouseldeck-prev]:hover:enabled,
+.stark [data-carouseldeck-next]:hover:enabled {
   background: #000;
   color: #fff;
 }
-.stark [data-slidedeck-prev]:disabled,
-.stark [data-slidedeck-next]:disabled {
+.stark [data-carouseldeck-prev]:disabled,
+.stark [data-carouseldeck-next]:disabled {
   color: #767676;
   cursor: default;
 }
-.stark [data-slidedeck-dots] {
+.stark [data-carouseldeck-dots] {
   display: flex;
   flex: 1 1 96px;
   gap: 4px;
   padding: 0 12px;
 }
-.stark [data-slidedeck-dots] button {
+.stark [data-carouseldeck-dots] button {
   flex: 1;
   min-width: 24px;
   height: 48px;
@@ -69,15 +69,15 @@
   background: none;
   cursor: pointer;
 }
-.stark [data-slidedeck-dots] button::before {
+.stark [data-carouseldeck-dots] button::before {
   content: "";
   display: block;
   border-top: 3px solid #b0b0b0;
 }
-.stark [data-slidedeck-dots] [aria-current="true"]::before {
+.stark [data-carouseldeck-dots] [aria-current="true"]::before {
   border-top: 9px solid #000;
 }
-.stark [data-slidedeck-counter] {
+.stark [data-carouseldeck-counter] {
   position: absolute;
   top: 0;
   right: 0;

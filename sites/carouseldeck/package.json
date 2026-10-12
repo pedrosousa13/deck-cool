@@ -1,5 +1,5 @@
 {
-  "name": "@sites/slidedeck",
+  "name": "@sites/carouseldeck",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -19,8 +19,8 @@
     "@pagedeck/markdown-loader": "0.2.3",
     "@pagedeck/search": "0.2.3",
     "@resvg/resvg-js": "2.6.2",
-    "@slidedeck/docs": "1.0.3",
-    "@slidedeck/react": "1.0.3",
+    "@carouseldeck/docs": "workspace:*",
+    "@carouseldeck/react": "workspace:*",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "satori": "0.33.4"

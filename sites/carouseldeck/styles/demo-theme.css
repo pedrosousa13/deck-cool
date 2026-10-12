@@ -1,19 +1,19 @@
 /*
- * slidedeck's optional theme.css, for the Theme page's demo alone. In a
- * layer, so slidedeck.css's unlayered deck rules still win everywhere; the
+ * carouseldeck's optional theme.css, for the Theme page's demo alone. In a
+ * layer, so carouseldeck.css's unlayered deck rules still win everywhere; the
  * next layer reverts the theme outside the demo, and `.example-theme` below
- * reverts slidedeck.css's rules inside it, back to the theme.
+ * reverts carouseldeck.css's rules inside it, back to the theme.
  */
-@import "@slidedeck/react/theme.css" layer(deck-theme);
+@import "@carouseldeck/react/theme.css" layer(deck-theme);
 
 @layer deck-theme-off {
   :is(
-    [data-slidedeck-prev],
-    [data-slidedeck-next],
-    [data-slidedeck-autoplay-toggle],
-    [data-slidedeck-dots],
-    [data-slidedeck-dots] > button,
-    [data-slidedeck-counter]
+    [data-carouseldeck-prev],
+    [data-carouseldeck-next],
+    [data-carouseldeck-autoplay-toggle],
+    [data-carouseldeck-dots],
+    [data-carouseldeck-dots] > button,
+    [data-carouseldeck-counter]
   ):not(.example-theme *) {
     all: revert;
   }
@@ -22,22 +22,22 @@
 /* The demo's controls wear theme.css. `revert-layer`, from unlayered CSS,
    rolls each property back to the layers: to the theme's value, or the
    browser's where it sets none. The last selector in the list only lifts the
-   rule above slidedeck.css's most specific deck rule. */
+   rule above carouseldeck.css's most specific deck rule. */
 .example-theme
   :is(
-    [data-slidedeck-prev],
-    [data-slidedeck-next],
-    [data-slidedeck-autoplay-toggle],
-    [data-slidedeck-dots],
-    [data-slidedeck-dots] > button,
-    [data-slidedeck-counter],
-    [data-slidedeck-dots] [data-index][aria-current="true"]
+    [data-carouseldeck-prev],
+    [data-carouseldeck-next],
+    [data-carouseldeck-autoplay-toggle],
+    [data-carouseldeck-dots],
+    [data-carouseldeck-dots] > button,
+    [data-carouseldeck-counter],
+    [data-carouseldeck-dots] [data-index][aria-current="true"]
   ),
 .example-theme
   :is(
-    [data-slidedeck-autoplay-toggle],
-    [data-slidedeck-dots] > button,
-    [data-slidedeck-dots] [data-index][aria-current="true"]
+    [data-carouseldeck-autoplay-toggle],
+    [data-carouseldeck-dots] > button,
+    [data-carouseldeck-dots] [data-index][aria-current="true"]
   )::before {
   all: revert-layer;
 }
@@ -45,7 +45,7 @@
 /* A few of the theme's tokens, from the site's palette, so the demo reads on
    the dark page. */
 .example-theme {
-  --deck-accent: var(--slidedeck-fill);
+  --deck-accent: var(--carouseldeck-fill);
   --deck-control-radius: 999px;
   --deck-control-padding: .5rem 1rem;
   --deck-control-background: var(--ground-page);

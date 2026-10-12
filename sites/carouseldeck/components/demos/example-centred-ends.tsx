@@ -1,9 +1,9 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
-// The recipe's CSS, in styles/slidedeck.css, on `.example-centred-ends`.
+// The recipe's CSS, in styles/carouseldeck.css, on `.example-centred-ends`.
 export default function CentredEnds() {
   return (
     <DemoFrame>

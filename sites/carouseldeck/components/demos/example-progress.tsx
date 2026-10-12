@@ -1,10 +1,10 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
 // Slides that shrink with their distance from the focal one, read from
-// `--deck-slide-progress` every frame: styles/slidedeck.css.
+// `--deck-slide-progress` every frame: styles/carouseldeck.css.
 export default function Progress() {
   return (
     <DemoFrame>

@@ -23,7 +23,7 @@ const pages = defineCollection({
   schema: false,
 });
 
-/** The docs pages that mark a demo, in @slidedeck/docs 1.0.3. */
+/** The docs pages that mark a demo, in @carouseldeck/docs. */
 const DOCS_DEMO_PAGES = [
   "/docs/guides/autoplay/",
   "/docs/guides/drag/",
@@ -46,10 +46,10 @@ const DOCS_DEMO_PAGES = [
   "/docs/reference/primitives/",
 ];
 
-// slidedeck's docs, from the @slidedeck/docs this site pins, under /docs.
+// carouseldeck's docs, from the workspace's @carouseldeck/docs, under /docs.
 const docs = defineDocs({
   from: import.meta.url,
-  package: "@slidedeck/docs",
+  package: "@carouseldeck/docs",
   base: "/docs",
   layout: "docsPage",
   demos: DEMOS,
@@ -106,7 +106,7 @@ export default defineConfig({
       brandSheet("brand.css"),
       brandSheet("family-bar.css"),
       brandSheet("skin-sheet.css"),
-      "./styles/slidedeck.css",
+      "./styles/carouseldeck.css",
       "./styles/demo-theme.css",
       ...SKINS.map((skin) => `./${skin.file}`),
     ],
@@ -138,7 +138,7 @@ export default defineConfig({
       "/examples/": "61kb",
       // A docs page with no demo ships the search island alone.
       "/docs/**": "61kb",
-      // A docs page with demos ships slidedeck and its demos too. Budget globs
+      // A docs page with demos ships carouseldeck and its demos too. Budget globs
       // cannot pick out the pages with a demo, so each is listed. They share
       // one budget, the largest one's, so a release that moves or adds a demo
       // among these pages still builds; a demo on another page needs it listed.

@@ -1,11 +1,11 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
-import { curve } from "@slidedeck/react/curve";
+import * as Deck from "@carouseldeck/react";
+import { curve } from "@carouseldeck/react/curve";
 import DemoFrame from "./demo-frame.tsx";
 
 // The recipe's arc: a radius of 528px under slides 160px wide and 16px
-// apart, and room for it in the viewport: styles/slidedeck.css.
+// apart, and room for it in the viewport: styles/carouseldeck.css.
 export default function CurveSize() {
   return (
     <DemoFrame>

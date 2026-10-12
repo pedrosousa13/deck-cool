@@ -1,7 +1,7 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
-import { curve } from "@slidedeck/react/curve";
+import * as Deck from "@carouseldeck/react";
+import { curve } from "@carouseldeck/react/curve";
 
 interface Album {
   /** Picks the cover's art in CSS: by album, never by position, as a loop's

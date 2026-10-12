@@ -1,6 +1,6 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import { PLACES, type Photo } from "./photos.ts";
 
 interface Place {

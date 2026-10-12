@@ -274,8 +274,72 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.19.1)(@vitest/browser-playwright@4.1.11)(happy-dom@20.14.5)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1))
 
+  sites/carouseldeck:
+    dependencies:
+      '@carouseldeck/docs':
+        specifier: workspace:*
+        version: link:../../decks/carouseldeck/packages/docs
+      '@carouseldeck/react':
+        specifier: workspace:*
+        version: link:../../decks/carouseldeck/packages/react
+      '@deck-cool/brand':
+        specifier: workspace:*
+        version: link:../../packages/brand
+      '@deck-cool/docs':
+        specifier: workspace:*
+        version: link:../../packages/docs
+      '@deck-cool/site-kit':
+        specifier: workspace:*
+        version: link:../../packages/site-kit
+      '@pagedeck/adapter-cloudflare-pages':
+        specifier: 0.2.3
+        version: 0.2.3(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)(esbuild@0.28.2)(supports-color@10.2.2)(yaml@2.9.1)
+      '@pagedeck/content':
+        specifier: 0.2.3
+        version: 0.2.3
+      '@pagedeck/core':
+        specifier: 0.2.3
+        version: 0.2.3(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)(esbuild@0.28.2)(supports-color@10.2.2)(yaml@2.9.1)
+      '@pagedeck/islands':
+        specifier: 0.2.3
+        version: 0.2.3(@babel/core@7.29.7(supports-color@10.2.2))(@babel/template@7.29.7)(@types/react@19.3.0)
+      '@pagedeck/markdown-loader':
+        specifier: 0.2.3
+        version: 0.2.3
+      '@pagedeck/search':
+        specifier: 0.2.3
+        version: 0.2.3(@babel/core@7.29.7(supports-color@10.2.2))(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)(esbuild@0.28.2)(supports-color@10.2.2)(yaml@2.9.1)
+      '@resvg/resvg-js':
+        specifier: 2.6.2
+        version: 2.6.2
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
+      satori:
+        specifier: 0.33.4
+        version: 0.33.4
+    devDependencies:
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      happy-dom:
+        specifier: 20.14.5
+        version: 20.14.5
+      wrangler:
+        specifier: 4.149.0
+        version: 4.149.0(@types/node@24.19.1)
+
   sites/deck-cool:
     dependencies:
+      '@carouseldeck/react':
+        specifier: workspace:*
+        version: link:../../decks/carouseldeck/packages/react
       '@deck-cool/brand':
         specifier: workspace:*
         version: link:../../packages/brand
@@ -294,9 +358,6 @@ importers:
       '@pagedeck/markdown-loader':
         specifier: 0.2.3
         version: 0.2.3
-      '@slidedeck/react':
-        specifier: 1.0.3
-        version: 1.0.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -440,67 +501,6 @@ importers:
       shiki:
         specifier: 4.5.0
         version: 4.5.0
-    devDependencies:
-      '@types/react':
-        specifier: 19.3.0
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: 19.3.0
-        version: 19.3.0(@types/react@19.3.0)
-      happy-dom:
-        specifier: 20.14.5
-        version: 20.14.5
-      wrangler:
-        specifier: 4.149.0
-        version: 4.149.0(@types/node@24.19.1)
-
-  sites/slidedeck:
-    dependencies:
-      '@deck-cool/brand':
-        specifier: workspace:*
-        version: link:../../packages/brand
-      '@deck-cool/docs':
-        specifier: workspace:*
-        version: link:../../packages/docs
-      '@deck-cool/site-kit':
-        specifier: workspace:*
-        version: link:../../packages/site-kit
-      '@pagedeck/adapter-cloudflare-pages':
-        specifier: 0.2.3
-        version: 0.2.3(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)(esbuild@0.28.2)(supports-color@10.2.2)(yaml@2.9.1)
-      '@pagedeck/content':
-        specifier: 0.2.3
-        version: 0.2.3
-      '@pagedeck/core':
-        specifier: 0.2.3
-        version: 0.2.3(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)(esbuild@0.28.2)(supports-color@10.2.2)(yaml@2.9.1)
-      '@pagedeck/islands':
-        specifier: 0.2.3
-        version: 0.2.3(@babel/core@7.29.7(supports-color@10.2.2))(@babel/template@7.29.7)(@types/react@19.3.0)
-      '@pagedeck/markdown-loader':
-        specifier: 0.2.3
-        version: 0.2.3
-      '@pagedeck/search':
-        specifier: 0.2.3
-        version: 0.2.3(@babel/core@7.29.7(supports-color@10.2.2))(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)(esbuild@0.28.2)(supports-color@10.2.2)(yaml@2.9.1)
-      '@resvg/resvg-js':
-        specifier: 2.6.2
-        version: 2.6.2
-      '@slidedeck/docs':
-        specifier: 1.0.3
-        version: 1.0.3
-      '@slidedeck/react':
-        specifier: 1.0.3
-        version: 1.0.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      react:
-        specifier: 19.3.0
-        version: 19.3.0
-      react-dom:
-        specifier: 19.3.0
-        version: 19.3.0(react@19.3.0)
-      satori:
-        specifier: 0.33.4
-        version: 0.33.4
     devDependencies:
       '@types/react':
         specifier: 19.3.0
@@ -1856,18 +1856,6 @@ packages:
   '@sindresorhus/is@7.2.0':
     resolution: {integrity: sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw==}
     engines: {node: '>=18'}
-
-  '@slidedeck/core@1.0.3':
-    resolution: {integrity: sha512-OxAWLuRYXr5ZKvUQ5BbbKjp5aOLbgz3qnvHtsqchGYRD1/8wjVC+C9f7+GZmAs+WuFU+9SiqfbEtwC9pTlOgbw==}
-
-  '@slidedeck/docs@1.0.3':
-    resolution: {integrity: sha512-U7mWdnJzkkCNROzPjOeCeO85nimJJ8nE0kSKzv9R8zYY2AlDjrt3sgWva01k8+/GLvGkrAoachDoRfi/JzRXmQ==}
-
-  '@slidedeck/react@1.0.3':
-    resolution: {integrity: sha512-ZmhuOx+d0aEnQ5HVSaHZ9ufgxpPgBcxVJ6+4AIbdQHDiCNoJmOLqUV9GYomO/vVT3NL1CyeQTDel8HWQKdW7Gg==}
-    peerDependencies:
-      react: '>=19 <20'
-      react-dom: '>=19 <20'
 
   '@speed-highlight/core@1.2.24':
     resolution: {integrity: sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw==}
@@ -4923,16 +4911,6 @@ snapshots:
 
   '@sindresorhus/is@7.2.0': {}
 
-  '@slidedeck/core@1.0.3': {}
-
-  '@slidedeck/docs@1.0.3': {}
-
-  '@slidedeck/react@1.0.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
-    dependencies:
-      '@slidedeck/core': 1.0.3
-      react: 19.3.0
-      react-dom: 19.3.0(react@19.3.0)
-
   '@speed-highlight/core@1.2.24': {}
 
   '@standard-schema/spec@1.1.0': {}
@@ -5121,7 +5099,7 @@ snapshots:
 
   '@types/ws@8.18.2':
     dependencies:
-      '@types/node': 24.19.1
+      '@types/node': 26.6.3
 
   '@typescript-eslint/eslint-plugin@8.70.1(@typescript-eslint/parser@8.70.1(eslint@10.11.0(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3))(eslint@10.11.0(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3)':
     dependencies:
@@ -5433,7 +5411,7 @@ snapshots:
 
   buffer-image-size@0.6.4:
     dependencies:
-      '@types/node': 24.19.1
+      '@types/node': 26.6.3
 
   bundle-name@4.1.1:
     dependencies:
@@ -5811,7 +5789,7 @@ snapshots:
 
   happy-dom@20.14.5:
     dependencies:
-      '@types/node': 24.19.1
+      '@types/node': 26.6.3
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.2
       buffer-image-size: 0.6.4

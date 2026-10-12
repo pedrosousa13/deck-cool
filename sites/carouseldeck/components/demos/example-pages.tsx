@@ -1,10 +1,10 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
 // Three slides to a page from 640px, so Next moves a page and the dots count
-// pages: styles/slidedeck.css.
+// pages: styles/carouseldeck.css.
 export default function Pages() {
   return (
     <DemoFrame>

@@ -1,6 +1,6 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 
 const SLIDES = [
   { name: "Momentum", line: "The browser's own." },
@@ -11,7 +11,7 @@ const SLIDES = [
 
 /**
  * The home page's one deck, rendered once per skin. It carries no class of
- * its own: each skin styles it through slidedeck's part names alone.
+ * its own: each skin styles it through carouseldeck's part names alone.
  */
 export default function SkinDeck({ label }: { label: string }) {
   return (

@@ -1,4 +1,4 @@
-import { comparison, fence, readSlidedeckReadme, SLIDEDECK } from "@deck-cool/site-kit/slidedeck-readme";
+import { CAROUSELDECK, comparison, fence, readCarouseldeckRelease } from "@deck-cool/site-kit/carouseldeck-readme";
 import { expect, test } from "vitest";
 import { minorOf } from "./facts.ts";
 
@@ -14,11 +14,11 @@ test("refuses a prerelease or anything but MAJOR.MINOR.PATCH, rather than cuttin
 });
 
 // The shape, not the values: a release may compare against other libraries.
-test("the installed package's README parses, with slidedeck's row in it", () => {
-  const real = readSlidedeckReadme(new URL("../", import.meta.url));
+test("the release's README parses, with carouseldeck's row in it", () => {
+  const real = readCarouseldeckRelease(new URL("../", import.meta.url)).readme;
   const rows = comparison(real);
-  expect(rows.some((row) => row.library === SLIDEDECK)).toBe(true);
+  expect(rows.some((row) => row.library === CAROUSELDECK)).toBe(true);
   for (const row of rows) expect(row.size).toMatch(/^\d+(\.\d+)? (B|KB|kB|MB)$/);
   expect(fence(real, "Quickstart")).toMatch(/<Deck\.Root aria-label=/);
-  expect(fence(real, "Install")).toBe("pnpm add @slidedeck/react");
+  expect(fence(real, "Install")).toBe("pnpm add @carouseldeck/react");
 });

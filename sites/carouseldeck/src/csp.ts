@@ -1,14 +1,14 @@
 import type { HeaderField } from "@pagedeck/core";
 
 /**
- * The <style> elements @slidedeck/react 1.0.3 renders with a deck, by the
+ * The <style> elements @carouseldeck/react renders with a deck, by the
  * `data-href` React dedupes them by: its base rules, alone or with an
  * effect's. site.build.test.ts fails on a page with a <style> not listed here.
  */
 export const DECK_STYLE_HASHES = {
-  "slidedeck-slide": "'sha256-27tsD7IAHNKKdm97Pb+mN7y8p4RrpTyHv2pd5Yv6b3Y='",
-  "slidedeck-slide slidedeck-curve": "'sha256-o8ClCv6cXWCQ58PwZTnPP04Xjm2bM5ffe8Uen8FNPEU='",
-  "slidedeck-slide slidedeck-fade": "'sha256-B3wFKR5JG1hSJjhJ6p5f3MXQcfrk0DrGO5FA9WGHPbs='",
+  "carouseldeck-slide": "'sha256-efzwvZmUtB7UorQn5xz/0EgItWc7phHDDpPgvPHVlRk='",
+  "carouseldeck-slide carouseldeck-curve": "'sha256-q6AR/0kmiKYW8wAk4LsPXy4kb6+fXxnH4OwjhABc7Tc='",
+  "carouseldeck-slide carouseldeck-fade": "'sha256-8fG7JnAdd1Nig8aeq9f3GFf6jVf3Q8oF+tNU01J9whM='",
 } as const;
 
 /**
@@ -16,7 +16,7 @@ export const DECK_STYLE_HASHES = {
  * everything else is refused. Stylesheets come from the site too, and the only
  * inline <style> elements allowed are the decks', by their hashes.
  *
- * Inline style attributes are allowed: slidedeck ships no CSS, so a deck's
+ * Inline style attributes are allowed: carouseldeck ships no CSS, so a deck's
  * scroll snapping and each slide's position are style attributes on its
  * server-rendered markup; Pagedeck renders each island's wrapper with one;
  * and Shiki colours each token of highlighted code with an inline `color`

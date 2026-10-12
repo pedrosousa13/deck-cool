@@ -7,10 +7,10 @@ export default defineConfig({
     // read the one build of it.
     globalSetup: [
       "packages/site-kit/src/load-warning.ts",
+      "sites/carouseldeck/src/build.global-setup.ts",
       "sites/deck-cool/src/build.global-setup.ts",
       "sites/pagedeck/src/build.global-setup.ts",
       "sites/playdeck/src/build.global-setup.ts",
-      "sites/slidedeck/src/build.global-setup.ts",
     ],
   },
 });

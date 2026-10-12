@@ -1,10 +1,10 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
 // Three slides in view, centred, so the focal slide is the middle one; a
-// click brings a slide there. styles/slidedeck.css outlines `[data-focal]`.
+// click brings a slide there. styles/carouseldeck.css outlines `[data-focal]`.
 export default function FocalSlide() {
   return (
     <DemoFrame>

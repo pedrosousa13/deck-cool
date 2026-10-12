@@ -1,6 +1,6 @@
 // What a page tells search engines and share cards, all from the page itself:
 // its title, and the `description` in its frontmatter. A docs page's comes
-// from @slidedeck/docs.
+// from @carouseldeck/docs.
 
 import { getEntry, type Collection, type ContentStoreReader } from "@pagedeck/content";
 import type { JsonLdNode, Page, PageHead, SocialImageInputs } from "@pagedeck/core";
@@ -13,7 +13,7 @@ import { REPOSITORY } from "../components/links.ts";
  * og:url and sitemap entry names it, whichever host serves a build, so a
  * preview never claims to be the page.
  */
-export const SITE_ORIGIN = "https://slide.deck.cool";
+export const SITE_ORIGIN = "https://carousel.deck.cool";
 
 interface Described {
   title: string;
@@ -31,7 +31,7 @@ function describe(
   if (page.entry === undefined) return undefined;
   if (page.collection === docs.name) {
     const doc = getEntry(store, docs, page.entry)?.data;
-    return doc === undefined ? undefined : { title: doc.title, tabTitle: `${doc.title} · slidedeck docs`, description: doc.description };
+    return doc === undefined ? undefined : { title: doc.title, tabTitle: `${doc.title} · carouseldeck docs`, description: doc.description };
   }
   if (page.collection !== pages.name) return undefined;
   const entry = getEntry(store, pages, page.entry)?.data;
@@ -47,7 +47,7 @@ function sourceCode(description: string | undefined): JsonLdNode {
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareSourceCode",
-    name: "slidedeck",
+    name: "carouseldeck",
     ...(description === undefined ? {} : { description }),
     url: url("/"),
     codeRepository: REPOSITORY,

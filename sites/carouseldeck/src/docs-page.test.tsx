@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import DocsPage from "../components/docs-page.tsx";
 
-// The docs layout #51 renders slidedeck's docs package into, given what
+// The docs layout #51 renders carouseldeck's docs package into, given what
 // @deck-cool/docs hands a layout.
 
 const nav: NavGroup[] = [
@@ -21,7 +21,7 @@ const nav: NavGroup[] = [
 function render(href: string): DocumentFragment {
   const template = document.createElement("template");
   template.innerHTML = renderToStaticMarkup(
-    <DocsPage title="Install" description="How to install slidedeck." href={href} nav={nav}>
+    <DocsPage title="Install" description="How to install carouseldeck." href={href} nav={nav}>
       <p>The page's prose.</p>
     </DocsPage>,
   );

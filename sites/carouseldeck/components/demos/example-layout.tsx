@@ -1,9 +1,9 @@
 "use client";
 
-import * as Deck from "@slidedeck/react";
+import * as Deck from "@carouseldeck/react";
 import DemoFrame from "./demo-frame.tsx";
 
-// Two and a half slides in view, a 16px gap, centred: styles/slidedeck.css.
+// Two and a half slides in view, a 16px gap, centred: styles/carouseldeck.css.
 export default function Layout() {
   return (
     <DemoFrame>

@@ -1,4 +1,4 @@
-.soft :has(> [data-slidedeck-viewport]) {
+.soft :has(> [data-carouseldeck-viewport]) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -9,16 +9,16 @@
   color: #3b2a4d;
   font-family: ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
 }
-.soft [data-slidedeck-viewport] {
+.soft [data-carouseldeck-viewport] {
   flex: 0 0 100%;
   gap: 12px;
   border-radius: 24px;
 }
-.soft [data-slidedeck-slide] {
+.soft [data-carouseldeck-slide] {
   width: 82%;
   scroll-snap-align: center;
 }
-.soft [data-slidedeck-slide] > div {
+.soft [data-carouseldeck-slide] > div {
   display: grid;
   align-content: center;
   gap: 4px;
@@ -27,15 +27,15 @@
   border-radius: 24px;
   background: #fff;
 }
-.soft [data-slidedeck-slide] strong {
+.soft [data-carouseldeck-slide] strong {
   font-size: 26px;
   line-height: 1.1;
 }
-.soft [data-slidedeck-slide] span {
+.soft [data-carouseldeck-slide] span {
   color: #6a5880;
 }
-.soft [data-slidedeck-prev],
-.soft [data-slidedeck-next] {
+.soft [data-carouseldeck-prev],
+.soft [data-carouseldeck-next] {
   min-height: 44px;
   padding: 0 18px;
   border: 0;
@@ -46,15 +46,15 @@
   font-weight: 600;
   cursor: pointer;
 }
-.soft [data-slidedeck-prev]:disabled,
-.soft [data-slidedeck-next]:disabled {
+.soft [data-carouseldeck-prev]:disabled,
+.soft [data-carouseldeck-next]:disabled {
   opacity: .35;
   cursor: default;
 }
-.soft [data-slidedeck-dots] {
+.soft [data-carouseldeck-dots] {
   display: flex;
 }
-.soft [data-slidedeck-dots] button {
+.soft [data-carouseldeck-dots] button {
   display: grid;
   place-items: center;
   width: 24px;
@@ -64,17 +64,17 @@
   background: none;
   cursor: pointer;
 }
-.soft [data-slidedeck-dots] button::before {
+.soft [data-carouseldeck-dots] button::before {
   content: "";
   width: 0;
   border: 4px solid #8a76a8;
   border-radius: 999px;
 }
-.soft [data-slidedeck-dots] [aria-current="true"]::before {
+.soft [data-carouseldeck-dots] [aria-current="true"]::before {
   width: 10px;
   border-color: #3b2a4d;
 }
-.soft [data-slidedeck-counter] {
+.soft [data-carouseldeck-counter] {
   margin-left: auto;
   font-weight: 600;
   font-variant-numeric: tabular-nums;

@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { lines, loadFont, socialCard } from "./social-card.ts";
 
 test("breaks a headline between words, each line within the card's width", () => {
-  const headline = "slidedeck: a React carousel built on native scroll snap";
+  const headline = "carouseldeck: a React carousel built on native scroll snap";
   const broken = lines(headline, 64, 1056);
   expect(broken.join(" ")).toBe(headline);
   for (const line of broken) expect(line.length * 64 * 0.6).toBeLessThanOrEqual(1056);
@@ -10,7 +10,7 @@ test("breaks a headline between words, each line within the card's width", () =>
 });
 
 test("draws a 1200 by 630 PNG, from the headline or else the title", async () => {
-  const card = socialCard("https://slide.deck.cool");
+  const card = socialCard("https://carousel.deck.cool");
   const page = {} as Parameters<typeof card.draw>[0]["page"];
   const drawn = await card.draw({ page, title: "A title", inputs: {} });
   expect([drawn.width, drawn.height]).toEqual([1200, 630]);

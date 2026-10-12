@@ -1,5 +1,5 @@
 // The social card each page shares with: a 1200 by 630 PNG on the brand's
-// dark ground, with slidedeck's icon, drawn by build.socialImages. satori lays
+// dark ground, with carouseldeck's icon, drawn by build.socialImages. satori lays
 // the card out as an SVG, and resvg paints it.
 //
 // The site sets its text in the system SF stack, which a build machine may
@@ -38,7 +38,7 @@ export function loadFont(file: string | URL): Buffer {
   }
 }
 
-const ICON = readFileSync(new URL("../node_modules/@deck-cool/brand/public/icons/slidedeck/still.svg", import.meta.url));
+const ICON = readFileSync(new URL("../node_modules/@deck-cool/brand/public/icons/carouseldeck/still.svg", import.meta.url));
 
 /**
  * The headline's lines, broken between words. A glyph is taken as 0.6em
@@ -83,7 +83,7 @@ function card(headline: string, host: string): Node {
           type: "img",
           props: { src: `data:image/svg+xml;base64,${ICON.toString("base64")}`, width: 72, height: 72 },
         },
-        box({ fontSize: 40, letterSpacing: "-0.02em" }, "slidedeck"),
+        box({ fontSize: 40, letterSpacing: "-0.02em" }, "carouseldeck"),
       ]),
       box(
         { flexDirection: "column", fontSize, lineHeight: 1.1, letterSpacing: "-0.025em" },
@@ -99,7 +99,7 @@ export function socialCard(origin: string): SocialImageAdapter {
   const host = new URL(origin).host;
   const fonts = [{ name: "Inter", weight: 600 as const, style: "normal" as const, data: loadFont(FONT_FILE) }];
   return {
-    name: "slidedeck social card",
+    name: "carouseldeck social card",
     async draw({ inputs, title }) {
       const headline = typeof inputs["headline"] === "string" ? inputs["headline"] : title;
       if (headline === undefined) throw new Error("Social card: the page has no headline to draw.");

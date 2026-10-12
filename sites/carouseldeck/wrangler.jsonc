@@ -1,13 +1,13 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   // Workers Static Assets, no Worker code. Runbook: docs/deploy.md.
-  "name": "slidedeck",
+  "name": "carouseldeck",
   // Not a secret: an account ID grants nothing without a token.
   "account_id": "c0bf36f52ec4652dabdacd6538b54983",
   "compatibility_date": "2026-10-01",
-  // One address: slide.deck.cool, and no workers.dev one.
+  // One address: carousel.deck.cool, and no workers.dev one.
   "workers_dev": false,
-  "routes": [{ "pattern": "slide.deck.cool", "custom_domain": true }],
+  "routes": [{ "pattern": "carousel.deck.cool", "custom_domain": true }],
   "assets": {
     "directory": "./site",
     "html_handling": "auto-trailing-slash",

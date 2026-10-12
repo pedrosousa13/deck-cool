@@ -85,7 +85,7 @@ export default function ExamplesPage() {
       <section className="examples-intro">
         <h1>Examples</h1>
         <p>
-          Real decks, built only on slidedeck’s public API and plain CSS. Each
+          Real decks, built only on carouseldeck’s public API and plain CSS. Each
           one is live: drag it, swipe it, or use the keyboard.
         </p>
       </section>
