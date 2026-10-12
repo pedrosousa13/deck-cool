@@ -2,8 +2,8 @@ import type { LiveSite } from "@deck-cool/site-kit/live-check";
 import { ORIGIN } from "../components/links.ts";
 import { RESPONSE_HEADERS } from "./headers.ts";
 
-/** Every page, each of which names its own path on play.deck.cool as canonical. */
-const PAGES = ["/", "/examples/", "/guides/comparison/", "/docs/search/"];
+/** The site's own pages, and three docs pages: the first, the one with the demos and the comparison guide. Each names its own path on play.deck.cool as canonical. */
+const PAGES = ["/", "/examples/", "/docs/search/", "/docs/start/", "/docs/examples/", "/docs/guides/comparison/"];
 
 /** Fails a page whose canonical link is not its own path on play.deck.cool, playdeck's canonical address (GLOSSARY.md). */
 export function checkCanonical(path: string, body: string): string[] {

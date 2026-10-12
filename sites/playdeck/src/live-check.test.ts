@@ -19,6 +19,10 @@ test("the build, served with its _headers, passes every check but the ones only 
   }
 });
 
+test("fetches the docs' first page, the one with the demos, and the comparison guide", () => {
+  expect(LIVE_SITE.served).toEqual(expect.arrayContaining(["/docs/start/", "/docs/examples/", "/docs/guides/comparison/"]));
+});
+
 test("a page whose canonical link is its own path on play.deck.cool passes", () => {
   expect(checkCanonical("/examples/", '<link rel="canonical" href="https://play.deck.cool/examples/">')).toEqual([]);
 });

@@ -1,10 +1,7 @@
-"use client";
-
 // Ported from pedrosousa13/playdeck's examples/archetype-course-platform.tsx at
-// cf72813. Two changes: its stylesheet moved out of an inline <style> into
+// cf72813. One change: its stylesheet moved out of an inline <style> into
 // styles/archetype-course-platform.css, because the site's CSP takes styles from the
-// site alone, and the module is an island, with the player as its default
-// export.
+// site alone. The island is components/demos/course-platform.tsx.
 import * as Player from '@playdeck/react';
 import {
   useEffect,
@@ -546,4 +543,3 @@ export const CoursePlatformSurface = ({
   );
 };
 
-export default CoursePlatformPlayer;

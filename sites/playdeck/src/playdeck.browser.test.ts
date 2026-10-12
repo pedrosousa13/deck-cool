@@ -5,6 +5,8 @@ import { describe, expect, test } from "vitest";
 import { browserHarness, islandsHydrated } from "@deck-cool/site-kit/browser-test";
 import { PATHS } from "../components/links.ts";
 import { MEDIA_ORIGINS } from "./csp.ts";
+import { DEMOS } from "./demos.ts";
+import { DOCS_NAV } from "./docs-pages.ts";
 import { RESPONSE_HEADERS } from "./headers.ts";
 
 // Drives the built site (build.global-setup.ts) in Chromium, served with the
@@ -14,7 +16,8 @@ import { RESPONSE_HEADERS } from "./headers.ts";
 const site = browserHarness(fileURLToPath(new URL("..", import.meta.url)));
 const { visit } = site;
 
-const PAGES = [PATHS.home, PATHS.examples, PATHS.comparison, PATHS.search];
+// The docs pages, one with a demo and one without, and the comparison guide, as site.build.test.ts covers them.
+const PAGES = [PATHS.home, PATHS.examples, PATHS.search, "/docs/examples/", "/docs/start/", PATHS.comparison];
 
 describe("the playdeck site in a browser", () => {
   test.each(PAGES)("%s is served with every header the build writes", async (path) => {
@@ -200,9 +203,13 @@ describe("the playdeck site in a browser", () => {
   });
 
   const SINTEL = "/durian/trailer/sintel_trailer-720p.mp4";
+  const BUNNY = "/peach/trailer/trailer_iphone.m4v";
+  // The docs' two demos are the same two players, on /docs/examples/.
   describe.each([
     { name: "streaming service", path: PATHS.examples, scope: "main", press: "Play from the beginning", clip: SINTEL },
-    { name: "course platform", path: PATHS.examples, scope: "main", press: "Start the lesson", clip: "/peach/trailer/trailer_iphone.m4v" },
+    { name: "course platform", path: PATHS.examples, scope: "main", press: "Start the lesson", clip: BUNNY },
+    { name: "docs' streaming service", path: "/docs/examples/", scope: "article", press: "Play from the beginning", clip: SINTEL },
+    { name: "docs' course platform", path: "/docs/examples/", scope: "article", press: "Start the lesson", clip: BUNNY },
   ])("the $name player", ({ path, scope, press, clip }) => {
     test("requests nothing off the origin, and loads no provider, until it is pressed; then plays its clip under the CSP", async () => {
       const { page, offOrigin, scripts, violations, errors } = await visit(path, { width: 1280 });
@@ -230,6 +237,21 @@ describe("the playdeck site in a browser", () => {
       // The request is aborted, so the player reports a media error, not a script one.
       expect(errors).toEqual([]);
     });
+  });
+
+  // The docs' tables and blocks are as wide as their content, so every page is checked, not two.
+  test("at 390px, no docs page scrolls sideways", { timeout: 120_000 }, async () => {
+    const wide: string[] = [];
+    for (const { path } of DOCS_NAV) {
+      const { page } = await visit(path, { width: 390 });
+      if ((await page.evaluate(() => document.documentElement.scrollWidth)) > 390) wide.push(path);
+    }
+    expect(wide).toEqual([]);
+  });
+
+  test("the docs pages visited above carry every demo the site registers", () => {
+    const visited = DOCS_NAV.filter(({ path }) => PAGES.includes(path));
+    expect(visited.flatMap(({ demos }) => demos).sort()).toEqual(Object.keys(DEMOS).sort());
   });
 
   test("the docs' search finds a page, and follows it", async () => {

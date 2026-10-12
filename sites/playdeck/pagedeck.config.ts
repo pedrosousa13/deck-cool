@@ -1,14 +1,12 @@
 import { cloudflarePages } from "@pagedeck/adapter-cloudflare-pages";
-import { defineCollection, getEntry } from "@pagedeck/content";
-import type { ContentStoreReader, Entry } from "@pagedeck/content";
-import { defineConfig, defineLocales, definePages, fromCollection } from "@pagedeck/core";
-import type { Page, PageContent, PageHead, PageSource, Route } from "@pagedeck/core";
-import { defineMarkdownLoader } from "@pagedeck/markdown-loader";
-import type { MarkdownEntry } from "@pagedeck/markdown-loader";
+import { listEntries } from "@pagedeck/content";
+import type { ContentStoreReader } from "@pagedeck/content";
+import { defineConfig, defineLocales, definePages } from "@pagedeck/core";
+import type { EntryNode, Page, PageContent, PageHead, PageSource, Route } from "@pagedeck/core";
 import { defineSearch } from "@pagedeck/search";
 import { cpSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { codeToHtml } from "shiki";
-import type { DocsLayoutProps } from "@deck-cool/docs";
+import { defineDocs } from "@deck-cool/docs";
 import { HASHED_FILE_HEADERS } from "@deck-cool/site-kit/headers";
 import type { SourceFile } from "./components/examples-page.tsx";
 import { DOCS, ORIGIN, PATHS, REPO } from "./components/links.ts";
@@ -26,7 +24,8 @@ import {
   STREAMING_SERVICE,
 } from "./src/catalog.ts";
 import { playdeckChunkNames } from "./src/chunk-names.ts";
-import { iconizeFeaturesTable, scrollTables, stageComparison } from "./src/comparison.ts";
+import { DEMOS } from "./src/demos.ts";
+import { docsProse } from "./src/docs-prose.ts";
 import { HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
 import { CODE_THEME } from "./src/code-theme.ts";
 import { SKINS, skins } from "./src/skins.ts";
@@ -62,8 +61,6 @@ const EXAMPLES = {
   title: "Examples — Playdeck",
   description:
     "Two players composed from playdeck's primitives for two different jobs, a streaming service and a course platform, each beside the files it is made of.",
-  // Served from public/, as playdeck.video serves it.
-  captions: "/archetype-captions.vtt",
 } as const;
 
 /** Each archetype's files, as the examples page prints them. */
@@ -72,12 +69,7 @@ const ARCHETYPES = {
   course: ["components/archetype-course-platform.tsx", "styles/archetype-course-platform.css"],
 } as const;
 
-const COMPARISON = {
-  description:
-    "How Playdeck compares with other React video libraries: bundle sizes measured with two bundlers, a sourced feature table, and the method behind both.",
-} as const;
-
-// The docs' search page, under /docs. #52 adds the docs it searches.
+// The docs' search page, under /docs.
 const SEARCH_COPY = {
   title: "Search",
   description:
@@ -96,6 +88,9 @@ const BAR_LINKS = [
   { label: "GitHub", href: REPO },
 ];
 
+/** The docs pages that mark a demo, in @playdeck/docs 1.3.0. */
+const DOCS_DEMO_PAGES = ["/docs/examples/"];
+
 // Measured, not chosen: each is the page's size rounded up to a whole
 // kilobyte. Re-measure rather than raise one. The home page's counts its eager
 // chunks only, not the chunks its players load when they come into view; the
@@ -105,7 +100,14 @@ const BUDGET = {
   [PATHS.home]: "59kb",
   [PATHS.examples]: "89kb",
   [PATHS.search]: "60kb",
-} as const;
+  // A docs page with no demo ships nothing: search is a page of its own.
+  "/docs/**": "0b",
+  // A docs page with demos ships playdeck and its demos. Budget globs cannot
+  // pick out the pages with a demo, so each is listed. They share one budget,
+  // the largest one's, so a release that moves or adds a demo among these pages
+  // still builds; a demo on another page needs it listed.
+  ...Object.fromEntries(DOCS_DEMO_PAGES.map((path) => [path, "85kb"])),
+};
 
 /**
  * One directory to publish from: the brand kit's icons and .assetsignore, then
@@ -119,15 +121,15 @@ function stagePublic(): string {
   return stage;
 }
 
-const comparison = defineCollection<MarkdownEntry>({
-  name: "comparison",
-  loader: defineMarkdownLoader({
-    root: stageComparison("./comparison", "./.pagedeck-comparison"),
-    locale: LOCALE,
-    languages: ["sh"],
-    theme: CODE_THEME,
-  }),
-  schema: false,
+// playdeck's docs, from the @playdeck/docs this site pins, under /docs.
+const docs = defineDocs({
+  from: import.meta.url,
+  package: "@playdeck/docs",
+  base: "/docs",
+  layout: DOCS_PAGE,
+  demos: DEMOS,
+  languages: ["css", "sh", "ts", "tsx"],
+  theme: CODE_THEME,
 });
 
 /** A page with no entry behind it, at `route`. `instances` annotates its parameter, which would otherwise infer as `unknown`. */
@@ -184,27 +186,24 @@ async function examplesContent(): Promise<PageContent> {
         component: EXAMPLES_PAGE,
         props: { streaming: await sources(ARCHETYPES.streaming), course: await sources(ARCHETYPES.course) },
         children: [
-          { component: STREAMING_SERVICE, props: { captionsSrc: EXAMPLES.captions, resumeAt: 18 } },
-          { component: COURSE_PLATFORM, props: { captionsSrc: EXAMPLES.captions, resumeAt: 14 } },
+          { component: STREAMING_SERVICE },
+          { component: COURSE_PLATFORM },
         ],
       },
     ],
   };
 }
 
-function comparisonContent(page: Page, store: ContentStoreReader): PageContent {
-  const entry: Entry<MarkdownEntry> | undefined = page.entry === undefined ? undefined : getEntry(store, comparison, page.entry);
-  if (entry === undefined) {
-    throw new Error(`Page ${page.path}: has no stored entry — run pagedeck sync before pagedeck build`);
-  }
-  const title = entry.data.title ?? "";
-  // The guide's own h1 is the layout's, so the body starts after it.
-  const body = entry.data.html.replace(/^\s*<h1[^>]*>[\s\S]*?<\/h1>/, "");
-  // No nav until #52 brings the docs' nav.json.
-  const props: DocsLayoutProps = { title, description: COMPARISON.description, href: page.path, nav: [] };
-  return {
-    tree: [{ component: DOCS_PAGE, props, children: [{ component: PROSE, props: { html: scrollTables(iconizeFeaturesTable(body)) } }] }],
-  };
+/** A docs page, its prose with what this site adds to it (src/docs-prose.ts). */
+function docsContent(page: Page, store: ContentStoreReader): PageContent {
+  const [layout] = docs.content(page, store).tree ?? [];
+  if (layout === undefined) return { tree: [] };
+  const children = (layout.children ?? []).map((node): EntryNode => {
+    const html = node.props?.["html"];
+    if (typeof html !== "string") return node;
+    return { component: PROSE, props: { html: docsProse(html, { comparison: page.path === PATHS.comparison }) } };
+  });
+  return { tree: [{ ...layout, children }] };
 }
 
 function contentOf(page: Page, store: ContentStoreReader): PageContent | Promise<PageContent> {
@@ -215,8 +214,7 @@ function contentOf(page: Page, store: ContentStoreReader): PageContent | Promise
       tree: [
         {
           component: SEARCH_PAGE,
-          // No docs yet, so no nav: #52 passes the docs' nav.json here.
-          props: { title: SEARCH_COPY.title, intro: SEARCH_COPY.intro, nav: [] },
+          props: { title: SEARCH_COPY.title, intro: SEARCH_COPY.intro, nav: listEntries(store, docs.collection)[0]?.data.nav ?? [] },
           children: [
             { component: SEARCH, props: { locale: LOCALE, label: SEARCH_COPY.label, emptyLabel: SEARCH_COPY.emptyLabel } },
           ],
@@ -224,19 +222,19 @@ function contentOf(page: Page, store: ContentStoreReader): PageContent | Promise
       ],
     };
   }
-  return comparisonContent(page, store);
+  return docsContent(page, store);
 }
 
 function headOf(page: Page): PageHead | undefined {
   if (page.path === PATHS.home) return { title: HOME.title, description: HOME.description };
   if (page.path === PATHS.examples) return { title: EXAMPLES.title, description: EXAMPLES.description };
   if (page.path === PATHS.search) return { title: SEARCH_COPY.title, description: SEARCH_COPY.description };
-  // The comparison guide's title and description are the docs layout's.
+  // A docs page's title and description are the docs layout's.
   return undefined;
 }
 
 export default defineConfig({
-  collections: [comparison],
+  collections: [docs.collection],
   build: {
     adapter: cloudflarePages(),
     // Every page names its own path here as canonical: play.deck.cool is
@@ -245,13 +243,13 @@ export default defineConfig({
     pages: definePages({
       locales: defineLocales({ en: { label: "English", direction: "ltr" } }),
       sources: [
-        fromCollection(comparison, { route: (entry) => entry.path.split("/") }),
+        docs.pages,
         ...[PATHS.home, PATHS.examples, PATHS.search].map((path) =>
           singlePage(path === "/" ? "/" : path.slice(1, -1).split("/")),
         ),
       ],
     }),
-    components,
+    components: { ...components, ...docs.components },
     content: contentOf,
     head: headOf,
     // The Family bar before <main> and the footer after it, so they are the
@@ -274,8 +272,11 @@ export default defineConfig({
       "./styles/archetype-course-platform.css",
       ...SKINS.map((skin) => `./${skin.file}`),
     ].map((sheet) => realpathSync(sheet)),
-    passthrough: { root: stagePublic() },
+    // The brand's icons and the site's own files; and the docs' images.
+    passthrough: { root: stagePublic(), contentRoot: docs.contentRoot },
     routing: {
+      // The docs have no index.md, so /docs/ goes to their first page.
+      redirects: [{ from: "/docs/", to: DOCS.start, status: 301 }],
       headers: [
         { prefix: "/", set: [...RESPONSE_HEADERS] },
         ...HASHED_PREFIXES.map((prefix) => ({ prefix, set: [...RESPONSE_HEADERS, ...HASHED_FILE_HEADERS] })),

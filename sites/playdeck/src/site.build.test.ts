@@ -1,6 +1,6 @@
 import { Window, type Document, type Element } from "happy-dom";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { playdeck, umbrella } from "@deck-cool/brand/decks";
@@ -8,6 +8,8 @@ import { everyResponse, isRecord, present, readManifest, text } from "@deck-cool
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { DOCS, PATHS, REPO } from "../components/links.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
+import { DEMOS } from "./demos.ts";
+import { DOCS_NAV } from "./docs-pages.ts";
 import { SKINS } from "./skins.ts";
 
 // Reads the build that build.global-setup.ts writes.
@@ -57,10 +59,16 @@ function hrefs(scope: Element | Document): (string | null)[] {
   return [...scope.querySelectorAll("a")].map((a) => a.getAttribute("href"));
 }
 
-const PAGES = [PATHS.home, PATHS.examples, PATHS.comparison, PATHS.search];
+/** The site's own pages. */
+const OWN_PAGES = [PATHS.home, PATHS.examples, PATHS.search];
 
-test("the site is the home page, the examples, the comparison guide and the docs' search page", () => {
-  expect(manifest.pages.map((page) => page.path).sort()).toEqual([...PAGES].sort());
+/** Two docs pages, one with a demo and one without, and the comparison guide, which the tests of every page cover too. */
+const DOCS_PAGES = ["/docs/examples/", "/docs/start/", PATHS.comparison];
+
+const PAGES = [...OWN_PAGES, ...DOCS_PAGES];
+
+test("the site is the home page, the examples, the docs' search page and every page in the docs' nav.json", () => {
+  expect(manifest.pages.map((page) => page.path).sort()).toEqual([...OWN_PAGES, ...DOCS_NAV.map(({ path }) => path)].sort());
 });
 
 describe("the package", () => {
@@ -101,8 +109,10 @@ describe("budgets, measured and pinned", () => {
   const PINNED: Record<string, string> = {
     [PATHS.home]: "59kb",
     [PATHS.examples]: "89kb",
-    [PATHS.comparison]: "0b",
     [PATHS.search]: "60kb",
+    "/docs/examples/": "85kb",
+    "/docs/start/": "0b",
+    [PATHS.comparison]: "0b",
   };
 
   test("every page has its pinned limit, and stays within it", () => {
@@ -120,18 +130,40 @@ describe("budgets, measured and pinned", () => {
     }
   });
 
-  test("the comparison guide ships 0 B of JavaScript, and no script at all", () => {
-    expect(budget.find((row) => row.path === PATHS.comparison)?.actual).toBe(0);
-    expect(parse(PATHS.comparison).querySelectorAll("script, link[rel=modulepreload]")).toHaveLength(0);
+  // The layout has no search island: search is a page of its own.
+  test("every docs page with no demo, the comparison guide among them, ships 0 B of JavaScript, and no script at all", () => {
+    const plain = DOCS_NAV.filter(({ demos }) => demos.length === 0);
+    expect(plain.map(({ path }) => path)).toContain(PATHS.comparison);
+    for (const { path } of plain) {
+      expect(budget.find((row) => row.path === path)?.actual, path).toBe(0);
+      expect(parse(path).querySelectorAll("script, link[rel=modulepreload]"), path).toHaveLength(0);
+    }
+  });
+
+  // So a docs release that moves a demo to another page still builds.
+  test("the docs pages with demos share one budget, which the largest of them fills to within a KB", () => {
+    const rows = DOCS_NAV.filter(({ demos }) => demos.length > 0).map(({ path }) =>
+      present(
+        budget.find((row) => row.path === path),
+        `the budget row for ${path}`,
+      ),
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    expect(new Set(rows.map((row) => row.limitText)).size).toBe(1);
+    const limit = Number.parseInt(rows[0]?.limitText ?? "", 10) * 1024;
+    const largest = Math.max(...rows.map((row) => row.actual));
+    expect(limit - largest).toBeGreaterThanOrEqual(0);
+    expect(limit - largest).toBeLessThan(1024);
   });
 
   test("each page with islands carries only its own", () => {
     const islands = Object.fromEntries(manifest.pages.map((page) => [page.path, [...page.components].sort()]));
     expect(islands).toEqual({
       [PATHS.home]: ["skin_player"],
-      [PATHS.examples]: ["course_platform", "streaming_service"],
-      [PATHS.comparison]: [],
+      // The docs' two demos, which are the two archetypes.
+      [PATHS.examples]: ["docsDemo:course-platform", "docsDemo:streaming-service"],
       [PATHS.search]: ["search"],
+      ...Object.fromEntries(DOCS_NAV.map(({ path, demos }) => [path, demos.map((name) => `docsDemo:${name}`).sort()])),
     });
   });
 });
@@ -179,6 +211,13 @@ describe("every page", () => {
       ["Search", PATHS.search],
       ["GitHub", REPO],
     ]);
+  });
+
+  // The docs are this site's own now, so nothing links playdeck.video's.
+  test.each(PAGES)("%s's Family bar links the docs and the comparison guide under /docs", (path) => {
+    const bar = present(parse(path).querySelector("header.family-bar"), "the Family bar");
+    expect(hrefs(bar)).toEqual(expect.arrayContaining(["/docs/start/", "/docs/guides/comparison/"]));
+    expect(hrefs(parse(path)).filter((href) => /playdeck\.video/.test(href ?? ""))).toEqual([]);
   });
 
   // GLOSSARY.md: a package site links its own deck's repo, never the maintainer's profile.
@@ -631,8 +670,11 @@ describe("the examples page", () => {
   });
 
   test("renders each player dormant, on the server, inside its own section", () => {
-    const streaming = present(main().querySelector('#streaming-service ~ .pd-stage [data-fw-component="streaming_service"]'), "the streaming player");
-    const course = present(main().querySelector('#course-platform ~ .pd-stage [data-fw-component="course_platform"]'), "the course player");
+    const streaming = present(
+      main().querySelector('#streaming-service ~ .pd-stage [data-fw-component="docsDemo:streaming-service"]'),
+      "the streaming player",
+    );
+    const course = present(main().querySelector('#course-platform ~ .pd-stage [data-fw-component="docsDemo:course-platform"]'), "the course player");
     expect(streaming.querySelector('button[aria-label="Play from the beginning"]')).not.toBeNull();
     expect(streaming.querySelector('button[aria-label="Resume from 0:18"]')).not.toBeNull();
     expect(course.querySelector('button[aria-label="Start the lesson"]')).not.toBeNull();
@@ -659,16 +701,19 @@ describe("the examples page", () => {
 describe("the comparison guide", () => {
   const doc = () => parse(PATHS.comparison);
   const prose = () => present(doc().querySelector("main .pd-docs .pd-doc .pd-prose"), "the guide's prose");
-  const SOURCES = fileURLToPath(new URL("../comparison/", import.meta.url));
+  const SOURCE = readFileSync(`${SITE}node_modules/@playdeck/docs/guides/comparison.md`, "utf8");
+  /** The rows of the table under the markdown heading `heading`, its delimiter row among them. */
+  const tableRows = (heading: string) => {
+    const section = SOURCE.slice(SOURCE.indexOf(`## ${heading}\n`));
+    return section.slice(0, section.indexOf("\n## ", 1)).split("\n").filter((line) => line.startsWith("| ")).length;
+  };
 
   test("is headed as playdeck's guide, under the docs layout", () => {
     expect(doc().title).toBe("React video library comparison");
     expect([...doc().querySelectorAll("main h1")].map(text)).toEqual(["React video library comparison"]);
   });
 
-  test("renders the three documents in order, each anchored and headed one level down", () => {
-    const anchors = [...prose().querySelectorAll("a[id]:not([href])")].map((a) => a.id);
-    expect(anchors).toEqual(["comparison-results", "comparison-features", "comparison-method"]);
+  test("renders the guide's three parts in order, each an h2", () => {
     expect([...prose().querySelectorAll("h2")].map(text)).toEqual([
       "React video library comparison: measured figures",
       "React video library comparison: features",
@@ -676,18 +721,16 @@ describe("the comparison guide", () => {
     ]);
   });
 
-  test("the results table is results.md's, row for row", () => {
+  test("the results table is the guide's, row for row", () => {
     // The header and each body row; the delimiter row draws none.
-    const rows = readFileSync(`${SOURCES}results.md`, "utf8").split("\n").filter((line) => line.startsWith("| ")).length - 1;
     const table = present(prose().querySelector('[aria-label="React video library comparison: measured figures"] table'), "the results table");
-    expect(table.querySelectorAll("tr")).toHaveLength(rows);
+    expect(table.querySelectorAll("tr")).toHaveLength(tableRows("React video library comparison: measured figures") - 1);
   });
 
   test("the features table draws an icon beside every status word, and links each to its note", () => {
     const table = present(prose().querySelector("table.cmp-features"), "the features table");
     const statuses = [...table.querySelectorAll("td .cmp-status")];
-    const axes = readFileSync(`${SOURCES}features.md`, "utf8").split("\n").filter((line) => line.startsWith("| ")).length - 2;
-    expect(statuses.length).toBe(axes * 6);
+    expect(statuses.length).toBe((tableRows("React video library comparison: features") - 2) * 6);
     for (const status of statuses) {
       expect(status.querySelector("svg.cmp-status__icon")?.getAttribute("aria-hidden")).toBe("true");
       expect(text(status.querySelector(".cmp-status__word"))).toBe(status.getAttribute("data-status"));
@@ -696,9 +739,13 @@ describe("the comparison guide", () => {
     expect(notes).toHaveLength(192);
     for (const link of table.querySelectorAll("sup a")) {
       const note = present(doc().getElementById(String(link.getAttribute("href")).slice(1)), link.getAttribute("href") ?? "");
-      expect(link.getAttribute("href")).toMatch(/^#comparison-features-fn-\d+$/);
+      expect(link.getAttribute("href")).toMatch(/^#comparison-fn-\d+$/);
       expect(note.closest(".cmp-footnotes")).not.toBeNull();
     }
+  });
+
+  test("writes out every footnote, so no [^label] reaches the page", () => {
+    expect(prose().textContent).not.toContain("[^");
   });
 
   test("puts every table in a labelled region that scrolls", () => {
@@ -713,26 +760,72 @@ describe("the comparison guide", () => {
     }
   });
 
-  test("its sources are playdeck's docs/comparison, generated, and not edited here", () => {
-    for (const file of ["results.md", "features.md", "method.md"]) {
-      expect(readFileSync(`${SOURCES}${file}`, "utf8").startsWith("<!--\n  Generated by `pnpm compare:") || file === "method.md", file).toBe(
-        true,
-      );
-    }
+  // One source: playdeck's docs package, not a copy kept here.
+  test("is read from @playdeck/docs, and the site keeps no copy of it", () => {
+    expect(DOCS_NAV.map(({ file }) => file)).toContain("guides/comparison.md");
+    expect(existsSync(`${SITE}comparison`)).toBe(false);
   });
 });
 
 describe("the docs' search page", () => {
-  test("is headed Search, under the docs layout, with the search island", () => {
+  test("is headed Search, under the docs layout with the docs' nav, with the search island", () => {
     const doc = parse(PATHS.search);
     expect(doc.title).toBe("Search");
-    // The docs' grid, with no nav until #52 brings the docs.
-    expect(doc.querySelector('main .pd-docs nav[aria-label="Documentation"]')).toBeNull();
+    const nav = present(doc.querySelector('main .pd-docs nav[aria-label="Documentation"]'), "the docs' nav");
+    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ path }) => path));
     expect(text(doc.querySelector("main .pd-docs .pd-doc > h1"))).toBe("Search");
     expect(doc.querySelector('main [data-fw-component="search"] input')).not.toBeNull();
   });
 
-  test("the index is built", () => {
+  test("the index is built, and holds every page", () => {
     expect(manifest.files).toEqual(expect.arrayContaining(["/search/en/index.json", "/search/en/documents.json"]));
+    const documents = JSON.parse(readFileSync(`${SITE}site/search/en/documents.json`, "utf8")) as { path: string }[];
+    expect(documents.map(({ path }) => path).sort()).toEqual(manifest.pages.map((page) => page.path).sort());
   });
+});
+
+describe("the docs, from @playdeck/docs", () => {
+  /** The demos a built page renders, by name, in order. */
+  const demosOn = (doc: Document) =>
+    [...doc.querySelectorAll("article [data-fw-component]")].map((island) => island.getAttribute("data-fw-component")?.replace(/^docsDemo:/, ""));
+
+  // The docs have no index.md, so /docs/ has no page of its own.
+  test("/docs/ redirects to the docs' first page", () => {
+    expect(DOCS_NAV[0]?.path).toBe("/docs/start/");
+    expect(readFileSync(`${SITE}site/_redirects`, "utf8")).toContain("/docs/ /docs/start/ 301\n");
+  });
+
+  test.each(DOCS_NAV)("$path renders with each demo it marks, in order, rendered on the server and dormant", ({ path, demos }) => {
+    const doc = parse(path);
+    expect(demosOn(doc)).toEqual(demos);
+    for (const island of doc.querySelectorAll("article [data-fw-component]")) {
+      expect(island.querySelector('[data-playdeck-part="viewport"]'), island.outerHTML.slice(0, 120)).not.toBeNull();
+    }
+    expect(doc.querySelectorAll("main video[src], main source[src], main iframe")).toHaveLength(0);
+  });
+
+  test("marks each demo the site registers once, and no other", () => {
+    expect(DOCS_NAV.flatMap((page) => page.demos).sort()).toEqual(Object.keys(DEMOS).sort());
+  });
+
+  test("the nav lists every page in nav.json's order, and marks the current one", () => {
+    const nav = present(parse("/docs/start/").querySelector('nav[aria-label="Documentation"]'), "the docs' nav");
+    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ path }) => path));
+    expect(nav.querySelector('[aria-current="page"]')?.getAttribute("href")).toBe("/docs/start/");
+  });
+
+  test("titles each page once, as its heading", () => {
+    const doc = parse("/docs/guides/theme/");
+    expect(doc.querySelectorAll("title")).toHaveLength(1);
+    expect(doc.title).toBe("Theme");
+    expect([...doc.querySelectorAll("main h1")].map(text)).toEqual(["Theme"]);
+  });
+
+  // The layout and the demos are the site's own words, unlike the prose they frame.
+  test.each(["components/docs-page.tsx", ...readdirSync(`${SITE}components/demos`).map((file) => `components/demos/${file}`)])(
+    "%s uses no em dash",
+    (file) => {
+      expect(readFileSync(`${SITE}${file}`, "utf8")).not.toMatch(/—|&mdash;/);
+    },
+  );
 });

@@ -4,19 +4,15 @@ export const REPO = "https://github.com/pedrosousa13/playdeck";
 /** playdeck's canonical site. Every page here names its own path on it as canonical (GLOSSARY.md). */
 export const ORIGIN = "https://play.deck.cool";
 
-/**
- * playdeck's docs, where they are today: the Astro site at playdeck.video.
- * They move to /docs in #52, which points these links there. Until those
- * pages exist, the build's link check refuses a /docs/ link.
- */
+/** playdeck's docs, under /docs, from @playdeck/docs. They have no index.md, so they start at start.md. */
 export const DOCS = {
-  start: "https://playdeck.video/start/",
+  start: "/docs/start/",
 } as const;
 
-/** Each page this site builds, at the path playdeck.video serves it at today. */
+/** Each page this site builds itself, and the comparison guide, a docs page the Family bar links. */
 export const PATHS = {
   home: "/",
   examples: "/examples/",
-  comparison: "/guides/comparison/",
+  comparison: "/docs/guides/comparison/",
   search: "/docs/search/",
 } as const;

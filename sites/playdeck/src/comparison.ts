@@ -1,165 +1,59 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, posix } from "node:path";
-
 /*
- * The library comparison guide, a port of pedrosousa13/playdeck's
- * apps/site/src/comparison-page.mjs and comparison-icons.mjs at cf72813.
- *
- * The source is playdeck's docs/comparison/*.md, which its
- * `pnpm compare:libraries` and `pnpm compare:features` generate. The three
- * files in ../comparison/ are those files, byte for byte, so both sites render
- * one text: refresh them by copying them again, never by editing them here.
- *
- * Composed as upstream composes it: one h1, then each document whole with its
- * headings one level down, anchored for a same-page link. Two steps are this
- * site's own. The markdown loader has no footnotes, so `footnotes` writes the
- * features table's `[^n]` references and their notes as HTML. A wide table
+ * What this site adds to the library comparison guide, guides/comparison.md in
+ * @playdeck/docs, a port of pedrosousa13/playdeck's
+ * apps/site/src/comparison-icons.mjs at cf72813. Each step reads the guide's
+ * rendered HTML. The docs loader has no footnotes, so `footnotes` writes the
+ * features table's `[^n]` references and their notes out. The features table
+ * draws an icon beside each status word (`iconizeFeaturesTable`). A wide table
  * scrolls in a labelled region of its own (`scrollTables`), so the page never
  * scrolls sideways.
  */
 
-export const TITLE = "React video library comparison";
-
-/** playdeck's repo, where a relative link in the documents resolves. */
-const BLOB = "https://github.com/pedrosousa13/playdeck/blob/main/";
-
-/** Where the documents sit in playdeck's repo. */
-const DIR = "docs/comparison";
-
-/**
- * The documents, in the order the page renders them, each with the id its
- * section is anchored at. Not upstream's `features`, which method.md's own
- * Features heading takes too.
- */
-const DOCUMENTS = [
-  { file: "results.md", anchor: "comparison-results" },
-  { file: "features.md", anchor: "comparison-features" },
-  { file: "method.md", anchor: "comparison-method" },
-] as const;
-
-const FENCE = /^\s*(```|~~~)/;
-
-/** Each line of `markdown` outside a fence through `change`, and the fenced ones as they are. */
-function outsideFences(markdown: string, change: (line: string) => string): string {
-  let fenced = false;
-  return markdown
-    .split("\n")
-    .map((line) => {
-      if (FENCE.test(line)) {
-        fenced = !fenced;
-        return line;
-      }
-      return fenced ? line : change(line);
-    })
-    .join("\n");
-}
-
-/** Every ATX heading one level down, `#` to `##`, outside fences. A `######` stays. */
-export function demoteHeadings(markdown: string): string {
-  return outsideFences(markdown, (line) => {
-    const heading = /^(#{1,6})(\s.*)?$/.exec(line);
-    if (heading === null) return line;
-    const [, hashes = "", rest = ""] = heading;
-    return hashes.length >= 6 ? line : `#${hashes}${rest}`;
-  });
-}
-
-/**
- * One link target as this page needs it. A link to one of the three documents
- * becomes a fragment on this page; any other relative link resolves in
- * playdeck's repo on GitHub; an absolute link or a fragment stays.
- */
-export function rewriteTarget(target: string): string {
-  if (target.startsWith("#") || target.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(target)) return target;
-  const [path = "", fragment = ""] = target.split("#");
-  const resolved = posix.normalize(posix.join(DIR, path));
-  const sibling = DOCUMENTS.find(({ file }) => resolved === posix.join(DIR, file));
-  if (sibling !== undefined) return fragment === "" ? `#${sibling.anchor}` : `#${fragment}`;
-  return `${BLOB}${resolved}${fragment === "" ? "" : `#${fragment}`}`;
-}
-
-/** Every inline `[text](target)` outside a fence, through `rewriteTarget`. */
-export function rewriteLinks(markdown: string): string {
-  return outsideFences(markdown, (line) =>
-    line.replace(/(?<!!)\]\(([^()\s]+)\)/g, (_, target: string) => `](${rewriteTarget(target)})`),
-  );
-}
+/** Each code block, kept out of the footnote passes: nothing in one is a note or a reference. */
+const CODE = /(<pre[\s\S]*?<\/pre>)/;
+const DEFINITION = /<p>\[\^([^\]\s]+)\]: ([\s\S]*?)<\/p>\n?/g;
 
 /**
  * GFM footnotes, written out: each `[^label]` reference becomes a numbered
- * superscript link, and the notes an ordered list at the end of the document,
- * each with a link back. Numbered in the order of first reference, as GitHub
- * numbers them, and each id under `prefix`, so two documents' notes cannot
- * share one. A fence is passed through: nothing in it is a note or a
- * reference. Fails on a reference with no note, a note no reference names, and
- * a note with a bare `<` or `&` outside a code span: the note is written out
- * as HTML, so either would reach the page as markup.
+ * superscript link, and the notes, each a paragraph that opens `[^label]: `,
+ * an ordered list where the first of them stood, each with a link back.
+ * Numbered in the order of first reference, as GitHub numbers them, and each
+ * id under `prefix`. Fails on a reference with no note, a note no reference
+ * names, and a label defined twice.
  */
-export function footnotes(markdown: string, prefix: string): string {
+export function footnotes(html: string, prefix: string): string {
+  const parts = html.split(CODE);
   const notes = new Map<string, string>();
-  const lines = markdown.split("\n");
-  const body: string[] = [];
-  let fenced = false;
-  for (let at = 0; at < lines.length; at += 1) {
-    const line = lines[at] ?? "";
-    if (FENCE.test(line)) fenced = !fenced;
-    const definition = fenced ? null : /^\[\^([^\]\s]+)\]:\s+(.*)$/.exec(line);
-    if (definition === null) {
-      body.push(line);
-      continue;
-    }
-    const [, label = "", first = ""] = definition;
-    const text = [first];
-    while (at + 1 < lines.length && /^\s+\S/.test(lines[at + 1] ?? "")) text.push((lines[(at += 1)] ?? "").trim());
-    if (notes.has(label)) throw new Error(`comparison: the footnote [^${label}] is defined twice`);
-    const note = text.join(" ");
-    const bare = /[<&]/.exec(note.replace(/`[^`]*`/g, ""));
-    if (bare !== null) throw new Error(`comparison: the footnote [^${label}] holds a bare ${bare[0]} outside a code span`);
-    notes.set(label, note);
-  }
-
-  const order: string[] = [];
-  const referenced = outsideFences(body.join("\n"), (line) =>
-    line.replace(/\[\^([^\]\s]+)\]/g, (_, label: string) => {
-      if (!notes.has(label)) throw new Error(`comparison: the footnote [^${label}] has no note`);
-      const first = !order.includes(label);
-      if (first) order.push(label);
-      const number = order.indexOf(label) + 1;
-      return `<sup><a href="#${prefix}-fn-${number}"${first ? ` id="${prefix}-fnref-${number}"` : ""}>${number}</a></sup>`;
-    }),
+  const marked = parts.map((part, at) =>
+    at % 2 === 1
+      ? part
+      : part.replace(DEFINITION, (_, label: string, note: string) => {
+          if (notes.has(label)) throw new Error(`comparison: the footnote [^${label}] is defined twice`);
+          notes.set(label, note);
+          return notes.size === 1 ? "\0notes\0" : "";
+        }),
   );
-  if (notes.size === 0) return referenced;
+  const order: string[] = [];
+  const referenced = marked.map((part, at) =>
+    at % 2 === 1
+      ? part
+      : part.replace(/\[\^([^\]\s]+)\]/g, (_, label: string) => {
+          if (!notes.has(label)) throw new Error(`comparison: the footnote [^${label}] has no note`);
+          const isFirst = !order.includes(label);
+          if (isFirst) order.push(label);
+          const number = order.indexOf(label) + 1;
+          return `<sup><a href="#${prefix}-fn-${number}"${isFirst ? ` id="${prefix}-fnref-${number}"` : ""}>${number}</a></sup>`;
+        }),
+  );
+  if (notes.size === 0) return referenced.join("");
   const unused = [...notes.keys()].filter((label) => !order.includes(label));
   if (unused.length > 0) throw new Error(`comparison: no reference names the footnotes ${unused.join(", ")}`);
 
   const list = order.map(
     (label, index) =>
-      `${index + 1}. <span id="${prefix}-fn-${index + 1}"></span>${notes.get(label) ?? ""} <a href="#${prefix}-fnref-${index + 1}" aria-label="Back to reference ${index + 1}">↩</a>`,
+      `<li id="${prefix}-fn-${index + 1}">${notes.get(label) ?? ""} <a href="#${prefix}-fnref-${index + 1}" aria-label="Back to reference ${index + 1}">↩</a></li>`,
   );
-  return [referenced.trimEnd(), "", '<section class="cmp-footnotes" aria-label="Footnotes">', "", ...list, "", "</section>"].join(
-    "\n",
-  );
-}
-
-/** The guide's markdown, composed from the three documents in `dir`. */
-export function comparisonDocument(dir: string): string {
-  const sections = DOCUMENTS.map(({ file, anchor }) => {
-    const source = readFileSync(join(dir, file), "utf8");
-    return `<a id="${anchor}"></a>\n\n${demoteHeadings(rewriteLinks(footnotes(source, anchor)))}`;
-  });
-  return [`# ${TITLE}`, ...sections].join("\n\n");
-}
-
-/**
- * Writes the composed guide to `stage`, as `guides/comparison.md`, for the
- * markdown loader to read: the loader reads files, so a composed document
- * needs one. Returns `stage`.
- */
-export function stageComparison(dir: string, stage: string): string {
-  rmSync(stage, { recursive: true, force: true });
-  mkdirSync(join(stage, "guides"), { recursive: true });
-  writeFileSync(join(stage, "guides", "comparison.md"), comparisonDocument(dir));
-  return stage;
+  return referenced.join("").replace("\0notes\0", `<section class="cmp-footnotes" aria-label="Footnotes"><ol>${list.join("")}</ol></section>\n`);
 }
 
 type Status = "yes" | "partial" | "plugin" | "no" | "n/a";
@@ -200,17 +94,22 @@ export function iconizeFeaturesTable(html: string): string {
 
 /**
  * Each table inside a region that scrolls sideways, named for the heading
- * above it. The region takes focus, so a keyboard can scroll a table with no
- * link in it.
+ * above it, and a second table under one heading numbered, so no two regions
+ * share a name. The region takes focus, so a keyboard can scroll a table with
+ * no link in it.
  */
 export function scrollTables(html: string): string {
   let heading = "Table";
+  let count = 0;
   return html.replace(/<h([2-4])[^>]*>([\s\S]*?)<\/h\1>|<table[\s\S]*?<\/table>/g, (match, _level, text?: string) => {
     if (text !== undefined) {
       heading = text.replace(/<[^>]*>/g, "").trim();
+      count = 0;
       return match;
     }
+    count += 1;
     // The heading's text is HTML already, so it needs no escaping but its quotes.
-    return `<div class="cmp-table" role="region" tabindex="0" aria-label="${heading.replace(/"/g, "&quot;")}">${match}</div>`;
+    const label = `${heading.replace(/"/g, "&quot;")}${count > 1 ? ` ${count}` : ""}`;
+    return `<div class="cmp-table" role="region" tabindex="0" aria-label="${label}">${match}</div>`;
   });
 }

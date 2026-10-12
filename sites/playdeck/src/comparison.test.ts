@@ -1,53 +1,36 @@
 import { expect, test } from "vitest";
-import { demoteHeadings, footnotes, iconizeFeaturesTable, rewriteTarget, scrollTables } from "./comparison.ts";
+import { footnotes, iconizeFeaturesTable, scrollTables } from "./comparison.ts";
 
-test("demotes every heading one level, but inside a fence and at ######", () => {
-  expect(demoteHeadings("# A\n\n## B\n\n```sh\n# a comment\n```\n\n###### F")).toBe(
-    "## A\n\n### B\n\n```sh\n# a comment\n```\n\n###### F",
+test("writes footnotes out: numbered references, and the notes as a list in place of the first, each with a way back", () => {
+  const html = footnotes(
+    "<table><tr><td>a</td><td>b[^x]</td></tr></table>\n<p>Text[^y], again[^x].</p>\n<p>[^x]: <strong>X</strong> note.</p>\n<p>[^y]: Y note\ngoes on.</p>\n<p>After.</p>\n",
+    "doc",
   );
-});
-
-test("points a sibling document at its anchor, another file at playdeck's repo, and leaves the rest", () => {
-  expect(rewriteTarget("./features.md")).toBe("#comparison-features");
-  expect(rewriteTarget("method.md#features")).toBe("#features");
-  expect(rewriteTarget("../../packages/react/README.md")).toBe(
-    "https://github.com/pedrosousa13/playdeck/blob/main/packages/react/README.md",
+  expect(html).toContain('<td>b<sup><a href="#doc-fn-1" id="doc-fnref-1">1</a></sup></td>');
+  expect(html).toContain('<p>Text<sup><a href="#doc-fn-2" id="doc-fnref-2">2</a></sup>, again<sup><a href="#doc-fn-1">1</a></sup>.</p>');
+  expect(html).toContain(
+    '<section class="cmp-footnotes" aria-label="Footnotes"><ol>' +
+      '<li id="doc-fn-1"><strong>X</strong> note. <a href="#doc-fnref-1" aria-label="Back to reference 1">↩</a></li>' +
+      '<li id="doc-fn-2">Y note\ngoes on. <a href="#doc-fnref-2" aria-label="Back to reference 2">↩</a></li>' +
+      "</ol></section>\n<p>After.</p>",
   );
-  expect(rewriteTarget("https://vidstack.io")).toBe("https://vidstack.io");
-  expect(rewriteTarget("#results")).toBe("#results");
-});
-
-test("writes footnotes out: numbered references, and the notes as a list with a way back, each id under the document's", () => {
-  const html = footnotes("| a | b[^x] |\n\nText[^y], again[^x].\n\n[^x]: **X** note.\n\n[^y]: Y note\n  goes on.\n", "doc");
-  expect(html).toContain('b<sup><a href="#doc-fn-1" id="doc-fnref-1">1</a></sup>');
-  expect(html).toContain('Text<sup><a href="#doc-fn-2" id="doc-fnref-2">2</a></sup>, again<sup><a href="#doc-fn-1">1</a></sup>.');
-  expect(html).toContain('1. <span id="doc-fn-1"></span>**X** note. <a href="#doc-fnref-1" aria-label="Back to reference 1">↩</a>');
-  expect(html).toContain('2. <span id="doc-fn-2"></span>Y note goes on.');
   expect(html).not.toContain("[^");
 });
 
-test("gives two documents' notes ids that cannot meet", () => {
-  const one = footnotes("a[^1]\n\n[^1]: one", "first");
-  const two = footnotes("a[^1]\n\n[^1]: one", "second");
-  const ids = (html: string) => [...html.matchAll(/id="([^"]+)"/g)].map(([, id]) => id);
-  expect(ids(one).filter((id) => ids(two).includes(id))).toEqual([]);
-});
-
 test("refuses a reference with no note, and a note with no reference", () => {
-  expect(() => footnotes("a[^1]", "doc")).toThrow("[^1] has no note");
-  expect(() => footnotes("a[^1]\n\n[^1]: one\n\n[^2]: two", "doc")).toThrow("no reference names the footnotes 2");
+  expect(() => footnotes("<p>a[^1]</p>", "doc")).toThrow("[^1] has no note");
+  expect(() => footnotes("<p>a[^1]</p><p>[^1]: one</p><p>[^2]: two</p>", "doc")).toThrow("no reference names the footnotes 2");
+  expect(() => footnotes("<p>a[^1]</p><p>[^1]: one</p><p>[^1]: again</p>", "doc")).toThrow("[^1] is defined twice");
 });
 
-test("refuses a note with a bare < or &, which would reach the page as HTML, but allows them in a code span", () => {
-  expect(() => footnotes("a[^1]\n\n[^1]: a <script> tag", "doc")).toThrow("[^1] holds a bare <");
-  expect(() => footnotes("a[^1]\n\n[^1]: this & that", "doc")).toThrow("[^1] holds a bare &");
-  expect(footnotes("a[^1]\n\n[^1]: a `<video>` & `a && b`".replace(" & ", " and "), "doc")).toContain("`<video>`");
+test("reads no note, and rewrites no reference, inside a code block", () => {
+  const html = footnotes("<p>a[^1]</p>\n<pre><code>[^2]: not a note\nb[^2]\n</code></pre>\n<p>[^1]: one</p>", "doc");
+  expect(html).toContain("<pre><code>[^2]: not a note\nb[^2]\n</code></pre>");
+  expect(html).toContain('<li id="doc-fn-1">one');
 });
 
-test("reads no note, and rewrites no reference, inside a fence", () => {
-  const html = footnotes("a[^1]\n\n```md\n[^2]: not a note\nb[^2]\n```\n\n[^1]: one", "doc");
-  expect(html).toContain("```md\n[^2]: not a note\nb[^2]\n```");
-  expect(html).toContain('1. <span id="doc-fn-1"></span>one');
+test("leaves HTML with no footnotes as it is", () => {
+  expect(footnotes("<p>Plain.</p>", "doc")).toBe("<p>Plain.</p>");
 });
 
 test("draws an icon beside each status word in the features table alone", () => {
@@ -65,4 +48,9 @@ test("puts each table in a focusable region named for the heading above it", () 
   expect(scrollTables('<h2 id="a">Results &amp; more</h2><table><tr><td>1</td></tr></table>')).toBe(
     '<h2 id="a">Results &amp; more</h2><div class="cmp-table" role="region" tabindex="0" aria-label="Results &amp; more"><table><tr><td>1</td></tr></table></div>',
   );
+});
+
+test("names a second table under one heading apart from the first, so no two regions share a name", () => {
+  const html = scrollTables("<table>a</table><table>b</table><h2>H</h2><table>c</table><table>d</table>");
+  expect([...html.matchAll(/aria-label="([^"]*)"/g)].map(([, label]) => label)).toEqual(["Table", "Table 2", "H", "H 2"]);
 });

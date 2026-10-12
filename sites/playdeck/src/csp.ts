@@ -1,10 +1,10 @@
 import type { HeaderField } from "@pagedeck/core";
 
 /**
- * Where each clip on /examples plays from. The home page's players reach
- * YouTube and Vimeo instead, through EMBED_FRAMES and EMBED_SCRIPTS. A player
- * fetches nothing until a reader presses play, so before that press no page
- * reaches any of these origins.
+ * Where each clip on /examples and /docs/examples/ plays from. The home
+ * page's players reach YouTube and Vimeo instead, through EMBED_FRAMES and
+ * EMBED_SCRIPTS. A player fetches nothing until a reader presses play, so
+ * before that press no page reaches any of these origins.
  */
 export const MEDIA_ORIGINS = [
   // The Blender Foundation's download host. Both archetype players play an
@@ -35,8 +35,9 @@ export const EMBED_FRAMES = ["https://www.youtube-nocookie.com", "https://player
  *
  * Scripts, stylesheets, images, the captions and the search index come from
  * the site itself, the clips from MEDIA_ORIGINS, the embeds from EMBED_FRAMES
- * and EMBED_SCRIPTS, and everything else is refused. Wistia and HLS's blob:
- * media wait for #52's demos, which add their origins here.
+ * and EMBED_SCRIPTS, and everything else is refused. The docs' two demos are
+ * the archetype players, so they need no grant of their own. A demo that plays
+ * Wistia or HLS adds its origins here.
  * `style-src-attr 'unsafe-inline'` is for the code highlighter's `style=`
  * colours and the players' own inline styles.
  */
