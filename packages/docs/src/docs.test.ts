@@ -150,9 +150,9 @@ describe("a fixture that follows the contract", () => {
   });
 
   test("names a page in the nav by its label, when it has one, and keeps its title", async () => {
-    const { entries } = await sync(site({ "install.md": "---\ntitle: Install slidedeck\nlabel: Install\ndescription: How.\n---\n\nText.\n" }));
+    const { entries } = await sync(site({ "install.md": "---\ntitle: Install carouseldeck\nlabel: Install\ndescription: How.\n---\n\nText.\n" }));
     const install = entries.find((entry) => entry.path === "docs/install");
-    expect(install?.data.title).toBe("Install slidedeck");
+    expect(install?.data.title).toBe("Install carouseldeck");
     expect(install?.data.nav[0]?.pages).toEqual([
       { title: "Example", href: "/docs/" },
       { title: "Install", href: "/docs/install/" },
