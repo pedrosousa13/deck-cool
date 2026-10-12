@@ -12,6 +12,7 @@ import { formatBytes, utf8Bytes } from "./bytes.ts";
 import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 import { DEMOS } from "./demos.ts";
 import { DOCS_NAV } from "./docs-pages.ts";
+import { DOCS_WITH_TABLES } from "./live-check.ts";
 import { PICKER, PRODUCT } from "./product.ts";
 import { SKINS } from "./skins.ts";
 
@@ -64,7 +65,7 @@ const OWN_PAGES = [PATHS.home, PATHS.search, PATHS.features, PATHS.interactive, 
  * Two docs pages, the first and one with tables, which the tests of every page
  * cover too. @pagedeck/docs 0.2.3 marks no demo, so neither has one.
  */
-const DOCS_PAGES = [DOCS.start, DOCS.siteConfig];
+const DOCS_PAGES = [DOCS.start, DOCS_WITH_TABLES];
 
 const PAGES = [...OWN_PAGES, ...DOCS_PAGES];
 
@@ -83,7 +84,7 @@ describe("budgets, measured and pinned", () => {
     [PATHS.cmsDemo]: "59kb",
     [PATHS.search]: "59kb",
     [DOCS.start]: "0b",
-    [DOCS.siteConfig]: "0b",
+    [DOCS_WITH_TABLES]: "0b",
   };
 
   test("every page has its pinned limit, and stays within it", () => {
@@ -742,14 +743,14 @@ describe("the docs, from @pagedeck/docs", () => {
   });
 
   test("titles each page once, as its heading", () => {
-    const doc = parse(DOCS.siteConfig);
+    const doc = parse(DOCS_WITH_TABLES);
     expect(doc.querySelectorAll("title")).toHaveLength(1);
     expect(doc.title).toBe("Site config");
     expect([...doc.querySelectorAll("main h1")].map(text)).toEqual(["Site config"]);
   });
 
   test("puts each table in a named region the keyboard can scroll, and lets it scroll each plain block", () => {
-    const prose = present(parse(DOCS.siteConfig).querySelector("main .fw-prose"), "the page's prose");
+    const prose = present(parse(DOCS_WITH_TABLES).querySelector("main .fw-prose"), "the page's prose");
     const tables = [...prose.querySelectorAll("table")];
     expect(tables.length).toBeGreaterThan(0);
     for (const table of tables) {

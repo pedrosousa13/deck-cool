@@ -2,11 +2,14 @@ import type { LiveSite } from "@deck-cool/site-kit/live-check";
 import { DOCS, PATHS } from "../components/links.ts";
 import { RESPONSE_HEADERS } from "./headers.ts";
 
+/** A docs page with tables and plain blocks, which the live check and the tests fetch beside the first. */
+export const DOCS_WITH_TABLES = "/docs/reference/site-config/";
+
 /** What `pnpm check-live` fetches from page.deck.cool. */
 export const LIVE_SITE: LiveSite = {
   headers: RESPONSE_HEADERS,
   /** The site's own pages, two docs pages, and the embed demo's script, none content-hashed. */
-  served: [...Object.values(PATHS), DOCS.start, DOCS.siteConfig, "/embed/demo-embed.js"],
+  served: [...Object.values(PATHS), DOCS.start, DOCS_WITH_TABLES, "/embed/demo-embed.js"],
   /** The one sheet, which `/` links, and the subset font's, which only `/features/` links. */
   sheets: [
     { page: "/", directory: "/assets/" },

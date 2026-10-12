@@ -5,6 +5,7 @@ import { browserHarness, islandsHydrated } from "@deck-cool/site-kit/browser-tes
 import { DOCS, PATHS } from "../components/links.ts";
 import { DOCS_NAV } from "./docs-pages.ts";
 import { RESPONSE_HEADERS } from "./headers.ts";
+import { DOCS_WITH_TABLES } from "./live-check.ts";
 
 // Drives the built site (build.global-setup.ts) in Chromium, served with the
 // headers in the build's _headers file, so every page runs under its CSP.
@@ -14,7 +15,7 @@ const { visit } = site;
 
 // Two docs pages, the first and one with tables, as site.build.test.ts covers
 // them. @pagedeck/docs 0.2.3 marks no demo, so no docs page has one.
-const PAGES = [PATHS.home, PATHS.interactive, PATHS.features, PATHS.cmsDemo, PATHS.search, DOCS.start, DOCS.siteConfig];
+const PAGES = [PATHS.home, PATHS.interactive, PATHS.features, PATHS.cmsDemo, PATHS.search, DOCS.start, DOCS_WITH_TABLES];
 
 describe("the pagedeck site in a browser", () => {
   test.each(PAGES)("%s is served with every header the build writes", async (path) => {
@@ -122,7 +123,7 @@ describe("the pagedeck site in a browser", () => {
 
   // A fence with no language renders as a plain <pre>.
   test("an unhighlighted block sits on the same tile as a highlighted one", async () => {
-    const { page } = await visit(DOCS.siteConfig, { width: 1280 });
+    const { page } = await visit(DOCS_WITH_TABLES, { width: 1280 });
     const look = (selector: string) =>
       page.locator(selector).first().evaluate((pre) => {
         const style = getComputedStyle(pre);
