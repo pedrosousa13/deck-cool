@@ -1,5 +1,7 @@
 # Docs arrive as an npm package
 
+Amended by [ADR 0002](0002-a-deck-lives-in-this-repo.md) on 2026-10-12. For a deck that lives in this repo, the `deck-released` dispatch and the bump PR below go away: its site depends on its packages as `workspace:*` and deploys from the release's own commit. The first reason, that a site describes the latest release, still holds. The decks still in their own repos keep everything below.
+
 Each deck's reference docs stay in that deck's own repo, as plain markdown with frontmatter, and the deck-cool site for that deck reads them at build time. The deck publishes them as a sibling npm package of markdown only (`@slidedeck/docs`, `@playdeck/docs`, `@pagedeck/docs`) at the same version as its code, and the site depends on that exact version. The contract the package follows is in [`docs/docs-contract.md`](../docs-contract.md). Decided with the maintainer on 2026-10-08 (#7).
 
 ## Why
