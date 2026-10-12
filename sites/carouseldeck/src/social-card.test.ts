@@ -10,7 +10,7 @@ test("breaks a headline between words, each line within the card's width", () =>
 });
 
 test("draws a 1200 by 630 PNG, from the headline or else the title", async () => {
-  const card = socialCard("https://carousel.deck.cool");
+  const card = socialCard("https://slide.deck.cool");
   const page = {} as Parameters<typeof card.draw>[0]["page"];
   const drawn = await card.draw({ page, title: "A title", inputs: {} });
   expect([drawn.width, drawn.height]).toEqual([1200, 630]);

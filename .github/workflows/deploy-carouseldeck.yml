@@ -211,11 +211,12 @@ jobs:
           fi
           pnpm exec wrangler deploy
 
-      # A first deploy waits for the custom domain's certificate.
+      # A first deploy waits for the custom domain's certificate. The origin is
+      # explicit: check-live's default stays slide.deck.cool until the flip.
       - name: Check the live site, for up to five minutes
         run: |
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            if pnpm check-live; then exit 0; fi
+            if pnpm check-live https://carousel.deck.cool; then exit 0; fi
             echo "Attempt $attempt failed; retrying in 30 s."
             sleep 30
           done

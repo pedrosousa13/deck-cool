@@ -2,4 +2,4 @@
 import { reportLiveCheck } from "@deck-cool/site-kit/live-check";
 import { LIVE_SITE } from "./live-check.ts";
 
-await reportLiveCheck(LIVE_SITE, process.argv[2] ?? "https://carousel.deck.cool");
+await reportLiveCheck(LIVE_SITE, process.argv[2] ?? "https://slide.deck.cool");

@@ -13,7 +13,9 @@ import { REPOSITORY } from "../components/links.ts";
  * og:url and sitemap entry names it, whichever host serves a build, so a
  * preview never claims to be the page.
  */
-export const SITE_ORIGIN = "https://carousel.deck.cool";
+// slide.deck.cool until carousel.deck.cool serves, then carousel.deck.cool
+// (a step on #105, docs/deploy.md).
+export const SITE_ORIGIN = "https://slide.deck.cool";
 
 interface Described {
   title: string;

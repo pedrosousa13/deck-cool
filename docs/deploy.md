@@ -153,6 +153,8 @@ Every section above applies, with these differences:
 
 ### slide.deck.cool until the first release
 
+Until carousel.deck.cool serves, the brand kit's carouseldeck URL, the site's canonical origin and `check-live`'s default origin stay `https://slide.deck.cool`, so no deployed site links a host that does not serve yet. Flip them to carousel.deck.cool once it serves: a step on #105. The publish job checks `https://carousel.deck.cool` explicitly.
+
 slide.deck.cool keeps serving the old Worker `slidedeck`, built from `@slidedeck/react`, until two things happen: the first carouseldeck release (1.2.0, #114) deploys the `carouseldeck` Worker, and the maintainer's DNS and redirect steps on #105 send slide.deck.cool to carousel.deck.cool. Nothing in this repo deploys the `slidedeck` Worker any more.
 
 ### The first deploy
@@ -185,7 +187,7 @@ CLOUDFLARE_API_TOKEN=... pnpm exec wrangler deploy
 ### Verifying carouseldeck
 
 ```sh
-pnpm --filter @sites/carouseldeck check-live                      # https://carousel.deck.cool
+pnpm --filter @sites/carouseldeck check-live https://carousel.deck.cool  # the default is slide.deck.cool until the flip
 pnpm --filter @sites/carouseldeck check-live https://example.com  # any other origin
 ```
 

@@ -115,7 +115,7 @@ describe.each(PAGES)("%s's <head>", (path, file) => {
     );
   });
 
-  test("names its canonical and og:url on carousel.deck.cool, and describes the page", () => {
+  test("names its canonical and og:url on its origin, and describes the page", () => {
     const head = doc().head;
     expect(head.querySelector('link[rel="canonical"]')?.getAttribute("href")).toBe(`${SITE_ORIGIN}${path}`);
     expect(head.querySelector('meta[property="og:url"]')?.getAttribute("content")).toBe(`${SITE_ORIGIN}${path}`);
@@ -553,7 +553,7 @@ test("the search index holds the site's pages and every docs page, within what o
   expect(bytes).toBeLessThanOrEqual(QUERY_CAP);
 });
 
-test("the sitemap and robots.txt name carousel.deck.cool", () => {
+test("the sitemap and robots.txt name its origin", () => {
   const sitemap = readFileSync(`${OUT}/sitemap-en.xml`, "utf8");
   expect([...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, loc]) => loc).sort()).toEqual(
     ALL_PATHS.map((path) => `${SITE_ORIGIN}${path}`).sort(),
