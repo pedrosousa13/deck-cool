@@ -8,7 +8,7 @@ interface Props {
 /** One way each deck leans on the browser. */
 const browser = [
   {
-    deck: "slidedeck",
+    deck: "carouseldeck",
     heading: "Native scrolling",
     body: "Momentum, snapping and keyboard scrolling come from CSS scroll snap in a real scroll container.",
   },
@@ -29,7 +29,7 @@ const agents = [
   { heading: "Tested examples", body: "Each deck's CI checks its examples, so the code you copy from the docs compiles." },
   {
     heading: "Predictable markup",
-    body: "slidedeck and playdeck name every part, and in pagedeck the markup is your own, so an agent never has to guess.",
+    body: "carouseldeck and playdeck name every part, and in pagedeck the markup is your own, so an agent never has to guess.",
   },
 ] as const;
 
@@ -40,7 +40,7 @@ const agents = [
  */
 const accessible = [
   {
-    deck: "slidedeck",
+    deck: "carouseldeck",
     claims: [
       'A labelled carousel region, each slide a group labelled "n of m".',
       "Arrow keys move the focused deck, and every dot is a button the keyboard reaches.",
@@ -134,7 +134,7 @@ export default function Layout({ title }: Props) {
         <div className="band__text">
           <h2>Unstyled, your look.</h2>
           <p>
-            Every deck renders plain HTML and needs no stylesheet, so there is no theme to fight. slidedeck and playdeck
+            Every deck renders plain HTML and needs no stylesheet, so there is no theme to fight. carouseldeck and playdeck
             give every part a stable name, and pagedeck renders your own components. Point your CSS or your tokens at the
             markup, and the look is yours.
           </p>

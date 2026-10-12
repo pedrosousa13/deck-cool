@@ -15,7 +15,7 @@
     "@pagedeck/content": "0.2.3",
     "@pagedeck/core": "0.2.3",
     "@pagedeck/markdown-loader": "0.2.3",
-    "@slidedeck/react": "1.0.3",
+    "@carouseldeck/react": "workspace:*",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

@@ -10,10 +10,10 @@ import { CONTENT_SECURITY_POLICY } from "./csp.ts";
 import { figureValue } from "./facts.ts";
 
 const SITE = fileURLToPath(new URL("..", import.meta.url));
-// slidedeck's built site, which the cross-site test below reads. The root
+// carouseldeck's built site, which the cross-site test below reads. The root
 // vitest.config.ts's global setup builds every site first, so this file needs
 // the whole workspace's run, not deck.cool's build alone.
-const SLIDEDECK_SITE = fileURLToPath(new URL("../../slidedeck/", import.meta.url));
+const CAROUSELDECK_SITE = fileURLToPath(new URL("../../carouseldeck/", import.meta.url));
 const BRAND = fileURLToPath(new URL("../../../packages/brand/public/", import.meta.url));
 
 interface BudgetReport {
@@ -217,15 +217,15 @@ describe("each deck's card", () => {
     expect(figure).toEqual(note === undefined ? [value, label] : [value, label, note]);
   });
 
-  // The format, not the value: a bump PR brings a new size, and both pages follow it.
-  test("slidedeck's card shows the size slidedeck's home page shows, from its README", () => {
-    const card = text(home().querySelector("#slidedeck .card__figure > p"));
+  // The format, not the value: a release brings a new size, and both pages follow it.
+  test("carouseldeck's card shows the size carouseldeck's home page shows, from its README", () => {
+    const card = text(home().querySelector("#carouseldeck .card__figure > p"));
     expect(card).toMatch(/^\d+(\.\d+)? (B|KB|kB|MB)$/);
-    const slidedeckHome = new window.DOMParser().parseFromString(
-      readFileSync(`${SLIDEDECK_SITE}site/index.html`, "utf8"),
+    const carouseldeckHome = new window.DOMParser().parseFromString(
+      readFileSync(`${CAROUSELDECK_SITE}site/index.html`, "utf8"),
       "text/html",
     );
-    expect(text(slidedeckHome.querySelector(".home-proof__figure > p"))).toBe(card);
+    expect(text(carouseldeckHome.querySelector(".home-proof__figure > p"))).toBe(card);
   });
 
   test.each(decks)("$name's card links to its site", (deck) => {
@@ -261,7 +261,7 @@ describe("the four quality sections", () => {
   test("unstyled: plain markup with named parts, and a part selector to style", () => {
     const section = sections()[0];
     expect(text(section?.querySelector("p"))).toBe(
-      "Every deck renders plain HTML and needs no stylesheet, so there is no theme to fight. slidedeck and playdeck give every part a stable name, and pagedeck renders your own components. Point your CSS or your tokens at the markup, and the look is yours.",
+      "Every deck renders plain HTML and needs no stylesheet, so there is no theme to fight. carouseldeck and playdeck give every part a stable name, and pagedeck renders your own components. Point your CSS or your tokens at the markup, and the look is yours.",
     );
     expect(section?.querySelector("pre")?.textContent).toBe("[data-playdeck-part='play-button'] {\n  border-radius: 999px;\n}");
   });
@@ -272,7 +272,7 @@ describe("the four quality sections", () => {
       "The browser already knows how to scroll, play video and show a page. The decks build on what it does instead of rebuilding it, so there is less code to ship.",
     );
     expect(tiles(section)).toEqual([
-      ["slidedeck", "slidedeck Native scrolling", ["Momentum, snapping and keyboard scrolling come from CSS scroll snap in a real scroll container."]],
+      ["carouseldeck", "carouseldeck Native scrolling", ["Momentum, snapping and keyboard scrolling come from CSS scroll snap in a real scroll container."]],
       ["playdeck", "playdeck Native video", ["Files and HLS streams play in the browser's own video element."]],
       ["pagedeck", "pagedeck HTML first", ["Pages render to HTML when the site builds. A page with nothing interactive ships no JavaScript at all."]],
     ]);
@@ -286,7 +286,7 @@ describe("the four quality sections", () => {
     expect(tiles(section)).toEqual([
       [undefined, "Small typed APIs", ["Every deck is written in TypeScript and ships its types, so your editor and your agent see every prop."]],
       [undefined, "Tested examples", ["Each deck's CI checks its examples, so the code you copy from the docs compiles."]],
-      [undefined, "Predictable markup", ["slidedeck and playdeck name every part, and in pagedeck the markup is your own, so an agent never has to guess."]],
+      [undefined, "Predictable markup", ["carouseldeck and playdeck name every part, and in pagedeck the markup is your own, so an agent never has to guess."]],
     ]);
     expect(section?.textContent).not.toMatch(/llms\.txt/i);
   });
@@ -299,7 +299,7 @@ describe("the four quality sections", () => {
     expect(tiles(section)).toEqual([
       [
         undefined,
-        "slidedeck",
+        "carouseldeck",
         [
           'A labelled carousel region, each slide a group labelled "n of m".',
           "Arrow keys move the focused deck, and every dot is a button the keyboard reaches.",
