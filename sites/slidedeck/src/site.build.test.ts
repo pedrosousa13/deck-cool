@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { buildOutput } from "@deck-cool/site-kit/build";
-import { everyResponse, present, readManifest, text } from "@deck-cool/site-kit/build-test";
+import { everyResponse, pagesWithEmDashes, present, readManifest, text } from "@deck-cool/site-kit/build-test";
 import { headersFor, parseHeaders } from "@deck-cool/site-kit/serve-site";
 import { REPOSITORY } from "../components/links.ts";
 import { umbrella } from "@deck-cool/brand/decks";
@@ -476,9 +476,9 @@ describe("the home page", () => {
   });
 });
 
-// The docs' words are slidedeck's own, from its docs package.
-test.each(OWN_PAGES)("%s uses no em dash anywhere", (_path, file) => {
-  expect(readFileSync(`${OUT}/${file}`, "utf8")).not.toMatch(/—|&mdash;/);
+test("no page uses an em dash", () => {
+  // Docs-package pages: their em dashes are upstream's (pedrosousa13/slidedeck#143).
+  expect(pagesWithEmDashes(SITE, DOCS_NAV.map(({ path }) => path))).toEqual([]);
 });
 
 describe("the Examples page", () => {
