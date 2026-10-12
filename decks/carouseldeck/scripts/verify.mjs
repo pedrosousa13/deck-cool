@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Every gate, in one command that stops at the first failure and names it.
-// CI runs this same list (.github/workflows/ci.yml), split across parallel
-// jobs by CI_JOBS below, so a gate added here runs in CI too, and there is no
-// second list to keep in step with it: verify.test.mjs fails if CI_JOBS do
-// not cover the whole list, or if ci.yml does not run every one of them.
+// CI runs this same list (deck-cool's root .github/workflows/ci.yml), split
+// across parallel jobs by CI_JOBS below, so a gate added here runs in CI too,
+// and there is no second list to keep in step with it: verify.test.mjs fails
+// if CI_JOBS do not cover the whole list, or if ci.yml does not run every one
+// of them.
 //
 //   pnpm verify                         every step, in order
 //   pnpm verify --changed               the steps the diff against main needs
@@ -86,15 +87,24 @@ export const CI_JOBS = {
 };
 
 /**
- * The gates a change needs, by path, first match wins. A path no rule matches
- * needs every gate.
+ * The gates a change needs, by path, first match wins. A path outside the
+ * deck needs every gate if it is the root's package.json, pnpm-lock.yaml,
+ * pnpm-workspace.yaml or .github/workflows/ci.yml, and none otherwise. A path
+ * inside the deck that no rule matches needs every gate.
  *
  * @type {{ match: RegExp, steps: string[] }[]}
  */
 const RULES = [
-  { match: /^packages\/|^pnpm-lock\.yaml$/, steps: STEPS },
   {
-    match: /^apps\/storybook\/|^e2e\/deck\.spec\.ts$/,
+    match:
+      /^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.github\/workflows\/ci\.yml)$/,
+    steps: STEPS
+  },
+  { match: /^(?!decks\/carouseldeck\/)/, steps: [] },
+  { match: /^decks\/carouseldeck\/packages\//, steps: STEPS },
+  {
+    match:
+      /^decks\/carouseldeck\/apps\/storybook\/|^decks\/carouseldeck\/e2e\/deck\.spec\.ts$/,
     steps: ['format:check', 'lint', 'typecheck', 'build', 'test:e2e']
   },
   // What a gate runs, and what those scripts import, is that gate: a change to
@@ -102,14 +112,17 @@ const RULES = [
   // for a step is here.
   {
     match:
-      /^scripts\/(bundle-size|compare-libraries|docs-examples|next-rsc|verify-packaging|workspace-packages)\.mjs$/,
+      /^decks\/carouseldeck\/scripts\/(bundle-size|compare-libraries|docs-examples|next-rsc|verify-packaging|workspace-packages)\.mjs$/,
     steps: STEPS
   },
   {
-    match: /^\.github\/|^scripts\//,
+    match: /^decks\/carouseldeck\/scripts\//,
     steps: ['format:check', 'lint', 'typecheck', 'test:scripts']
   },
-  { match: /^docs\/|\.md$/, steps: ['format:check'] }
+  {
+    match: /^decks\/carouseldeck\/docs\/|^decks\/carouseldeck\/.*\.md$/,
+    steps: ['format:check']
+  }
 ];
 
 /**
@@ -165,7 +178,7 @@ function changedSince(ref) {
       '--no-renames',
       /** @type {string} */ (base)
     ]),
-    ...git(['ls-files', '--others', '--exclude-standard'])
+    ...git(['ls-files', '--others', '--exclude-standard', '--full-name'])
   ];
 }
 

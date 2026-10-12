@@ -87,14 +87,10 @@ test('--job runs that CI job’s steps', () => {
 const gateNames = (/** @type {string[]} */ paths) =>
   gatesFor(paths).map(({ step }) => step);
 
-test('a change to a package, the lockfile or root config needs every gate', () => {
+test('a change to a deck package needs every gate', () => {
   for (const path of [
-    'packages/react/src/index.tsx',
-    'packages/react/README.md',
-    'pnpm-lock.yaml',
-    'package.json',
-    'tsconfig.base.json',
-    'playwright.config.ts'
+    'decks/carouseldeck/packages/react/src/index.tsx',
+    'decks/carouseldeck/packages/react/README.md'
   ]) {
     assert.deepEqual(
       gatesFor([path]),
@@ -104,16 +100,47 @@ test('a change to a package, the lockfile or root config needs every gate', () =
   }
 });
 
-test('a path no rule matches needs every gate', () => {
-  for (const path of ['tests/compare/features.mjs', 'prototypes/x/y.ts']) {
+test('a root lockfile, package.json, workspace file or ci.yml change needs every gate', () => {
+  for (const path of [
+    'pnpm-lock.yaml',
+    'package.json',
+    'pnpm-workspace.yaml',
+    '.github/workflows/ci.yml'
+  ]) {
+    assert.deepEqual(
+      gatesFor([path]),
+      STEPS.map((step) => ({ step, args: [] })),
+      path
+    );
+  }
+});
+
+test('a change only under sites/ or packages/ needs no deck gate', () => {
+  for (const path of [
+    'sites/deck-cool/src/index.ts',
+    'packages/brand/styles/brand.css',
+    '.changeset/quick-fox.md',
+    'README.md'
+  ]) {
+    assert.deepEqual(gatesFor([path]), [], path);
+  }
+});
+
+test('a path inside the deck no rule matches needs every gate', () => {
+  for (const path of [
+    'decks/carouseldeck/tests/compare/features.mjs',
+    'decks/carouseldeck/prototypes/x/y.ts',
+    'decks/carouseldeck/tsconfig.base.json',
+    'decks/carouseldeck/playwright.config.ts'
+  ]) {
     assert.deepEqual(gateNames([path]), STEPS, path);
   }
 });
 
 test('a change to storybook or its spec needs the build and the deck spec', () => {
   for (const path of [
-    'apps/storybook/stories/deck.stories.tsx',
-    'e2e/deck.spec.ts'
+    'decks/carouseldeck/apps/storybook/stories/deck.stories.tsx',
+    'decks/carouseldeck/e2e/deck.spec.ts'
   ]) {
     assert.deepEqual(
       gatesFor([path]),
@@ -129,11 +156,10 @@ test('a change to storybook or its spec needs the build and the deck spec', () =
   }
 });
 
-test('a change to CI or a script needs the checks and the scripts’ tests', () => {
+test('a change to a deck script needs the checks and the scripts’ tests', () => {
   for (const path of [
-    '.github/workflows/ci.yml',
-    'scripts/verify.mjs',
-    'scripts/tag-releases.test.mjs'
+    'decks/carouseldeck/scripts/verify.mjs',
+    'decks/carouseldeck/scripts/tag-releases.test.mjs'
   ]) {
     assert.deepEqual(
       gateNames([path]),
@@ -145,8 +171,8 @@ test('a change to CI or a script needs the checks and the scripts’ tests', () 
 
 test('a change to a script a gate runs needs every gate', () => {
   for (const path of [
-    'scripts/verify-packaging.mjs',
-    'scripts/workspace-packages.mjs'
+    'decks/carouseldeck/scripts/verify-packaging.mjs',
+    'decks/carouseldeck/scripts/workspace-packages.mjs'
   ]) {
     assert.deepEqual(gateNames([path]), STEPS, path);
   }
@@ -158,17 +184,20 @@ test('every script a gate runs is one that needs every gate', () => {
     for (const [file] of String(scripts[step]).matchAll(
       /scripts\/[\w.-]+\.mjs/g
     )) {
-      assert.deepEqual(gateNames([file]), STEPS, `${step} runs ${file}`);
+      assert.deepEqual(
+        gateNames([`decks/carouseldeck/${file}`]),
+        STEPS,
+        `${step} runs ${file}`
+      );
     }
   }
 });
 
-test('markdown and docs need format:check alone', () => {
+test('markdown and docs in the deck need format:check alone', () => {
   for (const path of [
-    'README.md',
-    'AGENTS.md',
-    'docs/adr/0001-size.md',
-    '.changeset/quick-fox.md'
+    'decks/carouseldeck/README.md',
+    'decks/carouseldeck/AGENTS.md',
+    'decks/carouseldeck/docs/adr/0001-native-scroll-snap-is-the-engine.md'
   ]) {
     assert.deepEqual(gateNames([path]), ['format:check'], path);
   }
@@ -176,7 +205,11 @@ test('markdown and docs need format:check alone', () => {
 
 test('several paths need the union of their gates, in list order', () => {
   assert.deepEqual(
-    gatesFor(['README.md', 'scripts/verify.mjs', 'apps/storybook/x.tsx']),
+    gatesFor([
+      'decks/carouseldeck/README.md',
+      'decks/carouseldeck/scripts/verify.mjs',
+      'decks/carouseldeck/apps/storybook/x.tsx'
+    ]),
     [
       { step: 'format:check', args: [] },
       { step: 'lint', args: [] },
@@ -187,7 +220,10 @@ test('several paths need the union of their gates, in list order', () => {
     ]
   );
   assert.deepEqual(
-    gatesFor(['apps/storybook/b.ts', 'packages/core/src/a.ts']),
+    gatesFor([
+      'decks/carouseldeck/apps/storybook/b.ts',
+      'decks/carouseldeck/packages/core/src/a.ts'
+    ]),
     STEPS.map((step) => ({ step, args: [] }))
   );
 });
@@ -203,7 +239,10 @@ test('--changed runs the gates the changed paths need', () => {
   const refs = [];
   const changed = (/** @type {string} */ ref) => {
     refs.push(ref);
-    return ['README.md', 'scripts/verify.mjs'];
+    return [
+      'decks/carouseldeck/README.md',
+      'decks/carouseldeck/scripts/verify.mjs'
+    ];
   };
   assert.deepEqual(
     plan(['--changed'], changed).map(({ step }) => step),
@@ -214,7 +253,9 @@ test('--changed runs the gates the changed paths need', () => {
 });
 
 test('--changed with --only or --job runs what both ask for', () => {
-  const changed = () => ['apps/storybook/stories/deck.stories.tsx'];
+  const changed = () => [
+    'decks/carouseldeck/apps/storybook/stories/deck.stories.tsx'
+  ];
   assert.deepEqual(
     plan(['--job', 'e2e', '--project=firefox', '--changed'], changed),
     [{ step: 'test:e2e', args: ['--project=firefox'] }]
@@ -227,7 +268,7 @@ test('--changed with --only or --job runs what both ask for', () => {
   // --project.
   assert.deepEqual(
     plan(['--job', 'e2e', '--project=firefox', '--changed'], () => [
-      'README.md'
+      'decks/carouseldeck/README.md'
     ]),
     []
   );
@@ -242,7 +283,7 @@ test('ciJobs says which CI jobs have a step to run', () => {
     next: true,
     e2e: true
   });
-  assert.deepEqual(ciJobs(gatesFor(['README.md'])), {
+  assert.deepEqual(ciJobs(gatesFor(['decks/carouseldeck/README.md'])), {
     checks: true,
     unit: false,
     'unit-react-18': false,
@@ -250,13 +291,35 @@ test('ciJobs says which CI jobs have a step to run', () => {
     next: false,
     e2e: false
   });
-  assert.deepEqual(ciJobs(gatesFor(['e2e/deck.spec.ts'])), {
+  assert.deepEqual(ciJobs(gatesFor(['decks/carouseldeck/e2e/deck.spec.ts'])), {
     checks: true,
     unit: false,
     'unit-react-18': false,
     packages: false,
     next: false,
     e2e: true
+  });
+  // A deck-only change needs every deck gate.
+  assert.deepEqual(
+    ciJobs(gatesFor(['decks/carouseldeck/packages/react/src/index.tsx'])),
+    {
+      checks: true,
+      unit: true,
+      'unit-react-18': true,
+      packages: true,
+      next: true,
+      e2e: true
+    }
+  );
+  // A change only under sites/ needs no deck gate: every gate job is skipped,
+  // and `verify` passes.
+  assert.deepEqual(ciJobs(gatesFor(['sites/deck-cool/src/index.ts'])), {
+    checks: false,
+    unit: false,
+    'unit-react-18': false,
+    packages: false,
+    next: false,
+    e2e: false
   });
 });
 
@@ -279,12 +342,12 @@ test("the union of CI's jobs is the whole list, each step once", () => {
   assert.equal(all.length, STEPS.length, 'a step is in two CI jobs');
 });
 
-const ci = read('.github/workflows/ci.yml');
+const ci = read('../../.github/workflows/ci.yml');
 
 test('ci.yml runs every CI job, and no other', () => {
-  const jobs = [...ci.matchAll(/pnpm verify --job (\S+)/g)].map(
-    (match) => /** @type {string} */ (match[1])
-  );
+  const jobs = [
+    ...ci.matchAll(/pnpm --dir decks\/carouseldeck verify --job (\S+)/g)
+  ].map((match) => /** @type {string} */ (match[1]));
   assert.deepEqual(jobs.sort(), Object.keys(CI_JOBS).sort());
 });
 
@@ -296,7 +359,10 @@ test("ci.yml's unit matrix is every shard of one count", () => {
     shards,
     shards.map((_, i) => `${i + 1}/${shards.length}`)
   );
-  assert.match(ci, /pnpm verify --job unit --shard="\$SHARD"/);
+  assert.match(
+    ci,
+    /pnpm --dir decks\/carouseldeck verify --job unit --shard="\$SHARD"/
+  );
 });
 
 test("ci.yml's e2e matrix is every Playwright project", async () => {
@@ -335,10 +401,16 @@ const needsOf = (/** @type {string} */ block) =>
     .split(',')
     .map((job) => job.trim());
 
-test('all-gates needs every gate job', () => {
-  const needs = needsOf(ciJobBlocks()['all-gates'] ?? '');
+test('verify needs every other job', () => {
+  const needs = needsOf(ciJobBlocks().verify ?? '');
   for (const gateJob of Object.keys(CI_JOBS)) {
-    assert.ok(needs.includes(gateJob), `all-gates does not need ${gateJob}`);
+    assert.ok(
+      needs.includes(`carouseldeck-${gateJob}`),
+      `verify does not need carouseldeck-${gateJob}`
+    );
+  }
+  for (const job of ['sites', 'changes']) {
+    assert.ok(needs.includes(job), `verify does not need ${job}`);
   }
 });
 
@@ -355,9 +427,9 @@ test('each gate job runs on a `changes` output that `changes` declares', () => {
   for (const job of Object.keys(CI_JOBS)) {
     assert.ok(outputs.includes(job), `changes declares no ${job} output`);
     assert.match(
-      blocks[job] ?? '',
+      blocks[`carouseldeck-${job}`] ?? '',
       new RegExp(`^ {4}if: needs\\.changes\\.outputs\\.${job} == 'true'$`, 'm'),
-      `${job} does not run on needs.changes.outputs.${job}`
+      `carouseldeck-${job} does not run on needs.changes.outputs.${job}`
     );
   }
 });

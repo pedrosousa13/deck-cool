@@ -6,7 +6,7 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  sites:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -41,3 +41,249 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
+
+  # The gates carouseldeck's change needs, from the paths it touches
+  # (decks/carouseldeck/scripts/verify.mjs, gatesFor): the merge base with
+  # origin/main on a branch push, so it covers the whole branch, not the last
+  # push; the commit before the push on a push to main, which lands squashed
+  # PRs, so that is one PR's change. No install: the script uses Node's
+  # built-ins only. Prints `<job>=true|false` for each job below.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      base: ${{ steps.plan.outputs.base }}
+      checks: ${{ steps.plan.outputs.checks }}
+      unit: ${{ steps.plan.outputs.unit }}
+      unit-react-18: ${{ steps.plan.outputs.unit-react-18 }}
+      packages: ${{ steps.plan.outputs.packages }}
+      next: ${{ steps.plan.outputs.next }}
+      e2e: ${{ steps.plan.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: plan
+        shell: bash # with pipefail, so a failing verify.mjs fails the step
+        env:
+          REF: ${{ github.ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$REF" = "refs/heads/main" ]; then
+            base="$BEFORE"
+          else
+            base=$(git merge-base origin/main HEAD)
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          node decks/carouseldeck/scripts/verify.mjs "--changed=$base" --dry-run
+          node decks/carouseldeck/scripts/verify.mjs "--changed=$base" --ci-jobs | tee -a "$GITHUB_OUTPUT"
+
+  # The gates that need no browser. Each gate job runs `pnpm --dir
+  # decks/carouseldeck verify --job <its name> --changed=<base>`:
+  # verify.mjs's CI_JOBS says which steps each job runs, so a gate added there
+  # runs here.
+  carouseldeck-checks:
+    needs: changes
+    if: needs.changes.outputs.checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - env:
+          BASE: ${{ needs.changes.outputs.base }}
+        run: pnpm --dir decks/carouseldeck verify --job checks "--changed=$BASE"
+
+  # The packed tarballs: publint, attw and `'use client'`.
+  carouseldeck-packages:
+    needs: changes
+    if: needs.changes.outputs.packages == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - env:
+          BASE: ${{ needs.changes.outputs.base }}
+        run: pnpm --dir decks/carouseldeck verify --job packages "--changed=$BASE"
+
+  # A Next.js server component renders a deck from the packed tarballs.
+  carouseldeck-next:
+    needs: changes
+    if: needs.changes.outputs.next == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          # The Next.js fixture installs into the same store from its own
+          # lockfile (decks/carouseldeck/scripts/next-rsc.mjs).
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            decks/carouseldeck/tests/next-rsc/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - env:
+          BASE: ${{ needs.changes.outputs.base }}
+        run: pnpm --dir decks/carouseldeck verify --job next "--changed=$BASE"
+
+  # vitest's browser mode: chromium, and webkit for a few tests, in four
+  # shards. vitest shards by file, so no one file may be much longer than a
+  # shard: arrival.test.tsx, once nine minutes, is four files for that. In
+  # Playwright's image, as carouseldeck-e2e is: its browsers and their
+  # system libraries are installed, so no job installs them with apt, which
+  # once hung CI for 15 minutes on a slow mirror.
+  #
+  # The image is pinned by digest, and must match @playwright/test in
+  # pnpm-lock.yaml. To bump it with Playwright: change the tag in all three
+  # jobs, then pin the digest the tag now names, from
+  #   docker buildx imagetools inspect mcr.microsoft.com/playwright:v<version>-noble
+  # (the index's `Digest:`).
+  #
+  # It runs as the runner's user, as Playwright's docs advise: Firefox refuses
+  # a HOME owned by another user. The image's Node is 24, the same as
+  # setup-node puts on PATH. Corepack's shims go to a directory that user can
+  # write, not the image's /usr/bin.
+  carouseldeck-unit:
+    needs: changes
+    if: needs.changes.outputs.unit == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1/4, 2/4, 3/4, 4/4]
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user 1001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - run: |
+          mkdir -p "$RUNNER_TEMP/corepack"
+          corepack enable --install-directory "$RUNNER_TEMP/corepack"
+          echo "$RUNNER_TEMP/corepack" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - env:
+          BASE: ${{ needs.changes.outputs.base }}
+          SHARD: ${{ matrix.shard }}
+        run: pnpm --dir decks/carouseldeck verify --job unit --shard="$SHARD" "--changed=$BASE"
+
+  # The React package's tests again, on React 18, against
+  # @carouseldeck/react-18's build: carouseldeck-unit, with its image and
+  # shards, beside it rather than after it in the same job, so CI takes no
+  # longer.
+  carouseldeck-unit-react-18:
+    needs: changes
+    if: needs.changes.outputs.unit-react-18 == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1/4, 2/4, 3/4, 4/4]
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user 1001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - run: |
+          mkdir -p "$RUNNER_TEMP/corepack"
+          corepack enable --install-directory "$RUNNER_TEMP/corepack"
+          echo "$RUNNER_TEMP/corepack" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - env:
+          BASE: ${{ needs.changes.outputs.base }}
+          SHARD: ${{ matrix.shard }}
+        run: pnpm --dir decks/carouseldeck verify --job unit-react-18 --shard="$SHARD" "--changed=$BASE"
+
+  # The e2e suite, one Playwright project per job, in the image
+  # carouseldeck-unit uses: keep the three in step.
+  carouseldeck-e2e:
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user 1001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - run: |
+          mkdir -p "$RUNNER_TEMP/corepack"
+          corepack enable --install-directory "$RUNNER_TEMP/corepack"
+          echo "$RUNNER_TEMP/corepack" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - env:
+          BASE: ${{ needs.changes.outputs.base }}
+          PROJECT: ${{ matrix.project }}
+        run: pnpm --dir decks/carouseldeck verify --job e2e --project="$PROJECT" "--changed=$BASE"
+
+  # The one check to require in branch protection: it passes when every job
+  # passed, or was skipped because the change needs none of its gates.
+  verify:
+    needs: [sites, changes, carouseldeck-checks, carouseldeck-packages, carouseldeck-next, carouseldeck-unit, carouseldeck-unit-react-18, carouseldeck-e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Gate jobs: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *)
+                echo "::error::A gate job ended in $result."
+                exit 1
+                ;;
+            esac
+          done

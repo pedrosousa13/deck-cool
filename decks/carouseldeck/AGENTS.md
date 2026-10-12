@@ -33,16 +33,17 @@ in one browser, `--shard=1/4` runs `test` and `test:react-18` in one vitest
 shard of four, and `--dry-run` lists the gates without running them. With no
 arguments, `pnpm verify` runs every gate, as before.
 
-CI (`.github/workflows/ci.yml`) runs the same list, split into parallel jobs
-by `CI_JOBS` in `scripts/verify.mjs`: `changes` works out which gates the
-change needs, then `checks` (the gates with no browser but the next two),
-`packages` (`test:packages`), `next` (`test:next`), `unit` (vitest, one job
-per shard of four), `unit-react-18` (`test:react-18`, the same way) and `e2e`
-(one job per browser) each run `pnpm verify --job <name>`. On a pull request
-they run with `--changed` against its base, and a job with nothing to run is
-skipped; a push to `main` runs every gate. `unit`, `unit-react-18` and `e2e`
-run in Playwright's container image, pinned by digest in `ci.yml`: bump it
-with `@playwright/test`, as the comment there says.
+CI (deck-cool's root `.github/workflows/ci.yml`) runs the same list, split
+into parallel jobs by `CI_JOBS` in `scripts/verify.mjs`: `changes` works out
+which gates the change needs, then `checks` (the gates with no browser but
+the next two), `packages` (`test:packages`), `next` (`test:next`), `unit`
+(vitest, one job per shard of four), `unit-react-18` (`test:react-18`, the
+same way) and `e2e` (one job per browser) each run `pnpm verify --job
+<name>`. On a pull request they run with `--changed` against its base, and a
+job with nothing to run is skipped; a push to `main` runs every gate. `unit`,
+`unit-react-18` and `e2e` run in Playwright's container image, pinned by
+digest in the root `ci.yml`: bump it with `@playwright/test`, as the comment
+there says.
 `scripts/verify.test.mjs` fails if the jobs do not cover every gate, so a gate
 added to the list runs in CI with no second list to update. CI does not
 replace running `pnpm verify` locally; it catches the time you forgot.
