@@ -115,4 +115,5 @@ Rejected:
 - **ADR 0001 is amended for a deck that lives here.** Its first reason holds: the site shows the latest release, now because the deploy builds the release's commit. Its "Releases update the sites by PR" consequence, and the dispatch and App token behind it, apply only to the decks still outside.
 - **deck.cool's carouseldeck card reads the release, not the workspace** (maintainer, 2026-10-12). At build time it reads the deck's README and size figure at the latest carouseldeck release tag, with `git show <tag>:<path>`, so the card always matches npm. That needs the tags in CI: the deck-cool build and deploy workflows check out full history or fetch the tags. #112 wires it.
 - **AGENTS.md gains a section for the deck**: run its commands with `pnpm --dir decks/carouseldeck`, and `pnpm --dir decks/carouseldeck verify` before landing a change to it.
+- **A deck keeps its own ADRs**, under `decks/<deck>/docs/adr/`, numbered on their own. The root's `docs/adr/` holds the repo's.
 - **playdeck moves the same way**, into `decks/playdeck/`, with its own gate jobs feeding `verify` and its own `fixed` group.

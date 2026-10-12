@@ -1,7 +1,7 @@
 # Loop copies are rendered by Viewport and never counted
 
 ADR-0006 chose clone and jump for loop (the technique's name; the elements are
-_copies_, CONTEXT.md): a full set of copies on each side of the slides,
+_copies_, GLOSSARY.md): a full set of copies on each side of the slides,
 `aria-hidden` and `inert`, and a jump of one set length onto the identical
 slide once the viewport rests on a copy's snap point, never mid-motion but for
 a press on the copies (amended for #48, below) and a wheel event there

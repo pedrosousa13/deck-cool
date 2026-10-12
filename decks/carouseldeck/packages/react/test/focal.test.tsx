@@ -16,7 +16,7 @@ import {
   WIDTH
 } from './fixtures';
 
-// The focal slide is the one at the snap alignment point (CONTEXT.md), which
+// The focal slide is the one at the snap alignment point (GLOSSARY.md), which
 // is consumer CSS (ADR-0003): here 3.5 slides in view, centred. Seven slides
 // give five snap points: slides 0 and 1 both rest at scroll 0, slides 5 and 6
 // both at the end of the range.

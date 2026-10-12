@@ -232,7 +232,7 @@ describe('Dots state as data attributes', () => {
     expect(group.getAttribute('data-carouseldeck-dots')).toBe('');
   });
 
-  // data-current marks the current slide (CONTEXT.md); a dot is a page, and
+  // data-current marks the current slide (GLOSSARY.md); a dot is a page, and
   // the current one is styled with [aria-current].
   test('each dot carries data-index, and none data-current', () => {
     const { dots } = renderDeck();

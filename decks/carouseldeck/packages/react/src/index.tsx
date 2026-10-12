@@ -639,7 +639,7 @@ export function useSlide(): UseSlideResult {
 
 /**
  * A transition built on progress while the viewport keeps scrolling natively
- * (CONTEXT.md), passed to `Deck.Viewport`'s `effect`. Each effect is its own
+ * (GLOSSARY.md), passed to `Deck.Viewport`'s `effect`. Each effect is its own
  * entry point, such as `@carouseldeck/react/fade`, so a deck that imports none
  * ships none of their code.
  */

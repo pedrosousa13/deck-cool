@@ -61,7 +61,7 @@ export function addStyle(css: string) {
 /** Slides 3.5 to the viewport, centred: apply with class `centred`. */
 export const CENTRED = `.centred > * { width: calc(100% / 3.5); scroll-snap-align: center; }`;
 
-// A page is a group of slides that snap together (CONTEXT.md). Geometry is
+// A page is a group of slides that snap together (GLOSSARY.md). Geometry is
 // consumer CSS (ADR-0003), so paging is too: only the first slide of each
 // page is a snap target. Both rules have the same specificity, so a later
 // page size, as in a media query, overrides every slide's alignment.

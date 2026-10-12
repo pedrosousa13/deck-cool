@@ -15,7 +15,7 @@ import {
   WIDTH
 } from './fixtures';
 
-// Progress (CONTEXT.md): each slide's signed distance from the focal
+// Progress (GLOSSARY.md): each slide's signed distance from the focal
 // position, in slides, written to the DOM as `--deck-slide-progress`, never
 // React state (ADR-0003). In-view: `data-in-view` on each slide the viewport
 // shows.

@@ -39,8 +39,9 @@ which gates the change needs, then `checks` (the gates with no browser but
 the next two), `packages` (`test:packages`), `next` (`test:next`), `unit`
 (vitest, one job per shard of four), `unit-react-18` (`test:react-18`, the
 same way) and `e2e` (one job per browser) each run `pnpm verify --job
-<name>`. On a pull request they run with `--changed` against its base, and a
-job with nothing to run is skipped; a push to `main` runs every gate. `unit`,
+<name>`. `ci.yml` runs on every push, not on a pull request: on a branch, the base
+is the merge base with `origin/main`; on `main`, the commit before the push.
+A job with nothing to run in that diff is skipped. `unit`,
 `unit-react-18` and `e2e` run in Playwright's container image, pinned by
 digest in the root `ci.yml`: bump it with `@playwright/test`, as the comment
 there says.
@@ -146,16 +147,5 @@ https://carousel.deck.cool. It builds its docs pages from the workspace's
 `@carouseldeck/docs`. A release deploys it: `release.yml` calls
 `deploy-carouseldeck.yml` with the released commit (ADR 0002).
 
-## Agent skills
-
-### Issue tracker
-
-Issues live in the repo itself — GitHub issues on pedrosousa13/deck-cool, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Canonical label names, as repo labels on pedrosousa13/deck-cool — plus `in-progress` and `P0`–`P3`, labels that stand in for a missing field. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+For the issue tracker, triage labels and the domain docs, see the root
+`AGENTS.md`.

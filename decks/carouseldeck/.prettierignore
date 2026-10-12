@@ -4,9 +4,5 @@ storybook-static/
 playwright-report/
 test-results/
 pnpm-lock.yaml
-# Stamped by the Factory plugin from its own templates. Reformatting them here
-# would drift them from those templates, and prettier breaks their wrapped
-# inline code spans.
-docs/agents/
 # Throwaway prototype measurement output (#3); gitignored in the prototype.
 prototypes/scroll-snap/measure-results/

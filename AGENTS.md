@@ -37,6 +37,14 @@ pnpm test        # vitest across the workspace
 
 deck.cool is deployed with wrangler, as Workers Static Assets, by `.github/workflows/deploy-deck-cool.yml`: a dry run on every push, a publish only on a manual run with `apply`. carouseldeck's site is deployed the same way to carousel.deck.cool, as the Worker `carouseldeck`, by `.github/workflows/deploy-carouseldeck.yml`, but only from a carouseldeck release: release.yml calls it with the released commit, and a manual run with `apply` publishes the latest `@carouseldeck/react@X.Y.Z` tag (ADR 0002). pagedeck's to page.deck.cool, as the Worker `pagedeck`, by `.github/workflows/deploy-pagedeck.yml`; and playdeck's to play.deck.cool, as the Worker `play-deck-cool`, by `.github/workflows/deploy-playdeck.yml`. Each one's dry run runs on a push that changes its site, `packages/` or the install, and carouseldeck's also on one that changes `decks/carouseldeck/packages/`. CI and deck.cool's deploy check out every tag, for the card. `docs/deploy.md` is the runbook.
 
+## carouseldeck
+
+Its source lives in `decks/carouseldeck/`. Run its commands from the repo
+root with `pnpm --dir decks/carouseldeck <script>`, and
+`pnpm --dir decks/carouseldeck verify` before landing a change to it (ADR
+0002). Its own ADRs are at `decks/carouseldeck/docs/adr/`, numbered on their
+own. `decks/carouseldeck/AGENTS.md` covers what's specific to working in it.
+
 ## Releasing a deck
 
 This section is for the decks that live in their own repos. carouseldeck lives in this repo, and its sites use it from the workspace, so it sends no dispatch and gets no bump PR (ADR 0002). It releases with Changesets, from `.changeset/` at the root, and `.github/workflows/release.yml`: a consumer-visible change to its packages needs a changeset (`pnpm changeset`), and the release runbook is `decks/carouseldeck/AGENTS.md`, "Releasing".

@@ -22,6 +22,7 @@ comparison with Embla and Keen.
 
 Contributing: run `pnpm verify` before landing anything (see
 [AGENTS.md](AGENTS.md)). Decisions are recorded in [docs/adr](docs/adr), and
-the project's vocabulary in [CONTEXT.md](CONTEXT.md).
+the project's vocabulary in the root [GLOSSARY.md](../../GLOSSARY.md), under
+"carouseldeck".
 
 MIT licensed.
