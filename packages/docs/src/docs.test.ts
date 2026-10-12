@@ -6,9 +6,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
-import { defineDocs, docsHref } from "./index.ts";
+import { defineDocs, docsHref, unsafeMarkup } from "./index.ts";
 import type { DocsOptions } from "./index.ts";
-import { unsafeMarkup } from "./page.ts";
 
 const FIXTURE = new URL("../fixtures/example-docs/", import.meta.url);
 

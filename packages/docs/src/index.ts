@@ -9,6 +9,8 @@ import { contentRootOf, createDocsLoader } from "./loader.ts";
 import type { DocsPage } from "./loader.ts";
 
 export { docsHref } from "./loader.ts";
+/** For a site that adds markup of its own to a docs page's HTML: checks the HTML first, as DocsProse does. */
+export { unsafeMarkup } from "./page.ts";
 export type { DocsPage, NavGroup } from "./loader.ts";
 
 /** A component as `build.components` declares one: a module path, or `{ path, hydrate }`. */
