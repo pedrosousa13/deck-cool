@@ -11,10 +11,10 @@ import { DOCS_NAV } from "./docs-pages.ts";
 // headers in the build's _headers file, so each page and its islands run
 // under the CSP. Needs Playwright's Chromium: `pnpm exec playwright install chromium`.
 
-// A page brings each deck into view before it checks, and axe reads a long page.
-vi.setConfig({ testTimeout: 30_000 });
-
 const site = browserHarness(fileURLToPath(new URL("..", import.meta.url)));
+// Raises the harness's 15 s for this file: a page brings each deck into view
+// before it checks, and axe reads a long page.
+vi.setConfig({ testTimeout: 30_000 });
 const { visit } = site;
 
 // The docs pages, one with a demo and one without, as site.build.test.ts covers them.
