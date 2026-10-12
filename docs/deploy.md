@@ -153,7 +153,7 @@ Every section above applies, with these differences:
 
 ### slide.deck.cool
 
-carousel.deck.cool serves carouseldeck. slide.deck.cool 301s there, path and query kept, through a Single Redirect rule on the deck.cool zone (rule a2e54e73…); plain http redirects too, through Always Use HTTPS. The old Worker `slidedeck`, built from `@slidedeck/react`, still has the slide.deck.cool custom domain attached, but the redirect rule runs first, so it never gets a request. It stays attached until the maintainer deletes it. The Pages project `slidedeck` and slidedeck.pages.dev are gone.
+carousel.deck.cool serves carouseldeck. slide.deck.cool 301s there, path and query kept, through a Single Redirect rule on the deck.cool zone (rule a2e54e731e06494bb9345754a53680c5); plain http redirects too, through Always Use HTTPS. The old Worker `slidedeck`, built from `@slidedeck/react`, still has the slide.deck.cool custom domain attached, but the redirect rule runs first, so it never gets a request. It stays attached until the maintainer deletes it. The Pages project `slidedeck` and slidedeck.pages.dev are gone.
 
 carousel.deck.cool's own build is still from the 1.2.0 tag, so its canonical and og:url tags still say slide.deck.cool until the next carouseldeck release redeploys it. The redirect covers that gap: a page that says slide.deck.cool still lands on carousel.deck.cool.
 
