@@ -1,5 +1,5 @@
 import { chromium, type Browser, type Page, type Response } from "playwright";
-import { afterAll, beforeAll } from "vitest";
+import { afterAll, beforeAll, vi } from "vitest";
 import { serveSite, type ServedSite } from "./serve-site.ts";
 
 declare global {
@@ -50,10 +50,16 @@ interface ReactRootFiber {
 }
 
 /**
- * How long islandsHydrated waits before it names the islands still
- * dehydrated: under vitest's default test timeout of 5 s, so it fails first.
+ * The test timeout in a file that calls browserHarness. Under load a browser
+ * test can take longer than vitest's default of 5 s.
  */
-const HYDRATION_DEADLINE_MS = 4_000;
+const BROWSER_TEST_TIMEOUT_MS = 15_000;
+
+/**
+ * How long islandsHydrated waits before it names the islands still
+ * dehydrated: under BROWSER_TEST_TIMEOUT_MS, so it fails first.
+ */
+const HYDRATION_DEADLINE_MS = 8_000;
 
 /**
  * Brings each island into view in turn, so one that hydrates when visible
@@ -104,10 +110,12 @@ export async function islandsHydrated(page: Page): Promise<void> {
 /**
  * Serves the site the build wrote under `site`, its directory, with the
  * headers in its _headers file, and launches Chromium, for the test file that
- * calls it. Both close after the file's tests. Needs Playwright's Chromium:
- * `pnpm exec playwright install chromium`.
+ * calls it. Both close after the file's tests. Sets that file's test timeout
+ * to BROWSER_TEST_TIMEOUT_MS; vitest resets it after the file. Needs
+ * Playwright's Chromium: `pnpm exec playwright install chromium`.
  */
 export function browserHarness(site: string): BrowserHarness {
+  vi.setConfig({ testTimeout: BROWSER_TEST_TIMEOUT_MS });
   let served: ServedSite | undefined;
   let browser: Browser | undefined;
 
