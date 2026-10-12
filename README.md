@@ -1,6 +1,6 @@
 # deck.cool
 
-Every site in the `*deck` family: the umbrella site at [deck.cool](https://deck.cool), and one site per package, at slide.deck.cool, page.deck.cool and play.deck.cool. All are built with [Pagedeck](https://github.com/pedrosousa13/pagedeck).
+Every site in the `*deck` family: the umbrella site at [deck.cool](https://deck.cool), and one site per package, at carousel.deck.cool, page.deck.cool and play.deck.cool. All are built with [Pagedeck](https://github.com/pedrosousa13/pagedeck).
 
 ## Design
 
