@@ -27,7 +27,6 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
     "@axe-core/playwright": "4.13.0",
-    "@changesets/cli": "3.0.3",
     "@eslint/js": "10.0.1",
     "@pagedeck/markdown-loader": "0.2.3",
     "@playwright/test": "1.63.0",

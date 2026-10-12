@@ -9,10 +9,12 @@
   "scripts": {
     "build": "pnpm -r --filter \"{./sites/*}...\" --filter \"{./packages/**}...\" build",
     "typecheck": "pnpm -r --filter \"{./sites/*}...\" --filter \"{./packages/**}...\" typecheck",
-    "test": "vitest run"
+    "test": "vitest run",
+    "changeset": "changeset"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
+    "@changesets/cli": "3.0.3",
     "@types/node": "24.19.1",
     "playwright": "1.63.0",
     "typescript": "6.0.3",
