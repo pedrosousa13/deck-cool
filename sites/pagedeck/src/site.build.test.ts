@@ -70,12 +70,12 @@ const DOCS_PAGES = [DOCS.start, DOCS_WITH_TABLES];
 const PAGES = [...OWN_PAGES, ...DOCS_PAGES];
 
 test("the site is the landing's four pages, the docs' search page and every page in the docs' nav.json", () => {
-  expect(manifest.pages.map((page) => page.path).sort()).toEqual([...OWN_PAGES, ...DOCS_NAV.map(({ path }) => path)].sort());
+  expect(manifest.pages.map((page) => page.path).sort()).toEqual([...OWN_PAGES, ...DOCS_NAV.map(({ href }) => href)].sort());
 });
 
 test("no page uses an em dash", () => {
   // Docs-package pages: their em dashes are upstream's (pedrosousa13/pagedeck#140).
-  expect(pagesWithEmDashes(SITE, DOCS_NAV.map(({ path }) => path))).toEqual([]);
+  expect(pagesWithEmDashes(SITE, DOCS_NAV.map(({ href }) => href))).toEqual([]);
 });
 
 describe("budgets, measured and pinned", () => {
@@ -115,10 +115,10 @@ describe("budgets, measured and pinned", () => {
   // The layout has no search island: search is a page of its own.
   test("every docs page with no demo ships 0 B of JavaScript, and no script at all", () => {
     const plain = DOCS_NAV.filter(({ demos }) => demos.length === 0);
-    expect(plain.map(({ path }) => path)).toEqual(expect.arrayContaining(DOCS_PAGES));
-    for (const { path } of plain) {
-      expect(budget.find((row) => row.path === path)?.actual, path).toBe(0);
-      expect(parse(path).querySelectorAll("script, link[rel=modulepreload]"), path).toHaveLength(0);
+    expect(plain.map(({ href }) => href)).toEqual(expect.arrayContaining(DOCS_PAGES));
+    for (const { href } of plain) {
+      expect(budget.find((row) => row.path === href)?.actual, href).toBe(0);
+      expect(parse(href).querySelectorAll("script, link[rel=modulepreload]"), href).toHaveLength(0);
     }
   });
 
@@ -130,7 +130,7 @@ describe("budgets, measured and pinned", () => {
       [PATHS.features]: ["consent_banner", "island_idle", "island_load", "island_visible", "search"],
       [PATHS.cmsDemo]: ["variant_picker"],
       [PATHS.search]: ["search"],
-      ...Object.fromEntries(DOCS_NAV.map(({ path, demos }) => [path, demos.map(demoComponent).sort()])),
+      ...Object.fromEntries(DOCS_NAV.map(({ href, demos }) => [href, demos.map(demoComponent).sort()])),
     });
   });
 });
@@ -687,7 +687,7 @@ describe("the docs' search page", () => {
     const doc = parse(PATHS.search);
     expect(doc.title).toBe("Search");
     const nav = present(doc.querySelector('main .fw-docs nav[aria-label="Documentation"]'), "the docs' nav");
-    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ path }) => path));
+    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ href }) => href));
     expect(text(doc.querySelector("main .fw-docs .fw-doc > h1"))).toBe("Search");
     expect(doc.querySelector('main [data-fw-component="search"] input')).not.toBeNull();
   });
@@ -714,8 +714,8 @@ describe("the docs, from @pagedeck/docs", () => {
     for (const [name, version] of Object.entries(pkg.dependencies)) if (name.startsWith("@pagedeck/")) expect(version, name).toBe("0.2.3");
   });
 
-  test.each(DOCS_NAV)("$path renders with each demo it marks, in order", ({ path, demos }) => {
-    expect(demosOn(parse(path))).toEqual(demos.map(demoComponent));
+  test.each(DOCS_NAV)("$href renders with each demo it marks, in order", ({ href, demos }) => {
+    expect(demosOn(parse(href))).toEqual(demos.map(demoComponent));
   });
 
   test("marks each demo the site registers once, and no other", () => {
@@ -723,9 +723,9 @@ describe("the docs, from @pagedeck/docs", () => {
   });
 
   // The docs come from npm: no page of them may run script or load from another origin.
-  test.each(DOCS_NAV)("$path carries no script, <style> or inline handler, and loads nothing from another origin", ({ path }) => {
-    const doc = parse(path);
-    expect(doc.querySelectorAll("script, style, iframe, object, embed"), path).toHaveLength(0);
+  test.each(DOCS_NAV)("$href carries no script, <style> or inline handler, and loads nothing from another origin", ({ href }) => {
+    const doc = parse(href);
+    expect(doc.querySelectorAll("script, style, iframe, object, embed"), href).toHaveLength(0);
     for (const element of doc.querySelectorAll("*")) {
       for (const { name, value } of element.attributes) {
         expect(name, element.tagName).not.toMatch(/^on/);
@@ -739,7 +739,7 @@ describe("the docs, from @pagedeck/docs", () => {
 
   test("the nav lists every page in nav.json's order, and marks the current one", () => {
     const nav = present(parse(DOCS.start).querySelector('nav[aria-label="Documentation"]'), "the docs' nav");
-    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ path }) => path));
+    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ href }) => href));
     expect(nav.querySelector('[aria-current="page"]')?.getAttribute("href")).toBe(DOCS.start);
   });
 
@@ -783,7 +783,7 @@ describe("the figures the docs quote", () => {
   test("no docs page loads JavaScript, and the search page, the one that does, loads its island when the browser is idle", () => {
     expect(source("index.md")).toContain("No page on this site loads any JavaScript.");
     expect(source("explanation/why-this-site-ships-no-javascript.md")).toContain("It loads when the browser is idle");
-    for (const { path } of DOCS_NAV) expect(budget.find((row) => row.path === path)?.actual, path).toBe(0);
+    for (const { href } of DOCS_NAV) expect(budget.find((row) => row.path === href)?.actual, href).toBe(0);
     const scripted = manifest.pages.filter((page) => page.path.startsWith("/docs/") && page.components.length > 0);
     expect(scripted.map((page) => page.path)).toEqual([PATHS.search]);
     expect(parse(PATHS.search).querySelector('[data-fw-component="search"]')?.getAttribute("data-fw-mode")).toBe("idle");

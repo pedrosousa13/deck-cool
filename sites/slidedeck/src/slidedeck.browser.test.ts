@@ -194,8 +194,8 @@ describe("the docs' demos in a browser", () => {
   });
 
   // Every demo island runs under the CSP, loads nothing from another origin, and no script fails.
-  test.each(DEMO_PAGES)("$path's demos run, under the CSP, with nothing off the origin, and axe finds no violations", async ({ path }) => {
-    const { page, offOrigin, violations, errors } = await visit(path, { width: 1280, reducedMotion: "reduce" });
+  test.each(DEMO_PAGES)("$href's demos run, under the CSP, with nothing off the origin, and axe finds no violations", async ({ href }) => {
+    const { page, offOrigin, violations, errors } = await visit(href, { width: 1280, reducedMotion: "reduce" });
     await hydrated(page);
     expect(await page.locator("article [data-slidedeck-slide][data-in-view]").count()).toBeGreaterThan(0);
     // The curve effect fades a slide with its distance from the focal one: the neighbours' faint text is the effect.
@@ -206,8 +206,8 @@ describe("the docs' demos in a browser", () => {
     expect(errors).toEqual([]);
   });
 
-  test.each(DEMO_PAGES)("at 390px, $path does not scroll sideways", async ({ path }) => {
-    const { page } = await visit(path, { width: 390, reducedMotion: "reduce" });
+  test.each(DEMO_PAGES)("at 390px, $href does not scroll sideways", async ({ href }) => {
+    const { page } = await visit(href, { width: 390, reducedMotion: "reduce" });
     await hydrated(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });

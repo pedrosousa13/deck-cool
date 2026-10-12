@@ -70,7 +70,7 @@ const DOCS_PAGES = ["/docs/examples/", "/docs/start/", PATHS.comparison];
 const PAGES = [...OWN_PAGES, ...DOCS_PAGES];
 
 test("the site is the home page, the examples, the docs' search page and every page in the docs' nav.json", () => {
-  expect(manifest.pages.map((page) => page.path).sort()).toEqual([...OWN_PAGES, ...DOCS_NAV.map(({ path }) => path)].sort());
+  expect(manifest.pages.map((page) => page.path).sort()).toEqual([...OWN_PAGES, ...DOCS_NAV.map(({ href }) => href)].sort());
 });
 
 test("no page uses an em dash", () => {
@@ -78,7 +78,7 @@ test("no page uses an em dash", () => {
     // The examples keep playdeck.video's copy as it was ported.
     PATHS.examples,
     // Docs-package pages: their em dashes are upstream's (pedrosousa13/playdeck#908).
-    ...DOCS_NAV.map(({ path }) => path),
+    ...DOCS_NAV.map(({ href }) => href),
   ];
   expect(pagesWithEmDashes(SITE, exempt)).toEqual([]);
 });
@@ -145,19 +145,19 @@ describe("budgets, measured and pinned", () => {
   // The layout has no search island: search is a page of its own.
   test("every docs page with no demo, the comparison guide among them, ships 0 B of JavaScript, and no script at all", () => {
     const plain = DOCS_NAV.filter(({ demos }) => demos.length === 0);
-    expect(plain.map(({ path }) => path)).toContain(PATHS.comparison);
-    for (const { path } of plain) {
-      expect(budget.find((row) => row.path === path)?.actual, path).toBe(0);
-      expect(parse(path).querySelectorAll("script, link[rel=modulepreload]"), path).toHaveLength(0);
+    expect(plain.map(({ href }) => href)).toContain(PATHS.comparison);
+    for (const { href } of plain) {
+      expect(budget.find((row) => row.path === href)?.actual, href).toBe(0);
+      expect(parse(href).querySelectorAll("script, link[rel=modulepreload]"), href).toHaveLength(0);
     }
   });
 
   // So a docs release that moves a demo to another page still builds.
   test("the docs pages with demos share one budget, which the largest of them fills to within a KB", () => {
-    const rows = DOCS_NAV.filter(({ demos }) => demos.length > 0).map(({ path }) =>
+    const rows = DOCS_NAV.filter(({ demos }) => demos.length > 0).map(({ href }) =>
       present(
-        budget.find((row) => row.path === path),
-        `the budget row for ${path}`,
+        budget.find((row) => row.path === href),
+        `the budget row for ${href}`,
       ),
     );
     expect(rows.length).toBeGreaterThan(0);
@@ -175,7 +175,7 @@ describe("budgets, measured and pinned", () => {
       // The docs' two demos, which are the two archetypes.
       [PATHS.examples]: [COURSE_PLATFORM, STREAMING_SERVICE],
       [PATHS.search]: ["search"],
-      ...Object.fromEntries(DOCS_NAV.map(({ path, demos }) => [path, demos.map(demoComponent).sort()])),
+      ...Object.fromEntries(DOCS_NAV.map(({ href, demos }) => [href, demos.map(demoComponent).sort()])),
     });
   });
 });
@@ -779,7 +779,7 @@ describe("the docs' search page", () => {
     const doc = parse(PATHS.search);
     expect(doc.title).toBe("Search");
     const nav = present(doc.querySelector('main .pd-docs nav[aria-label="Documentation"]'), "the docs' nav");
-    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ path }) => path));
+    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ href }) => href));
     expect(text(doc.querySelector("main .pd-docs .pd-doc > h1"))).toBe("Search");
     expect(doc.querySelector('main [data-fw-component="search"] input')).not.toBeNull();
   });
@@ -797,12 +797,12 @@ describe("the docs, from @playdeck/docs", () => {
 
   // The docs have no index.md, so /docs/ has no page of its own.
   test("/docs/ redirects to the docs' first page", () => {
-    expect(DOCS_NAV[0]?.path).toBe("/docs/start/");
+    expect(DOCS_NAV[0]?.href).toBe("/docs/start/");
     expect(readFileSync(`${SITE}site/_redirects`, "utf8")).toContain("/docs/ /docs/start/ 301\n");
   });
 
-  test.each(DOCS_NAV)("$path renders with each demo it marks, in order, rendered on the server and dormant", ({ path, demos }) => {
-    const doc = parse(path);
+  test.each(DOCS_NAV)("$href renders with each demo it marks, in order, rendered on the server and dormant", ({ href, demos }) => {
+    const doc = parse(href);
     expect(demosOn(doc)).toEqual(demos.map(demoComponent));
     for (const island of doc.querySelectorAll("article [data-fw-component]")) {
       expect(island.querySelector('[data-playdeck-part="viewport"]'), island.outerHTML.slice(0, 120)).not.toBeNull();
@@ -816,7 +816,7 @@ describe("the docs, from @playdeck/docs", () => {
 
   test("the nav lists every page in nav.json's order, and marks the current one", () => {
     const nav = present(parse("/docs/start/").querySelector('nav[aria-label="Documentation"]'), "the docs' nav");
-    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ path }) => path));
+    expect(hrefs(nav)).toEqual(DOCS_NAV.map(({ href }) => href));
     expect(nav.querySelector('[aria-current="page"]')?.getAttribute("href")).toBe("/docs/start/");
   });
 

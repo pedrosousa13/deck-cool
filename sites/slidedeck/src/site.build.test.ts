@@ -39,7 +39,7 @@ const DOCS_PAGES = [
 const PAGES = [...OWN_PAGES, ...DOCS_PAGES] as const;
 
 /** Every page the site builds, by path: its own, then every docs page in nav.json's order. */
-const ALL_PATHS = [...OWN_PAGES.map(([path]) => path), ...DOCS_NAV.map(({ path }) => path)];
+const ALL_PATHS = [...OWN_PAGES.map(([path]) => path), ...DOCS_NAV.map(({ href }) => href)];
 
 const window = new Window();
 
@@ -75,7 +75,7 @@ describe("the JavaScript budget", () => {
       budget.find((each) => each.path === path),
       `${path}'s budget`,
     );
-  const demoPaths = DOCS_NAV.filter(({ demos }) => demos.length > 0).map(({ path }) => path);
+  const demoPaths = DOCS_NAV.filter(({ demos }) => demos.length > 0).map(({ href }) => href);
 
   // A page's budget is what it ships, rounded up to the next KB: a page that
   // ships more breaks the build, and one that ships much less needs its budget lowered.
@@ -478,7 +478,7 @@ describe("the home page", () => {
 
 test("no page uses an em dash", () => {
   // Docs-package pages: their em dashes are upstream's (pedrosousa13/slidedeck#143).
-  expect(pagesWithEmDashes(SITE, DOCS_NAV.map(({ path }) => path))).toEqual([]);
+  expect(pagesWithEmDashes(SITE, DOCS_NAV.map(({ href }) => href))).toEqual([]);
 });
 
 describe("the Examples page", () => {
@@ -616,12 +616,12 @@ describe("the docs, from @slidedeck/docs", () => {
 
   // slidedeck's READMEs link https://slide.deck.cool/docs/.
   test("serves /docs/, the docs' first page", () => {
-    expect(DOCS_NAV[0]?.path).toBe("/docs/");
+    expect(DOCS_NAV[0]?.href).toBe("/docs/");
     expect(existsSync(`${OUT}/docs/index.html`)).toBe(true);
   });
 
-  test.each(DOCS_NAV)("$path renders with each demo it marks, in order, rendered on the server", ({ path, demos }) => {
-    const doc = parse(`${path.slice(1)}index.html`);
+  test.each(DOCS_NAV)("$href renders with each demo it marks, in order, rendered on the server", ({ href, demos }) => {
+    const doc = parse(`${href.slice(1)}index.html`);
     expect(demosOn(doc)).toEqual(demos);
     for (const island of doc.querySelectorAll("article fw-island")) {
       expect(island.querySelector('[aria-roledescription="carousel"] [data-slidedeck-slide]'), island.outerHTML.slice(0, 120)).not.toBeNull();
@@ -643,7 +643,7 @@ describe("the docs, from @slidedeck/docs", () => {
 
   test("the sidebar lists every page in nav.json's order, each by its label or else its title", () => {
     const sidebar = present(parse("docs/install/index.html").querySelector('nav[aria-label="Documentation"]'), "the sidebar");
-    expect([...sidebar.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual(DOCS_NAV.map(({ path }) => path));
+    expect([...sidebar.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual(DOCS_NAV.map(({ href }) => href));
     expect(text(sidebar.querySelector('a[href="/docs/"]'))).toBe("Introduction");
     expect(text(sidebar.querySelector('a[href="/docs/install/"]'))).toBe("Install");
   });
@@ -658,10 +658,10 @@ describe("the docs, from @slidedeck/docs", () => {
   test("a page with no demo ships the search island alone, and every such page ships the same", () => {
     const plain = DOCS_NAV.filter(({ demos }) => demos.length === 0);
     expect(plain.length).toBeGreaterThan(0);
-    for (const { path } of plain) {
-      expect([...parse(`${path.slice(1)}index.html`).querySelectorAll("fw-island")].map((island) => island.getAttribute("data-fw-component"))).toEqual(["search"]);
+    for (const { href } of plain) {
+      expect([...parse(`${href.slice(1)}index.html`).querySelectorAll("fw-island")].map((island) => island.getAttribute("data-fw-component"))).toEqual(["search"]);
     }
-    const sizes = new Set(plain.map(({ path }) => budget.find((each) => each.path === path)?.actual));
+    const sizes = new Set(plain.map(({ href }) => budget.find((each) => each.path === href)?.actual));
     expect(sizes.size).toBe(1);
   });
 });

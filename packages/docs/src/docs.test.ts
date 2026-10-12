@@ -87,17 +87,17 @@ describe("docsHref", () => {
 describe("docsNav", () => {
   test("gives each page in nav.json's order, with its address and the demos it marks", () => {
     expect(docsNav({ from: site(), package: "@example/docs", base: "/docs" })).toEqual([
-      { file: "index.md", path: "/docs/", demos: [] },
-      { file: "install.md", path: "/docs/install/", demos: [] },
-      { file: "guides/index.md", path: "/docs/guides/", demos: [] },
-      { file: "guides/layout.md", path: "/docs/guides/layout/", demos: [] },
-      { file: "guides/demos.md", path: "/docs/guides/demos/", demos: ["counter"] },
+      { file: "index.md", href: "/docs/", demos: [] },
+      { file: "install.md", href: "/docs/install/", demos: [] },
+      { file: "guides/index.md", href: "/docs/guides/", demos: [] },
+      { file: "guides/layout.md", href: "/docs/guides/layout/", demos: [] },
+      { file: "guides/demos.md", href: "/docs/guides/demos/", demos: ["counter"] },
     ]);
   });
 
   test("gives each page's address under the site's trailingSlash", () => {
     const pages = docsNav({ from: site(), package: "@example/docs", base: "/docs", trailingSlash: "never" });
-    expect(pages.map(({ path }) => path)).toEqual(["/docs", "/docs/install", "/docs/guides", "/docs/guides/layout", "/docs/guides/demos"]);
+    expect(pages.map(({ href }) => href)).toEqual(["/docs", "/docs/install", "/docs/guides", "/docs/guides/layout", "/docs/guides/demos"]);
   });
 
   test("gives a page's demos in order, as the build cuts the page, and not a marker in a code block", () => {

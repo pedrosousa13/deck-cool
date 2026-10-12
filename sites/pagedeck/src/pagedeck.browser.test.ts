@@ -114,9 +114,9 @@ describe("the pagedeck site in a browser", () => {
   // The docs' tables and blocks are as wide as their content, so every page is checked, not two.
   test("at 390px, no docs page scrolls sideways", { timeout: 120_000 }, async () => {
     const wide: string[] = [];
-    for (const { path } of DOCS_NAV) {
-      const { page } = await visit(path, { width: 390 });
-      if ((await page.evaluate(() => document.documentElement.scrollWidth)) > 390) wide.push(path);
+    for (const { href } of DOCS_NAV) {
+      const { page } = await visit(href, { width: 390 });
+      if ((await page.evaluate(() => document.documentElement.scrollWidth)) > 390) wide.push(href);
     }
     expect(wide).toEqual([]);
   });

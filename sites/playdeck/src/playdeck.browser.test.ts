@@ -242,9 +242,9 @@ describe("the playdeck site in a browser", () => {
   // The docs' tables and blocks are as wide as their content, so every page is checked, not two.
   test("at 390px, no docs page scrolls sideways", { timeout: 120_000 }, async () => {
     const wide: string[] = [];
-    for (const { path } of DOCS_NAV) {
-      const { page } = await visit(path, { width: 390 });
-      if ((await page.evaluate(() => document.documentElement.scrollWidth)) > 390) wide.push(path);
+    for (const { href } of DOCS_NAV) {
+      const { page } = await visit(href, { width: 390 });
+      if ((await page.evaluate(() => document.documentElement.scrollWidth)) > 390) wide.push(href);
     }
     expect(wide).toEqual([]);
   });
@@ -261,7 +261,7 @@ describe("the playdeck site in a browser", () => {
   });
 
   test("the docs pages visited above carry every demo the site registers", () => {
-    const visited = DOCS_NAV.filter(({ path }) => PAGES.includes(path));
+    const visited = DOCS_NAV.filter(({ href }) => PAGES.includes(href));
     expect(visited.flatMap(({ demos }) => demos).sort()).toEqual(Object.keys(DEMOS).sort());
   });
 

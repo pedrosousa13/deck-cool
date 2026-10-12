@@ -38,7 +38,7 @@ export interface DocsNavPage {
   /** The page's file in the docs package, such as `guides/layout.md`. */
   readonly file: string;
   /** Its address, such as `/docs/guides/layout/`. */
-  readonly path: string;
+  readonly href: string;
   /** The demos it marks, by name, in order. */
   readonly demos: readonly string[];
 }
@@ -224,7 +224,7 @@ export function docsNav(options: DocsNavOptions): DocsNavPage[] {
   const context = pageContext(options, root, files, new Set());
   return nav.groups
     .flatMap((group) => group.pages)
-    .map((file) => ({ file, path: hrefOf(options, file), demos: scanPage(file, readFileSync(join(root, file), "utf8"), context).demos }));
+    .map((file) => ({ file, href: hrefOf(options, file), demos: scanPage(file, readFileSync(join(root, file), "utf8"), context).demos }));
 }
 
 export function createDocsLoader(options: DocsOptions): Loader<DocsPage> {
