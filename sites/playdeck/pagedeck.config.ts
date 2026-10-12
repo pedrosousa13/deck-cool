@@ -2,7 +2,7 @@ import { cloudflarePages } from "@pagedeck/adapter-cloudflare-pages";
 import { listEntries } from "@pagedeck/content";
 import type { ContentStoreReader } from "@pagedeck/content";
 import { defineConfig, defineLocales, definePages } from "@pagedeck/core";
-import type { EntryNode, Page, PageContent, PageHead, PageSource, Route } from "@pagedeck/core";
+import type { Page, PageContent, PageHead, PageSource, Route } from "@pagedeck/core";
 import { defineSearch } from "@pagedeck/search";
 import { cpSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { codeToHtml } from "shiki";
@@ -18,7 +18,6 @@ import {
   FAMILY_BAR,
   FOOTER,
   HOME_PAGE,
-  PROSE,
   SEARCH,
   SEARCH_PAGE,
   STREAMING_SERVICE,
@@ -130,6 +129,7 @@ const docs = defineDocs({
   demos: DEMOS,
   languages: ["css", "sh", "ts", "tsx"],
   theme: CODE_THEME,
+  prose: (html, page) => docsProse(html, { comparison: page.path === PATHS.comparison }),
 });
 
 /** A page with no entry behind it, at `route`. `instances` annotates its parameter, which would otherwise infer as `unknown`. */
@@ -194,18 +194,6 @@ async function examplesContent(): Promise<PageContent> {
   };
 }
 
-/** A docs page, its prose with what this site adds to it (src/docs-prose.ts). */
-function docsContent(page: Page, store: ContentStoreReader): PageContent {
-  const [layout] = docs.content(page, store).tree ?? [];
-  if (layout === undefined) return { tree: [] };
-  const children = (layout.children ?? []).map((node): EntryNode => {
-    const html = node.props?.["html"];
-    if (typeof html !== "string") return node;
-    return { component: PROSE, props: { html: docsProse(html, { comparison: page.path === PATHS.comparison }) } };
-  });
-  return { tree: [{ ...layout, children }] };
-}
-
 function contentOf(page: Page, store: ContentStoreReader): PageContent | Promise<PageContent> {
   if (page.path === PATHS.home) return homeContent();
   if (page.path === PATHS.examples) return examplesContent();
@@ -222,7 +210,7 @@ function contentOf(page: Page, store: ContentStoreReader): PageContent | Promise
       ],
     };
   }
-  return docsContent(page, store);
+  return docs.content(page, store);
 }
 
 function headOf(page: Page): PageHead | undefined {

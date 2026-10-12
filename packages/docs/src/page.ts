@@ -275,6 +275,16 @@ export function unsafeMarkup(html: string): string | undefined {
   return undefined;
 }
 
+/**
+ * A stretch of a docs page's HTML through a site's `rewrite`. The rewrite may add markup
+ * markdown does not write, so the docs' HTML is checked first, as DocsProse checks it.
+ */
+export function rewriteProse(html: string, rewrite: (html: string) => string): string {
+  const unsafe = unsafeMarkup(html);
+  if (unsafe !== undefined) throw new Error(`Docs prose: holds ${unsafe}, which markdown does not write — the docs page cannot hold raw HTML`);
+  return rewrite(html);
+}
+
 /** Cuts rendered HTML at each demo marker. A marker in a code block is escaped, so it is not cut. */
 export function splitAtDemos(html: string): BodyPart[] {
   const parts: BodyPart[] = [];

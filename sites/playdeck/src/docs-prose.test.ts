@@ -17,9 +17,3 @@ test("writes out the comparison guide's footnotes and icons, and no other page's
   expect(docsProse(html, { comparison: true })).toContain('<section class="cmp-footnotes"');
   expect(docsProse(html, { comparison: false })).toContain("yes[^1]");
 });
-
-// The markup it adds is the site's own, so the docs' HTML is checked first, as DocsProse checks it.
-test("refuses HTML that markdown does not write, before it adds any", () => {
-  expect(() => docsProse("<p>a</p><script>alert(1)</script>", { comparison: false })).toThrow(/<script>/);
-  expect(() => docsProse('<img src=x onerror="alert(1)">', { comparison: true })).toThrow(/onerror/);
-});

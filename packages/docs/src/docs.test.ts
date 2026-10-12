@@ -6,8 +6,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
-import { defineDocs, demoComponent, docsHref, unsafeMarkup } from "./index.ts";
+import { defineDocs, demoComponent, docsHref } from "./index.ts";
 import type { DocsOptions } from "./index.ts";
+import { rewriteProse, unsafeMarkup } from "./page.ts";
 
 const FIXTURE = new URL("../fixtures/example-docs/", import.meta.url);
 
@@ -567,6 +568,31 @@ describe("the content callback", () => {
     store.close();
   });
 
+  test("runs each stretch of prose through the site's `prose`, with its page, and leaves the demos", async () => {
+    const seen: string[] = [];
+    const { docs, store } = await synced({
+      prose: (html, page) => {
+        seen.push(page.path);
+        return html.replace("<p>", '<p class="site">');
+      },
+    });
+    const content = docs.content(page("/docs/guides/demos/", "docs/guides/demos"), store);
+    expect(content.tree?.[0]?.children).toEqual([
+      { component: "docsSiteProse", props: { html: '<p class="site">Press the button.</p>\n' } },
+      { component: "docsDemo:counter" },
+      { component: "docsSiteProse", props: { html: '<p class="site">That was the demo.</p>\n' } },
+    ]);
+    expect(seen).toEqual(["/docs/guides/demos/", "/docs/guides/demos/"]);
+    expect(Object.keys(docs.components)).toContain("docsSiteProse");
+    store.close();
+  });
+
+  test("registers the site's prose component only when the site passes `prose`", async () => {
+    const { docs, store } = await synced();
+    expect(Object.keys(docs.components)).not.toContain("docsSiteProse");
+    store.close();
+  });
+
   test("names each demo's component as demoComponent gives it", async () => {
     const { docs, store } = await synced();
     expect(demoComponent("counter")).toBe("docsDemo:counter");
@@ -652,6 +678,14 @@ describe("the rendered HTML", () => {
     ["a tag the check cannot read", '<p class="a"b>x</p>', '<p class="a"b>'],
   ])("refuses %s", (_name, html, markup) => {
     expect(unsafeMarkup(html)).toBe(markup);
+  });
+
+  // The site's rewrite may add markup markdown does not write, so the docs' HTML is checked before it.
+  test("checks the docs' HTML before the site's rewrite, and not after it", () => {
+    const addSvg = (html: string) => `${html}<svg aria-hidden="true"></svg>`;
+    expect(rewriteProse("<p>a</p>", addSvg)).toBe('<p>a</p><svg aria-hidden="true"></svg>');
+    expect(() => rewriteProse("<p>a</p><script>alert(1)</script>", addSvg)).toThrow(/<script>/);
+    expect(() => rewriteProse('<img src=x onerror="alert(1)">', addSvg)).toThrow(/onerror/);
   });
 
   test("passes Shiki's highlighted code and plain markdown", () => {
