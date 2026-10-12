@@ -39,7 +39,7 @@ const SEARCH_COPY = {
   description:
     "Search pagedeck's site and documentation by keyword, with pages that match in their title ranked above pages that match only in their body.",
   intro:
-    "Search every page of this site. Results are ranked by where the words appear — a title match comes before a body match.",
+    "Search every page of this site. Results are ranked by where the words appear: a title match comes before a body match.",
   label: "Search pagedeck",
   emptyLabel: "No page matches those words.",
 } as const;

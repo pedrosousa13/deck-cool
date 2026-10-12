@@ -691,6 +691,10 @@ describe("the docs' search page", () => {
     expect(doc.querySelector('main [data-fw-component="search"] input')).not.toBeNull();
   });
 
+  test("uses no em dash", () => {
+    expect(html(PATHS.search)).not.toMatch(/\u2014|&mdash;/);
+  });
+
   // #53: the index holds the landing pages too, so the box names the whole site.
   test("labels its box Search pagedeck", () => {
     expect(html(PATHS.search)).toContain("&quot;label&quot;:&quot;Search pagedeck&quot;");
