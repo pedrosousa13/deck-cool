@@ -149,6 +149,15 @@ describe("a fixture that follows the contract", () => {
     }
   });
 
+  test("keeps links to /…, #… and https:, inline and by reference, as they are", async () => {
+    const links = "[a](/t.png) [b](#a) [c](https://example.com/t.png) [d][e]\n\n[e]: https://example.com/e.png";
+    const { entries } = await sync(site({ "install.md": `---\ntitle: Install\ndescription: How.\n---\n\n${links}\n` }));
+    const html = JSON.stringify(entries.find((entry) => entry.path === "docs/install")?.data.body);
+    for (const href of ["/t.png", "#a", "https://example.com/t.png", "https://example.com/e.png"]) {
+      expect(html).toContain(`href=\\"${href}\\"`);
+    }
+  });
+
   test.each([
     ["a list item", "- See the [install\n  guide](./install.md#a) first."],
     ["a block quote", "> See the [install\n> guide](./install.md#a) first."],
@@ -328,6 +337,32 @@ describe("the build fails, naming the file and line", () => {
       { "guides/layout.md": LAYOUT.replace("../assets/grid.svg", "../assets/missing.svg") },
       {},
       'guides/layout.md:8 — shows "../assets/missing.svg", which is not a file under assets/ — add it under assets/, or fix the path',
+    ],
+    ...([
+      ["an https: image", "https://example.com/t.png"],
+      ["an http: image", "http://example.com/t.png"],
+      ["an image at a root path", "/t.png"],
+      ["an image that is only a fragment", "#a"],
+      ["an image with no destination", ""],
+    ] as const).map(([name, href]): [string, Readonly<Record<string, string | undefined>>, Partial<DocsOptions>, string] => [
+      name,
+      { "guides/layout.md": LAYOUT.replace("(../assets/grid.svg)", `(${href})`) },
+      {},
+      `guides/layout.md:8 — shows "${href}", which is not a file under assets/ — add it under assets/, or fix the path`,
+    ]),
+    [
+      "an image at the root path of a file under assets/",
+      { "index.md": "---\ntitle: Example\ndescription: Home.\n---\n\n![The layout grid](/assets/grid.svg)\n" },
+      {},
+      'index.md:6 — shows "/assets/grid.svg", which is not a file under assets/ — add it under assets/, or fix the path',
+    ],
+    [
+      "an image by reference to an https: URL",
+      {
+        "guides/layout.md": LAYOUT.replace("(../assets/grid.svg)", "[grid]") + "[grid]: https://example.com/t.png\n",
+      },
+      {},
+      'guides/layout.md:8 — shows "https://example.com/t.png", which is not a file under assets/ — add it under assets/, or fix the path',
     ],
     [
       "a demo the site does not register",

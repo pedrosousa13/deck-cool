@@ -183,13 +183,15 @@ export function scanPage(file: string, text: string, context: PageContext): Scan
         fault(at, `links to "${token.href}", a scheme the site does not allow — link with http:, https: or mailto:, or to a page by its .md file`);
         return;
       }
-      if (NOT_RELATIVE.test(token.href)) return;
+      // An image must be a file under assets/, so only a link may leave the package.
+      const relative = !NOT_RELATIVE.test(token.href);
+      if (!relative && token.kind !== "image") return;
       const [path, fragment] = splitFragment(token.href);
       const target = posix.join(posix.dirname(file), path);
 
       let replacement: string;
       if (token.kind === "image") {
-        if (!target.startsWith("assets/") || !context.exists(target)) {
+        if (!relative || !target.startsWith("assets/") || !context.exists(target)) {
           fault(at, `shows "${token.href}", which is not a file under assets/ — add it under assets/, or fix the path`);
           return;
         }
