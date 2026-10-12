@@ -5,6 +5,12 @@ import { serveSite } from "@deck-cool/site-kit/serve-site";
 import { LIVE_SITE } from "./live-check.ts";
 
 // packages/site-kit/src/live-check.test.ts tests the checks themselves, against hosts that fail each one.
+test("fetches the site's own pages, the docs' first page and one with tables", () => {
+  expect(LIVE_SITE.served).toEqual(
+    expect.arrayContaining(["/", "/interactive/", "/features/", "/content/", "/docs/search/", "/docs/", "/docs/reference/site-config/"]),
+  );
+});
+
 test("the build, served with its _headers, passes every check but the ones only the upload and the zone can pass", async () => {
   const site = await serveSite(fileURLToPath(new URL("..", import.meta.url)));
   try {

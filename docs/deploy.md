@@ -202,7 +202,7 @@ curl -sI https://slidedeck.pages.dev/   # no 200
 
 ## pagedeck at page.deck.cool
 
-`sites/pagedeck` is served at `https://page.deck.cool` by a third Worker, `pagedeck`, on the same `deck.cool` zone. It takes over from the landing page at `pagedeck-landing.pedrodsousa.workers.dev`. Until #53 brings the docs to `/docs`, the site's docs links go to pagedeck's docs at `https://pagedeck-docs.pedrodsousa.workers.dev` (`DOCS_ORIGIN` in `sites/pagedeck/components/links.ts`).
+`sites/pagedeck` is served at `https://page.deck.cool` by a third Worker, `pagedeck`, on the same `deck.cool` zone. It takes over from the landing page at `pagedeck-landing.pedrodsousa.workers.dev`, and from the docs at `pagedeck-docs.pedrodsousa.workers.dev`: the site serves its own docs under `/docs`, built from `@pagedeck/docs` (#53), and its docs links go there (`DOCS` in `sites/pagedeck/components/links.ts`).
 
 Every section above applies, with these differences:
 
@@ -240,7 +240,7 @@ pnpm --filter @sites/pagedeck check-live                      # https://page.dec
 pnpm --filter @sites/pagedeck check-live https://example.com  # any other origin
 ```
 
-`check-live` fetches `/`, `/interactive/`, `/features/`, `/content/`, `/docs/search/` and `/embed/demo-embed.js`, and fails unless each answers `200` with every header in `sites/pagedeck/src/headers.ts`, at its exact value, and no `immutable`. The CSP, and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, are among those headers. It then checks two hashed stylesheets, the one `/` links under `/assets/` and the font sheet `/features/` links under `/fonts/`: each must answer `200` with the same headers and `Cache-Control: public, max-age=31536000, immutable`. It fails unless `/manifest.json` and `/no-such-page/` answer `404`, and unless `http://page.deck.cool/` answers `301` to `https://page.deck.cool/`. `sites/pagedeck/src/live-check.test.ts` runs the same checks against the build served locally.
+`check-live` fetches `/`, `/interactive/`, `/features/`, `/content/`, `/docs/search/`, two docs pages (`/docs/` and `/docs/reference/site-config/`) and `/embed/demo-embed.js`, and fails unless each answers `200` with every header in `sites/pagedeck/src/headers.ts`, at its exact value, and no `immutable`. The CSP, and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, are among those headers. It then checks two hashed stylesheets, the one `/` links under `/assets/` and the font sheet `/features/` links under `/fonts/`: each must answer `200` with the same headers and `Cache-Control: public, max-age=31536000, immutable`. It fails unless `/manifest.json` and `/no-such-page/` answer `404`, and unless `http://page.deck.cool/` answers `301` to `https://page.deck.cool/`. `sites/pagedeck/src/live-check.test.ts` runs the same checks against the build served locally.
 
 `src/live-check.ts` lists this site's paths and its two stylesheets. The checks are site-kit's, as deck.cool's are.
 
@@ -255,7 +255,7 @@ Two things Cloudflare does on the zone are known, and the maintainer accepted bo
 
 ### The old Workers stay up
 
-`pagedeck-landing` and `pagedeck-docs` keep running. `pagedeck-docs` serves the docs that this site links to. Both retire in #53 or pedrosousa13/pagedeck#124, once `/docs` is served here. Delete neither before then: a deletion can't be undone, so the maintainer confirms each one first.
+`pagedeck-landing` and `pagedeck-docs` keep running. This site no longer links either: it serves its own docs under `/docs`. Both can retire once this site's deploy with `/docs` is live and the maintainer confirms it, in pedrosousa13/pagedeck#124. Delete neither before then: a deletion can't be undone, so the maintainer confirms each one first.
 
 ## playdeck at play.deck.cool
 
