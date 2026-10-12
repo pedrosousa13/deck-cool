@@ -39,7 +39,7 @@ deck.cool is deployed with wrangler, as Workers Static Assets, by `.github/workf
 
 ## Releasing a deck
 
-This section is for the decks that live in their own repos. carouseldeck lives in this repo, and its sites use it from the workspace, so it sends no dispatch and gets no bump PR (ADR 0002).
+This section is for the decks that live in their own repos. carouseldeck lives in this repo, and its sites use it from the workspace, so it sends no dispatch and gets no bump PR (ADR 0002). It releases with Changesets, from `.changeset/` at the root, and `.github/workflows/release.yml`: a consumer-visible change to its packages needs a changeset (`pnpm changeset`), and the release runbook is `decks/carouseldeck/AGENTS.md`, "Releasing".
 
 `.github/workflows/bump-deck.yml` sets every `@<deck>/*` dependency in the workspace to a deck's new version, updates the lockfile, and opens a PR titled `Bump <deck> to <version>` from the branch `bump/<deck>-<version>`. The PR merges itself, squashed, once CI passes. When a deck publishes a release, its dispatch tries this at once, and that first try usually fails on pnpm's one-day hold. The daily run bumps the release once it is a day old. A second dispatch for the same version does nothing. A dispatch for a version older than one the workspace already has fails and changes nothing: the workflow never downgrades. The bump logic is `packages/bump-deck`.
 

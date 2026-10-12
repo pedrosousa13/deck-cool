@@ -1,0 +1,253 @@
+name: Release
+
+# Releases the in-repo decks with Changesets (ADR 0002). On every push to
+# main, `select` asks Changesets what the tree needs:
+#
+# - "version": changesets are pending. `version` opens or updates the
+#   "Version packages" PR. Nothing is published. The maintainer merges that PR
+#   by hand, and the merge is the release.
+# - "publish": no changeset is pending, and npm lacks a version in the tree.
+#   That is the push of a merged version PR. `verify` runs the deck's whole
+#   `pnpm verify` and packs the tarballs it checked, `publish` publishes them
+#   with provenance, `tag` tags them and creates their GitHub releases, and
+#   `deploy` publishes carousel.deck.cool at this commit.
+# - "none": nothing runs after `select`. Most pushes end here.
+#
+# Every action is pinned to a full commit SHA, its version in a comment.
+on:
+  push:
+    branches: [main]
+
+# Read-only. Each job widens its own copy only as far as it needs. The npm
+# credential (`id-token: write`, `NPM_TOKEN`) is only in `publish`, which runs
+# no code from the repo and cannot write to it.
+permissions:
+  contents: read
+
+# Never cancelled: half the packages on npm and half not is worse than a
+# queued run. A newer push still replaces a run that is waiting, not one that
+# has started, and that newer run selects its own mode.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  select:
+    # A fork gets its own copy of this file. It must not build or pack under
+    # this repo's package names.
+    if: github.repository == 'pedrosousa13/deck-cool'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.select-mode.outputs.mode }}
+      publish-plan-artifact-id: ${{ steps.select-mode.outputs.publish-plan-artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # "version", "publish" or "none". Reads `.changeset/` and, when no
+      # changeset is pending, asks npm which versions it lacks. No install.
+      - id: select-mode
+        uses: changesets/action/select-mode@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+
+  version:
+    needs: select
+    if: needs.select.outputs.mode == 'version'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The GITHUB_TOKEN only reads. The App's token pushes the branch and opens
+    # the PR: a branch the GITHUB_TOKEN pushes starts no workflow, and main
+    # requires `verify`.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Puts the pnpm named in package.json's packageManager on the path.
+      - run: corepack enable
+      # No cache in a job that can write: a restored cache is code from
+      # another run.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      # For the Changesets CLI only. No dependency's install script runs in a
+      # job that holds a token that can write to the repo.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Get a token from the deck-cool-releases App
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.DECK_APP_ID }}
+          private-key: ${{ secrets.DECK_APP_PRIVATE_KEY }}
+          owner: pedrosousa13
+          repositories: deck-cool
+          permission-contents: write
+          permission-pull-requests: write
+      # Runs `changeset version` and pushes the changeset-release/main branch
+      # through the GitHub API, as the App.
+      - uses: changesets/action/version@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          github-token: ${{ steps.app.outputs.token }}
+
+  verify:
+    needs: select
+    if: needs.select.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      pack-dir-artifact-id: ${{ steps.pack.outputs.pack-dir-artifact-id }}
+    steps:
+      # One runner and one `pnpm verify`, every gate. The tarballs `pack`
+      # ships are the build this job checked. No pnpm store cache and no
+      # browser cache: a restored cache is code from another run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Puts the pnpm named in package.json's packageManager on the path.
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir decks/carouseldeck exec playwright install --with-deps chromium firefox webkit
+        timeout-minutes: 15
+      - run: pnpm --dir decks/carouseldeck verify
+      # Packs the build `pnpm verify` just checked, so `publish` builds
+      # nothing itself.
+      - id: pack
+        uses: changesets/action/pack@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          publish-plan-artifact-id: ${{ needs.select.outputs.publish-plan-artifact-id }}
+
+  publish:
+    needs: [select, verify]
+    if: needs.select.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Trusted publishing, and provenance: npm refuses a publish whose
+      # manifest sets `publishConfig.provenance` without it.
+      id-token: write
+    # Whether the secret is set, never its value: the value reaches only the
+    # publish step.
+    env:
+      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+    # What this run published, for `tag` to wait for and `deploy` to check.
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+      published-packages: ${{ steps.publish.outputs.published-packages }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Puts the pnpm named in package.json's packageManager on the path.
+      - run: corepack enable
+      # No `registry-url`: it writes an `.npmrc` holding `${NODE_AUTH_TOKEN}`,
+      # which `pnpm publish` can send unresolved as a bearer token, and fail a
+      # publish OIDC would have carried.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      # For the Changesets CLI only: this job builds nothing, and no
+      # dependency's install script runs in the job that holds the credential.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # Trusted publishing needs npm 11.5.1 or later. `pnpm publish` spawns
+      # the `npm` on the path, so this is the npm that publishes. Pinned: this
+      # step is on the credential path.
+      - run: npm install -g npm@11.19.0
+      - run: npm --version
+
+      # Fails before anything reaches npm when no credential can publish, and
+      # says why.
+      - name: Check a credential can publish
+        env:
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          if [ "$REPO_PRIVATE" = "true" ]; then
+            echo "::error::The repository is private. npm generates provenance only from a public repository, and these packages require it. Nothing was published."
+            exit 1
+          fi
+          if [ "$HAS_NPM_TOKEN" = "true" ]; then
+            echo "Publishing with the NPM_TOKEN secret, unless a trusted publisher answers first."
+            exit 0
+          fi
+          # A trusted publisher is set on a package that already exists, so
+          # with no token every package must be on npm already. A private
+          # package is never published, so it is not checked.
+          missing=""
+          for manifest in decks/*/packages/*/package.json; do
+            [ "$(node -p "require('./$manifest').private === true")" = true ] && continue
+            name=$(node -p "require('./$manifest').name")
+            npm view "$name" name > /dev/null 2>&1 || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::No credential can publish:$missing not on npm, and no NPM_TOKEN secret is set. Nothing was published."
+            exit 1
+          fi
+          echo "Publishing over trusted publishing (OIDC)."
+
+      # Only when the secret is set: an unresolved placeholder must not reach
+      # `pnpm publish`, for the reason at `setup-node` above. The file holds
+      # the placeholder, not the token.
+      - name: Use the NPM_TOKEN secret, if set
+        if: env.HAS_NPM_TOKEN == 'true'
+        run: |
+          # shellcheck disable=SC2016 # npm expands the placeholder, not the shell.
+          echo '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}' >> ~/.npmrc
+
+      # `changeset publish --from-pack-dir` publishes core before the packages
+      # that depend on it, and stops at the first failure. Provenance comes
+      # from each manifest's `publishConfig.provenance`. Tags and releases are
+      # `tag`'s, so this job needs no `contents: write`.
+      - id: publish
+        uses: changesets/action/publish@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        with:
+          pack-dir-artifact-id: ${{ needs.verify.outputs.pack-dir-artifact-id }}
+          push-git-tags: false
+          create-github-releases: false
+
+  tag:
+    needs: publish
+    runs-on: ubuntu-latest
+    # Up to ten minutes waiting for npm, and the tagging around it.
+    timeout-minutes: 20
+    permissions:
+      contents: write # create the tags and the GitHub releases
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # No install: the script uses Node's built-ins only, and reads npm
+      # without a credential. Every version on npm without a release gets one,
+      # tagged `<name>@<version>` at this commit, with its changelog section
+      # as the notes. It waits for npm to show the versions `publish` names.
+      - name: Tag and release what npm has
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISHED_PACKAGES: ${{ needs.publish.outputs.published-packages }}
+        run: node decks/carouseldeck/scripts/tag-releases.mjs
+
+  # A release deploys its site (ADR 0002). The commit carries the
+  # @carouseldeck/react@X.Y.Z tag `tag` just made, which the deploy checks.
+  # Its publish job reads CLOUDFLARE_API_TOKEN from the production
+  # environment itself, so this passes no secret.
+  deploy:
+    needs: [publish, tag]
+    if: needs.publish.outputs.published == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/deploy-carouseldeck.yml
+    with:
+      sha: ${{ github.sha }}

@@ -95,61 +95,27 @@ scripts need none. A breaking change is a `major`. A change to
 `packages/docs` alone needs none either: the docs are published at the
 version of the code they describe, so the change ships with the next release.
 
-**A release** is `.github/workflows/release.yml`, on every push to `main`. It
-runs `pnpm verify` first, then:
+**A release** is deck-cool's `.github/workflows/release.yml`, on every push to
+`main` (ADR 0002 in deck-cool). It asks Changesets first, so most pushes do
+nothing, then:
 
 - with changesets pending, it opens or updates the "Version packages" PR,
   which bumps the versions and writes the changelogs. Nothing is published.
-- after that PR merges, it publishes the versions npm does not have yet, with
-  provenance, from the tarballs the verify job packed, then tags them and
-  creates the GitHub releases. Then `tell-deck-cool` sends
-  pedrosousa13/deck-cool a `deck-released` dispatch with the version, with a
-  token from the `deck-cool-releases` App (the `DECK_APP_ID` variable and the
-  `DECK_APP_PRIVATE_KEY` secret). deck.cool bumps `@carouseldeck/docs` and
-  rebuilds carouseldeck's docs from it. Nobody needs to send a dispatch again:
-  deck-cool's daily scheduled bump checks npm every day, so it picks up a
-  version its one-day hold refused at dispatch, or one whose dispatch was lost.
+  It opens the PR with a token from the `deck-cool-releases` App, so CI runs
+  on it.
+- after that PR merges, it runs the whole `pnpm verify`, publishes the
+  versions npm does not have yet, with provenance, from the tarballs the
+  verify job packed, then tags them `<name>@<version>` and creates the GitHub
+  releases. Then it deploys carousel.deck.cool at the released commit, with
+  `deploy-carouseldeck.yml`.
 
-The version PR is opened with the workflow's `GITHUB_TOKEN`, and a PR that
-token opens triggers no workflow, so `ci.yml` does not run on it. Its merge
-runs the release workflow's own `pnpm verify` before anything is published.
-If branch protection ever requires CI on it, close and reopen the PR, or push
-an empty commit to its branch, to start `ci.yml`.
-
-**One-time maintainer setup**, all five steps done; 0.1.0 published on
-2026-10-05. Until the last step, the jobs after `verify` show as skipped on
-every push, and nothing is published:
-
-1. In the repository's Settings, Actions, General, allow GitHub Actions to
-   create and approve pull requests. Without it, the version job fails to
-   open the PR.
-2. Make the repository public. npm generates provenance only from a public
-   repository, and both packages require it (`publishConfig.provenance`).
-   Done: public since 2026-10-05.
-3. Claim the `@carouseldeck` scope on npm as an organization (#5).
-4. Add an `NPM_TOKEN` repository secret for the first publish: a granular
-   token that can publish the `@carouseldeck` scope. npm configures trusted
-   publishing per package, so a package must exist before it can have one.
-5. Set the `RELEASE_ENABLED` repository variable to `true`.
-
-With releases on, the publish job's first step fails loudly, before anything
-reaches npm, if the repository is private or no credential can publish.
-
-After the first publish, on npmjs.com add a trusted publisher to each
-package: GitHub Actions, `pedrosousa13` / `deck-cool` / `release.yml`, no
-environment. Then delete the `NPM_TOKEN` secret; later releases publish over
-OIDC. Done on 2026-10-07 (#79): releases now publish over OIDC only.
-
-`@carouseldeck/docs` (#133) is not on npm yet, and trusted publishing needs a
-package to exist. The merge that adds it is its first release: its 1.0.3 is
-not on npm, so the release run after the merge tries to publish it.
-
-- If no `NPM_TOKEN` secret is set, that run fails at "Check a credential can
-  publish", and nothing is published. Add an `NPM_TOKEN` secret, a token that
-  can create new packages under the `@carouseldeck` scope, then re-run the
-  `publish` job.
-- Once `@carouseldeck/docs@1.0.3` is on npm, add its trusted publisher on
-  npmjs.com, as above, and delete the `NPM_TOKEN` secret.
+**The first publish**, 1.2.0, uses the `NPM_TOKEN` secret: npm sets a trusted
+publisher per package, so a package must exist first. After it, on
+npmjs.com add a trusted publisher to each of the four packages: GitHub
+Actions, `pedrosousa13` / `deck-cool` / `release.yml`, no environment. Then
+delete the `NPM_TOKEN` secret. Later releases publish over OIDC. Without the
+secret, a run that would publish a package not yet on npm fails at "Check a
+credential can publish", before anything is published.
 
 ## Docs
 
