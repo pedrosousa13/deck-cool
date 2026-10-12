@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "description": "Headless, composable React 19 carousel primitives built on native scroll snap.",
   "license": "MIT",
-  "homepage": "https://slide.deck.cool",
+  "homepage": "https://carousel.deck.cool",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pedrosousa13/deck-cool.git",

@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "description": "The carouseldeck docs as markdown, at the version of the code they document, for deck.cool to build the docs site from.",
   "license": "MIT",
-  "homepage": "https://slide.deck.cool/docs/",
+  "homepage": "https://carousel.deck.cool/docs/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pedrosousa13/deck-cool.git",
