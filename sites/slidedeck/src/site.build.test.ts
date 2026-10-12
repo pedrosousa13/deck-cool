@@ -620,8 +620,8 @@ describe("the docs, from @slidedeck/docs", () => {
     expect(existsSync(`${OUT}/docs/index.html`)).toBe(true);
   });
 
-  test.each(DOCS_NAV)("$path renders with each demo it marks, in order, rendered on the server", ({ html, demos }) => {
-    const doc = parse(html);
+  test.each(DOCS_NAV)("$path renders with each demo it marks, in order, rendered on the server", ({ path, demos }) => {
+    const doc = parse(`${path.slice(1)}index.html`);
     expect(demosOn(doc)).toEqual(demos);
     for (const island of doc.querySelectorAll("article fw-island")) {
       expect(island.querySelector('[aria-roledescription="carousel"] [data-slidedeck-slide]'), island.outerHTML.slice(0, 120)).not.toBeNull();
@@ -658,8 +658,8 @@ describe("the docs, from @slidedeck/docs", () => {
   test("a page with no demo ships the search island alone, and every such page ships the same", () => {
     const plain = DOCS_NAV.filter(({ demos }) => demos.length === 0);
     expect(plain.length).toBeGreaterThan(0);
-    for (const { html } of plain) {
-      expect([...parse(html).querySelectorAll("fw-island")].map((island) => island.getAttribute("data-fw-component"))).toEqual(["search"]);
+    for (const { path } of plain) {
+      expect([...parse(`${path.slice(1)}index.html`).querySelectorAll("fw-island")].map((island) => island.getAttribute("data-fw-component"))).toEqual(["search"]);
     }
     const sizes = new Set(plain.map(({ path }) => budget.find((each) => each.path === path)?.actual));
     expect(sizes.size).toBe(1);
