@@ -8,13 +8,12 @@ import type { MarkdownEntry } from "@pagedeck/markdown-loader";
 import { defineSearch } from "@pagedeck/search";
 import { cpSync, realpathSync, rmSync } from "node:fs";
 import { z } from "zod";
-import { defineDocs } from "@deck-cool/docs";
+import { defineDocs, scrollableProse } from "@deck-cool/docs";
 import { HASHED_FILE_HEADERS } from "@deck-cool/site-kit/headers";
 import { DOCS, PATHS, REPO } from "./components/links.ts";
 import { components, COUNTER, DOCS_PAGE, FAMILY_BAR, FOOTER, ISLAND_PAGE, SEARCH, SEARCH_PAGE } from "./src/catalog.ts";
 import { CODE_THEME } from "./src/code-theme.ts";
 import { DEMOS } from "./src/demos.ts";
-import { docsProse } from "./src/docs-prose.ts";
 import { FEATURES_HEAD, featuresContent, FONTS, SCRIPTS, SOCIAL_IMAGES } from "./src/features.ts";
 import { HASHED_PREFIXES, RESPONSE_HEADERS } from "./src/headers.ts";
 import { CMS_DEMO_HEAD, cmsDemoContent } from "./src/cms-demo.ts";
@@ -120,7 +119,8 @@ const docs = defineDocs({
   demos: DEMOS,
   languages: ["css", "html", "js", "json", "sh", "toml", "ts", "tsx"],
   theme: CODE_THEME,
-  prose: docsProse,
+  // Each table in a region that scrolls, and each plain block focusable.
+  prose: (html) => scrollableProse(html, { tableClass: "fw-table" }),
 });
 
 /** A page with no entry behind it, at `route`. `instances` annotates its parameter, which would otherwise infer as `unknown`. */

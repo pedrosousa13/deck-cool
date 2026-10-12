@@ -10,6 +10,7 @@ import type { DocsPage } from "./loader.ts";
 import { rewriteProse } from "./page.ts";
 
 export { docsHref } from "./loader.ts";
+export { scrollableProse } from "./scrollable-prose.ts";
 export type { DocsPage, NavGroup } from "./loader.ts";
 
 /** A component as `build.components` declares one: a module path, or `{ path, hydrate }`. */

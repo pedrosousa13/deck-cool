@@ -1,4 +1,5 @@
-import { footnotes, iconizeFeaturesTable, scrollTables } from "./comparison.ts";
+import { scrollableProse } from "@deck-cool/docs";
+import { footnotes, iconizeFeaturesTable } from "./comparison.ts";
 
 /**
  * A stretch of a docs page's HTML, with what this site adds to it: each table
@@ -9,5 +10,5 @@ import { footnotes, iconizeFeaturesTable, scrollTables } from "./comparison.ts";
  */
 export function docsProse(html: string, { comparison }: { comparison: boolean }): string {
   const prose = comparison ? iconizeFeaturesTable(footnotes(html, "comparison")) : html;
-  return scrollTables(prose).replaceAll("<pre>", '<pre tabindex="0">');
+  return scrollableProse(prose, { tableClass: "cmp-table" });
 }

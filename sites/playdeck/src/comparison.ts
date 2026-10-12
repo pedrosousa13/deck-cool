@@ -4,9 +4,7 @@
  * apps/site/src/comparison-icons.mjs at cf72813. Each step reads the guide's
  * rendered HTML. The docs loader has no footnotes, so `footnotes` writes the
  * features table's `[^n]` references and their notes out. The features table
- * draws an icon beside each status word (`iconizeFeaturesTable`). A wide table
- * scrolls in a labelled region of its own (`scrollTables`), so the page never
- * scrolls sideways.
+ * draws an icon beside each status word (`iconizeFeaturesTable`).
  */
 
 /** Each code block, kept out of the footnote passes: nothing in one is a note or a reference. */
@@ -90,26 +88,4 @@ export function iconizeFeaturesTable(html: string): string {
               `<td><span class="cmp-status" data-status="${status}">${ICONS[status]}<span class="cmp-status__word">${status}</span></span>${footnote}</td>`,
           ),
   );
-}
-
-/**
- * Each table inside a region that scrolls sideways, named for the heading
- * above it, and a second table under one heading numbered, so no two regions
- * share a name. The region takes focus, so a keyboard can scroll a table with
- * no link in it.
- */
-export function scrollTables(html: string): string {
-  let heading = "Table";
-  let count = 0;
-  return html.replace(/<h([2-4])[^>]*>([\s\S]*?)<\/h\1>|<table[\s\S]*?<\/table>/g, (match, _level, text?: string) => {
-    if (text !== undefined) {
-      heading = text.replace(/<[^>]*>/g, "").trim();
-      count = 0;
-      return match;
-    }
-    count += 1;
-    // The heading's text is HTML already, so it needs no escaping but its quotes.
-    const label = `${heading.replace(/"/g, "&quot;")}${count > 1 ? ` ${count}` : ""}`;
-    return `<div class="cmp-table" role="region" tabindex="0" aria-label="${label}">${match}</div>`;
-  });
 }

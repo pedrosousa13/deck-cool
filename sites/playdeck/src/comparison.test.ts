@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { footnotes, iconizeFeaturesTable, scrollTables } from "./comparison.ts";
+import { footnotes, iconizeFeaturesTable } from "./comparison.ts";
 
 test("writes footnotes out: numbered references, and the notes as a list in place of the first, each with a way back", () => {
   const html = footnotes(
@@ -42,15 +42,4 @@ test("draws an icon beside each status word in the features table alone", () => 
   expect(out).toContain('<span class="cmp-status__word">yes</span></span><sup><a>1</a></sup></td>');
   expect(out).toContain('data-status="n/a"');
   expect(out).toContain(results);
-});
-
-test("puts each table in a focusable region named for the heading above it", () => {
-  expect(scrollTables('<h2 id="a">Results &amp; more</h2><table><tr><td>1</td></tr></table>')).toBe(
-    '<h2 id="a">Results &amp; more</h2><div class="cmp-table" role="region" tabindex="0" aria-label="Results &amp; more"><table><tr><td>1</td></tr></table></div>',
-  );
-});
-
-test("names a second table under one heading apart from the first, so no two regions share a name", () => {
-  const html = scrollTables("<table>a</table><table>b</table><h2>H</h2><table>c</table><table>d</table>");
-  expect([...html.matchAll(/aria-label="([^"]*)"/g)].map(([, label]) => label)).toEqual(["Table", "Table 2", "H", "H 2"]);
 });
