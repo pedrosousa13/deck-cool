@@ -2,7 +2,7 @@
 
 deck-cool becomes the monorepo for the decks (#105). carouseldeck, slidedeck renamed, moves in first and playdeck follows. This ADR settles how a deck lives here: its directory, its tooling, its CI, its releases, and what happens to its React 18 build. #105's decisions 1 to 7 are its inputs. Written for #110 on 2026-10-12, from slidedeck's `main` at `ff73434`.
 
-One point is marked **Proposed, pending maintainer**. It is a recommendation, not a decision, until the maintainer rules on it.
+The maintainer ruled on the manual deploy and on deck.cool's carouseldeck card on 2026-10-12. Both rulings are recorded below.
 
 ## Layout
 
@@ -89,7 +89,7 @@ Each package's `repository.url` points at deck-cool, with `directory` set to its
 
 **A release deploys its site (#105, decision 4).** `sites/carouseldeck` depends on the deck's packages as `workspace:*`. The deploy builds the release's own commit, so the workspace holds exactly the released code. The deck's `deck-released` dispatch, its bump PR and `bump-deck`'s `slidedeck` case go away.
 
-**Proposed, pending maintainer: a manual deploy publishes the latest release.** A run of `deploy-carouseldeck.yml` by hand with `apply` checks out the latest `@carouseldeck/react@*` tag, not `main`, and deploys that. So a change to `sites/carouseldeck` or `packages/brand` alone reaches carousel.deck.cool with the deck's next release, or with a patch release cut for it. That follows decision 4, but it means a landing-page fix can wait on a release, where the other sites deploy from `main` today.
+**A manual deploy publishes the latest release** (maintainer, 2026-10-12). A run of `deploy-carouseldeck.yml` by hand with `apply` builds the latest `@carouseldeck/react@*` release tag, never `main`. The cost: a change to `sites/carouseldeck` or `packages/brand` alone waits for the deck's next release, or for a patch release cut for it, where the other sites deploy from `main` today.
 
 Rejected:
 
@@ -111,6 +111,6 @@ Rejected:
 ## Consequences
 
 - **ADR 0001 is amended for a deck that lives here.** Its first reason holds: the site shows the latest release, now because the deploy builds the release's commit. Its "Releases update the sites by PR" consequence, and the dispatch and App token behind it, apply only to the decks still outside.
-- **deck.cool reads carouseldeck's README from the workspace** (#105's checklist, `slidedeck-readme.ts`). The umbrella deploys from `main`, so its size figure is `main`'s, which can be ahead of the release.
+- **deck.cool's carouseldeck card reads the release, not the workspace** (maintainer, 2026-10-12). At build time it reads the deck's README and size figure at the latest carouseldeck release tag, with `git show <tag>:<path>`, so the card always matches npm. That needs the tags in CI: the deck-cool build and deploy workflows check out full history or fetch the tags. #112 wires it.
 - **AGENTS.md gains a section for the deck**: run its commands with `pnpm --dir decks/carouseldeck`, and `pnpm --dir decks/carouseldeck verify` before landing a change to it.
 - **playdeck moves the same way**, into `decks/playdeck/`, with its own gate jobs feeding `verify` and its own `fixed` group.
