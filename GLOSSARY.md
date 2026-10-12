@@ -4,7 +4,12 @@ deck.cool is the umbrella for a family of small, unstyled React packages, each n
 
 ## Vocabulary
 
-- **Deck**: one package in the family (slidedeck, playdeck, pagedeck). Each deck has its own source repo; its site lives here.
+- **Deck**: one package in the family (slidedeck, playdeck, pagedeck). Its site lives here, and its source lives either here or in its own repo.
+- **In-repo deck**: a deck whose source lives in this repo, under `decks/<deck>/`. slidedeck is the first, renamed carouseldeck as it moves in. See ADR 0002.
+  _Avoid_: internal deck, monorepo deck
+- **Outside deck**: a deck whose source still lives in its own repo. Its site follows its releases through a bump PR (ADR 0001).
+  _Avoid_: external deck, remote deck
+- **Deck gates**: the checks a deck runs before a change to it lands. CI runs them only for a change that touches the deck.
 - **Umbrella site**: the site at `https://deck.cool`. It lists every deck and says what each one does.
 - **Package site**: a deck's own site, served at its subdomain of deck.cool.
 - **Family bar**: the top bar every site shares (design direction C). The umbrella mark opens a switcher across the decks, and the product name rolls to the pick.
