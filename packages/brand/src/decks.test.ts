@@ -4,9 +4,9 @@ import { decks, umbrella } from "./decks.ts";
 
 const PUBLIC = new URL("../public/", import.meta.url);
 
-test("the decks are exactly slidedeck, playdeck and pagedeck", () => {
+test("the decks are exactly carouseldeck, playdeck and pagedeck", () => {
   expect(decks.map((deck) => deck.name)).toEqual([
-    "slidedeck",
+    "carouseldeck",
     "playdeck",
     "pagedeck",
   ]);
@@ -14,7 +14,7 @@ test("the decks are exactly slidedeck, playdeck and pagedeck", () => {
 
 test("each deck links to its site", () => {
   expect(decks.map((deck) => deck.url)).toEqual([
-    "https://slide.deck.cool",
+    "https://carousel.deck.cool",
     "https://play.deck.cool",
     "https://page.deck.cool",
   ]);
@@ -63,7 +63,13 @@ function readBoardDecks(literal: string | undefined): BoardDeck[] {
 }
 const board = readFileSync(new URL("../../../design/canvas/Main.dc.html", import.meta.url), "utf8");
 const literal = /const DECKS = (\[[\s\S]*?\]);\n/.exec(board)?.[1];
-const boardDecks = readBoardDecks(literal);
+// The board is history (design/), drawn before slidedeck was renamed
+// carouseldeck (#105): read its slidedeck as carouseldeck.
+const boardDecks = readBoardDecks(literal).map((deck) =>
+  deck.name === "slidedeck"
+    ? { ...deck, name: "carouseldeck", install: deck.install.replace("@slidedeck/", "@carouseldeck/") }
+    : deck,
+);
 
 test("the board lists the same decks, in the same order", () => {
   expect(boardDecks.map((deck) => deck.name)).toEqual(decks.map((deck) => deck.name));
@@ -87,11 +93,11 @@ test.each(decks)("$name's card copy is the board's, word for word", (deck) => {
   });
 });
 
-// GLOSSARY.md's "One figure per deck". slidedeck's has no value but a source:
-// each site reads its size from @slidedeck/react's README when it builds.
+// GLOSSARY.md's "One figure per deck". carouseldeck's has no value but a source:
+// each site reads its size from @carouseldeck/react's README when it builds.
 test("each deck has one figure", () => {
   expect(Object.fromEntries(decks.map((deck) => [deck.name, deck.figure]))).toEqual({
-    slidedeck: { source: "slidedeck-readme", label: "for a carousel with Prev and Next", note: "min+gzip, React external" },
+    carouseldeck: { source: "carouseldeck-readme", label: "for a carousel with Prev and Next", note: "min+gzip, React external" },
     playdeck: { value: "0", label: "requests to YouTube or Vimeo before play" },
     pagedeck: { value: "0 B", label: "of JavaScript on a page with nothing interactive" },
   });

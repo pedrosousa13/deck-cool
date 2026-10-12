@@ -23,10 +23,11 @@ export interface LiteralFigure extends FigureText {
 
 /**
  * A figure whose number each site reads from the deck's installed package as
- * it builds: slidedeck's size, from @slidedeck/react's README.
+ * it builds: carouseldeck's size, from @carouseldeck/react's README at its
+ * latest release.
  */
 export interface ReadmeFigure extends FigureText {
-  readonly source: "slidedeck-readme";
+  readonly source: "carouseldeck-readme";
 }
 
 /** A number from a deck's site, and what it counts. */
@@ -68,20 +69,21 @@ export const umbrella = {
 
 // The card copy (claim to install) was taken from each deck's live site on
 // 2026-10-08, for the umbrella board (design/canvas/Main.dc.html). The one
-// figure per deck is GLOSSARY.md's, from #45. slidedeck's size has no value
-// here: deck.cool and slidedeck's site read it from @slidedeck/react's README
-// when they build, so it follows each release.
-export const slidedeck: Deck<ReadmeFigure> = {
-  name: "slidedeck",
+// figure per deck is GLOSSARY.md's, from #45. carouseldeck is slidedeck renamed
+// (#105), so its copy is the board's slidedeck copy. Its size has no value
+// here: deck.cool and carouseldeck's site read it from @carouseldeck/react's
+// README when they build, so it follows each release.
+export const carouseldeck: Deck<ReadmeFigure> = {
+  name: "carouseldeck",
   kind: "Carousel",
   claim: "A carousel that lets the browser do the scrolling.",
   description:
     "Native momentum, snapping and focus scrolling. Loop, fade, curve and autoplay as effects you import only when you use them.",
-  install: "pnpm add @slidedeck/react",
-  figure: { source: "slidedeck-readme", label: "for a carousel with Prev and Next", note: "min+gzip, React external" },
-  url: "https://slide.deck.cool",
+  install: "pnpm add @carouseldeck/react",
+  figure: { source: "carouseldeck-readme", label: "for a carousel with Prev and Next", note: "min+gzip, React external" },
+  url: "https://carousel.deck.cool",
   accent: { fill: "#0071e3", text: "#2997ff" },
-  icons: icons("slidedeck"),
+  icons: icons("carouseldeck"),
 };
 
 export const playdeck: Deck<LiteralFigure> = {
@@ -110,4 +112,4 @@ export const pagedeck: Deck<LiteralFigure> = {
   icons: icons("pagedeck"),
 };
 
-export const decks: readonly Deck[] = [slidedeck, playdeck, pagedeck];
+export const decks: readonly Deck[] = [carouseldeck, playdeck, pagedeck];

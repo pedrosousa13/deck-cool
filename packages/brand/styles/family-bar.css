@@ -22,7 +22,7 @@
   --bar-fill-text: var(--fill-text);
   --bar-hairline: var(--bar-fill);
 }
-.family-bar[data-deck="slidedeck"] { --bar-fill: var(--slidedeck-fill); }
+.family-bar[data-deck="carouseldeck"] { --bar-fill: var(--carouseldeck-fill); }
 .family-bar[data-deck="playdeck"] { --bar-fill: var(--playdeck-fill); }
 .family-bar[data-deck="pagedeck"] { --bar-fill: var(--pagedeck-fill); }
 
@@ -90,7 +90,7 @@
   transform-origin: 32px 52px;
 }
 .family-bar__fan-left {
-  fill: var(--slidedeck-fill);
+  fill: var(--carouseldeck-fill);
   transform: rotate(-14deg);
 }
 .family-bar__fan-right {

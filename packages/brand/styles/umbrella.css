@@ -95,7 +95,7 @@ main h3 {
 .card:hover {
   background: var(--ground-raised);
 }
-[data-deck="slidedeck"] { --tint: var(--slidedeck-text); }
+[data-deck="carouseldeck"] { --tint: var(--carouseldeck-text); }
 [data-deck="playdeck"] { --tint: var(--playdeck-text); }
 [data-deck="pagedeck"] { --tint: var(--pagedeck-text); }
 .card__text {

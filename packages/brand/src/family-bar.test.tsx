@@ -10,10 +10,10 @@ function present<T>(value: T | null | undefined, what: string): T {
   return value;
 }
 
-const slidedeck = present(decks.find((deck) => deck.name === "slidedeck"), "slidedeck");
+const carouseldeck = present(decks.find((deck) => deck.name === "carouseldeck"), "carouseldeck");
 const links = [
   { label: "Docs", href: "/docs" },
-  { label: "GitHub", href: "https://github.com/example/slidedeck" },
+  { label: "GitHub", href: "https://github.com/example/carouseldeck" },
 ];
 
 // A <template>'s content is inert, so the DOM fetches no stylesheet or image.
@@ -25,13 +25,13 @@ function render(element: React.ReactElement): DocumentFragment {
 
 describe("the Family bar", () => {
   test("links no stylesheet: a site loads family-bar.css through build.css", () => {
-    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    const doc = render(<FamilyBar current={carouseldeck} links={links} />);
     expect(doc.querySelector("link")).toBeNull();
     expect(doc.firstElementChild?.tagName).toBe("HEADER");
   });
 
   test("the switcher is a button, labelled Switch deck, that toggles an auto popover", () => {
-    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    const doc = render(<FamilyBar current={carouseldeck} links={links} />);
     expect(doc.querySelector("details, summary")).toBeNull();
     const button = present(doc.querySelector("header button[popovertarget]"), "the switcher's button");
     expect(button.getAttribute("type")).toBe("button");
@@ -44,7 +44,7 @@ describe("the Family bar", () => {
   });
 
   test("the panel links every deck with its still icon, name and kind", () => {
-    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    const doc = render(<FamilyBar current={carouseldeck} links={links} />);
     const tiles = [...doc.querySelectorAll("header [popover] a")];
     expect(tiles.map((a) => a.getAttribute("href"))).toEqual(decks.map((deck) => deck.url));
     tiles.forEach((tile, at) => {
@@ -56,16 +56,16 @@ describe("the Family bar", () => {
   });
 
   test("only the current deck is marked aria-current", () => {
-    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    const doc = render(<FamilyBar current={carouseldeck} links={links} />);
     const current = [...doc.querySelectorAll('[aria-current="page"]')];
     expect(current).toHaveLength(1);
-    expect(current[0]?.getAttribute("href")).toBe(slidedeck.url);
+    expect(current[0]?.getAttribute("href")).toBe(carouseldeck.url);
   });
 
   test("on a deck's site the bar names the deck after a slash and carries its accent", () => {
-    const doc = render(<FamilyBar current={slidedeck} links={links} />);
-    expect(doc.querySelector("header")?.dataset.deck).toBe("slidedeck");
-    expect(doc.querySelector("header nav")?.textContent).toContain("/slidedeck");
+    const doc = render(<FamilyBar current={carouseldeck} links={links} />);
+    expect(doc.querySelector("header")?.dataset.deck).toBe("carouseldeck");
+    expect(doc.querySelector("header nav")?.textContent).toContain("/carouseldeck");
   });
 
   test("on the umbrella site no deck is current and no slash shows", () => {
@@ -77,7 +77,7 @@ describe("the Family bar", () => {
   });
 
   test("renders the site's own links", () => {
-    const doc = render(<FamilyBar current={slidedeck} links={links} />);
+    const doc = render(<FamilyBar current={carouseldeck} links={links} />);
     for (const { label, href } of links) {
       const link = doc.querySelector(`header nav a[href="${href}"]`);
       expect(link?.textContent).toBe(label);
@@ -85,10 +85,10 @@ describe("the Family bar", () => {
   });
 
   test("renders the Install pill only when given", () => {
-    const without = render(<FamilyBar current={slidedeck} links={links} />);
+    const without = render(<FamilyBar current={carouseldeck} links={links} />);
     expect(without.textContent).not.toContain("Install");
 
-    const withInstall = render(<FamilyBar current={slidedeck} links={links} install="/docs/install" />);
+    const withInstall = render(<FamilyBar current={carouseldeck} links={links} install="/docs/install" />);
     const pills = [...withInstall.querySelectorAll("header nav a")].filter((a) => a.textContent === "Install");
     expect(pills).toHaveLength(1);
     expect(pills[0]?.getAttribute("href")).toBe("/docs/install");
@@ -96,7 +96,7 @@ describe("the Family bar", () => {
 
   test("renders its children, such as a search box, last in the row", () => {
     const doc = render(
-      <FamilyBar current={slidedeck} links={links} install="/docs/install">
+      <FamilyBar current={carouseldeck} links={links} install="/docs/install">
         <input type="search" aria-label="Search" />
       </FamilyBar>,
     );
