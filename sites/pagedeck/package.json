@@ -15,6 +15,7 @@
     "@pagedeck/adapter-cloudflare-pages": "0.2.3",
     "@pagedeck/content": "0.2.3",
     "@pagedeck/core": "0.2.3",
+    "@pagedeck/docs": "0.2.3",
     "@pagedeck/font-subset": "0.2.3",
     "@pagedeck/islands": "0.2.3",
     "@pagedeck/markdown-loader": "0.2.3",

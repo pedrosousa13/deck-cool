@@ -168,6 +168,9 @@ importers:
       '@pagedeck/core':
         specifier: 0.2.3
         version: 0.2.3(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)(esbuild@0.28.2)(supports-color@10.2.2)
+      '@pagedeck/docs':
+        specifier: 0.2.3
+        version: 0.2.3
       '@pagedeck/font-subset':
         specifier: 0.2.3
         version: 0.2.3(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)(esbuild@0.28.2)(supports-color@10.2.2)
@@ -822,6 +825,10 @@ packages:
     resolution: {integrity: sha512-4JKcJDCw+uk63rvt9hXfIaupJBSSxL32vMIzMOMkaA/89mrp2ZqrOJeXM12zfEraa0Jh6RrzydMGo+1G4agp3A==}
     engines: {node: ^22.18.0 || >=23.7.0}
     hasBin: true
+
+  '@pagedeck/docs@0.2.3':
+    resolution: {integrity: sha512-6qnneis4jlLCBzLchcNB03HpCDeFdcv3QXDPJJwVmI+ZLHYOk7GvcyJpqYBprcGPtBTybySd4wqFVXDGv6l6WA==}
+    engines: {node: '>=22.0.0'}
 
   '@pagedeck/edge@0.2.3':
     resolution: {integrity: sha512-F05mIMEMkZvY/mPMnxPsRWiD9iDr9h5OFkLS5q0PrP9pMwXPjGuX8SNL5v4EILpNNVph1TjhEzWfQN5ME1iGjQ==}
@@ -2445,6 +2452,8 @@ snapshots:
       - terser
       - tsx
       - yaml
+
+  '@pagedeck/docs@0.2.3': {}
 
   '@pagedeck/edge@0.2.3(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)(esbuild@0.28.2)(supports-color@10.2.2)':
     dependencies:
