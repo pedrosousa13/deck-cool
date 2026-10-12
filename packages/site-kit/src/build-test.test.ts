@@ -73,7 +73,7 @@ describe("pagesWithEmDashes", () => {
   };
   page("index.html", "<p>Clean, with an en dash: 1\u20132.</p>");
   page("a/index.html", "<p>One \u2014 two</p>");
-  page("b/c/index.html", "<p>One &mdash; two</p>");
+  page("a/b/index.html", "<p>One &mdash; two</p>");
   page("404.html", "<title>Not found \u2014 Site</title>");
   page("examples/index.html", "<p>Kept \u2014 as ported</p>");
   page("examples.css", "/* \u2014 not a page */");
@@ -81,10 +81,10 @@ describe("pagesWithEmDashes", () => {
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   test("names each page whose HTML holds an em dash, as the character or &mdash;", () => {
-    expect(pagesWithEmDashes(dir)).toEqual(["/404.html", "/a/", "/b/c/", "/examples/"]);
+    expect(pagesWithEmDashes(dir)).toEqual(["/404.html", "/a/", "/a/b/", "/examples/"]);
   });
 
-  test("skips each page under an exempt path", () => {
-    expect(pagesWithEmDashes(dir, ["/examples/"])).toEqual(["/404.html", "/a/", "/b/c/"]);
+  test("skips each exempt page, and only that page, not the pages under it", () => {
+    expect(pagesWithEmDashes(dir, ["/examples/", "/a/"])).toEqual(["/404.html", "/a/b/"]);
   });
 });

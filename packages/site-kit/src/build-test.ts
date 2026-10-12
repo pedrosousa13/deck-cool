@@ -32,15 +32,15 @@ export interface Manifest {
 
 /**
  * Each built page under `site/` whose HTML holds an em dash, as `—` or
- * `&mdash;`, by its path: `/a/` for `a/index.html`, sorted. A page under one
- * of the `exempt` paths is skipped.
+ * `&mdash;`, by its path: `/a/` for `a/index.html`, sorted. A page whose path
+ * is one of the `exempt` paths is skipped; the pages under it are not.
  */
 export function pagesWithEmDashes(site: string, exempt: readonly string[] = []): string[] {
   const out = join(site, "site");
   return readdirSync(out, { recursive: true, encoding: "utf8" })
     .filter((file) => file.endsWith(".html"))
     .map((file) => ({ file, path: `/${file.replace(/(^|\/)index\.html$/, "$1")}` }))
-    .filter(({ path }) => !exempt.some((prefix) => path.startsWith(prefix)))
+    .filter(({ path }) => !exempt.includes(path))
     .filter(({ file }) => /\u2014|&mdash;/.test(readFileSync(join(out, file), "utf8")))
     .map(({ path }) => path)
     .sort();
