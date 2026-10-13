@@ -152,15 +152,23 @@ test("the user's wheel during a mouse drag is kept, and the release goes on from
 
   // Under half a slide on by the drag, then on by the wheel, with the
   // button still down. Measured, the wheel scrolls the deck a slide on in
-  // Chromium, and some 50px in WebKit.
+  // Chromium, and some 50px in WebKit — but one big wheel event leaves that
+  // to WebKit's own momentum, which under load (#123) can stop after its
+  // first, small tick and never go on: sent as several smaller wheel events
+  // instead, each is its own immediate, un-animated scroll, so the total
+  // does not depend on a momentum frame that might not come. Still async,
+  // so poll for it rather than read it the instant `mouse` resolves.
   await mouse(
     ['move', start, y],
     ['down'],
     ['move', start - 0.45 * WIDTH, y, 6],
-    ['wheel', WIDTH, 0],
-    ['wait', 300]
+    ['wheel', WIDTH / 3, 0],
+    ['wheel', WIDTH / 3, 0],
+    ['wheel', WIDTH / 3, 0]
   );
-  expect(viewport.scrollLeft).toBeGreaterThan(WIDTH / 2);
+  await expect
+    .poll(() => viewport.scrollLeft, { timeout: 3000 })
+    .toBeGreaterThan(WIDTH / 2);
   // The drag goes on from where the wheel took the deck, and is released
   // from there, held still: past half a slide on, it rests on the second
   // slide, where the drag alone, under half a slide on, rests on the first.
@@ -190,16 +198,26 @@ test('a slide removed during a mouse drag, which moves the viewport, leaves the 
   const box = viewport.getBoundingClientRect();
   const x = box.left + box.width / 2;
 
-  // A third of a slide on from the third slide, at 700.
+  // A third of a slide on from the third slide, at 700. The drag's moves
+  // are the browser's own input queue, not the engine's: under load (#123)
+  // they can still be queued, unapplied, well after `mouse` resolves. Poll
+  // for the drag to have actually landed before moving the slide out from
+  // under it, or the removal below would find the deck still at rest.
   await mouse(
     ['move', x, box.bottom - 20],
     ['down'],
     ['move', x, box.bottom - 120, 6]
   );
+  await expect
+    .poll(() => Math.abs(viewport.scrollTop - 700), { timeout: 3000 })
+    .toBeLessThan(5);
   // The first slide goes. The browser keeps what shows where it is, so the
-  // viewport goes up a slide, to 400, and the engine refreshes.
+  // viewport goes up a slide, to 400, and the engine refreshes. That too is
+  // the browser's own doing, on the same input queue, so poll for it.
   rerender(<Tall from={1} />);
-  expect(Math.abs(viewport.scrollTop - 400)).toBeLessThan(5);
+  await expect
+    .poll(() => Math.abs(viewport.scrollTop - 400), { timeout: 3000 })
+    .toBeLessThan(5);
   // Held still: from 400 the drag rests on the slide it holds, now the
   // second, where from the drag's own 700 it would rest a slide on.
   await mouse(['wait', 100], ['up']);
