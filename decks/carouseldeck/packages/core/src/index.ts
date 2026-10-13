@@ -198,7 +198,10 @@ export function createDeck(
     const copy = boxes.findIndex((box, i) => !own(i) && near(box));
     if (copy === -1) return;
     const point = geometry.slides[wrap(copy - first, slides.length)];
-    if (point !== -1) along.scrollTo(geometry.points[point], 'instant');
+    if (point !== -1) {
+      jumping = true;
+      along.scrollTo(geometry.points[point], 'instant');
+    }
   };
 
   // A touch or pen pressed on the viewport, or a mouse drag as it starts,
@@ -559,14 +562,19 @@ export function createDeck(
   // at quiet, and makes no later scroll the user's.
   let userInput = false;
   let userScroll = false;
-  // The layout moved the snap points mid-move, or mid-scroll of a scroll
-  // that is not the user's (see `keepPlace`): a move's target, or such a
-  // scroll's rest, counts the old snap points. A move rests on its target
-  // once it ends; a scroll with no move, not the user's, rests on the
-  // current index instead, as `keepPlace` would have put it at once, had it
-  // not still been going. `startMove` and `endMove` clear it, as a new
-  // move's target, or the user's own scroll taking over, counts the new
-  // ones.
+  // Whether the engine's own jump off a copy (`jumpOffCopies`) has a scroll
+  // still pending with the browser: set where it starts that scroll,
+  // cleared once it ends (`scrollEnded`) or the user takes the deck over
+  // (`takeOver`). `keepPlace` reads it to tell the jump apart from anyone
+  // else's scroll, the page's own included, which stands like the user's.
+  let jumping = false;
+  // The layout moved the snap points while something the engine started was
+  // still settling (see `keepPlace`): a move in flight, or the jump still
+  // pending (`jumping`). A move rests on its target once it ends; the jump
+  // rests on the current index instead, as `keepPlace` would have put it at
+  // once, had the jump's scroll not still been going (#146). `startMove` and
+  // `endMove` clear it, as a new move's target, or the user's own scroll
+  // taking over, counts the new snap points.
   let relaidOut = false;
   const startMove = (target: number) => {
     move = { target, stalled: false };
@@ -591,6 +599,7 @@ export function createDeck(
     if (move || confirm) taken = { at: axis().position, way };
     confirm = null;
     userInput = true;
+    jumping = false;
     endMove();
     // Quiet still ends what a refresh is owed, if this input scrolls
     // nothing, and ends the input.
@@ -723,15 +732,14 @@ export function createDeck(
       restoreSnap();
     }
     scrolling = false;
-    // A new layout may have cut the move short: rest on its target. Or
-    // there was no move, only a scroll that was not the user's: rest on the
-    // index it was already at, as `keepPlace` would have put it back to at
-    // once, had the scroll not still been going (#146).
-    const target = relaidOut
-      ? move
-        ? wrap(move.target, state.count)
-        : state.index
-      : null;
+    jumping = false;
+    // A new layout may have moved the snap points under a move or the jump
+    // still going (`relaidOut`): rest on the move's target, or the jump's,
+    // the current index.
+    let target: number | null = null;
+    if (relaidOut) {
+      target = move ? wrap(move.target, state.count) : state.index;
+    }
     // Quiet ended the move short of its target: a re-snap goes on its way,
     // as the browser may still be scrolling there (`resnap`).
     if (target === null && move && !arrived(move)) {
@@ -982,13 +990,14 @@ export function createDeck(
   // and a moving deck rests on its move's target once the move ends
   // (`scrollEnded`). A deck a pointer holds goes back, or on to the
   // target, once it lets go (`letGo`). A scroll of the user's stands, a
-  // touch pan or a mouse drag included: it settles at its own end. A scroll
-  // going that is not the user's, as a loop's jump off a copy still being
-  // reported by the browser, goes back to the current index once it ends
-  // too (`scrollEnded`), not wherever it leaves the viewport. Where
-  // the new layout has fewer snap points, the deck rests on the last, and
-  // reports it. Returns whether the deck has kept its place, or will once
-  // the pointer lets go or the scroll ends, so nothing settles before then.
+  // touch pan or a mouse drag included: it settles at its own end, and so
+  // does anyone else's, the page's own `scrollTo` or `scrollIntoView`
+  // included. Only the engine's own jump off a copy (`jumping`), still
+  // being reported by the browser, goes back to the current index once it
+  // ends too, not wherever it leaves the viewport. Where the new layout has
+  // fewer snap points, the deck rests on the last, and reports it. Returns
+  // whether the deck has kept its place, or will once the pointer lets go
+  // or the scroll ends, so nothing settles before then.
   const keepPlace = () => {
     if (drag === 'dragging') return false;
     if (move) {
@@ -1005,7 +1014,7 @@ export function createDeck(
       return true;
     }
     if (scrolling) {
-      if (!userScroll) relaidOut = true;
+      if (jumping) relaidOut = true;
       return false;
     }
     restOn(state.index);

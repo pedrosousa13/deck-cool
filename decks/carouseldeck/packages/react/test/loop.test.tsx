@@ -328,14 +328,13 @@ describe('loop', () => {
     await expect.poll(counter).toBe('1 / 4');
   });
 
-  // A deterministic repro of #146 (see `keepPlace` in packages/core/src):
-  // the layout change must still keep the deck's place once a scroll that
-  // was never the user's — the loop's own jump off a copy fires one such,
-  // mid-flight — goes on to end, even though no move is going either.
-  // Forced here (a stray `scroll` event held live across the slide add)
-  // rather than timed to land during a real jump off a copy, so the race
-  // does not depend on luck.
-  test('a stray scroll still live when slides are added keeps the counter at the old index', async () => {
+  // A scroll that is neither the user's nor the engine's own jump off a
+  // copy, as the page's own `scrollTo` or `scrollIntoView` (#127): the
+  // layout change must leave it to settle where it ends, like the user's,
+  // not force it back to the old index. A stray `scroll` event held live
+  // across the slide add stands in for it, rather than timing the race to
+  // land during a real such scroll, so it does not depend on luck.
+  test('a stray scroll still live when slides are added settles where it ends, not the old index', async () => {
     const { rerender } = render(
       <TestDeck loop slides={3} defaultIndex={2} controls={<Deck.Counter />} />
     );
@@ -347,9 +346,8 @@ describe('loop', () => {
     await expectSettledTo(counter, '3 / 3');
 
     // Not the user's: no input precedes it, so the engine never takes it
-    // for one (`userScroll` stays false), the way a jump off a copy never
-    // is either. Left short of its own rest, as an uncompensated scroll
-    // would be.
+    // for one (`userScroll` stays false). Not the engine's own jump off a
+    // copy either, so `jumping` stays false too.
     viewport.scrollLeft -= WIDTH;
     viewport.dispatchEvent(new Event('scroll'));
 
@@ -357,8 +355,10 @@ describe('loop', () => {
       <TestDeck loop slides={4} defaultIndex={2} controls={<Deck.Counter />} />
     );
 
-    // Quiet, not `scrollend`, ends a scroll the engine never started.
-    await expect.poll(counter).toBe('3 / 4');
+    // Quiet, not `scrollend`, ends a scroll the engine never started. It
+    // reads the index from where the scroll actually left the viewport, one
+    // slide back from the old index, now under the new layout.
+    await expect.poll(counter).toBe('2 / 4');
   });
 
   // A slide added to a looping deck adds a copy before the slides too, which
@@ -782,6 +782,62 @@ describe('loop in an engine without scrollend', () => {
 
     await expectSettledTo(() => onIndexChange.mock.calls, [[4]]);
     expect(offsetOf('5 of 5')).toBe(0);
+  });
+
+  // A deterministic repro of #146, driving the engine's own jump off a
+  // copy rather than a stand-in for it: the layout change must keep the
+  // deck's place while the jump is still going. With no `scrollend`, quiet
+  // always ends a scroll, waiting out the debounce again once the jump
+  // starts one of its own: two frames land well inside it, so the layout
+  // change below always finds the jump still going, not timed to land
+  // there by luck. Chromium can track the jump's own snap target through
+  // the layout change and put the viewport back on its own, saving the
+  // race by luck: forced wrong again below, as the jump's scroll left
+  // uncompensated would leave it.
+  test('a real jump off a copy still going when slides are added keeps the counter at the old index (#127)', async () => {
+    const onIndexChange = vi.fn();
+    const { rerender } = render(
+      <TestDeck
+        loop
+        slides={3}
+        defaultIndex={2}
+        onIndexChange={onIndexChange}
+        controls={<Deck.Counter />}
+      />
+    );
+    const counter = () =>
+      document.querySelector('[data-carouseldeck-counter]')?.textContent;
+    const viewport = viewportOf(
+      screen.getByRole('region', { name: 'Test deck' })
+    );
+    await expectSettledTo(counter, '3 / 3');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    // The move across the seam lands on the copy of the first slide, and
+    // jumps off it: `settle` reads the jumped-off position at once, so
+    // `onIndexChange` fires as the jump's own scroll starts.
+    await expect
+      .poll(() => onIndexChange.mock.calls, { timeout: 3000 })
+      .toEqual([[0]]);
+    // Lets the browser report the jump's own scroll, still going.
+    await nextFrame();
+    await nextFrame();
+
+    rerender(
+      <TestDeck
+        loop
+        slides={4}
+        defaultIndex={2}
+        onIndexChange={onIndexChange}
+        controls={<Deck.Counter />}
+      />
+    );
+    // Forced wrong, as the jump's own scroll left uncompensated would
+    // leave it (see above).
+    viewport.scrollLeft = WIDTH;
+
+    await expectSettledTo(counter, '1 / 4');
+    expect(onIndexChange.mock.calls).toEqual([[0]]);
   });
 });
 
