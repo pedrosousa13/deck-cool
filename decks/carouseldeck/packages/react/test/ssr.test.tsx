@@ -1,9 +1,10 @@
-import { act, type ComponentProps } from 'react';
+import { act, type ComponentProps, type ReactElement } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, expect, test, vi } from 'vitest';
 import * as Deck from '@carouseldeck/react';
 // Internal: see the test that uses it.
+import { LoopShells } from '../src/loop-shells';
 import { ServerSlidesProvider } from '../src/server-slides';
 import { nextFrame, TestDeck, viewportOf, WIDTH } from './fixtures';
 
@@ -15,15 +16,22 @@ const rectsOf = (elements: Element[]) =>
 /**
  * Paints the server HTML for `props`, then hydrates it, checking that
  * nothing moved unless `mayCorrect`. `atServer` reads the viewport before
- * any script has run.
+ * any script has run. `wrap`, around `TestDeck` itself, reaches an internal
+ * context such as #144's staging switch; it never sees `props`.
  */
 async function hydrate(
   props: DeckProps,
   atServer: (v: HTMLElement) => void = () => {},
-  { mayCorrect = false } = {}
+  {
+    mayCorrect = false,
+    wrap = (el: ReactElement) => el
+  }: {
+    mayCorrect?: boolean;
+    wrap?: (el: ReactElement) => ReactElement;
+  } = {}
 ) {
   const container = document.createElement('div');
-  container.innerHTML = renderToString(<TestDeck {...props} />);
+  container.innerHTML = renderToString(wrap(<TestDeck {...props} />));
   document.body.append(container);
   const viewport = viewportOf(container);
   atServer(viewport);
@@ -42,7 +50,7 @@ async function hydrate(
   await act(async () => {
     hydrateRoot(
       container,
-      <TestDeck {...props} onIndexChange={onIndexChange} />,
+      wrap(<TestDeck {...props} onIndexChange={onIndexChange} />),
       { onRecoverableError }
     );
   });
@@ -228,6 +236,48 @@ test('a looping deck starts on the slide at defaultIndex without layout shift', 
 
   expect(slideOffset(viewport)).toBe(0);
   expect(viewport.scrollLeft).toBe(7 * WIDTH);
+  expect(index).toBe('2');
+});
+
+// One instance (staged): shells and spacers, not copies (#144). The before-
+// spacer's own SSR estimate (decision 6) pushes the slides two sets in, same
+// as a 5-set copies layout would, so hydration moves nothing: shells carry
+// no content, so only their estimated inset is compared here, never their
+// size, which decision 6 does not estimate (they are `opacity:0` and
+// `inert`, so a size change at mount, if it ever showed as a shift, would
+// still paint nothing a person sees).
+test('one instance (staged): a looping deck with shells starts on the slide at defaultIndex without layout shift', async () => {
+  const slideOffset = (viewport: HTMLElement) =>
+    viewport.querySelector('[aria-label="3 of 5"]')!.getBoundingClientRect()
+      .left - viewport.getBoundingClientRect().left;
+  const rectsOfSlidesAndSpacers = (viewport: HTMLElement) =>
+    [
+      ...viewport.querySelectorAll(':scope > :not([data-carouseldeck-shell])')
+    ].map((el) => el.getBoundingClientRect().toJSON());
+
+  let serverShells = -1;
+  let serverCopies = -1;
+  let before: unknown;
+  const { viewport, index } = await hydrate(
+    { loop: true, defaultIndex: 2 },
+    (viewport) => {
+      serverShells = viewport.querySelectorAll(
+        '[data-carouseldeck-shell]'
+      ).length;
+      serverCopies = viewport.querySelectorAll(
+        '[data-carouseldeck-copy]'
+      ).length;
+      expect(slideOffset(viewport)).toBe(0);
+      before = rectsOfSlidesAndSpacers(viewport);
+    },
+    { mayCorrect: true, wrap: (el) => <LoopShells value>{el}</LoopShells> }
+  );
+
+  expect(serverShells).toBe(25);
+  expect(serverCopies).toBe(0);
+  expect(rectsOfSlidesAndSpacers(viewport)).toEqual(before);
+  expect(slideOffset(viewport)).toBe(0);
+  expect(viewport.scrollLeft).toBe(12 * WIDTH);
   expect(index).toBe('2');
 });
 

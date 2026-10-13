@@ -5,6 +5,8 @@ import { describe, expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import { curve } from '@carouseldeck/react/curve';
+// Internal: see the test that uses it.
+import { LoopShells } from '../src/loop-shells';
 import {
   addStyle,
   expectSettledTo,
@@ -563,6 +565,37 @@ describe('curve in server HTML', () => {
     expect(progressOf(viewport)).toEqual(
       [0, 1, 2, 3, 4, 5].map((i) => i - focal)
     );
+  });
+});
+
+// One instance (staged, #144): with shells, a real slide placed k sets away
+// wraps its progress by k times the slide count instead of running on
+// forever as a copy's distance would (decision, Task 4 notes): `p = i + k·n
+// − s`, `k` clamped to the two buffer sets either side. Curve has no
+// stacking target, so it is in scope here; stacked effects are Task 5's.
+describe('one instance (staged): curve in server HTML', () => {
+  test('gives each real slide its progress wrapped into the nearest slot, looping at defaultIndex 1', async () => {
+    addStyle(SLIDE_CSS);
+    const painted = (viewport: HTMLElement) =>
+      [
+        ...viewport.querySelectorAll<HTMLElement>(
+          ':scope > [data-carouseldeck-slide]'
+        )
+      ].map((slide) => [
+        getComputedStyle(slide).opacity,
+        getComputedStyle(slide.firstElementChild!).transform
+      ]);
+    const { viewport, server, serverProgress, hydrated } =
+      await serverThenHydrated(
+        <LoopShells value>
+          <CurveDeck loop defaultIndex={1} />
+        </LoopShells>,
+        painted
+      );
+
+    expect(serverProgress).toEqual([-1, 0, 1, 2, 3, -2]);
+    expect(progressOf(viewport)).toEqual(serverProgress);
+    expect(hydrated).toEqual(server);
   });
 });
 

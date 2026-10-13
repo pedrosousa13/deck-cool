@@ -1009,6 +1009,35 @@ export function createDeck(
     settle();
   };
 
+  // Shells mode only (#144, decision 6): a real slide starts translated by
+  // `Deck.Slide`'s own CSS estimate, `--carouseldeck-placed`, wherever it
+  // renders placed `k` sets from its own. `layoutShells`, below, is about
+  // to read every slide's current rect to find its home with that
+  // translate removed, the same way it always does, through `placedAt` --
+  // but nothing has written `placedAt` yet, so without this it would
+  // assume no slide has one, and read a translated slide's rect as its
+  // home outright, off by the very translate decision 6 asks for. Seeded
+  // here, once, from the inline custom property React itself wrote, never
+  // from computed style (the plan's defect 2): `place`, right after,
+  // overwrites every entry with the engine's own measured placement.
+  {
+    const along = axis();
+    for (const slide of slidesOf(viewport).slides) {
+      if (!(slide instanceof HTMLElement)) continue;
+      const kn = parseFloat(
+        slide.style.getPropertyValue('--carouseldeck-placed')
+      );
+      if (!Number.isFinite(kn) || kn === 0) continue;
+      // Its own border-box size, never its rendered rect's: a consumer's
+      // progress-driven `scale` would otherwise make this offset, and so
+      // `layoutShells`' first length and homes, off by the same amount
+      // the scale is (the CSS `translate` itself, decision 6, resolves
+      // against the border box too, never the scaled rect).
+      const size = along.vertical ? slide.offsetHeight : slide.offsetWidth;
+      placedAt.set(slide, { slot: 0, offset: kn * size });
+    }
+  }
+
   // With one slide per snap point, server HTML already rests here where the
   // browser honours `scroll-initial-target`, and this scroll is a no-op.
   // Where slides share snap points, slide `index` may rest at another snap
@@ -1017,9 +1046,30 @@ export function createDeck(
   // slides, before `restOn`'s own read of the snap points, which runs
   // before `settle`'s (ADR-0013): without it, the mid shells have no
   // `scroll-snap-align` yet, and there is nowhere to rest.
+  const beforeStart = axis().position;
   layoutShells(viewport, axis(), placedAt);
   alignCopies(viewport);
   restOn(options.index);
+
+  // WebKit can silently drop a `scrollLeft` write made before the document's
+  // first paint (confirmed in the prototype, #144): the write above takes no
+  // effect there, and the deck is left resting wherever the browser put it
+  // instead, a buffer set included. Checked again once the first frame has
+  // drawn, and only where the position has not moved at all since just
+  // before that write: anyone else's, a press, a move or a scroll
+  // included, already has its own rest by then, wherever that leaves it,
+  // which this must not override -- and the only way the position can
+  // still equal what it was then, with nothing else having touched it, is
+  // that the write itself never took. Ported from the prototype's
+  // `settleInitialScroll`. Cancelled in `destroy`.
+  let startFrame = requestAnimationFrame(() => {
+    startFrame = 0;
+    const along = axis();
+    if (along.position !== beforeStart) return;
+    const { points } = snapPoints(viewport, along);
+    const to = points[clamp(state.index, points.length)] ?? 0;
+    if (Math.abs(along.position - to) >= 1) restOn(state.index);
+  });
 
   // A new layout that moves the snap points under the viewport keeps the
   // deck at its current index: a `dir` change (below), or loop's copies or
@@ -1371,6 +1421,7 @@ export function createDeck(
       if (penPan !== null) clearTimeout(penPan);
       cancelAnimationFrame(frame);
       cancelAnimationFrame(focusFrame);
+      cancelAnimationFrame(startFrame);
       const atDestroy = slidesOf(viewport);
       for (const slide of atDestroy.run) {
         slide.removeAttribute(IN_VIEW);
@@ -1708,19 +1759,38 @@ function layoutShells(
   // never read from computed style (the plan's defect 2): a slide not yet
   // placed has none.
   const offsets = slides.map((slide) => placedAt.get(slide)?.offset ?? 0);
+  // Each slide's own border-box size, never its rendered rect's (#144): a
+  // consumer's progress-driven `scale` (ADR-0003's own docs example)
+  // shrinks or grows the rect `along.span` reads, `offsetWidth`/
+  // `offsetHeight` neither, so this stays the slide's true size regardless.
+  const sizes = slides.map((slide) =>
+    slide instanceof HTMLElement
+      ? along.vertical
+        ? slide.offsetHeight
+        : slide.offsetWidth
+      : 0
+  );
+  // Each slide's start, from its span's own centre -- unmoved by a centred
+  // `scale`, unlike either edge -- less half its true size, with its own
+  // already-placed translate removed: independent of a consumer's scale
+  // and of where `place` last put it (the plan's defect 1 and 2, and
+  // scale, together).
+  const starts = spans.map(
+    ([start, end], i) => (start + end) / 2 - sizes[i] / 2 - offsets[i]
+  );
 
-  // `length` (L) comes from the slides' own geometry alone, with each
-  // end's translate removed, never from where the spacers put them:
-  // computed first, so the spacers can be sized from it before anything
-  // reads a slide's position (the plan's defect 1).
+  // `length` (L) comes from the slides' own geometry alone, never from
+  // where the spacers put them: computed first, so the spacers can be
+  // sized from it before anything reads a slide's position (the plan's
+  // defect 1).
   const [marginStart0] = along.insets(getComputedStyle(slides[0]), 'margin', 0);
   const [, marginEndN] = along.insets(
     getComputedStyle(slides[n - 1]),
     'margin',
     0
   );
-  const start0 = spans[0][0] - offsets[0];
-  const endN = spans[n - 1][1] - offsets[n - 1];
+  const start0 = starts[0];
+  const endN = starts[n - 1] + sizes[n - 1];
   const length = endN + marginEndN + gap + marginStart0 - start0;
 
   // The spacers, before the real slides' positions are read: on a layout
@@ -1737,10 +1807,7 @@ function layoutShells(
   // Each slide's home, with its own already-placed translate removed, so
   // it is independent of where `place` last put it (the plan's defect 1
   // and 2 together).
-  const homes = spans.map(
-    ([start], i) => start - offsets[i] - view[0] + position
-  );
-  const sizes = spans.map(([start, end]) => end - start);
+  const homes = starts.map((start) => start - view[0] + position);
 
   const insetProp = along.vertical ? 'insetBlockStart' : 'insetInlineStart';
   const sizeProp = along.vertical ? 'height' : 'width';
@@ -1748,10 +1815,16 @@ function layoutShells(
   run.forEach((shell, idx) => {
     const i = idx % n;
     const set = Math.floor(idx / n) - 2;
-    const box = slides[i].getBoundingClientRect();
+    const slide = slides[i];
+    const cross =
+      slide instanceof HTMLElement
+        ? along.vertical
+          ? slide.offsetWidth
+          : slide.offsetHeight
+        : 0;
     write(shell, insetProp, `${homes[i] + set * length}px`);
     write(shell, sizeProp, `${sizes[i]}px`);
-    write(shell, crossProp, `${along.vertical ? box.width : box.height}px`);
+    write(shell, crossProp, `${cross}px`);
   });
 
   return {

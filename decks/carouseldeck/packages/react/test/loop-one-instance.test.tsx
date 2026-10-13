@@ -247,6 +247,23 @@ describe('one instance (staged): structure', () => {
     expect(root.dataset.index).toBe('3');
   });
 
+  // Task 4 (#144): the mount's own scroll write may be dropped (WebKit, the
+  // prototype's history) or never settle-debounced at all in a fast test, so
+  // this checks the rest lands within two frames, not the ~100ms a settle's
+  // debounce would otherwise hide behind.
+  test('rests at defaultIndex within two frames, with no debounce to hide behind', async () => {
+    const { root, viewport } = renderShells({ defaultIndex: 3 });
+    await nextFrame();
+    await nextFrame();
+
+    const slide = screen.getByRole('group', { name: '4 of 5' });
+    const offset = Math.round(
+      slide.getBoundingClientRect().left - viewport.getBoundingClientRect().left
+    );
+    expect(offset).toBe(0);
+    expect(root.dataset.index).toBe('3');
+  });
+
   test('Next, then Prev, within the slides, settle and report', async () => {
     const { root, onIndexChange } = renderShells({ defaultIndex: 1 });
     const next = screen.getByRole('button', { name: 'Next' });

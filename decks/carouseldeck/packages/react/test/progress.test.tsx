@@ -4,6 +4,8 @@ import { renderToString } from 'react-dom/server';
 import { describe, expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
+// Internal: see the test that uses it.
+import { LoopShells } from '../src/loop-shells';
 import {
   addStyle,
   CENTRED,
@@ -211,6 +213,52 @@ describe('--deck-slide-progress in server HTML', () => {
       expect(hydrated).toEqual(server);
     }
   );
+});
+
+// One instance (staged, #144): a real slide placed k sets away wraps its
+// progress by k times the slide count, rather than running on as a copy's
+// distance would (Task 4 notes): `p = i + k·n − s`, `k` clamped to the two
+// buffer sets either side.
+describe('one instance (staged): --deck-slide-progress in server HTML', () => {
+  const SCALED = `.scaled > * {
+    width: ${WIDTH / 3}px;
+    scale: calc(1 - min(max(var(--deck-slide-progress, 0), -1 * var(--deck-slide-progress, 0)), 1) * 0.2);
+  }`;
+  // Only the real slides: `.scaled > *` also reaches the shells and
+  // spacers, which carry no progress and are not part of this claim.
+  const painted = (viewport: HTMLElement) =>
+    [
+      ...viewport.querySelectorAll<HTMLElement>(
+        ':scope > [data-carouseldeck-slide]'
+      )
+    ].map((slide) => getComputedStyle(slide).scale);
+
+  test('with shells, gives each real slide its progress wrapped into the nearest slot, and keeps the visible slides painted the same at hydration', async () => {
+    addStyle(SCALED);
+    const { viewport, server, serverProgress, hydrated } =
+      await serverThenHydrated(
+        <LoopShells value>
+          <ProgressDeck viewportClassName="scaled" loop defaultIndex={1} />
+        </LoopShells>,
+        painted
+      );
+
+    expect(serverProgress).toEqual([-1, 0, 1, 2, -2]);
+    // Slides 2 to 4 (indexes 1 to 3), the three 'start'-aligned ones in
+    // view: decision 6 promises hydration keeps the visible slide in
+    // place, which this checks for all three. Slides 1 and 5 (indexes 0
+    // and 4) are off-screen either side: the engine's own placement
+    // (`nearestSlot`, ADR-0013) picks whichever of the five sets is
+    // nearest the viewport's own centre, which three slides in view moves
+    // off the focal slide's alignment point, so it can read a different
+    // slot than this estimate's simpler per-slide-distance one. Neither a
+    // slide a person can see, so painting it differently paints nothing
+    // a person sees differently either.
+    expect(progressOf(viewport).slice(1, 4)).toEqual(
+      serverProgress.slice(1, 4)
+    );
+    expect(hydrated.slice(1, 4)).toEqual(server.slice(1, 4));
+  });
 });
 
 describe('--deck-slide-index', () => {
