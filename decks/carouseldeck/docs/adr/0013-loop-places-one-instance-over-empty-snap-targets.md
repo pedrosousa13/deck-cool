@@ -1,23 +1,27 @@
 # Loop places one real slide by translate over empty snap targets
 
+**Accepted 2026-10-13, built in #144 (one instance, JavaScript placement),
+#145 (CSS placement) and #146 (press correction).** Until #144 lands, loop
+still renders full copies (ADR-0009).
+
 ADR-0009 built loop as clone and jump: a full set of copies on each side of
 the slides, each a `Deck.Slide` rendered again, so its state, effects, ids
-and media are its own and mount a second and third time. A video player, an
-`id`, a running effect — anything a slide's content does — runs three times.
-`packages/docs/guides/known-limits.md` warned about it (#119).
+and media are its own and mount a second and third time. Anything a slide's
+content does, such as a video player, an `id` or a running effect, runs
+three times. `packages/docs/guides/known-limits.md` warned about it (#119).
 
 **The maintainer's ruling (2026-10-13): one instance per slide, not a
 lighter copy.** Each slide's children mount exactly once; refs, state,
 effects, ids and media stay stable across the loop, the seam and the jump.
 This supersedes the `useIsCopy()` brief of 2026-10-12, which only would have
-told content it was in a copy — `Deck.useSlide().copy` already does that,
+told content it was in a copy: `Deck.useSlide().copy` already does that,
 unchanged, for the small-deck fallback below.
 
 ## The technique
 
 Native scroll snap stays the engine (ADR-0001, ADR-0006). Loop's copies
-become empty, inert, `aria-hidden` boxes that render no children — call them
-_shells_ — and the one real slide is moved onto whichever shell is nearest
+become empty, inert, `aria-hidden` boxes that render no children. Call them
+_shells_. The one real slide is moved onto whichever shell is nearest
 the viewport, by `translate`.
 
 **Snap points come from shells, for all five sets, as ADR-0007 already
@@ -28,8 +32,8 @@ per copy too, when loop and an effect combine. This is that same mechanism,
 generalised: a shell is a snap target with no copy of the slide's content
 behind it. Engines snap to a translated box, so a moved real slide must
 never be a snap area: it gets `scroll-snap-align: none`, unconditionally,
-and a dedicated shell — at the real slide's own place among the sets, not
-only the copies' — carries its snap point instead. Five sets in all: the
+and a dedicated shell, at the real slide's own place among the sets and not
+only the copies', carries its snap point instead. Five sets in all: the
 real slides' own set (replacing what would have been its own snap point)
 and two sets of shells on each side.
 
@@ -38,7 +42,7 @@ flick's native momentum, or several flicks chained before any settles (iOS
 can keep momentum going across a chained flick with no `scrollend` between
 them), travels more than one set length before the scroller ever rests. A
 mid-scroll correction was tried and cuts a smooth or momentum scroll dead at
-the write, in both Chromium and WebKit — worse than the problem. A second
+the write, in both Chromium and WebKit, worse than the problem. A second
 buffer set is the gentler fix: still only empty, inert boxes, so the extra
 DOM cost is small. `reachable`, `resnap`'s window and `release`'s point list
 (ADR-0009) generalise from one set's reach to two; the engine does not
@@ -50,7 +54,7 @@ consumer's layout CSS (width, gap, breakpoints) applies unchanged
 (ADR-0003) and alone decides how much of the track they occupy. A shell
 cannot also take flow space without doubling it, so shells are positioned
 out of flow, each at its slide's own measured box plus its set's whole
-multiple of the run's length, and sized to match it — the same
+multiple of the run's length, and sized to match it: the same
 `alignCopies` idea ADR-0009 already has (copying a slide's `scroll-snap-align`
 onto its copies at every settle), extended to position and size. A resize or
 a layout change that moves the real slides re-measures and re-positions
@@ -76,14 +80,14 @@ the same task, so nothing paints a wrong frame.
 clamped to the track's physical end, a `scrollTo` asking to go further is a
 no-op the browser does not fire a `scroll` or `scrollend` event for, so the
 jump never runs again and presses in one direction can pin the deck there.
-Every Next, Prev, arrow key and dot press now corrects the position into the
+Every Next, Prev, arrow key and dot press corrects the position into the
 middle set first, synchronously, before it moves, so a press always has a
 full set of room ahead of it whether or not a settle got the chance to jump.
 
 **A drag recovers from a failed pointer capture.** `setPointerCapture` can
 throw when a busy main thread delivers the pointer's move after the pointer
 itself is gone. Unhandled, that left the engine's `drag` state stuck at
-`dragging` with no pointer to release it. The call is now guarded: on a
+`dragging` with no pointer to release it. The call is guarded: on a
 throw, the drag returns to idle at once, as if the press had never started
 one.
 
@@ -91,7 +95,7 @@ one.
 WebKit: a `scrollLeft` write made before the first paint is silently
 dropped, while the identical write from a later task succeeds. The initial
 position, including the shells' placement, is set a frame after mount,
-never synchronously with it. Server HTML already renders every real slide's
+never synchronously with it. Server HTML renders every real slide's
 starting translate and every shell's starting geometry for `defaultIndex`
 (ADR-0011's pattern: a good estimate from index arithmetic alone, corrected
 before the first frame once the browser can measure), so hydration moves
@@ -111,7 +115,7 @@ points reach a set past either end as before (`reachable`, ADR-0009); a
 press or a wheel event on them still shifts the deck a set onto the slides
 where nothing shows (`shiftOffCopies`); click to focus, autoplay, synced
 decks, fade, curve, stack, pages, vertical and right-to-left read the same.
-Only what measured a copy's own box now measures its shell instead.
+Only what measured a copy's own box measures its shell instead.
 
 ## What is open to the implementation
 
@@ -133,8 +137,8 @@ half-done):
 ## Supersedes, in part
 
 ADR-0009's "React renders the copies; the engine finds them" is superseded:
-a copy renders no children. Its loop mechanics — the snap-point generalisation
+a copy renders no children. Its loop mechanics, the snap-point generalisation
 to copies past either end, `jumpOffCopies`, `shiftOffCopies`, a press or
-wheel shifting onto the slides, the move lifecycle of ADR-0006 — are not;
-they are what this ADR extends from one set each side to two, and from
-full copies to shells.
+wheel shifting onto the slides, and the move lifecycle of ADR-0006, are not
+superseded; they are what this ADR extends from one set each side to two,
+and from full copies to shells.

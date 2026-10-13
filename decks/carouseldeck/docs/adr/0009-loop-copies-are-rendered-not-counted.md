@@ -4,11 +4,11 @@
 finds them", below, assumed a copy renders the slide's children again. For
 most decks it no longer does: ADR-0013 makes a copy an empty shell, and
 places the one real slide onto it by `translate`. This ADR's loop mechanics
-— copies' snap points reaching a set past either end, `jumpOffCopies`,
-`shiftOffCopies`, a press or wheel shifting onto the slides, and what loop
-does with the deck's other features — still hold, extended from one set
-each side to two; only a deck too small to place shells still renders full
-copies, exactly as built here.
+still hold, extended from one set each side to two: copies' snap points
+reaching a set past either end, `jumpOffCopies`, `shiftOffCopies`, a press
+or wheel shifting onto the slides, and what loop does with the deck's other
+features. Only a deck too small to place shells still renders full copies,
+exactly as built here.
 
 ADR-0006 chose clone and jump for loop (the technique's name; the elements are
 _copies_, GLOSSARY.md): a full set of copies on each side of the slides,
