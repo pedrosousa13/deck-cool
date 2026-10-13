@@ -1,5 +1,15 @@
 # Loop copies are rendered by Viewport and never counted
 
+**Superseded in part by ADR-0013.** "React renders the copies; the engine
+finds them", below, assumed a copy renders the slide's children again. For
+most decks it no longer does: ADR-0013 makes a copy an empty shell, and
+places the one real slide onto it by `translate`. This ADR's loop mechanics
+— copies' snap points reaching a set past either end, `jumpOffCopies`,
+`shiftOffCopies`, a press or wheel shifting onto the slides, and what loop
+does with the deck's other features — still hold, extended from one set
+each side to two; only a deck too small to place shells still renders full
+copies, exactly as built here.
+
 ADR-0006 chose clone and jump for loop (the technique's name; the elements are
 _copies_, GLOSSARY.md): a full set of copies on each side of the slides,
 `aria-hidden` and `inert`, and a jump of one set length onto the identical
