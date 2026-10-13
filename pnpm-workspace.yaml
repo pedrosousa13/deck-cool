@@ -16,13 +16,6 @@ packages:
 allowBuilds:
   esbuild: false
   workerd: false
-# The maintainer published @playdeck/docs@1.3.0 and @pagedeck/docs@0.2.3 by
-# hand on 2026-10-11, each from its deck's own main, so these versions skip
-# pnpm's one-day hold (#52, #53). #93 removes these entries once the hold has
-# passed.
-minimumReleaseAgeExclude:
-  - '@playdeck/docs@1.3.0'
-  - '@pagedeck/docs@0.2.3'
 # satori pins fflate 0.7.3, which GHSA-px8p-9vwx-vf98 covers. Remove this
 # override once satori stops pinning 0.7.3.
 overrides:
