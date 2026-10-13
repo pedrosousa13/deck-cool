@@ -10,7 +10,7 @@ interface View {
   photo: Photo;
 }
 
-const VIEW_LIST: View[] = [
+const CARDS: View[] = [
   { name: "Valley", line: "Mist on green slopes", photo: VIEWS.valley },
   { name: "Waterfall", line: "Falls in the woods", photo: VIEWS.waterfall },
   { name: "Peaks", line: "Snow on the range", photo: VIEWS.summit },
@@ -26,7 +26,7 @@ export default function CardStackDeck() {
   return (
     <Deck.Root aria-label="Views" className="card-stack-deck" loop>
       <Deck.Viewport effect={stack}>
-        {VIEW_LIST.map((view) => (
+        {CARDS.map((view) => (
           <Deck.Slide key={view.name}>
             {/* The recipe's CSS draws on the slide's one child. */}
             <div className="photo-card">

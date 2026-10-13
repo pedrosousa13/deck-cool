@@ -106,7 +106,7 @@ describe("the decks in a browser", () => {
 
   // Reduced motion, as every visit() in this file runs under: Next cuts straight
   // to the next card, with no throw to wait out.
-  test("the card stack's Next throws the top card out and the next one takes its place, under the CSP", async () => {
+  test("the card stack's Next moves the top card out and the next one takes its place, under the CSP", async () => {
     const { page, violations } = await visit("/examples/", { width: 1280, reducedMotion: "reduce" });
     await hydrated(page);
     const deck = page.locator(".card-stack-deck");
@@ -115,6 +115,42 @@ describe("the decks in a browser", () => {
     await deck.locator("[data-focal] [data-carouseldeck-next]").click();
     await expect.poll(top).toBe("Waterfall");
     expect(await violations()).toEqual([]);
+  });
+
+  test("the card stack loops: five Nexts bring Valley back on top", async () => {
+    const { page, violations } = await visit("/examples/", { width: 1280, reducedMotion: "reduce" });
+    await hydrated(page);
+    const deck = page.locator(".card-stack-deck");
+    const top = () => deck.locator("[data-focal] h3").textContent();
+    for (const name of ["Waterfall", "Peaks", "Shore", "Pines", "Valley"]) {
+      await deck.locator("[data-focal] [data-carouseldeck-next]").click();
+      await expect.poll(top).toBe(name);
+    }
+    expect(await violations()).toEqual([]);
+  });
+
+  // The recipe's reduced-motion block makes --exit a step at halfway: a drag
+  // partway through, short of halfway, leaves the card without a throw.
+  test("a partial drag shows no throw under reduced motion, where plain motion already shows one", async () => {
+    const partialDragTransform = async (reducedMotion: "reduce" | "no-preference") => {
+      const { page } = await visit("/examples/", { width: 1280, reducedMotion });
+      await hydrated(page);
+      const deck = page.locator(".card-stack-deck");
+      const leaving = deck.locator(".photo-card", { hasText: "Valley" }).first();
+      const viewport = deck.locator("[data-carouseldeck-viewport]");
+      await viewport.scrollIntoViewIfNeeded();
+      const box = await viewport.boundingBox();
+      if (!box) throw new Error("the card stack's viewport has no box");
+      const y = box.y + box.height / 2;
+      await page.mouse.move(box.x + box.width / 2, y);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 2 - box.width * 0.35, y, { steps: 10 });
+      const transform = await leaving.evaluate((element) => getComputedStyle(element).transform);
+      await page.mouse.up();
+      return transform;
+    };
+    expect(await partialDragTransform("reduce")).toBe("matrix(1, 0, 0, 1, 0, 0)");
+    expect(await partialDragTransform("no-preference")).not.toBe("matrix(1, 0, 0, 1, 0, 0)");
   });
 
   // The page's script is its islands', so a click selects the command for copying instead.

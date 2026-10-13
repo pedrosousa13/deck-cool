@@ -127,22 +127,22 @@ export const PLACES = {
 
 // The same photos with English alt text, for the card stack.
 export const VIEWS = {
-  valley: photo("valley", 640, 800, "A green valley between mountains", ...VALLEY),
-  waterfall: photo("waterfall", 640, 800, "A waterfall between rocks", ...WATERFALL),
-  summit: photo("summit", 640, 800, "Snow-covered mountains", ...PEAKS),
-  shore: photo("shore", 640, 800, "Rocks on a sea shore", ...BAY),
-  pines: photo("pines", 640, 800, "A forest by the sea", ...FOREST)
+  valley: { ...PLACES.valley, alt: "A green valley between mountains" },
+  waterfall: { ...PLACES.waterfall, alt: "A waterfall between rocks" },
+  summit: { ...PLACES.summit, alt: "Snow-covered mountains" },
+  shore: { ...PLACES.shore, alt: "Rocks on a sea shore" },
+  pines: { ...PLACES.pines, alt: "A forest by the sea" }
 };
 
-/** Every photo, once each by its page on Unsplash, for the credits. */
+/** Every photo, once each by its page on Unsplash, for the credits. VIEWS
+ * shares every photo's url with PLACES, so it adds none of its own. */
 export const CREDITS: readonly Photo[] = [
   ...new Map(
     [
       ...Object.values(PRODUCTS),
       ...Object.values(SCENES),
       ...Object.values(STORIES),
-      ...Object.values(PLACES),
-      ...Object.values(VIEWS)
+      ...Object.values(PLACES)
     ].map((photo) => [photo.url, photo])
   ).values()
 ];
