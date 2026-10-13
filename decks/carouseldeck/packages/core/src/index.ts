@@ -140,7 +140,7 @@ export function createDeck(
   const paint = (along = axis()) => {
     cancelAnimationFrame(frame);
     frame = 0;
-    writeProgress(viewport, along, align);
+    writeProgress(viewport, along, align, placedAt);
   };
 
   // Whether the viewport holds loop's copies and an effect's snap targets,
@@ -150,6 +150,20 @@ export function createDeck(
   // deck is without measuring (see `shiftOffCopies`).
   let known: Geometry = { points: [], slides: [], length: 0, sets: 0 };
 
+  // Shells mode only (ADR-0013): each real slide's current placement, as
+  // `place` last wrote it onto it -- the slot it sits over (-2 to 2, 0 its
+  // own) and the logical translate (along the axis) that puts it there.
+  // `layoutShells` reads a slide's offset to measure its home independent
+  // of it; `writeProgress`, `onClick` and `onFocusIn` read a slide's slot
+  // to find where it currently reads as placed. Never read from computed
+  // style (the two defects #144's plan calls out). A `WeakMap` needs no
+  // cleanup as slides come and go.
+  const placedAt = new WeakMap<Element, { slot: number; offset: number }>();
+  // The geometry `place` needs to keep placing every real slide with no
+  // further box read, mid-scroll: cached by the last `layoutShells`, null
+  // outside shells mode.
+  let placement: Placement | null = null;
+
   const settle = () => {
     refreshOwed = false;
     shifted = null;
@@ -158,11 +172,12 @@ export function createDeck(
     shape = shapeOf(viewport);
     placeOwed = null;
     const along = axis();
-    layoutShells(viewport, along);
+    placement = layoutShells(viewport, along, placedAt);
     alignCopies(viewport);
     const geometry = snapPoints(viewport, along);
     known = geometry;
     jumpOffCopies(along, geometry);
+    place(viewport, along, placement, placedAt);
     // Its own settle reports where the deck comes to rest.
     if (resnap(along, geometry)) return;
     const { points, slides } = geometry;
@@ -260,6 +275,10 @@ export function createDeck(
     style.scrollSnapType = 'none';
     along.scrollTo(at + shift, 'instant');
     style.scrollSnapType = snap;
+    // In the same task as the shift's scroll (ADR-0013): no waiting on the
+    // browser's own, possibly later, scroll event for a frame to paint
+    // correctly.
+    place(viewport, along, placement, placedAt);
     // Positions kept from before the shift move with it.
     if (drag === 'dragging') dragAt += shift;
     if (taken) taken.at += shift;
@@ -520,6 +539,10 @@ export function createDeck(
     scrollEnded();
   };
   const onScroll = () => {
+    // Shells mode (ADR-0013): placed on every scroll event, reading no box
+    // or computed style, before anything else, so a real slide is never a
+    // frame late onto its nearest slot.
+    place(viewport, axis(), placement, placedAt);
     frame ||= requestAnimationFrame(() => paint());
     // The scroll a refresh's new layout makes, to where it settled the
     // deck, is no scroll (see `relaidAt`).
@@ -862,12 +885,19 @@ export function createDeck(
       resume();
       return;
     }
-    const { slides: own, boxes, first } = slidesOf(viewport);
+    const { slides: own, boxes, first, sets } = slidesOf(viewport);
     const index = own.indexOf(slide);
     if (index === -1) return;
     const along = axis();
     const geometry = snapPoints(viewport, along);
     const owner = pageOwner(viewport, along, geometry.slides, index);
+    // Shells mode (ADR-0013): the shell at the slide's own currently
+    // placed slot, not always its mid one, so this reads where the slide
+    // actually is.
+    const placed =
+      sets === 2
+        ? first + index + (placedAt.get(slide)?.slot ?? 0) * own.length
+        : first + index;
     // A slide in no page, as one before the first snap point where the
     // slides snap to their start, goes to the snap point nearest its start,
     // so the deck still rests on a snap point.
@@ -876,7 +906,7 @@ export function createDeck(
         ? indexAt(
             geometry,
             along.position +
-              alignOffset(along, along.view(), boxes[first + index], 'start')
+              alignOffset(along, along.view(), boxes[placed], 'start')
           )
         : geometry.slides[owner];
     startMove(target);
@@ -885,7 +915,7 @@ export function createDeck(
 
   const refresh = () => {
     followViewport(0);
-    layoutShells(viewport, axis());
+    placement = layoutShells(viewport, axis(), placedAt);
     alignCopies(viewport);
     // Loop's copies or an effect's snap targets came or went, as when `loop`
     // or an effect changes on a mounted deck: the snap points moved under
@@ -987,7 +1017,7 @@ export function createDeck(
   // slides, before `restOn`'s own read of the snap points, which runs
   // before `settle`'s (ADR-0013): without it, the mid shells have no
   // `scroll-snap-align` yet, and there is nowhere to rest.
-  layoutShells(viewport, axis());
+  layoutShells(viewport, axis(), placedAt);
   alignCopies(viewport);
   restOn(options.index);
 
@@ -1237,23 +1267,34 @@ export function createDeck(
       slide = slide.parentElement;
     }
     const along = axis();
-    const { run, slides: own, first } = slidesOf(viewport);
-    // A loop's copy is inert, so a click on it reaches the viewport itself:
-    // the copy is the one under the pointer.
-    let at = slide ? run.indexOf(slide) : -1;
-    if (at === -1 && event.target === viewport) {
-      const point = along.at(event);
-      at = run.findIndex((box) => {
-        const [start, end] = along.span(box.getBoundingClientRect());
-        return start <= point && point < end;
-      });
+    const { run, slides: own, first, sets } = slidesOf(viewport);
+    let index: number;
+    let set: number;
+    // Shells mode (ADR-0013): a real slide is never inert, so a click on
+    // one reaches it directly; map it to the slot it currently reads as
+    // placed, not its own mid shell.
+    if (sets === 2 && slide && own.includes(slide)) {
+      index = own.indexOf(slide);
+      set = placedAt.get(slide)?.slot ?? 0;
+    } else {
+      // A loop's copy, or a shell, is inert, so a click there reaches the
+      // viewport itself: the one under the pointer is the one in `run`.
+      let at = slide ? run.indexOf(slide) : -1;
+      if (at === -1 && event.target === viewport) {
+        const point = along.at(event);
+        at = run.findIndex((box) => {
+          const [start, end] = along.span(box.getBoundingClientRect());
+          return start <= point && point < end;
+        });
+      }
+      if (at === -1) return;
+      index = wrap(at - first, own.length);
+      set = Math.floor((at - first) / own.length);
     }
-    if (at === -1) return;
     // The snap point of the clicked slide's page. One slide to a page, that
-    // is the slide's own. A copy's is a set of slides on from its slide's,
-    // the way it is from the slides, so the deck moves to it across the seam.
-    const index = wrap(at - first, own.length);
-    const set = Math.floor((at - first) / own.length);
+    // is the slide's own. A copy's, or a shell's, is a set of slides on
+    // from its slide's, the way it is from the slides, so the deck moves
+    // to it across the seam.
     const { points, slides } = snapPoints(viewport, along);
     const owner = pageOwner(viewport, along, slides, index);
     if (owner !== -1) scrollTo(slides[owner] + set * points.length, true);
@@ -1609,23 +1650,46 @@ function alignCopies(viewport: HTMLElement) {
   });
 }
 
+/** Shells mode only (ADR-0013): the geometry `layoutShells` measures, and
+ * `place` needs to go on placing every real slide with no further box
+ * read, mid-scroll. */
+interface Placement {
+  /** Each real slide's own centre, content-coordinate, with no
+   * translate: `place` compares the viewport's centre against these. */
+  centres: number[];
+  /** The run's length, `L` (decision 2). */
+  length: number;
+  /** The viewport's own size along the axis, cached here so `place` reads
+   * no box. */
+  view: number;
+}
+
 /**
  * Shells mode only (ADR-0013): measures the real slides' home positions —
  * where each sits now, in content coordinates, independent of any
- * `translate` already on it — and the run's length `L`, from a slide to
- * its own shell a set over (decision 2: the distance from the first
- * slide's start to the last slide's end, plus its trailing margin, the
- * viewport's gap and the first slide's own leading margin). The spacers
- * each take `2L` less one gap, so the scroll range matches a five-set
- * copies layout; shell `(k, i)` sits at slide `i`'s home plus `k·L`, sized
- * to match it, placed with logical insets so RTL needs no special case.
- * Written only where a value differs, so a settle lays out once. A no-op
- * outside shells mode.
+ * `translate` the engine itself has placed there (read from `placedAt`,
+ * never from computed style: it can hold several components, and a
+ * vertical deck's or an RTL one's is not simply its first) — and the run's
+ * length `L`, from a slide to its own shell a set over (decision 2: the
+ * distance from the first slide's start to the last slide's end, plus its
+ * trailing margin, the viewport's gap and the first slide's own leading
+ * margin, each with its own already-placed translate removed first, so a
+ * slide sitting over a buffer shell never throws `L` off by a multiple of
+ * itself). The spacers each take `2L` less one gap, so the scroll range
+ * matches a five-set copies layout; shell `(k, i)` sits at slide `i`'s home
+ * plus `k·L`, sized to match it, placed with logical insets so RTL needs
+ * no special case. Written only where a value differs, so a settle lays
+ * out once. Returns the geometry `place` needs to go on working from with
+ * no further box read; null outside shells mode.
  */
-function layoutShells(viewport: HTMLElement, along: Axis) {
+function layoutShells(
+  viewport: HTMLElement,
+  along: Axis,
+  placedAt: WeakMap<Element, { slot: number; offset: number }>
+): Placement | null {
   const { slides, run, sets } = slidesOf(viewport);
   const n = slides.length;
-  if (sets !== 2 || n === 0) return;
+  if (sets !== 2 || n === 0) return null;
   const write = (
     el: Element,
     prop: 'insetInlineStart' | 'insetBlockStart' | 'width' | 'height' | 'flex',
@@ -1636,16 +1700,27 @@ function layoutShells(viewport: HTMLElement, along: Axis) {
     }
   };
 
-  // `length` (L) comes from the slides' own geometry alone, never from
-  // where the spacers put them: computed first, so the spacers can be
-  // sized from it before anything reads a slide's position.
   const gap = along.gap(getComputedStyle(viewport));
-  const first = slides[0];
-  const last = slides[n - 1];
-  const [start0] = along.span(first.getBoundingClientRect());
-  const [, endN] = along.span(last.getBoundingClientRect());
-  const [marginStart0] = along.insets(getComputedStyle(first), 'margin', 0);
-  const [, marginEndN] = along.insets(getComputedStyle(last), 'margin', 0);
+  const spans = slides.map((slide) =>
+    along.span(slide.getBoundingClientRect())
+  );
+  // The engine's own last-written translate (logical, along the axis),
+  // never read from computed style (the plan's defect 2): a slide not yet
+  // placed has none.
+  const offsets = slides.map((slide) => placedAt.get(slide)?.offset ?? 0);
+
+  // `length` (L) comes from the slides' own geometry alone, with each
+  // end's translate removed, never from where the spacers put them:
+  // computed first, so the spacers can be sized from it before anything
+  // reads a slide's position (the plan's defect 1).
+  const [marginStart0] = along.insets(getComputedStyle(slides[0]), 'margin', 0);
+  const [, marginEndN] = along.insets(
+    getComputedStyle(slides[n - 1]),
+    'margin',
+    0
+  );
+  const start0 = spans[0][0] - offsets[0];
+  const endN = spans[n - 1][1] - offsets[n - 1];
   const length = endN + marginEndN + gap + marginStart0 - start0;
 
   // The spacers, before the real slides' positions are read: on a layout
@@ -1659,15 +1734,13 @@ function layoutShells(viewport: HTMLElement, along: Axis) {
 
   const view = along.view();
   const position = along.position;
-  const home = (slide: Element) => {
-    const [start] = along.span(slide.getBoundingClientRect());
-    const translate =
-      slide instanceof HTMLElement
-        ? parseFloat(getComputedStyle(slide).translate) || 0
-        : 0;
-    return start - translate - view[0] + position;
-  };
-  const homes = slides.map(home);
+  // Each slide's home, with its own already-placed translate removed, so
+  // it is independent of where `place` last put it (the plan's defect 1
+  // and 2 together).
+  const homes = spans.map(
+    ([start], i) => start - offsets[i] - view[0] + position
+  );
+  const sizes = spans.map(([start, end]) => end - start);
 
   const insetProp = along.vertical ? 'insetBlockStart' : 'insetInlineStart';
   const sizeProp = along.vertical ? 'height' : 'width';
@@ -1676,10 +1749,61 @@ function layoutShells(viewport: HTMLElement, along: Axis) {
     const i = idx % n;
     const set = Math.floor(idx / n) - 2;
     const box = slides[i].getBoundingClientRect();
-    const [slideStart, slideEnd] = along.span(box);
     write(shell, insetProp, `${homes[i] + set * length}px`);
-    write(shell, sizeProp, `${slideEnd - slideStart}px`);
+    write(shell, sizeProp, `${sizes[i]}px`);
     write(shell, crossProp, `${along.vertical ? box.width : box.height}px`);
+  });
+
+  return {
+    centres: homes.map((home, i) => home + sizes[i] / 2),
+    length,
+    view: view[1] - view[0]
+  };
+}
+
+/** The slot `k` (clamped to the two buffer sets each side, ADR-0013)
+ * whose translate by `k * length` puts a slide's own centre, `delta` away
+ * from the viewport's, nearest it -- ported from the prototype's
+ * `nearestK`. Ties within half a pixel of the midpoint between two slots
+ * go to the slot after, matching the SSR estimate's rounding exactly. */
+function nearestSlot(delta: number, length: number): number {
+  const k = Math.floor((delta + length / 2 + 0.5) / length);
+  return Math.max(-2, Math.min(2, k));
+}
+
+/**
+ * Shells mode only (ADR-0013): places each real slide, by `translate`,
+ * over whichever shell slot is nearest the viewport's centre -- ported
+ * from the prototype's `place` and `nearestK` (decision 3). Reads only
+ * `geometry`, as `layoutShells` last left it, and `along.position`: no box
+ * or computed style, so this is safe to call on every scroll event (the
+ * press and wheel tests' "reads N boxes" guarantees). Written, and
+ * `placedAt` updated, only where the slot differs, so a settle or a
+ * scroll event moves nothing twice. A no-op outside shells mode.
+ */
+function place(
+  viewport: HTMLElement,
+  along: Axis,
+  geometry: Placement | null,
+  placedAt: WeakMap<Element, { slot: number; offset: number }>
+) {
+  if (!geometry || geometry.length === 0) return;
+  const { centres, length, view } = geometry;
+  const { slides } = slidesOf(viewport);
+  const centre = along.position + view / 2;
+  slides.forEach((slide, i) => {
+    const slot = nearestSlot(centre - centres[i], length);
+    if (placedAt.get(slide)?.slot === slot) return;
+    const offset = slot * length;
+    placedAt.set(slide, { slot, offset });
+    if (!(slide instanceof HTMLElement)) return;
+    const value =
+      slot === 0
+        ? 'none'
+        : along.vertical
+          ? `0px ${offset}px`
+          : `${offset * along.sign}px 0px`;
+    if (slide.style.translate !== value) slide.style.translate = value;
   });
 }
 
@@ -1840,6 +1964,11 @@ interface Axis {
   /** The viewport's `columnGap` (horizontal) or `rowGap` (vertical), in
    * pixels; `normal` is 0. */
   gap(style: CSSStyleDeclaration): number;
+  /** 1 for horizontal LTR or vertical, -1 for horizontal RTL: the
+   * physical direction a logical (along-the-axis) distance runs in.
+   * `place` (ADR-0013) multiplies a logical translate by it to get the
+   * physical `translate` CSS needs; everything else stays logical. */
+  sign: 1 | -1;
 }
 
 function axisOf(viewport: HTMLElement, vertical: boolean): Axis {
@@ -1902,7 +2031,8 @@ function axisOf(viewport: HTMLElement, vertical: boolean): Axis {
     gap(style) {
       const value = style[vertical ? 'rowGap' : 'columnGap'];
       return value === 'normal' ? 0 : parseFloat(value) || 0;
-    }
+    },
+    sign
   };
 }
 
@@ -1946,20 +2076,27 @@ function focalSlide(viewport: HTMLElement, axis: Axis, align: string): number {
 /**
  * Writes each slide's progress and in-view state (see `createDeck`). Measures
  * every slide before writing to any, and writes only what changed, so a frame
- * lays out once.
+ * lays out once. In shells mode (ADR-0013), measured from the shells, each
+ * real slide given its placed slot's value: the shells themselves carry
+ * neither, having no content for a consumer's CSS to read.
  */
-function writeProgress(viewport: HTMLElement, axis: Axis, align: string) {
+function writeProgress(
+  viewport: HTMLElement,
+  axis: Axis,
+  align: string,
+  placedAt: WeakMap<Element, { slot: number; offset: number }>
+) {
   const view = axis.view();
   // With loop, the copies too, each by its own place in the run: a copy in
   // view moves on as the slides do, and lands where its slide is after a
   // jump.
-  const { run: slides, boxes } = slidesOf(viewport);
+  const { slides: own, run, boxes, first, sets } = slidesOf(viewport);
   const spans = boxes.map((box) => axis.span(box.getBoundingClientRect()));
   const focal = focalPosition(
     spans.map((span) => spanOffset(span, view, align)),
     spans
   );
-  slides.forEach((slide, i) => {
+  const write = (slide: Element, i: number) => {
     const [start, end] = spans[i];
     const inView =
       Math.min(end, view[1]) - Math.max(start, view[0]) >= IN_VIEW_MIN_PX;
@@ -1971,7 +2108,15 @@ function writeProgress(viewport: HTMLElement, axis: Axis, align: string) {
     if (slide.style.getPropertyValue(PROGRESS) !== progress) {
       slide.style.setProperty(PROGRESS, progress);
     }
-  });
+  };
+  if (sets === 2) {
+    own.forEach((slide, i) => {
+      const slot = placedAt.get(slide)?.slot ?? 0;
+      write(slide, first + i + slot * own.length);
+    });
+    return;
+  }
+  run.forEach(write);
 }
 
 /**
