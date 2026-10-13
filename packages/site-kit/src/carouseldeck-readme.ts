@@ -3,7 +3,6 @@
 // `compare:check` keeps both honest: carouseldeck's home page and deck.cool's
 // carouseldeck card read the same figure (ADR 0002).
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 
 /** A row of the README's comparison, its cells as the README writes them. */
 export interface Library {
@@ -126,28 +125,17 @@ function latestTag(site: URL): string | undefined {
     .find((tag) => /^\d+\.\d+\.\d+$/.test(tag.slice(CAROUSELDECK.length + 1)));
 }
 
-/** A file of the @carouseldeck/react installed in `site`, the site's directory. */
-function readInstalled(site: URL, file: string): string {
-  try {
-    return readFileSync(new URL(`node_modules/${CAROUSELDECK}/${file}`, site), "utf8");
-  } catch (error) {
-    throw new Error(`The site at ${site.pathname} has no ${CAROUSELDECK} installed: add it to its dependencies.`, { cause: error });
-  }
-}
-
 /**
  * The latest carouseldeck release, as the repo `site` is in tags it: the
  * README at the tag, with `git show`, so a page matches npm and not unreleased
- * work. Until the first release is tagged (#114), the package installed in
- * `site`, the site's directory. CI must fetch the tags, or it reads that.
+ * work. CI must fetch the tags, or this throws.
  */
 export function readCarouseldeckRelease(site: URL): Release {
   const tag = latestTag(site);
   if (tag === undefined) {
-    return {
-      readme: readInstalled(site, "README.md"),
-      version: (JSON.parse(readInstalled(site, "package.json")) as { version: string }).version,
-    };
+    throw new Error(
+      `The site at ${site.pathname} has no ${CAROUSELDECK}@X.Y.Z tag: the checkout needs its tags (fetch-depth: 0 on actions/checkout, or git fetch --tags).`,
+    );
   }
   let readme: string;
   try {

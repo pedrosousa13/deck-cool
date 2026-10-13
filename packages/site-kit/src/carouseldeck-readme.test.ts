@@ -158,18 +158,13 @@ describe("readCarouseldeckRelease", () => {
     expect(readCarouseldeckRelease(site)).toEqual({ readme: fixtureReadme("1.00 KB"), version: "1.2.0" });
   });
 
-  // Until the first carouseldeck release is tagged (#114).
-  test("with no release tag, reads the installed package", () => {
+  test("with no release tag, names the missing tag and the fix", () => {
     const site = makeRepo();
     commitReadme("1.00 KB");
-    install(site, "4.00 KB", "1.1.0");
 
-    expect(readCarouseldeckRelease(site)).toEqual({ readme: fixtureReadme("4.00 KB"), version: "1.1.0" });
-  });
-
-  test("with no release tag and nothing installed, names the package", () => {
-    const site = makeRepo();
-    expect(() => readCarouseldeckRelease(site)).toThrow(/no @carouseldeck\/react installed/);
+    expect(() => readCarouseldeckRelease(site)).toThrow(
+      new RegExp(`site at ${site.pathname}.*no @carouseldeck/react@X\\.Y\\.Z tag.*fetch-depth: 0`),
+    );
   });
 
   test("names the site and the tag when git cannot show the README at the tag", () => {
