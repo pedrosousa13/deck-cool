@@ -328,6 +328,39 @@ describe('loop', () => {
     await expect.poll(counter).toBe('1 / 4');
   });
 
+  // A deterministic repro of #146 (see `keepPlace` in packages/core/src):
+  // the layout change must still keep the deck's place once a scroll that
+  // was never the user's — the loop's own jump off a copy fires one such,
+  // mid-flight — goes on to end, even though no move is going either.
+  // Forced here (a stray `scroll` event held live across the slide add)
+  // rather than timed to land during a real jump off a copy, so the race
+  // does not depend on luck.
+  test('a stray scroll still live when slides are added keeps the counter at the old index', async () => {
+    const { rerender } = render(
+      <TestDeck loop slides={3} defaultIndex={2} controls={<Deck.Counter />} />
+    );
+    const counter = () =>
+      document.querySelector('[data-carouseldeck-counter]')?.textContent;
+    const viewport = viewportOf(
+      screen.getByRole('region', { name: 'Test deck' })
+    );
+    await expectSettledTo(counter, '3 / 3');
+
+    // Not the user's: no input precedes it, so the engine never takes it
+    // for one (`userScroll` stays false), the way a jump off a copy never
+    // is either. Left short of its own rest, as an uncompensated scroll
+    // would be.
+    viewport.scrollLeft -= WIDTH;
+    viewport.dispatchEvent(new Event('scroll'));
+
+    rerender(
+      <TestDeck loop slides={4} defaultIndex={2} controls={<Deck.Counter />} />
+    );
+
+    // Quiet, not `scrollend`, ends a scroll the engine never started.
+    await expect.poll(counter).toBe('3 / 4');
+  });
+
   // A slide added to a looping deck adds a copy before the slides too, which
   // moves every slide on by one under the viewport (#146).
   test('slides added during a move across the seam end at its target', async () => {
