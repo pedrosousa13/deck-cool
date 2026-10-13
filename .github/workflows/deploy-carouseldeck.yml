@@ -1,13 +1,12 @@
 name: Deploy carouseldeck
 
-# carouseldeck's site shows its latest release (ADR 0002), so it publishes only
-# a released commit, never an unreleased main:
+# carouseldeck's site shows its latest release (ADR 0002), so a publish always
+# builds the latest @carouseldeck/react@X.Y.Z tag, never an unreleased main:
 #
-# - release.yml calls this workflow (workflow_call) with the commit it just
-#   released and tagged. That call publishes that commit.
-# - A manual run on main with `apply` publishes the latest
-#   `@carouseldeck/react@X.Y.Z` tag. Before the first release there is none,
-#   and the run fails and publishes nothing.
+# - release.yml starts a run of this workflow with `apply`, right after a
+#   release tags it. Before the first release there is none, and the run
+#   fails and publishes nothing.
+# - A manual run on main with `apply` does the same by hand.
 # - A push that changes the site, the deck's packages, a shared package or the
 #   install builds the site at that push and runs `wrangler deploy --dry-run`,
 #   which uses no credential and sends nothing to Cloudflare. So does a manual
@@ -32,12 +31,6 @@ on:
         required: false
         default: false
         type: boolean
-  workflow_call:
-    inputs:
-      sha:
-        description: "The released commit to publish, as a full SHA. It must carry an @carouseldeck/react@X.Y.Z tag."
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -45,13 +38,13 @@ permissions:
 # A publishing run is never cancelled: wrangler uploads the assets before it
 # publishes the version that serves them.
 concurrency:
-  group: deploy-carouseldeck-${{ (inputs.apply || inputs.sha) && 'apply' || github.ref }}
-  cancel-in-progress: ${{ !(inputs.apply || inputs.sha) }}
+  group: deploy-carouseldeck-${{ inputs.apply && 'apply' || github.ref }}
+  cancel-in-progress: ${{ !inputs.apply }}
 
 jobs:
   # Every run that does not publish: no environment, no secret.
   dry-run:
-    if: ${{ !(github.repository == 'pedrosousa13/deck-cool' && github.ref == 'refs/heads/main' && (inputs.apply || inputs.sha)) }}
+    if: ${{ !(github.repository == 'pedrosousa13/deck-cool' && github.ref == 'refs/heads/main' && inputs.apply) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -81,7 +74,7 @@ jobs:
         working-directory: .
 
       - name: Refuse a publish off main
-        if: ${{ inputs.apply || inputs.sha }}
+        if: ${{ inputs.apply }}
         run: |
           echo "::error title=Not published::A publish runs only on main in pedrosousa13/deck-cool, and this run is on ${GITHUB_REF} in ${GITHUB_REPOSITORY}. Nothing was published."
           exit 1
@@ -91,7 +84,7 @@ jobs:
 
   # Picks the commit to publish, from the tags. No environment and no secret.
   release:
-    if: ${{ github.repository == 'pedrosousa13/deck-cool' && github.ref == 'refs/heads/main' && (inputs.apply || inputs.sha) }}
+    if: ${{ github.repository == 'pedrosousa13/deck-cool' && github.ref == 'refs/heads/main' && inputs.apply }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -102,31 +95,17 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       # A release is a commit on main with an @carouseldeck/react@X.Y.Z tag.
-      # release.yml names the commit, and a manual run takes the latest tag.
+      # Every run, manual or release.yml's dispatch, takes the latest one.
       - name: Pick the release
         id: pick
-        env:
-          SHA: ${{ inputs.sha }}
         run: |
           release_tags() {
             grep -E '^@carouseldeck/react@[0-9]+\.[0-9]+\.[0-9]+$' || true
           }
-          if [ -n "$SHA" ]; then
-            if ! [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "::error title=Not published::The sha input is not a full commit SHA. Nothing was published."
-              exit 1
-            fi
-            tag=$(git tag --points-at "$SHA" | release_tags | head -n 1)
-            if [ -z "$tag" ]; then
-              echo "::error title=Not published::Commit $SHA carries no @carouseldeck/react@X.Y.Z tag, so it is not a release. Nothing was published."
-              exit 1
-            fi
-          else
-            tag=$(git tag --list '@carouseldeck/react@*' --sort=-v:refname | release_tags | head -n 1)
-            if [ -z "$tag" ]; then
-              echo "::error title=Not published::There is no @carouseldeck/react@X.Y.Z tag yet, so there is no release to publish. Nothing was published. The first release publishes the site itself."
-              exit 1
-            fi
+          tag=$(git tag --list '@carouseldeck/react@*' --sort=-v:refname | release_tags | head -n 1)
+          if [ -z "$tag" ]; then
+            echo "::error title=Not published::There is no @carouseldeck/react@X.Y.Z tag yet, so there is no release to publish. Nothing was published. The first release publishes the site itself."
+            exit 1
           fi
           sha=$(git rev-parse "refs/tags/$tag^{commit}")
           if ! git merge-base --is-ancestor "$sha" origin/main; then

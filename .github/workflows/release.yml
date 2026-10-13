@@ -10,7 +10,8 @@ name: Release
 #   That is the push of a merged version PR. `verify` runs the deck's whole
 #   `pnpm verify` and packs the tarballs it checked, `publish` publishes them
 #   with provenance, `tag` tags them and creates their GitHub releases, and
-#   `deploy` publishes carousel.deck.cool at this commit.
+#   `deploy` starts a run of `deploy-carouseldeck.yml` that publishes
+#   carousel.deck.cool at the release.
 # - "none": nothing runs after `select`. Most pushes end here.
 #
 # Every action is pinned to a full commit SHA, its version in a comment.
@@ -249,15 +250,23 @@ jobs:
           PUBLISHED_PACKAGES: ${{ needs.publish.outputs.published-packages }}
         run: node decks/carouseldeck/scripts/tag-releases.mjs
 
-  # A release deploys its site (ADR 0002). The commit carries the
-  # @carouseldeck/react@X.Y.Z tag `tag` just made, which the deploy checks.
-  # Its publish job reads CLOUDFLARE_API_TOKEN from the production
-  # environment itself, so this passes no secret.
+  # A release deploys its site (ADR 0002). This job starts
+  # deploy-carouseldeck.yml as its own run, the manual apply path, which picks
+  # the latest @carouseldeck/react@X.Y.Z tag itself, the one `tag` just made,
+  # and checks it is on main before publishing it. `tag` runs first, so the
+  # tag exists before the dispatch starts, and the dispatched run reads
+  # CLOUDFLARE_API_TOKEN from its own production environment, so this job
+  # passes no secret and needs only actions: write to start it.
   deploy:
     needs: [publish, tag]
     if: needs.publish.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
-      contents: read
-    uses: ./.github/workflows/deploy-carouseldeck.yml
-    with:
-      sha: ${{ github.sha }}
+      actions: write
+    steps:
+      - name: Dispatch the carouseldeck deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run deploy-carouseldeck.yml --ref main -f apply=true

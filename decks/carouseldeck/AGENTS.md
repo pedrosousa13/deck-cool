@@ -114,8 +114,8 @@ nothing, then:
 - after that PR merges, it runs the whole `pnpm verify`, publishes the
   versions npm does not have yet, with provenance, from the tarballs the
   verify job packed, then tags them `<name>@<version>` and creates the GitHub
-  releases. Then it deploys carousel.deck.cool at the released commit, with
-  `deploy-carouseldeck.yml`.
+  releases. Then it dispatches a run of `deploy-carouseldeck.yml` with
+  `apply`, which deploys carousel.deck.cool at the release.
 
 **The first publish**, 1.2.0, used the `NPM_TOKEN` secret: npm sets a trusted
 publisher per package, so a package has to exist first. Each of the four
@@ -150,8 +150,8 @@ against the contract with the rules deck.cool's docs loader applies.
 
 The site lives in this repo, as `sites/carouseldeck`, and is served at
 https://carousel.deck.cool. It builds its docs pages from the workspace's
-`@carouseldeck/docs`. A release deploys it: `release.yml` calls
-`deploy-carouseldeck.yml` with the released commit (ADR 0002).
+`@carouseldeck/docs`. A release deploys it: `release.yml` dispatches a run of
+`deploy-carouseldeck.yml` with `apply` (ADR 0002).
 
 For the issue tracker, triage labels and the domain docs, see the root
 `AGENTS.md`.

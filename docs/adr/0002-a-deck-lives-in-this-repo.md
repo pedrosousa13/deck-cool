@@ -83,11 +83,11 @@ Rejected:
 2. `version`: opens or updates the "Version packages" PR. It opens it with a token from the `deck-cool-releases` App, not the `GITHUB_TOKEN`, because a branch the `GITHUB_TOKEN` pushes runs no workflow and main requires `verify`. The maintainer merges it by hand: that merge is the release.
 3. `publish`: runs the deck's whole `pnpm verify` in one job, packs the tarballs it verified, then publishes them with provenance over OIDC from a job that builds nothing and runs no install script. npm's trusted publisher for each package is `pedrosousa13` / `deck-cool` / `release.yml`. The first publish of a package uses the `NPM_TOKEN` secret (#105, before the move).
 4. `tag`: tags each published version `<name>@<version>` and creates its GitHub release, from slidedeck's `scripts/tag-releases.mjs`.
-5. `deploy`: calls `deploy-carouseldeck.yml` as a reusable workflow (`workflow_call`) with `apply`, at the same commit.
+5. `deploy`: starts its own run of `deploy-carouseldeck.yml`, `gh workflow run deploy-carouseldeck.yml -f apply=true`, the manual `apply` path. `tag` runs first, so the release's tag exists before the dispatch, and the dispatched run picks it up itself.
 
 Each package's `repository.url` points at deck-cool, with `directory` set to its path under `decks/carouseldeck/`. Tags are scoped by package name, so two decks' tags never collide.
 
-**A release deploys its site (#105, decision 4).** `sites/carouseldeck` depends on the deck's packages as `workspace:*`. The deploy builds the release's own commit, so the workspace holds exactly the released code. The deck's `deck-released` dispatch, its bump PR and `bump-deck`'s `slidedeck` case go away.
+**A release deploys its site (#105, decision 4).** `sites/carouseldeck` depends on the deck's packages as `workspace:*`. The deploy builds the commit the release's tag points at, so the workspace holds exactly the released code. The deck's `deck-released` dispatch, its bump PR and `bump-deck`'s `slidedeck` case go away.
 
 **A manual deploy publishes the latest release** (maintainer, 2026-10-12). A run of `deploy-carouseldeck.yml` by hand with `apply` builds the latest `@carouseldeck/react@*` release tag, never `main`. The cost: a change to `sites/carouseldeck` or `packages/brand` alone waits for the deck's next release, or for a patch release cut for it, where the other sites deploy from `main` today.
 
