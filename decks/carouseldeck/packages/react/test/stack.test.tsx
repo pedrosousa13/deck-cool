@@ -4,6 +4,8 @@ import { describe, expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import { stack } from '@carouseldeck/react/stack';
+// Internal: see the test that uses it.
+import { LoopShells } from '../src/loop-shells';
 import {
   expectSettledTo,
   expectSnaps,
@@ -138,6 +140,41 @@ describe('stack', () => {
     const z = zIndex();
     expect(topDown(z).slice(0, 3)).toEqual([1, 2, 3]);
     expect(z[0]).toBeLessThan(z[3]!);
+  });
+});
+
+// One instance (staged, #144, Task 5): with shells, a stacked effect's
+// shells are its own snap targets, and the run stays at the real slides,
+// never 3n copies. A thrown card's progress wraps into the back of the
+// stack directly (the maintainer's ruling on ADR-0013's fork): held past
+// the last card, two cards that would be invisible past -1 without a copy
+// to land on instead read as if just behind the top of the stack.
+describe('one instance (staged): stack with shells', () => {
+  test('held 0.6 into a throw crossing the seam, the thrown slide is below the other two', async () => {
+    render(
+      <LoopShells value>
+        <StackDeck slides={3} loop defaultIndex={2} />
+      </LoopShells>
+    );
+    const viewport = viewportOf(
+      screen.getByRole('region', { name: 'Test deck' })
+    );
+    const zIndex = () =>
+      [
+        ...viewport.querySelectorAll<HTMLElement>('[data-carouseldeck-slide]')
+      ].map((slide) => Number(getComputedStyle(slide).zIndex));
+    const hold = async (way: number) => {
+      viewport.style.scrollSnapType = 'none';
+      viewport.scrollLeft += WIDTH * way;
+      await nextFrame();
+      await nextFrame();
+    };
+
+    await hold(0.6);
+
+    const z = zIndex();
+    expect(z[2]).toBeLessThan(z[0]!);
+    expect(z[2]).toBeLessThan(z[1]!);
   });
 });
 

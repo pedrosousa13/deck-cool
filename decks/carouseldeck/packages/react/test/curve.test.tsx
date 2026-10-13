@@ -568,6 +568,30 @@ describe('curve in server HTML', () => {
   });
 });
 
+// Task 5 (#144): curve has no stacking target, so a real slide placed over
+// a shell is translated onto it exactly as any non-stacked shells deck's
+// is (Task 3); this is a regression check that the translate still
+// composes with curve's own content transform once an effect is in play.
+describe('one instance (staged): curve with shells', () => {
+  test("placed before slide 1, slide '6 of 6' turns the mirror of slide 2's turn", async () => {
+    addStyle(SLIDE_CSS);
+    render(
+      <LoopShells value>
+        <CurveDeck loop defaultIndex={0} />
+      </LoopShells>
+    );
+    const root = screen.getByRole('region', { name: 'Test deck' });
+    const { angles } = readDeck(root);
+    await nextFrame();
+    await nextFrame();
+
+    const a = angles();
+    expect(a[5]).toBe(-a[1]!);
+    expect(a[5]).not.toBe(0);
+    expect(root.dataset.index).toBe('0');
+  });
+});
+
 // One instance (staged, #144): with shells, a real slide placed k sets away
 // wraps its progress by k times the slide count instead of running on
 // forever as a copy's distance would (decision, Task 4 notes): `p = i + k·n

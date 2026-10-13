@@ -1613,6 +1613,10 @@ function slidesOf(viewport: HTMLElement): {
   /** With loop, how many sets of copies, or of shells, sit before the
    * slides (and after them); 0 without. Shells always give 2. */
   sets: number;
+  /** Shells mode only (#144, Task 5): whether the shells are also an
+   * effect's snap targets, each stacking its own slide in one place rather
+   * than standing in for one out of flow. Always false outside shells. */
+  stacked: boolean;
 } {
   const slides: Element[] = [];
   const before: Element[] = [];
@@ -1637,7 +1641,18 @@ function slidesOf(viewport: HTMLElement): {
   // slides' own set of shells starts, two sets in.
   if (shellSets.size > 0) {
     const run = [-2, -1, 0, 1, 2].flatMap((set) => shellSets.get(set) ?? []);
-    return { slides, run, boxes: run, first: 2 * slides.length, sets: 2 };
+    // A shell is also a snap target only where an effect stacks the slides
+    // (#144, Task 5): every shell carries both markers then, so the first
+    // one answers for all of them.
+    const stacked = run.length > 0 && run[0].hasAttribute(SNAP_TARGET);
+    return {
+      slides,
+      run,
+      boxes: run,
+      first: 2 * slides.length,
+      sets: 2,
+      stacked
+    };
   }
   const run = [...before, ...slides, ...after];
   const boxes =
@@ -1647,7 +1662,8 @@ function slidesOf(viewport: HTMLElement): {
     run,
     boxes,
     first: before.length,
-    sets: slides.length > 0 ? before.length / slides.length : 0
+    sets: slides.length > 0 ? before.length / slides.length : 0,
+    stacked: false
   };
 }
 
@@ -1680,9 +1696,12 @@ const shapeOf = (viewport: HTMLElement) =>
  * their own. Written only where it differs, so a settle lays out once.
  */
 function alignCopies(viewport: HTMLElement) {
-  const { slides, run, first, sets } = slidesOf(viewport);
+  const { slides, run, first, sets, stacked } = slidesOf(viewport);
   const shells = sets === 2;
-  if (first === 0 && !shells) return;
+  // Stacked mode (#144, Task 5): the real slides keep the alignment the
+  // effect gives them (`none`), and the shells its targets' (`start`),
+  // neither read from nor copied onto the other.
+  if ((first === 0 && !shells) || (shells && stacked)) return;
   const own = slides.filter(
     (slide): slide is HTMLElement => slide instanceof HTMLElement
   );
@@ -1728,24 +1747,6 @@ interface Placement {
   view: number;
 }
 
-/**
- * Shells mode only (ADR-0013): measures the real slides' home positions —
- * where each sits now, in content coordinates, independent of any
- * `translate` the engine itself has placed there (read from `placedAt`,
- * never from computed style: it can hold several components, and a
- * vertical deck's or an RTL one's is not simply its first) — and the run's
- * length `L`, from a slide to its own shell a set over (decision 2: the
- * distance from the first slide's start to the last slide's end, plus its
- * trailing margin, the viewport's gap and the first slide's own leading
- * margin, each with its own already-placed translate removed first, so a
- * slide sitting over a buffer shell never throws `L` off by a multiple of
- * itself). The spacers each take `2L` less one gap, so the scroll range
- * matches a five-set copies layout; shell `(k, i)` sits at slide `i`'s home
- * plus `k·L`, sized to match it, placed with logical insets so RTL needs
- * no special case. Written only where a value differs, so a settle lays
- * out once. Returns the geometry `place` needs to go on working from with
- * no further box read; null outside shells mode.
- */
 /** `style`'s border-box size along `dimension`, subpixel and independent of
  * any `scale` or `translate` (#144, review of Task 4): `getBoundingClientRect`
  * bakes a `scale` in, and `offsetWidth`/`offsetHeight` round to the nearest
@@ -1772,14 +1773,36 @@ function borderBoxSize(
   );
 }
 
+/**
+ * Shells mode only (ADR-0013): measures the real slides' home positions —
+ * where each sits now, in content coordinates, independent of any
+ * `translate` the engine itself has placed there (read from `placedAt`,
+ * never from computed style: it can hold several components, and a
+ * vertical deck's or an RTL one's is not simply its first) — and the run's
+ * length `L`, from a slide to its own shell a set over (decision 2: the
+ * distance from the first slide's start to the last slide's end, plus its
+ * trailing margin, the viewport's gap and the first slide's own leading
+ * margin, each with its own already-placed translate removed first, so a
+ * slide sitting over a buffer shell never throws `L` off by a multiple of
+ * itself). The spacers each take `2L` less one gap, so the scroll range
+ * matches a five-set copies layout; shell `(k, i)` sits at slide `i`'s home
+ * plus `k·L`, sized to match it, placed with logical insets so RTL needs
+ * no special case. Written only where a value differs, so a settle lays
+ * out once. Returns the geometry `place` needs to go on working from with
+ * no further box read; null outside shells mode.
+ */
 function layoutShells(
   viewport: HTMLElement,
   along: Axis,
   placedAt: WeakMap<Element, { slot: number; offset: number }>
 ): Placement | null {
-  const { slides, run, sets } = slidesOf(viewport);
+  const { slides, run, sets, stacked } = slidesOf(viewport);
   const n = slides.length;
-  if (sets !== 2 || n === 0) return null;
+  // Stacked mode (#144, Task 5): the shells are an effect's own snap
+  // targets, laid out and sized by it (a CSS grid track), never out of
+  // flow or positioned by measuring the slides -- there is no spacer and
+  // no translate either, so nothing here applies.
+  if (sets !== 2 || n === 0 || stacked) return null;
   const write = (
     el: Element,
     prop: 'insetInlineStart' | 'insetBlockStart' | 'width' | 'height' | 'flex',
@@ -2198,13 +2221,13 @@ function writeProgress(
   // With loop, the copies too, each by its own place in the run: a copy in
   // view moves on as the slides do, and lands where its slide is after a
   // jump.
-  const { slides: own, run, boxes, first, sets } = slidesOf(viewport);
+  const { slides: own, run, boxes, first, sets, stacked } = slidesOf(viewport);
   const spans = boxes.map((box) => axis.span(box.getBoundingClientRect()));
   const focal = focalPosition(
     spans.map((span) => spanOffset(span, view, align)),
     spans
   );
-  const write = (slide: Element, i: number) => {
+  const write = (slide: Element, i: number, raw = i - focal) => {
     const [start, end] = spans[i];
     const inView =
       Math.min(end, view[1]) - Math.max(start, view[0]) >= IN_VIEW_MIN_PX;
@@ -2212,19 +2235,45 @@ function writeProgress(
       slide.toggleAttribute(IN_VIEW, inView);
     }
     if (!(slide instanceof HTMLElement)) return;
-    const progress = String(Math.round((i - focal) * 1000) / 1000);
+    const progress = String(Math.round(raw * 1000) / 1000);
     if (slide.style.getPropertyValue(PROGRESS) !== progress) {
       slide.style.setProperty(PROGRESS, progress);
     }
   };
   if (sets === 2) {
     own.forEach((slide, i) => {
+      // Stacked mode (#144, Task 5): a slide is never translated onto
+      // another slot, so its own box, always `first + i`, is the one to
+      // measure it by; its progress wraps into the back of the stack
+      // instead (the maintainer's ruling on the fork, `wrapStackedProgress`).
+      if (stacked) {
+        write(
+          slide,
+          first + i,
+          wrapStackedProgress(first + i - focal, own.length)
+        );
+        return;
+      }
       const slot = placedAt.get(slide)?.slot ?? 0;
       write(slide, first + i + slot * own.length);
     });
     return;
   }
-  run.forEach(write);
+  run.forEach((slide, i) => write(slide, i));
+}
+
+/** A stacked, looping slide's progress with shells (ADR-0013, Task 5; the
+ * maintainer's ruling on the fork, 2026-10-13): wrapped into `(b, b + n]`,
+ * `b = -0.9985` -- a slide thrown to within the engine's precision returns
+ * at the back, rather than carrying on past -1 with nowhere shown, as
+ * shells give it no copy of its own to land on (the card-stack recipe's
+ * own two windows, kept unchanged, already meet exactly there). */
+const STACKED_WRAP = -0.9985;
+function wrapStackedProgress(progress: number, count: number): number {
+  let wrapped = progress;
+  while (wrapped <= STACKED_WRAP) wrapped += count;
+  while (wrapped > STACKED_WRAP + count) wrapped -= count;
+  return wrapped;
 }
 
 /**

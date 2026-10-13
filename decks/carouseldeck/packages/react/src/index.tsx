@@ -65,6 +65,22 @@ interface DeckContextValue {
 const clampSlide = (index: number, count: number) =>
   Math.min(Math.max(index, 0), count - 1);
 
+/** A stacked, looping slide's progress with shells (ADR-0013, Task 5; the
+ * maintainer's ruling on the fork, 2026-10-13): wrapped into `(b, b + n]`,
+ * `b = -0.9985` -- a slide thrown to within the engine's precision returns
+ * at the back, rather than carrying on past -1 with nowhere shown, as
+ * shells give it no copy of its own to land on (the card-stack recipe's
+ * own two windows, kept unchanged, already meet exactly there). Mirrors
+ * `@carouseldeck/core`'s own copy of the same formula, which gives the
+ * engine's measured progress the same wrap once it mounts. */
+const STACKED_WRAP = -0.9985;
+function wrapStackedProgress(progress: number, count: number): number {
+  let wrapped = progress;
+  while (wrapped <= STACKED_WRAP) wrapped += count;
+  while (wrapped > STACKED_WRAP + count) wrapped -= count;
+  return wrapped;
+}
+
 const DeckContext = createContext<DeckContextValue | null>(null);
 
 function useDeckContext(primitive: string): DeckContextValue {
@@ -716,10 +732,17 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
   const looping = loop && !everySlideFits(count);
   const shells = looping && shellsOn;
   const copies = looping && !shellsOn;
-  const run = slides.length * (copies ? 3 : 1);
+  // Whether the effect stacks the slides in one place: known from calling
+  // its layout once -- stacked or not never depends on the count passed
+  // in, only the grid it draws does.
+  const stacked =
+    effect?.layout?.(orientation, slides.length)?.target !== undefined;
+  // With shells, stacked (#144, Task 5): the shells are the effect's own
+  // snap targets, one per shell rather than one per slide, so the run is
+  // five full sets of them, never three copies (shells have no copies).
+  const run = slides.length * (copies ? 3 : shells && stacked ? 5 : 1);
   const layout = effect?.layout?.(orientation, run);
   const target = layout?.target;
-  const stacked = target !== undefined;
   // Each slide starts at its distance in slides from the slide the deck
   // starts at, a copy by its own place in the run, so server HTML paints
   // progress as the engine will once it measures (ADR-0011, #125).
@@ -738,6 +761,11 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
           Math.min(2, Math.floor((start - index) / slides.length + 0.5))
         )
       : 0;
+  // With shells, stacked (#144, Task 5): a slide is never translated onto
+  // another slot -- it is sticky, always its own -- so its progress wraps
+  // into the back of the stack instead, the maintainer's ruling on
+  // ADR-0013's fork (`wrapStackedProgress`).
+  const stackedShells = shells && stacked;
   // Adding or removing a slide, the copies or an effect's snap targets can
   // change the snap points without resizing the viewport, which is all the
   // engine observes. Where the copies or snap targets came or went, the
@@ -768,15 +796,17 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
               copy === 'before'
                 ? { ...layout?.slide, order: -1 }
                 : layout?.slide,
-            progress:
-              index -
-              start +
-              (copy === 'after'
-                ? slides.length
-                : copy
-                  ? -slides.length
-                  : slot * slides.length),
-            placed: slot !== 0 ? slot * slides.length : undefined,
+            progress: stackedShells
+              ? wrapStackedProgress(index - start, slides.length)
+              : index -
+                start +
+                (copy === 'after'
+                  ? slides.length
+                  : copy
+                    ? -slides.length
+                    : slot * slides.length),
+            placed:
+              !stackedShells && slot !== 0 ? slot * slides.length : undefined,
             copy
           }}
         >
@@ -812,14 +842,14 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
       {set()}
       {copies && <Fragment key="after">{set('after')}</Fragment>}
       {copies && <Fragment key="before">{set('before')}</Fragment>}
-      {shells && (
+      {shells && !stacked && (
         <div
           data-carouseldeck-spacer="before"
           aria-hidden="true"
           style={spacerStyle(true, slides.length)}
         />
       )}
-      {shells && (
+      {shells && !stacked && (
         <div
           data-carouseldeck-spacer="after"
           aria-hidden="true"
@@ -827,6 +857,7 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
         />
       )}
       {shells &&
+        !stacked &&
         SHELL_SETS.flatMap((shellSet) =>
           Array.from({ length: slides.length }, (_, index) => (
             <div
@@ -847,7 +878,27 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
             />
           ))
         )}
+      {/* With shells, stacked (#144, Task 5): the shells are the effect's
+          own snap targets, one grid cell each, five full sets of them.
+          They carry no estimated geometry of their own -- the grid places
+          them exactly, so there is nothing for hydration to correct -- and
+          no spacer, no out-of-flow position and no alignment copied onto
+          them: `target`'s own style is every bit of layout they need. */}
+      {stackedShells &&
+        SHELL_SETS.flatMap((shellSet) =>
+          Array.from({ length: slides.length }, (_, index) => (
+            <div
+              key={`shell:${shellSet}:${index}`}
+              data-carouseldeck-shell={shellSet}
+              data-carouseldeck-snap-target=""
+              aria-hidden="true"
+              inert
+              style={target?.((shellSet + 2) * slides.length + index)}
+            />
+          ))
+        )}
       {target &&
+        !stackedShells &&
         Array.from({ length: run }, (_, index) => (
           <div
             key={`target-${index}`}
