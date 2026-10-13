@@ -1,8 +1,9 @@
 # Loop places one real slide by translate over empty snap targets
 
-**Accepted 2026-10-13, built in #144 (one instance, JavaScript placement),
-#145 (CSS placement) and #146 (press correction).** Until #144 lands, loop
-still renders full copies (ADR-0009).
+This decision is accepted, on 2026-10-13. Three issues build it: #144 places
+each slide once, in JavaScript; #145 moves that placement to CSS; #146
+corrects a press at the seam. Until #144 lands, loop still renders full
+copies (ADR-0009).
 
 ADR-0009 built loop as clone and jump: a full set of copies on each side of
 the slides, each a `Deck.Slide` rendered again, so its state, effects, ids
@@ -10,8 +11,8 @@ and media are its own and mount a second and third time. Anything a slide's
 content does, such as a video player, an `id` or a running effect, runs
 three times. `packages/docs/guides/known-limits.md` warned about it (#119).
 
-**The maintainer's ruling (2026-10-13): one instance per slide, not a
-lighter copy.** Each slide's children mount exactly once; refs, state,
+**The maintainer's ruling (2026-10-13): each slide mounted once, not a
+lighter copy.** Its children mount exactly once; refs, state,
 effects, ids and media stay stable across the loop, the seam and the jump.
 This supersedes the `useIsCopy()` brief of 2026-10-12, which only would have
 told content it was in a copy: `Deck.useSlide().copy` already does that,
@@ -20,8 +21,8 @@ unchanged, for the small-deck fallback below.
 ## The technique
 
 Native scroll snap stays the engine (ADR-0001, ADR-0006). Loop's copies
-become empty, inert, `aria-hidden` boxes that render no children. Call them
-_shells_. The one real slide is moved onto whichever shell is nearest
+become empty, inert, `aria-hidden` boxes that render no children: _shells_
+(GLOSSARY.md). The one real slide is moved onto whichever shell is nearest
 the viewport, by `translate`.
 
 **Snap points come from shells, for all five sets, as ADR-0007 already
@@ -65,8 +66,10 @@ every shell before the next settle.
 (`animation-timeline: scroll()`) on the compositor where `CSS.supports`
 reports it; a scroll listener recomputes it on the main thread everywhere
 else (Firefox today). Either way it composes with a consumer's own
-`transform`, never overwriting it; where the two cannot coexist, the docs
-say so.
+`transform`: the two are independent properties, so both apply together. A
+consumer's own `translate` is the property placement itself needs, and the
+two cannot share it; the docs name `translate` as placement's, for a
+consumer to avoid.
 
 **The jump stays, and corrects translate in the same task.** At rest on a
 shell, the engine jumps the scroll position back into the real slides' own
@@ -84,13 +87,6 @@ Every Next, Prev, arrow key and dot press corrects the position into the
 middle set first, synchronously, before it moves, so a press always has a
 full set of room ahead of it whether or not a settle got the chance to jump.
 
-**A drag recovers from a failed pointer capture.** `setPointerCapture` can
-throw when a busy main thread delivers the pointer's move after the pointer
-itself is gone. Unhandled, that left the engine's `drag` state stuck at
-`dragging` with no pointer to release it. The call is guarded: on a
-throw, the drag returns to idle at once, as if the press had never started
-one.
-
 **Start position after first paint.** Measured in the prototype on real
 WebKit: a `scrollLeft` write made before the first paint is silently
 dropped, while the identical write from a later task succeeds. The initial
@@ -101,21 +97,28 @@ starting translate and every shell's starting geometry for `defaultIndex`
 before the first frame once the browser can measure), so hydration moves
 nothing.
 
-**A deck too small to loop keeps today's copies.** A set no longer than the
-viewport plus its widest slide cannot place a shell without bringing a copy
-of a slide into view beside its own slide, the same test ADR-0009 already
-uses to decide a deck does not loop at all. There, the engine falls back to
-rendering full copies exactly as ADR-0009 built them, and
+**A deck too small for shells keeps today's copies.** Placing a shell needs
+room for it beside its own slide without a copy showing there too: a set
+narrower than the viewport plus its widest slide cannot guarantee that
+room. That test is wider than ADR-0009's, which decides a deck does not
+loop at all on a set no longer than the viewport alone: a deck between the
+two still loops, as ADR-0009 already has it, but falls back to rendering
+full copies exactly as ADR-0009 built them, rather than shells. There,
 `Deck.useSlide().copy` reports `'before'` or `'after'` in them as it always
-has. With one instance, `copy` is always `undefined`: a real slide is never
-a copy of itself.
+has. Where each slide mounts once, `copy` is always `undefined`: a real
+slide is never a copy of itself. The docs say which decks lack the
+mount-once guarantee.
 
 **Everything ADR-0009 built on copies keeps working.** The copies' snap
 points reach a set past either end as before (`reachable`, ADR-0009); a
 press or a wheel event on them still shifts the deck a set onto the slides
-where nothing shows (`shiftOffCopies`); click to focus, autoplay, synced
-decks, fade, curve, stack, pages, vertical and right-to-left read the same.
-Only what measured a copy's own box measures its shell instead.
+where nothing shows (`shiftOffCopies`); `--deck-slide-progress` and
+`data-in-view` are still written per slide, in whichever slot it is placed;
+click to focus, autoplay, synced decks, fade, curve, stack, pages, vertical
+and right-to-left read the same; and #142's fix, which keeps a looping
+deck's place once its own jump off a copy is still settling when the layout
+changes (`jumping`), still applies. Only what measured a copy's own box
+measures its shell instead.
 
 ## What is open to the implementation
 
@@ -127,7 +130,10 @@ half-done):
 - the exact measurement this needs for the run's length (the distance from
   a slide to its own shell a set over) where slides are not uniform width;
 - whether the CSS path and the JavaScript fallback can share one
-  measurement-and-positioning pass, or need their own;
+  measurement-and-positioning pass, or need their own.
+
+## Out of scope
+
 - the VoiceOver pass, ruled for after release (ADR-0006's open check and
   this one share it): no slide announced twice or as a shell, and the
   sites make no screen-reader claim about loop until it is done;
