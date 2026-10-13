@@ -1,8 +1,7 @@
 // What the home page states about the package, read from @carouseldeck/react's
-// latest release when the site builds: its README at the release tag, or the
-// installed package's until the first release is tagged. Never retyped: a new
-// release, with a new `pnpm compare` measurement, changes the page on the next
-// build.
+// latest release when the site builds: its README at the release tag; without
+// one, the build fails. Never retyped: a new release, with a new `pnpm
+// compare` measurement, changes the page on the next build.
 import { highlighter } from "@deck-cool/site-kit/highlight";
 import { carouseldeckSize, fence, readCarouseldeckRelease } from "@deck-cool/site-kit/carouseldeck-readme";
 
