@@ -17,10 +17,13 @@ import {
 import {
   COPY,
   createDeck,
+  SHELL,
   SNAP_TARGET,
+  SPACER,
   type DeckEngine,
   type Orientation
 } from '@carouseldeck/core';
+import { LoopShells } from './loop-shells.js';
 import { ServerSlides } from './server-slides.js';
 import { slidesIn } from './slides-in.js';
 
@@ -550,10 +553,15 @@ const visuallyHidden: CSSProperties = {
   border: 0
 };
 
-/** The viewport's slides: its children but snap targets and loop copies. */
+/** The viewport's slides: its children but snap targets, loop copies,
+ * shells and spacers. */
 const slideCount = (viewport: HTMLElement) =>
   [...viewport.children].filter(
-    (child) => !child.hasAttribute(SNAP_TARGET) && !child.hasAttribute(COPY)
+    (child) =>
+      !child.hasAttribute(SNAP_TARGET) &&
+      !child.hasAttribute(COPY) &&
+      !child.hasAttribute(SHELL) &&
+      !child.hasAttribute(SPACER)
   ).length;
 
 /** Warns about controlled-deck mistakes, as React does for an input's
@@ -692,9 +700,14 @@ const viewportStyles: Record<Orientation, CSSProperties> = {
 export function Viewport({ style, children, effect, ...props }: ViewportProps) {
   const { viewportRef, engineRef, orientation, loop, count, initialIndex } =
     useDeckContext('Viewport');
+  // Staging switch for #144: shells instead of copies, for the new tests
+  // only (not exported from the package entry). Deleted in Task 7.
+  const shellsOn = use(LoopShells);
   const slides = Children.toArray(children);
   // A deck whose slides all fit has nothing to loop (see createDeck).
-  const copies = loop && !everySlideFits(count);
+  const looping = loop && !everySlideFits(count);
+  const shells = looping && shellsOn;
+  const copies = looping && !shellsOn;
   const run = slides.length * (copies ? 3 : 1);
   const layout = effect?.layout?.(orientation, run);
   const target = layout?.target;
@@ -714,7 +727,7 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
     .join();
   useLayoutEffect(() => {
     engineRef.current?.refresh();
-  }, [engineRef, slides.length, copies, stacked, order]);
+  }, [engineRef, slides.length, copies, shells, stacked, order]);
   const set = (copy?: 'before' | 'after') =>
     slides.map((slide, index) => (
       // `toArray` gives every element a key derived from the consumer's,
@@ -746,6 +759,9 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
       data-carouseldeck-viewport=""
       data-orientation={orientation}
       data-carouseldeck-effect={effect?.name}
+      data-carouseldeck-loop={
+        looping ? (shells ? 'shells' : 'copies') : undefined
+      }
       style={{
         ...viewportStyles[orientation],
         ...layout?.viewport,
@@ -764,6 +780,32 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
       {set()}
       {copies && <Fragment key="after">{set('after')}</Fragment>}
       {copies && <Fragment key="before">{set('before')}</Fragment>}
+      {shells && (
+        <div
+          data-carouseldeck-spacer="before"
+          aria-hidden="true"
+          style={spacerStyle(true)}
+        />
+      )}
+      {shells && (
+        <div
+          data-carouseldeck-spacer="after"
+          aria-hidden="true"
+          style={spacerStyle(false)}
+        />
+      )}
+      {shells &&
+        SHELL_SETS.flatMap((shellSet) =>
+          Array.from({ length: slides.length }, (_, index) => (
+            <div
+              key={`shell:${shellSet}:${index}`}
+              data-carouseldeck-shell={shellSet}
+              aria-hidden="true"
+              inert
+              style={shellStyle}
+            />
+          ))
+        )}
       {target &&
         Array.from({ length: run }, (_, index) => (
           <div
@@ -776,6 +818,43 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
     </div>
   );
 }
+
+/** Shells' five sets, -2 to 2, 0 being the real slides' own (ADR-0013). */
+const SHELL_SETS = [-2, -1, 0, 1, 2] as const;
+
+/** A shell: an empty, inert, `aria-hidden` stand-in for a slide, out of
+ * flow, sized and positioned by the engine. Neutralised against any
+ * consumer CSS that would otherwise size or paint a wildcard-selected
+ * child (ADR-0013). */
+const shellStyle = {
+  position: 'absolute',
+  margin: 0,
+  padding: 0,
+  border: 0,
+  scale: 'none',
+  rotate: 'none',
+  translate: 'none',
+  opacity: 0,
+  pointerEvents: 'none'
+} as CSSProperties;
+
+/** One of shells' two in-flow spacers, before the real slides or after
+ * them: pushes them two sets in, so the shells before them have somewhere
+ * to sit (ADR-0013). Sized by the engine. */
+const spacerStyle = (before: boolean) =>
+  ({
+    ...(before && { order: -1 }),
+    flex: 'none',
+    margin: 0,
+    padding: 0,
+    border: 0,
+    scale: 'none',
+    rotate: 'none',
+    translate: 'none',
+    opacity: 0,
+    pointerEvents: 'none',
+    scrollSnapAlign: 'none'
+  }) as CSSProperties;
 
 // A slide's size and alignment are geometry, which belongs to consumer CSS
 // (ADR-0003). These defaults make a deck work with no stylesheet, and their
@@ -791,6 +870,10 @@ const deckDefaults =
   ':where([data-carouseldeck-slide]){width:100%;scroll-snap-align:start}' +
   ':where([data-orientation=vertical]>[data-carouseldeck-slide]){height:100%}' +
   ':where([data-carouseldeck-viewport]){scrollbar-width:none}' +
+  // Shells (ADR-0013) are absolutely positioned by the engine: the
+  // viewport becomes their containing block, unless the consumer already
+  // gives it a non-static position.
+  ':where([data-carouseldeck-loop=shells]){position:relative}' +
   '@supports not (scrollbar-width:none){' +
   ':where([data-carouseldeck-viewport])::-webkit-scrollbar{display:none}}';
 

@@ -89,7 +89,10 @@ export default defineConfig({
         // input through CDP, which is Chromium's alone.
         {
           browser: 'webkit',
-          include: ['packages/react/test/settle-without-frames.test.tsx']
+          include: [
+            'packages/react/test/settle-without-frames.test.tsx',
+            'packages/react/test/loop-one-instance.test.tsx'
+          ]
         }
       ],
       commands: { mouse },

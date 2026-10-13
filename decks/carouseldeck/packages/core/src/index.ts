@@ -157,8 +157,9 @@ export function createDeck(
     userScroll = false;
     shape = shapeOf(viewport);
     placeOwed = null;
-    alignCopies(viewport);
     const along = axis();
+    layoutShells(viewport, along);
+    alignCopies(viewport);
     const geometry = snapPoints(viewport, along);
     known = geometry;
     jumpOffCopies(along, geometry);
@@ -884,6 +885,8 @@ export function createDeck(
 
   const refresh = () => {
     followViewport(0);
+    layoutShells(viewport, axis());
+    alignCopies(viewport);
     // Loop's copies or an effect's snap targets came or went, as when `loop`
     // or an effect changes on a mounted deck: the snap points moved under
     // the viewport, and where the browser puts it then is no snap point of
@@ -980,6 +983,12 @@ export function createDeck(
   // browser honours `scroll-initial-target`, and this scroll is a no-op.
   // Where slides share snap points, slide `index` may rest at another snap
   // point, so the first paint may correct: server HTML cannot measure.
+  // Shells need their own first pass, and their alignment copied from the
+  // slides, before `restOn`'s own read of the snap points, which runs
+  // before `settle`'s (ADR-0013): without it, the mid shells have no
+  // `scroll-snap-align` yet, and there is nowhere to rest.
+  layoutShells(viewport, axis());
+  alignCopies(viewport);
   restOn(options.index);
 
   // A new layout that moves the snap points under the viewport keeps the
@@ -1321,9 +1330,20 @@ export function createDeck(
       if (penPan !== null) clearTimeout(penPan);
       cancelAnimationFrame(frame);
       cancelAnimationFrame(focusFrame);
-      for (const slide of slidesOf(viewport).run) {
+      const atDestroy = slidesOf(viewport);
+      for (const slide of atDestroy.run) {
         slide.removeAttribute(IN_VIEW);
         if (slide instanceof HTMLElement) slide.style.removeProperty(PROGRESS);
+      }
+      // Shells mode writes `scroll-snap-align` onto the real slides, which
+      // are never in `run` there (ADR-0013): removed here too.
+      if (atDestroy.sets === 2) {
+        for (const slide of atDestroy.slides) {
+          if (slide instanceof HTMLElement) {
+            slide.style.removeProperty('scroll-snap-align');
+            slide.style.removeProperty('translate');
+          }
+        }
       }
       resizes.disconnect();
       dirs.disconnect();
@@ -1381,6 +1401,16 @@ export const SNAP_TARGET = 'data-carouseldeck-snap-target';
 /** Marks a viewport child as a loop's copy of a slide rather than a slide:
  * `before` the slides, or `after` them. */
 export const COPY = 'data-carouseldeck-copy';
+/** Marks a viewport child as a shell (ADR-0013): an empty, inert,
+ * `aria-hidden` stand-in for a slide, out of flow, carrying its snap point
+ * and its `scroll-snap-align`. The value is which set it is in, from -2 to
+ * 2, 0 being the real slides' own set. */
+export const SHELL = 'data-carouseldeck-shell';
+/** Marks a viewport child as one of shells' two in-flow spacers, `before`
+ * the real slides or `after` them (ADR-0013): each two sets long, so the
+ * shells either side have room to sit, out of flow, over the scroll range
+ * a five-set copies layout would have. */
+export const SPACER = 'data-carouseldeck-spacer';
 const IN_VIEW = 'data-in-view';
 /** How much of a slide the scrollport must show for it to be in view. */
 const IN_VIEW_MIN_PX = 1;
@@ -1475,18 +1505,34 @@ function slidesOf(viewport: HTMLElement): {
   run: Element[];
   boxes: Element[];
   first: number;
-  /** With loop, how many sets of copies sit before the slides (and after
-   * them); 0 without. */
+  /** With loop, how many sets of copies, or of shells, sit before the
+   * slides (and after them); 0 without. Shells always give 2. */
   sets: number;
 } {
   const slides: Element[] = [];
   const before: Element[] = [];
   const after: Element[] = [];
   const targets: Element[] = [];
+  const shellSets = new Map<number, Element[]>();
   for (const child of viewport.children) {
+    if (child.hasAttribute(SPACER)) continue;
+    if (child.hasAttribute(SHELL)) {
+      const set = Number(child.getAttribute(SHELL));
+      const shells = shellSets.get(set);
+      if (shells) shells.push(child);
+      else shellSets.set(set, [child]);
+      continue;
+    }
     if (child.hasAttribute(SNAP_TARGET)) targets.push(child);
     else if (!child.hasAttribute(COPY)) slides.push(child);
     else (child.getAttribute(COPY) === 'before' ? before : after).push(child);
+  }
+  // Shells carry their own snap points (ADR-0013): the run is the shells,
+  // in set order, and the slides are never in it. `first` is where the
+  // slides' own set of shells starts, two sets in.
+  if (shellSets.size > 0) {
+    const run = [-2, -1, 0, 1, 2].flatMap((set) => shellSets.get(set) ?? []);
+    return { slides, run, boxes: run, first: 2 * slides.length, sets: 2 };
   }
   const run = [...before, ...slides, ...after];
   const boxes =
@@ -1511,30 +1557,129 @@ function slidesOf(viewport: HTMLElement): {
  */
 const shapeOf = (viewport: HTMLElement) =>
   [
-    ...[COPY, SNAP_TARGET].map(
+    ...[COPY, SNAP_TARGET, SHELL].map(
       (marker) => viewport.querySelector(`:scope > [${marker}]`) !== null
     ),
     slidesOf(viewport).first
   ].join();
 
 /**
- * Gives each loop copy its slide's snap alignment, inline: CSS that picks the
- * slides that snap by their place among the viewport's children, as
- * `:nth-child()` does for pages, would pick other copies. Written only where
- * it differs, so a settle lays out once.
+ * Gives each loop copy, or shell, its slide's snap alignment, inline: CSS
+ * that picks the slides that snap by their place among the viewport's
+ * children, as `:nth-child()` does for pages, would pick other copies or
+ * shells. With shells, the real slides carry `scroll-snap-align: none`
+ * unconditionally instead (ADR-0013): their shells carry the snap points,
+ * so their own inline override is cleared first, to read the consumer's
+ * computed value beneath it, then put back in the same task; their
+ * `scroll-margin` is copied onto the shells too, since shells have none of
+ * their own. Written only where it differs, so a settle lays out once.
  */
 function alignCopies(viewport: HTMLElement) {
-  const { slides, run, first } = slidesOf(viewport);
-  if (first === 0) return;
-  // The whole value, both axes, not the axis's: a copy must snap as its
-  // slide does on either axis, so it is copied as it is, not read.
+  const { slides, run, first, sets } = slidesOf(viewport);
+  const shells = sets === 2;
+  if (first === 0 && !shells) return;
+  const own = slides.filter(
+    (slide): slide is HTMLElement => slide instanceof HTMLElement
+  );
+  if (shells) for (const slide of own) slide.style.scrollSnapAlign = '';
+  // The whole value, both axes, not the axis's: a copy or shell must snap
+  // as its slide does on either axis, so it is copied as it is, not read.
   const aligns = slides.map((slide) => getComputedStyle(slide).scrollSnapAlign);
+  const margins = shells
+    ? slides.map((slide) => getComputedStyle(slide).scrollMargin)
+    : [];
+  if (shells) {
+    for (const slide of own) {
+      if (slide.style.scrollSnapAlign !== 'none') {
+        slide.style.scrollSnapAlign = 'none';
+      }
+    }
+  }
   run.forEach((copy, i) => {
-    if (i >= first && i < first + slides.length) return;
-    const align = aligns[wrap(i - first, slides.length)];
+    if (!shells && i >= first && i < first + slides.length) return;
+    const index = wrap(i - first, slides.length);
+    const align = aligns[index];
     if (copy instanceof HTMLElement && copy.style.scrollSnapAlign !== align) {
       copy.style.scrollSnapAlign = align;
     }
+    if (shells && copy instanceof HTMLElement) {
+      const margin = margins[index];
+      if (copy.style.scrollMargin !== margin) copy.style.scrollMargin = margin;
+    }
+  });
+}
+
+/**
+ * Shells mode only (ADR-0013): measures the real slides' home positions —
+ * where each sits now, in content coordinates, independent of any
+ * `translate` already on it — and the run's length `L`, from a slide to
+ * its own shell a set over (decision 2: the distance from the first
+ * slide's start to the last slide's end, plus its trailing margin, the
+ * viewport's gap and the first slide's own leading margin). The spacers
+ * each take `2L` less one gap, so the scroll range matches a five-set
+ * copies layout; shell `(k, i)` sits at slide `i`'s home plus `k·L`, sized
+ * to match it, placed with logical insets so RTL needs no special case.
+ * Written only where a value differs, so a settle lays out once. A no-op
+ * outside shells mode.
+ */
+function layoutShells(viewport: HTMLElement, along: Axis) {
+  const { slides, run, sets } = slidesOf(viewport);
+  const n = slides.length;
+  if (sets !== 2 || n === 0) return;
+  const write = (
+    el: Element,
+    prop: 'insetInlineStart' | 'insetBlockStart' | 'width' | 'height' | 'flex',
+    value: string
+  ) => {
+    if (el instanceof HTMLElement && el.style[prop] !== value) {
+      el.style[prop] = value;
+    }
+  };
+
+  // `length` (L) comes from the slides' own geometry alone, never from
+  // where the spacers put them: computed first, so the spacers can be
+  // sized from it before anything reads a slide's position.
+  const gap = along.gap(getComputedStyle(viewport));
+  const first = slides[0];
+  const last = slides[n - 1];
+  const [start0] = along.span(first.getBoundingClientRect());
+  const [, endN] = along.span(last.getBoundingClientRect());
+  const [marginStart0] = along.insets(getComputedStyle(first), 'margin', 0);
+  const [, marginEndN] = along.insets(getComputedStyle(last), 'margin', 0);
+  const length = endN + marginEndN + gap + marginStart0 - start0;
+
+  // The spacers, before the real slides' positions are read: on a layout
+  // that moves them, as the first settle's does, the slides' own position
+  // already reflects it once this write lands.
+  const spacerSize = `0 0 ${Math.max(0, 2 * length - gap)}px`;
+  for (const side of ['before', 'after'] as const) {
+    const spacer = viewport.querySelector(`:scope > [${SPACER}="${side}"]`);
+    if (spacer) write(spacer, 'flex', spacerSize);
+  }
+
+  const view = along.view();
+  const position = along.position;
+  const home = (slide: Element) => {
+    const [start] = along.span(slide.getBoundingClientRect());
+    const translate =
+      slide instanceof HTMLElement
+        ? parseFloat(getComputedStyle(slide).translate) || 0
+        : 0;
+    return start - translate - view[0] + position;
+  };
+  const homes = slides.map(home);
+
+  const insetProp = along.vertical ? 'insetBlockStart' : 'insetInlineStart';
+  const sizeProp = along.vertical ? 'height' : 'width';
+  const crossProp = along.vertical ? 'width' : 'height';
+  run.forEach((shell, idx) => {
+    const i = idx % n;
+    const set = Math.floor(idx / n) - 2;
+    const box = slides[i].getBoundingClientRect();
+    const [slideStart, slideEnd] = along.span(box);
+    write(shell, insetProp, `${homes[i] + set * length}px`);
+    write(shell, sizeProp, `${slideEnd - slideStart}px`);
+    write(shell, crossProp, `${along.vertical ? box.width : box.height}px`);
   });
 }
 
@@ -1681,13 +1826,20 @@ interface Axis {
   /** A slide's `scroll-snap-align` along the axis: of its block and inline
    * values, the block for a vertical deck, the inline for a horizontal one. */
   snapAlign(slide: Element): string;
-  /** A box's `scrollPadding` or `scrollMargin` at the axis's start and end,
-   * in pixels; a percentage is of `size`, and `auto` is none. */
+  /** A box's `scrollPadding`, `scrollMargin` or plain `margin` at the
+   * axis's start and end, in pixels; a percentage is of `size`, and `auto`
+   * is none. */
   insets(
     style: CSSStyleDeclaration,
-    property: 'scrollPadding' | 'scrollMargin',
+    property: 'scrollPadding' | 'scrollMargin' | 'margin',
     size: number
   ): Span;
+  /** Whether the axis is the block axis (a vertical deck). Shells
+   * (ADR-0013) use it to place themselves with logical insets. */
+  vertical: boolean;
+  /** The viewport's `columnGap` (horizontal) or `rowGap` (vertical), in
+   * pixels; `normal` is 0. */
+  gap(style: CSSStyleDeclaration): number;
 }
 
 function axisOf(viewport: HTMLElement, vertical: boolean): Axis {
@@ -1745,6 +1897,11 @@ function axisOf(viewport: HTMLElement, vertical: boolean): Axis {
         const amount = parseFloat(value) || 0;
         return value.endsWith('%') ? (amount / 100) * size : amount;
       }) as Span;
+    },
+    vertical,
+    gap(style) {
+      const value = style[vertical ? 'rowGap' : 'columnGap'];
+      return value === 'normal' ? 0 : parseFloat(value) || 0;
     }
   };
 }
