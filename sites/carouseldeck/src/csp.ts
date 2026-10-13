@@ -9,6 +9,7 @@ export const DECK_STYLE_HASHES = {
   "carouseldeck-slide": "'sha256-efzwvZmUtB7UorQn5xz/0EgItWc7phHDDpPgvPHVlRk='",
   "carouseldeck-slide carouseldeck-curve": "'sha256-q6AR/0kmiKYW8wAk4LsPXy4kb6+fXxnH4OwjhABc7Tc='",
   "carouseldeck-slide carouseldeck-fade": "'sha256-8fG7JnAdd1Nig8aeq9f3GFf6jVf3Q8oF+tNU01J9whM='",
+  "carouseldeck-slide carouseldeck-stack": "'sha256-Yr0IuBMT0Jd7yr+Ow1/uThn+2srRNBM9hSfY3PGxl3Y='",
 } as const;
 
 /**
