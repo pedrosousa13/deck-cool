@@ -48,9 +48,9 @@ function PhotoControls() {
       <Button isDisabled={!canPrev} onPress={prev}>
         Previous photo
       </Button>
-      {/* "03 — 10" */}
+      {/* "03 / 10" */}
       <span>
-        {count !== null && `${twoDigits(index + 1)} — ${twoDigits(count)}`}
+        {count !== null && `${twoDigits(index + 1)} / ${twoDigits(count)}`}
       </span>
       <Button isDisabled={!canNext} onPress={next}>
         Next photo

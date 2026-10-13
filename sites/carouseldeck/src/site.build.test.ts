@@ -477,8 +477,7 @@ describe("the home page", () => {
 });
 
 test("no page uses an em dash", () => {
-  // Docs-package pages: their em dashes are upstream's (pedrosousa13/slidedeck#143).
-  expect(pagesWithEmDashes(SITE, DOCS_NAV.map(({ href }) => href))).toEqual([]);
+  expect(pagesWithEmDashes(SITE)).toEqual([]);
 });
 
 describe("the Examples page", () => {
