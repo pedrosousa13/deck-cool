@@ -1115,7 +1115,19 @@ export function createDeck(
       drag = 'dragging';
       takeOver();
       removeSnap();
-      viewport.setPointerCapture(pointer);
+      try {
+        viewport.setPointerCapture(pointer);
+      } catch {
+        // A busy main thread can deliver this move after the pointer
+        // itself is gone, and the capture throws (found building #119's
+        // prototype, #140). With no pointer left to release it, the drag
+        // would be stuck "dragging" for good: it goes back to idle at
+        // once instead, snapping restored, as if the press had never
+        // started one.
+        drag = 'idle';
+        restoreSnap();
+        return;
+      }
       // Before the drag first moves the deck (see `shiftOffCopies`).
       shiftOffCopies();
       dragAt = dragAxis.position;

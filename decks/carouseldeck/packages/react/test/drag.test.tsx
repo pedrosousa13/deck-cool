@@ -78,6 +78,33 @@ describe('a mouse drag', () => {
     await expectSnaps(viewport);
   });
 
+  test('a drag whose pointer capture fails goes back to idle, not stuck dragging', async () => {
+    const { viewport, onIndexChange } = renderDeck();
+    const original = HTMLElement.prototype.setPointerCapture;
+    // A busy main thread can deliver the pointer's move after the pointer
+    // itself is gone, and the real capture throws (#119, found on #140).
+    HTMLElement.prototype.setPointerCapture = () => {
+      throw new DOMException('no pointer to capture');
+    };
+    try {
+      await mouseDrag(viewport, -200, slowly);
+    } finally {
+      HTMLElement.prototype.setPointerCapture = original;
+    }
+    await sleep(300);
+
+    // Never started: the deck did not follow the pointer, and snapping is
+    // back on rather than left off for good.
+    expect(viewport.scrollLeft).toBe(0);
+    expect(onIndexChange).not.toHaveBeenCalled();
+    await expectSnaps(viewport);
+
+    // Not stuck: a later drag works as any other.
+    await mouseDrag(viewport, -200, slowly);
+    await expectSettledTo(() => viewport.scrollLeft, WIDTH);
+    expect(onIndexChange.mock.calls).toEqual([[1]]);
+  });
+
   test('reports nothing while the button is down', async () => {
     const { viewport, onIndexChange } = renderDeck();
 

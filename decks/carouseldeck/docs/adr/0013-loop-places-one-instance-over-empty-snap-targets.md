@@ -17,7 +17,7 @@ unchanged, for the small-deck fallback below.
 
 Native scroll snap stays the engine (ADR-0001, ADR-0006). Loop's copies
 become empty, inert, `aria-hidden` boxes that render no children — call them
-*shells* — and the one real slide is moved onto whichever shell is nearest
+_shells_ — and the one real slide is moved onto whichever shell is nearest
 the viewport, by `translate`.
 
 **Snap points come from shells, for all five sets, as ADR-0007 already
