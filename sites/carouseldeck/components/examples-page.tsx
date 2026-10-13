@@ -2,6 +2,7 @@
 // of its own. Each example's deck is an island, a 'use client' module of its
 // own in components/showcase.
 import type { ReactNode } from "react";
+import CardStackDeck from "./showcase/card-stack-deck.tsx";
 import CoverFlowDeck from "./showcase/cover-flow-deck.tsx";
 import GalleryDeck from "./showcase/gallery-deck.tsx";
 import HeroDeck from "./showcase/hero-deck.tsx";
@@ -69,6 +70,13 @@ const EXAMPLES: Example[] = [
     body: "effect={curve} on album covers drawn in CSS, looping, sized with the curve recipe.",
     code: [{ href: "/docs/recipes/size-a-curve/" }],
     deck: <CoverFlowDeck />
+  },
+  {
+    id: "card-stack",
+    title: "Card stack",
+    body: "Photo cards on effect={stack}, looping. Next throws the top card out and back in behind the rest.",
+    code: [{ href: "/docs/recipes/card-stack/" }],
+    deck: <CardStackDeck />
   }
 ];
 

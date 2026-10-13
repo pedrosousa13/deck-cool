@@ -836,7 +836,8 @@ main .home-family .home-more {
 
 /* Captions over a photo: white on a scrim dark enough for 4.5:1. */
 .hero-deck,
-.stories-deck {
+.stories-deck,
+.card-stack-deck {
   --ex-scrim: linear-gradient(to top, rgb(0 0 0 / .8), rgb(0 0 0 / .45) 60%, transparent);
 }
 
@@ -1325,6 +1326,122 @@ main .home-family .home-more {
 }
 .album[data-album="field"] {
   background-image: repeating-linear-gradient(90deg, #606c38 0 18px, #4a5429 18px 36px);
+}
+
+/* Card stack: photo cards on effect={stack}, the card stack recipe's fanned
+   look. The cards behind the top one fan out above and beside it, turned and
+   grown a little by depth. Next, in the card, throws the top card out to the
+   side, clear of the fan, and back in behind it. */
+
+.card-stack-deck {
+  container-type: inline-size;
+}
+
+.card-stack-deck [data-carouseldeck-viewport] {
+  /* Room for the throw beside the stack: a card's width and the fan on each
+     side, about three cards' width in all. */
+  --card-width: clamp(200px, (100cqi - 32px) / 3.1, 280px);
+  --card-height: calc(var(--card-width) * 1.25);
+  /* Room above and below for the fan and the shadow. */
+  height: calc(var(--card-height) + 64px);
+}
+
+.card-stack-deck [data-carouseldeck-slide] {
+  display: grid;
+  place-items: center;
+}
+
+.photo-card {
+  /* From progress: how far the card has been thrown (0 to 1); how far it
+     has come back in, past halfway (0 to 1); and its depth in the stack,
+     which on the way back in grows to the back, one less than the count. */
+  --p: var(--deck-slide-progress);
+  --exit: clamp(0, -1 * var(--p), 1);
+  --return: clamp(0, var(--exit) * 2 - 1, 1);
+  --depth: calc(max(var(--p), 0) + var(--return) * (var(--deck-slide-count) - 1));
+  /* Thrown toward the inline start: at its furthest, halfway, clear of the
+     fan by 24px and tilted 6deg; back in place as it lands. */
+  --start: -1;
+  --throw: calc(100% + 24px);
+  --thrown: translateX(calc(var(--start) * var(--throw) * sin(var(--exit) * .5turn)))
+    rotate(calc(var(--start) * 6deg * sin(var(--exit) * .5turn)));
+  /* A fanned pile: behind the top card, each card shifts and turns by its
+     depth, alternately up-right and down-left, and grows a little. */
+  --behind: translate(calc(sin(var(--depth) * 120deg) * 14px), calc(sin(var(--depth) * 120deg) * -10px))
+    rotate(calc(sin(var(--depth) * 120deg) * 9deg))
+    scale(calc(1 + min(var(--depth), 2) * .04));
+
+  position: relative;
+  box-sizing: border-box;
+  width: var(--card-width);
+  height: var(--card-height);
+  overflow: hidden;
+  border-radius: 20px;
+  background-color: var(--card);
+  box-shadow: 0 16px 32px rgb(0 0 0 / .5);
+  transform-origin: 50% 50%;
+  transform: var(--thrown) var(--behind);
+  /* Dimmer by depth. Not opacity, which would show the cards through one
+     another. */
+  filter: brightness(calc(1 - .06 * var(--depth)));
+  /* No fade. A card outside the stack is hidden outright: one thrown all
+     the way (where its copy now sits, the same card in the same place) and
+     the loop's copies waiting their turn. The engine writes progress in
+     whole thousandths of a slide, and the two windows meet halfway between
+     two of them: the thrown card shows down to -0.998, its copy from 4.001
+     in a deck of five. So each frame shows one of them, never neither (a
+     hole, where Firefox's scroll rests a thousandth short) and never both
+     (a doubled shadow). */
+  opacity: calc(
+    clamp(0, (var(--p) + .9985) * 2000, 1) *
+      clamp(0, (var(--deck-slide-count) - .9985 - var(--p)) * 2000, 1)
+  );
+}
+
+.card-stack-deck:dir(rtl) .photo-card {
+  --start: 1;
+}
+
+.photo-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-card-caption {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 56px 16px 16px;
+  background: var(--ex-scrim);
+  color: #fff;
+}
+
+.photo-card h3 {
+  margin: 0 0 2px;
+  font-size: 20px;
+  letter-spacing: -.01em;
+}
+
+.photo-card p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.photo-card [data-carouseldeck-next] {
+  flex: none;
+}
+
+/* No throw: the top card stays in place and cuts to the back halfway. */
+@media (prefers-reduced-motion: reduce) {
+  .photo-card {
+    --exit: clamp(0, (-1 * var(--p) - .5) * 1000, 1);
+  }
 }
 
 /* A phone: the testimonials' Previous, dots and Next stay on one row down to

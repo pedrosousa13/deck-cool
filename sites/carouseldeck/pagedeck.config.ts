@@ -82,6 +82,7 @@ export default defineConfig({
       storiesDeck: "./components/showcase/stories-deck.tsx",
       rtlDeck: "./components/showcase/rtl-deck.tsx",
       coverFlowDeck: "./components/showcase/cover-flow-deck.tsx",
+      cardStackDeck: "./components/showcase/card-stack-deck.tsx",
     },
     // The Family bar, with search in it, before <main> and the footer after
     // it, so they are the page's banner and contentinfo landmarks.

@@ -104,6 +104,19 @@ describe("the decks in a browser", () => {
     expect(await violations()).toEqual([]);
   });
 
+  // Reduced motion, as every visit() in this file runs under: Next cuts straight
+  // to the next card, with no throw to wait out.
+  test("the card stack's Next throws the top card out and the next one takes its place, under the CSP", async () => {
+    const { page, violations } = await visit("/examples/", { width: 1280, reducedMotion: "reduce" });
+    await hydrated(page);
+    const deck = page.locator(".card-stack-deck");
+    const top = () => deck.locator("[data-focal] h3").textContent();
+    expect(await top()).toBe("Valley");
+    await deck.locator("[data-focal] [data-carouseldeck-next]").click();
+    await expect.poll(top).toBe("Waterfall");
+    expect(await violations()).toEqual([]);
+  });
+
   // The page's script is its islands', so a click selects the command for copying instead.
   test("one click on the home page's install command selects all of it, and nothing else", async () => {
     const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });

@@ -495,6 +495,7 @@ describe("the Examples page", () => {
       "Stories",
       "Right to left",
       "Cover flow",
+      "Card stack",
     ]);
     expect(sections.map((section) => section.querySelector('[aria-roledescription="carousel"]')?.getAttribute("aria-label"))).toEqual([
       "Product photos",
@@ -503,7 +504,16 @@ describe("the Examples page", () => {
       "Travel stories",
       "وجهات للسفر",
       "Albums",
+      "Views",
     ]);
+  });
+
+  test("the card stack's code link goes to the recipe", () => {
+    const section = present(
+      [...examples().querySelectorAll("main section.example")].find((each) => text(each.querySelector("h2")) === "Card stack"),
+      "the card stack's section",
+    );
+    expect(links(section)).toEqual([["View code ›", "/docs/recipes/card-stack/"]]);
   });
 
   test("credits every photo it shows, linking its page on Unsplash", () => {
