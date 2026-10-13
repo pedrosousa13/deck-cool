@@ -3,10 +3,10 @@ name: Deploy carouseldeck
 # carouseldeck's site shows its latest release (ADR 0002), so a publish always
 # builds the latest @carouseldeck/react@X.Y.Z tag, never an unreleased main:
 #
-# - release.yml starts a run of this workflow with `apply`, right after a
-#   release tags it. Before the first release there is none, and the run
-#   fails and publishes nothing.
-# - A manual run on main with `apply` does the same by hand.
+# - release.yml starts a run of this workflow with `apply`, right after its
+#   `tag` job tags the release.
+# - A manual run on main with `apply` does the same by hand. Before the
+#   first release there is no tag, and the run fails and publishes nothing.
 # - A push that changes the site, the deck's packages, a shared package or the
 #   install builds the site at that push and runs `wrangler deploy --dry-run`,
 #   which uses no credential and sends nothing to Cloudflare. So does a manual

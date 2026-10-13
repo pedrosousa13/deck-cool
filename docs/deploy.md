@@ -148,6 +148,8 @@ Every section above applies, with these differences:
   - A push runs the dry run only when it changes `sites/carouseldeck/`, `decks/carouseldeck/packages/`, `packages/`, the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` or the workflow itself. A manual run without `apply` runs it on its branch.
 
   A publish runs only in `pedrosousa13/deck-cool`, on `main`. A run anywhere else with `apply` fails in the dry run and publishes nothing. A change to the site or `packages/brand` alone reaches carousel.deck.cool with the deck's next release.
+
+  **A failed deploy shows red in its own "Deploy carouseldeck" run, not in the "Release" run.** `deploy`'s dispatch succeeds once GitHub accepts the new run, before that run starts, so the "Release" run goes green as soon as the dispatch is accepted. If carousel.deck.cool is not live after a release, check the Actions tab for "Deploy carouseldeck", not "Release".
 - **The token and the secret.** The publish job uses the same `CLOUDFLARE_API_TOKEN` in the `production` environment. Workers Editor is account-wide, and Workers Routes Write covers every hostname on the `deck.cool` zone, so the token deploys this Worker too. `release.yml`'s `deploy` job only starts this workflow's run, with `actions: write` and no secret; that run reads `CLOUDFLARE_API_TOKEN` from its own `production` environment, the same as a manual run.
 - **The zone.** Always Use HTTPS is a zone setting, so it already covers `carousel.deck.cool`. deck.cool's HSTS has `includeSubDomains`, and the site's `_headers` sends the same HSTS.
 

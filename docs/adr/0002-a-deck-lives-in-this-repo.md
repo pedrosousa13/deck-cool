@@ -94,7 +94,8 @@ Each package's `repository.url` points at deck-cool, with `directory` set to its
 Rejected:
 
 - **Trigger the deploy on `release: published`.** The `tag` job creates releases with the `GITHUB_TOKEN`, and events from that token start no workflow.
-- **Dispatch the deploy on `main`.** `main` can be past the release by the time the run starts, and decision 4 forbids deploying unreleased code.
+- **Dispatch the deploy on a push to `main`.** A push trigger fires at `main`'s head, which can be past the release by the time the run starts, and decision 4 forbids deploying unreleased code. The dispatch `deploy` actually starts is not this: it fires only after `tag`, and the dispatched run resolves its own commit, from the latest `@carouseldeck/react@X.Y.Z` tag, never from `main`'s head, then checks that commit is on `main`.
+- **Call `deploy-carouseldeck.yml` as a reusable workflow (`workflow_call`), passing the released commit.** On the 1.2.0 release (run 38279622713), the called workflow's `publish` job named `environment: production`, but a reusable call's job does not read that environment's secrets the way a direct run does, and `CLOUDFLARE_API_TOKEN` came through empty (#130).
 - **One release workflow per deck.** npm's trusted publisher names one workflow file, and one file is simpler to keep pinned and reviewed. Decks with nothing pending do nothing in it.
 - **Run the whole `pnpm verify` on every push to `main`**, as slidedeck's `release.yml` did. Here only a publish needs it.
 

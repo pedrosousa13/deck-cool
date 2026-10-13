@@ -251,19 +251,20 @@ jobs:
         run: node decks/carouseldeck/scripts/tag-releases.mjs
 
   # A release deploys its site (ADR 0002). This job starts
-  # deploy-carouseldeck.yml as its own run, the manual apply path, which picks
-  # the latest @carouseldeck/react@X.Y.Z tag itself, the one `tag` just made,
-  # and checks it is on main before publishing it. `tag` runs first, so the
-  # tag exists before the dispatch starts, and the dispatched run reads
+  # deploy-carouseldeck.yml as its own run: the same apply run a manual
+  # dispatch starts, not a manual one itself. It picks the latest
+  # @carouseldeck/react@X.Y.Z tag itself, the one `tag` just made, and checks
+  # that tag's commit is on main before publishing it. `tag` runs first, so
+  # the tag exists before this dispatches. That run reads
   # CLOUDFLARE_API_TOKEN from its own production environment, so this job
-  # passes no secret and needs only actions: write to start it.
+  # passes no secret.
   deploy:
     needs: [publish, tag]
     if: needs.publish.outputs.published == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      actions: write
+      actions: write # start a run of deploy-carouseldeck.yml
     steps:
       - name: Dispatch the carouseldeck deploy
         env:
