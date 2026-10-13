@@ -148,7 +148,7 @@ export function createDeck(
   let shape = '';
   // The snap points as of the last settle, for a press to read where the
   // deck is without measuring (see `shiftOffCopies`).
-  let known: Geometry = { points: [], slides: [], length: 0 };
+  let known: Geometry = { points: [], slides: [], length: 0, sets: 0 };
 
   const settle = () => {
     refreshOwed = false;
@@ -226,14 +226,14 @@ export function createDeck(
   // rest a copy a pixel or two off its slide's rest plus a set's length.
   // Returns where the shift put the deck, or null if it did not shift.
   const shiftOffCopies = () => {
-    const { points, length } = known;
+    const { points, length, sets } = known;
     const count = points.length;
     if (move || length === 0 || count === 0) return null;
     const along = axis();
     const at = along.position;
     let nearest = 0;
     const distance = (i: number) => Math.abs(positionOf(known, i) - at);
-    for (let i = -count; i < 2 * count; i++) {
+    for (let i = -sets * count; i < (sets + 1) * count; i++) {
       if (distance(i) < distance(nearest)) nearest = i;
     }
     const set = Math.floor(nearest / count);
@@ -303,7 +303,7 @@ export function createDeck(
     const at = along.position;
     const count = geometry.points.length;
     if (count === 0) return false;
-    const reach = geometry.length > 0 ? count : 0;
+    const reach = geometry.length > 0 ? geometry.sets * count : 0;
     const indexes = Array.from(
       { length: count + 2 * reach },
       (_, i) => i - reach
@@ -940,13 +940,14 @@ export function createDeck(
       const ahead = Math.sign(positionOf(geometry, next) - at) || 1;
       const margin = geometry.length / count / 2;
       const distance = (i: number) => (positionOf(geometry, i) - at) * ahead;
-      const onward = [-1, 0, 1]
+      const { sets } = geometry;
+      const onward = Array.from({ length: 2 * sets + 1 }, (_, i) => i - sets)
         .map((set) => wrap(next, count) + set * count)
         .filter((i) => reachable(geometry, along, i) && distance(i) > margin);
       if (onward.length > 0) {
         next = onward.reduce((a, b) => (distance(b) < distance(a) ? b : a));
       } else {
-        let furthest = ahead > 0 ? 2 * count - 1 : -count;
+        let furthest = ahead > 0 ? (sets + 1) * count - 1 : -sets * count;
         while (!reachable(geometry, along, furthest)) furthest -= ahead;
         // Already there, or heading there: the press is dropped.
         if (furthest === move?.target || distance(furthest) <= margin) {
@@ -1157,7 +1158,8 @@ export function createDeck(
     suppressClick();
     // With loop, the copies' snap points too, a set of slides either way.
     const geometry = snapPoints(viewport, dragAxis);
-    const reach = geometry.length > 0 ? geometry.points.length : 0;
+    const reach =
+      geometry.length > 0 ? geometry.sets * geometry.points.length : 0;
     const points = Array.from(
       { length: geometry.points.length + 2 * reach },
       (_, i) => positionOf(geometry, i - reach)
@@ -1274,7 +1276,7 @@ export function createDeck(
     let here = 0;
     const distance = (i: number) =>
       Math.abs(positionOf(geometry, i) - along.position);
-    for (let i = -count; i < 2 * count; i++) {
+    for (let i = -geometry.sets * count; i < (geometry.sets + 1) * count; i++) {
       if (distance(i) < distance(here)) here = i;
     }
     scrollTo(here + delta, true);
@@ -1431,7 +1433,8 @@ function positionOf({ points, length }: Geometry, index: number): number {
  * copy's up to a set past either end that the scroll range reaches. */
 function reachable(geometry: Geometry, axis: Axis, index: number): boolean {
   const count = geometry.points.length;
-  if (index < -count || index > 2 * count - 1) return false;
+  const { sets } = geometry;
+  if (index < -sets * count || index > (sets + 1) * count - 1) return false;
   const position = positionOf(geometry, index);
   return position >= -1 && position <= axis.max() + 1;
 }
@@ -1472,6 +1475,9 @@ function slidesOf(viewport: HTMLElement): {
   run: Element[];
   boxes: Element[];
   first: number;
+  /** With loop, how many sets of copies sit before the slides (and after
+   * them); 0 without. */
+  sets: number;
 } {
   const slides: Element[] = [];
   const before: Element[] = [];
@@ -1485,7 +1491,13 @@ function slidesOf(viewport: HTMLElement): {
   const run = [...before, ...slides, ...after];
   const boxes =
     targets.length === 0 ? run : run.map((slide, i) => targets[i] ?? slide);
-  return { slides, run, boxes, first: before.length };
+  return {
+    slides,
+    run,
+    boxes,
+    first: before.length,
+    sets: slides.length > 0 ? before.length / slides.length : 0
+  };
 }
 
 /**
@@ -1535,6 +1547,9 @@ interface Geometry {
   /** With loop, how far one set of slides runs along the axis, from a slide
    * to its copy after the slides; 0 without. */
   length: number;
+  /** With loop, how many sets of copies the viewport holds before the
+   * slides (and after them); 0 without. */
+  sets: number;
 }
 
 /**
@@ -1583,7 +1598,7 @@ function snapRest(viewport: HTMLElement, axis: Axis, clamped = true) {
 function snapPoints(viewport: HTMLElement, axis: Axis): Geometry {
   const view = axis.view();
   const restOf = snapRest(viewport, axis);
-  const { slides, boxes, first } = slidesOf(viewport);
+  const { slides, boxes, first, sets } = slidesOf(viewport);
   const own = boxes.slice(first, first + slides.length);
   const positions = own.map(restOf);
   const points = [
@@ -1601,13 +1616,15 @@ function snapPoints(viewport: HTMLElement, axis: Axis): Geometry {
     return {
       points: points.slice(0, 1),
       slides: positions.map((p) => (p === null ? -1 : 0)),
-      length: 0
+      length: 0,
+      sets: 0
     };
   }
   return {
     points,
     slides: positions.map((p) => (p === null ? -1 : points.indexOf(p))),
-    length
+    length,
+    sets
   };
 }
 
