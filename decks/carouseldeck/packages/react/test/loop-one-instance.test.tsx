@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
+import { createDeck } from '@carouseldeck/core';
 import { LoopShells } from '../src/loop-shells';
 import {
   addStyle,
@@ -31,6 +32,9 @@ import { mouse } from './mouse';
 type ShellDeckProps = ComponentProps<typeof Deck.Root> & {
   slides?: number;
   viewportClassName?: string;
+  /** The viewport's width (horizontal) or width and height (vertical);
+   * `WIDTH` unless given. */
+  width?: number;
 };
 
 /** A deck with no stylesheet beyond the consumer's own, wrapped in the
@@ -40,6 +44,7 @@ function ShellDeck({
   slides = 5,
   viewportClassName,
   orientation,
+  width = WIDTH,
   ...props
 }: ShellDeckProps) {
   const vertical = orientation === 'vertical';
@@ -48,7 +53,7 @@ function ShellDeck({
       <Deck.Prev />
       <Deck.Viewport
         className={viewportClassName}
-        style={vertical ? { width: WIDTH, height: 200 } : { width: WIDTH }}
+        style={vertical ? { width, height: 200 } : { width }}
       >
         {Array.from({ length: slides }, (_, i) => (
           <Deck.Slide key={i}>Slide {i + 1}</Deck.Slide>
@@ -276,6 +281,136 @@ describe('one instance (staged): structure', () => {
     await userEvent.click(prev);
     await expectSettledTo(() => onIndexChange.mock.calls, [[2], [1]]);
     expect(root.dataset.index).toBe('1');
+  });
+});
+
+// Review of Task 4, fixup 1 (#144): a slide whose width is not a whole
+// pixel (3 slides each `calc(100% / 3)` of a viewport whose own width is
+// not divisible by 3) was given a shell rounded to the nearest whole
+// pixel, through `offsetWidth`/`offsetHeight`: an `end`- or `center`-
+// aligned rest could then land up to a pixel off. The shell's size now
+// comes from the slide's own computed, subpixel, border-box size instead,
+// still independent of any `translate` or `scale` a consumer writes.
+describe('one instance (staged): subpixel sizes', () => {
+  const thirds = (align: string) =>
+    // A few pixels of gap, so the three slides' run is longer than the
+    // 1000px viewport by more than a pixel: with none, three slides at
+    // exactly a third of it each would all fit, and the deck would not
+    // loop at all.
+    `.thirds { column-gap: 6px; }
+     .thirds > [data-carouseldeck-slide] { width: calc(100% / 3); scroll-snap-align: ${align}; }`;
+
+  for (const align of ['end', 'center'] as const) {
+    test(`a shell's width matches its slide's unscaled, subpixel width, and the rest lands within half a pixel after the seam and back (${align})`, async () => {
+      addStyle(thirds(align));
+      const { root, viewport } = renderShells({
+        slides: 3,
+        viewportClassName: 'thirds',
+        width: 1000
+      });
+      await sleep(100);
+
+      const slides = slidesIn(viewport);
+      const mid = shellsAt(viewport, 0);
+      const expected = 1000 / 3;
+      slides.forEach((slide, i) => {
+        expect(
+          Math.abs(slide.getBoundingClientRect().width - expected)
+        ).toBeLessThan(0.05);
+        expect(
+          Math.abs(mid[i].getBoundingClientRect().width - expected)
+        ).toBeLessThan(0.05);
+      });
+
+      // The rest lands at the alignment point itself, within half a pixel:
+      // for `end`, the slide's end flush with the viewport's; for
+      // `center`, their centres level.
+      const restOffset = () => {
+        const v = viewport.getBoundingClientRect();
+        const s = screen
+          .getByRole('group', { name: '1 of 3' })
+          .getBoundingClientRect();
+        return align === 'end'
+          ? s.right - v.right
+          : (s.left + s.right) / 2 - (v.left + v.right) / 2;
+      };
+      expect(Math.abs(restOffset())).toBeLessThan(0.5);
+
+      const next = screen.getByRole('button', { name: 'Next' });
+      const prev = screen.getByRole('button', { name: 'Previous' });
+      for (let i = 0; i < 3; i++) {
+        await userEvent.click(next);
+        await expectSettledTo(() => root.dataset.index, String((i + 1) % 3));
+      }
+      for (let i = 0; i < 3; i++) {
+        await userEvent.click(prev);
+        await expectSettledTo(() => root.dataset.index, String((2 - i) % 3));
+      }
+
+      expect(Math.abs(restOffset())).toBeLessThan(0.5);
+    });
+  }
+});
+
+// Review of Task 4, fixup 2 (#144): the rAF re-check after mount
+// (`startFrame`, comparing `beforeStart`) ran for every deck, looping or
+// not, shells or copies. It now runs only where the viewport is in shells
+// mode at mount, so every other deck behaves exactly as it does on main.
+describe('one instance (staged): the start re-check is scoped to shells', () => {
+  test('a deck without loop, with defaultIndex set, gets no second restOn write after a dropped initial write', async () => {
+    // Built directly on `@carouseldeck/core`, not through React, and
+    // without mandatory snapping: a mandatory deck's own browser keeps the
+    // position at a valid rest on its own (measured directly), so by the
+    // time any script runs it is already resting somewhere valid, leaving
+    // nothing for a drop to disturb; `resnap`'s own wait-for-quiet needs
+    // mandatory snapping to engage at all, so a dropped write only has
+    // something to correct, and this re-check something to do, without it.
+    // Slide 0 carries no snap point of its own, so wherever the drop
+    // leaves the position, it is not a rest either -- the position a
+    // dropped write leaves a shells deck at, a buffer set's.
+    const viewport = document.createElement('div');
+    Object.assign(viewport.style, {
+      display: 'flex',
+      width: '300px',
+      overflowX: 'auto',
+      scrollSnapType: 'x proximity'
+    });
+    for (let i = 0; i < 5; i++) {
+      const slide = document.createElement('div');
+      slide.setAttribute('data-carouseldeck-slide', '');
+      Object.assign(slide.style, {
+        flexShrink: '0',
+        width: '300px',
+        height: '10px',
+        scrollSnapAlign: i === 0 ? 'none' : 'start'
+      });
+      viewport.append(slide);
+    }
+    document.body.append(viewport);
+
+    let calls = 0;
+    const original = viewport.scrollTo.bind(viewport);
+    viewport.scrollTo = ((...args: Parameters<typeof original>) => {
+      calls++;
+      // The first write is dropped, as WebKit can before the first paint
+      // (decision 5): a real call, that does not move the position.
+      if (calls === 1) return;
+      return original(...args);
+    }) as typeof viewport.scrollTo;
+
+    const engine = createDeck(viewport, {
+      index: 2,
+      onChange: () => {}
+    });
+    try {
+      await nextFrame();
+      await nextFrame();
+    } finally {
+      engine.destroy();
+      viewport.remove();
+    }
+
+    expect(calls).toBe(1);
   });
 });
 

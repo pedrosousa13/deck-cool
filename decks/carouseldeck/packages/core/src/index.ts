@@ -1028,12 +1028,18 @@ export function createDeck(
         slide.style.getPropertyValue('--carouseldeck-placed')
       );
       if (!Number.isFinite(kn) || kn === 0) continue;
-      // Its own border-box size, never its rendered rect's: a consumer's
-      // progress-driven `scale` would otherwise make this offset, and so
-      // `layoutShells`' first length and homes, off by the same amount
-      // the scale is (the CSS `translate` itself, decision 6, resolves
-      // against the border box too, never the scaled rect).
-      const size = along.vertical ? slide.offsetHeight : slide.offsetWidth;
+      // Its own computed, subpixel, border-box size (#144, review of Task
+      // 4), never its rendered rect's or `offsetWidth`/`offsetHeight`'s
+      // whole-pixel one: a consumer's progress-driven `scale` would
+      // otherwise make this offset, and so `layoutShells`' first length and
+      // homes, off by the same amount the scale is (the CSS `translate`
+      // itself, decision 6, resolves against the border box too, never the
+      // scaled rect), and rounding to the nearest pixel would throw an
+      // `end`- or `center`-aligned rest off by up to half of one.
+      const size = borderBoxSize(
+        getComputedStyle(slide),
+        along.vertical ? 'height' : 'width'
+      );
       placedAt.set(slide, { slot: 0, offset: kn * size });
     }
   }
@@ -1047,6 +1053,11 @@ export function createDeck(
   // before `settle`'s (ADR-0013): without it, the mid shells have no
   // `scroll-snap-align` yet, and there is nowhere to rest.
   const beforeStart = axis().position;
+  // Shells mode only (review of Task 4): whether a buffer set's shell could
+  // even be where a dropped write below leaves the deck resting, which is
+  // the only way this is wrong -- a deck with no shells rests wherever the
+  // browser puts it, same as it always has on main.
+  const shellsAtMount = slidesOf(viewport).sets === 2;
   layoutShells(viewport, axis(), placedAt);
   alignCopies(viewport);
   restOn(options.index);
@@ -1062,14 +1073,16 @@ export function createDeck(
   // still equal what it was then, with nothing else having touched it, is
   // that the write itself never took. Ported from the prototype's
   // `settleInitialScroll`. Cancelled in `destroy`.
-  let startFrame = requestAnimationFrame(() => {
-    startFrame = 0;
-    const along = axis();
-    if (along.position !== beforeStart) return;
-    const { points } = snapPoints(viewport, along);
-    const to = points[clamp(state.index, points.length)] ?? 0;
-    if (Math.abs(along.position - to) >= 1) restOn(state.index);
-  });
+  let startFrame = shellsAtMount
+    ? requestAnimationFrame(() => {
+        startFrame = 0;
+        const along = axis();
+        if (along.position !== beforeStart) return;
+        const { points } = snapPoints(viewport, along);
+        const to = points[clamp(state.index, points.length)] ?? 0;
+        if (Math.abs(along.position - to) >= 1) restOn(state.index);
+      })
+    : 0;
 
   // A new layout that moves the snap points under the viewport keeps the
   // deck at its current index: a `dir` change (below), or loop's copies or
@@ -1733,6 +1746,32 @@ interface Placement {
  * out once. Returns the geometry `place` needs to go on working from with
  * no further box read; null outside shells mode.
  */
+/** `style`'s border-box size along `dimension`, subpixel and independent of
+ * any `scale` or `translate` (#144, review of Task 4): `getBoundingClientRect`
+ * bakes a `scale` in, and `offsetWidth`/`offsetHeight` round to the nearest
+ * whole pixel, off by up to half a pixel for an `end`- or `center`-aligned
+ * rest. `width`/`height` is the content box under the default `box-sizing`,
+ * so its padding and border are added back; `border-box` counts them
+ * already. */
+function borderBoxSize(
+  style: CSSStyleDeclaration,
+  dimension: 'width' | 'height'
+): number {
+  const base = parseFloat(style[dimension]) || 0;
+  if (style.boxSizing === 'border-box') return base;
+  const sides =
+    dimension === 'width'
+      ? (['Left', 'Right'] as const)
+      : (['Top', 'Bottom'] as const);
+  return sides.reduce(
+    (size, side) =>
+      size +
+      (parseFloat(style[`padding${side}`]) || 0) +
+      (parseFloat(style[`border${side}Width`]) || 0),
+    base
+  );
+}
+
 function layoutShells(
   viewport: HTMLElement,
   along: Axis,
@@ -1759,16 +1798,17 @@ function layoutShells(
   // never read from computed style (the plan's defect 2): a slide not yet
   // placed has none.
   const offsets = slides.map((slide) => placedAt.get(slide)?.offset ?? 0);
-  // Each slide's own border-box size, never its rendered rect's (#144): a
-  // consumer's progress-driven `scale` (ADR-0003's own docs example)
-  // shrinks or grows the rect `along.span` reads, `offsetWidth`/
-  // `offsetHeight` neither, so this stays the slide's true size regardless.
-  const sizes = slides.map((slide) =>
-    slide instanceof HTMLElement
-      ? along.vertical
-        ? slide.offsetHeight
-        : slide.offsetWidth
-      : 0
+  // Each slide's own computed style, read once: its border-box size, below,
+  // comes from it rather than its rendered rect's (#144) or `offsetWidth`/
+  // `offsetHeight`'s (review of Task 4) -- a consumer's progress-driven
+  // `scale` (ADR-0003's own docs example) shrinks or grows the rect
+  // `along.span` reads, and `offsetWidth`/`offsetHeight` round to the
+  // nearest whole pixel, off by up to half a pixel for an `end`- or
+  // `center`-aligned rest; this stays the slide's true, subpixel size
+  // regardless.
+  const styles = slides.map((slide) => getComputedStyle(slide));
+  const sizes = styles.map((style) =>
+    borderBoxSize(style, along.vertical ? 'height' : 'width')
   );
   // Each slide's start, from its span's own centre -- unmoved by a centred
   // `scale`, unlike either edge -- less half its true size, with its own
@@ -1783,12 +1823,8 @@ function layoutShells(
   // where the spacers put them: computed first, so the spacers can be
   // sized from it before anything reads a slide's position (the plan's
   // defect 1).
-  const [marginStart0] = along.insets(getComputedStyle(slides[0]), 'margin', 0);
-  const [, marginEndN] = along.insets(
-    getComputedStyle(slides[n - 1]),
-    'margin',
-    0
-  );
+  const [marginStart0] = along.insets(styles[0], 'margin', 0);
+  const [, marginEndN] = along.insets(styles[n - 1], 'margin', 0);
   const start0 = starts[0];
   const endN = starts[n - 1] + sizes[n - 1];
   const length = endN + marginEndN + gap + marginStart0 - start0;
@@ -1809,22 +1845,21 @@ function layoutShells(
   // and 2 together).
   const homes = starts.map((start) => start - view[0] + position);
 
+  // Each slide's own border-box size across the axis, the same subpixel way
+  // (#144, review of Task 4).
+  const crosses = styles.map((style) =>
+    borderBoxSize(style, along.vertical ? 'width' : 'height')
+  );
+
   const insetProp = along.vertical ? 'insetBlockStart' : 'insetInlineStart';
   const sizeProp = along.vertical ? 'height' : 'width';
   const crossProp = along.vertical ? 'width' : 'height';
   run.forEach((shell, idx) => {
     const i = idx % n;
     const set = Math.floor(idx / n) - 2;
-    const slide = slides[i];
-    const cross =
-      slide instanceof HTMLElement
-        ? along.vertical
-          ? slide.offsetWidth
-          : slide.offsetHeight
-        : 0;
     write(shell, insetProp, `${homes[i] + set * length}px`);
     write(shell, sizeProp, `${sizes[i]}px`);
-    write(shell, crossProp, `${cross}px`);
+    write(shell, crossProp, `${crosses[i]}px`);
   });
 
   return {
