@@ -81,8 +81,6 @@ describe('a mouse drag', () => {
   test('a drag whose pointer capture fails goes back to idle, not stuck dragging', async () => {
     const { viewport, onIndexChange } = renderDeck();
     const original = HTMLElement.prototype.setPointerCapture;
-    // A busy main thread can deliver the pointer's move after the pointer
-    // itself is gone, and the real capture throws (#119, found on #140).
     HTMLElement.prototype.setPointerCapture = () => {
       throw new DOMException('no pointer to capture');
     };
@@ -103,6 +101,33 @@ describe('a mouse drag', () => {
     await mouseDrag(viewport, -200, slowly);
     await expectSettledTo(() => viewport.scrollLeft, WIDTH);
     expect(onIndexChange.mock.calls).toEqual([[1]]);
+  });
+
+  test('a move in flight when capture fails keeps its target', async () => {
+    const { viewport, onIndexChange } = renderDeck();
+    const original = HTMLElement.prototype.setPointerCapture;
+    // Read at the moment capture is tried, before the catch can put it back:
+    // proves capture is tried before anything else changes, not after.
+    let snapTypeWhenCaptured: string | undefined;
+    HTMLElement.prototype.setPointerCapture = function (this: HTMLElement) {
+      snapTypeWhenCaptured = this.style.scrollSnapType;
+      throw new DOMException('no pointer to capture');
+    };
+    try {
+      // Next heads for snap point 1; the drag that would otherwise pull it
+      // back to 0 never takes over, since its capture keeps failing.
+      act(() => screen.getByRole('button', { name: 'Next' }).click());
+      await mouseDrag(viewport, 250, slowly);
+    } finally {
+      HTMLElement.prototype.setPointerCapture = original;
+    }
+
+    expect(snapTypeWhenCaptured).not.toBe('none');
+
+    // Untouched: the press's own move ran to its target and reported it.
+    await expectSettledTo(() => viewport.scrollLeft, WIDTH);
+    expect(onIndexChange.mock.calls).toEqual([[1]]);
+    await expectSnaps(viewport);
   });
 
   test('reports nothing while the button is down', async () => {
