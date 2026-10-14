@@ -19,8 +19,8 @@ What a deck does with no extra work:
   a move, the deck goes to the snap point of that slide's page instead.
 - The viewport is focusable, so the arrow keys, Page Up, Page Down, Home and
   End scroll it.
-- Loop copies are `inert` and `aria-hidden`, so they are never focused or
-  announced.
+- Loop's shells, and a small deck's copies, are `inert` and `aria-hidden`, so
+  they are never focused or announced.
 - Under reduced motion, a move carouseldeck starts (Prev, Next, a dot,
   `scrollTo`, a new `index`, a drag's release) jumps to its snap point instead
   of scrolling smoothly. Autoplay starts stopped, fade cuts, and curve stays

@@ -95,9 +95,10 @@ export function VideoDeck({
   );
 }
 
-/** A slide's player, registered by the slide's index. A loop's copy renders
- * the slide again: it shows the video's first frame, still, and registers
- * nothing, so it never replaces or clears the slide's player. */
+/** A slide's player, registered by the slide's index. Each slide mounts
+ * once (ADR-0013): only a small-deck fallback's copy of it renders this
+ * again, showing the video's first frame, still, and registering nothing,
+ * so it never replaces or clears the slide's own player. */
 function SlideVideo({
   source,
   register
@@ -164,11 +165,12 @@ Notes:
 - A playdeck player loads when it comes into view. `whenReady` waits for that,
   and the focal check stops a late load from playing a slide the deck has
   left.
-- With `loop`, the deck renders each slide again in its copies. Each
-  slide's content calls `Deck.useSlide()`. A slide registers its player by
-  its index, and a copy shows the video's first frame, still, and registers
-  nothing. No copy's player can replace or clear a slide's, and the focal
-  slide's video plays once the deck crosses the seam and jumps.
+- With `loop`, each slide mounts once (ADR-0013), so the same player moves
+  across the seam with it. Only a deck too small for shells falls back to
+  rendering copies; each slide's content calls `Deck.useSlide()`, and there
+  a copy shows the video's first frame, still, and registers nothing, so no
+  copy's player can replace or clear a slide's. The focal slide's video
+  plays once the deck crosses the seam and jumps.
 - `VideoDeck`'s `ref` gives its parent the player handles, by slide index.
 
 The stories `Deck / Playdeck Video` and `Deck / Playdeck Video Loop` in this

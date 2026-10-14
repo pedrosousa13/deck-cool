@@ -21,7 +21,7 @@ export const libraries = [
     entry: 'entries/carouseldeck.tsx',
     nativeScroll: 'Yes: CSS scroll snap in a real scroll container',
     accessibility:
-      'Labelled carousel region, slides labelled "n of m", button controls, dots with `aria-current`, a polite live region, loop copies inert',
+      'Labelled carousel region, slides labelled "n of m", button controls, dots with `aria-current`, a polite live region, loop shells and copies inert',
     api: 'Components (`Deck.Root`, `Deck.Viewport`, `Deck.Slide`, controls), controlled `index` and a handle',
     sources: [
       'packages/react/src/index.tsx',

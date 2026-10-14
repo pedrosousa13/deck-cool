@@ -9,8 +9,11 @@ runs. Elsewhere a layout effect moves there before the first paint. Either
 way, with one slide per snap point, there is no layout shift.
 
 Each slide carries its starting `--deck-slide-progress` in the server HTML.
-That is its distance in slides from the slide the deck starts at. A loop's
-copy is measured by its own place in the run. Fade, curve and your own CSS on progress then paint from the
+That is its distance in slides from the slide the deck starts at. With loop,
+a slide's starting `translate` places it onto the shell its index estimates
+it nearest to, and the shells themselves get an estimated position too; a
+deck too small for shells falls back to copies, each measured by its own
+place in the run. Fade, curve and your own CSS on progress then paint from the
 server HTML as they do once hydrated. With equal-size slides, one per snap
 point, the engine's first measurement gives the same values, so hydration
 changes nothing.

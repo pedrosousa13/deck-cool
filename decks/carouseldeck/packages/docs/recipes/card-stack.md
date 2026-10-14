@@ -83,21 +83,22 @@ shrinks and dims into place at the back.
 ## Loop
 
 The stack needs `loop` for the thrown card to become the last. With loop,
-the card's copy after the slides sits at the back as the card goes: its
-progress runs from the slide count to one less, so it arrives where the
-thrown card lands. `--deck-slide-count` does not count copies, so it is the
-same on every slide and copy. Without loop, a thrown card leaves the stack,
-and the stack runs down to the last card.
+each card mounts once (ADR-0013): once thrown past the engine's own
+precision of -1, its progress wraps round to the slide count less a sliver,
+so it arrives at the back of the stack as itself, never a copy.
+`--deck-slide-count` does not count shells or copies, so it reads the same
+throughout. Without loop, a thrown card leaves the stack, and the stack runs
+down to the last card.
 
 ## What is shown
 
 The cards do not fade. A card outside the stack is hidden outright: one
-thrown all the way, at progress -1, where its copy now sits, and the loop's
-copies waiting their turn, at the slide count or beyond. The engine writes
-progress in whole thousandths of a slide, and the two windows meet halfway
-between two of them: in a deck of three, the thrown card shows down to
--0.998, and its copy from 2.001. So every frame shows exactly one of the two.
-A scroll can rest a thousandth short of a snap point, as Firefox's does: with
+thrown all the way, below progress -0.998, and one still due at the back,
+above 2.001 (in a deck of three). The engine writes progress in whole
+thousandths of a slide, and the two windows meet exactly where loop wraps a
+thrown card's progress back to the slide count (ADR-0013, `b = -0.9985`), so
+every frame shows the card in exactly one of the two places, never both. A
+scroll can rest a thousandth short of a snap point, as Firefox's does: with
 both hidden there, the stack would show a hole at the back, and with both
 shown, its shadow would darken for a moment.
 

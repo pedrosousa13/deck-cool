@@ -2,12 +2,12 @@
 
 **Superseded in part by ADR-0013.** "React renders the copies; the engine
 finds them", below, assumed a copy renders the slide's children again.
-ADR-0013 decides to replace copies with empty boxes instead, placing the one
-real slide onto them by `translate`, built in #144. Until then, loop renders
-copies exactly as this ADR describes. ADR-0013 builds on this ADR's own
-mechanics, rather than superseding them: copies' snap points reaching a set
-past either end, `jumpOffCopies`, `shiftOffCopies`, a press or wheel
-shifting onto the slides, and what loop does with the deck's other
+ADR-0013 replaces copies with empty boxes instead, placing the one real
+slide onto them by `translate`, built in #144. Only a deck too small for a
+shell still renders copies exactly as this ADR describes. ADR-0013 builds on
+this ADR's own mechanics, rather than superseding them: copies' snap points
+reaching a set past either end, `jumpOffCopies`, `shiftOffCopies`, a press or
+wheel shifting onto the slides, and what loop does with the deck's other
 features.
 
 ADR-0006 chose clone and jump for loop (the technique's name; the elements are

@@ -32,7 +32,7 @@ enough:
 
 Give the slides a width that is not a percentage, such as `px`, `rem` or `vw`.
 The padding's percentage is of the deck's width, and a slide's is of the
-viewport's content box, which the padding narrows. With `loop`, the copies
+viewport's content box, which the padding narrows. With `loop`, the shells
 either side already let the first and last slides reach the centre.
 
 The story is `Recipes / Centred Ends`. An end-to-end test checks that the deck

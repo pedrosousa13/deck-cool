@@ -1,9 +1,9 @@
 # Loop places one real slide by translate over empty snap targets
 
-This decision is accepted, on 2026-10-13. Three issues build it: #144 places
-each slide once, in JavaScript; #145 moves that placement to CSS; #146
-corrects a press at the seam. Until #144 lands, loop still renders full
-copies (ADR-0009).
+This decision is accepted, on 2026-10-13. **Status: built in #144 with
+JavaScript placement; #145, #146 to come.** Three issues build it: #144
+places each slide once, in JavaScript; #145 moves that placement to CSS;
+#146 corrects a press at the seam.
 
 ADR-0009 built loop as clone and jump: a full set of copies on each side of
 the slides, each a `Deck.Slide` rendered again, so its state, effects, ids
@@ -120,6 +120,87 @@ deck's place once its own jump off a copy is still settling when the layout
 changes (`jumping`), still applies. Only what measured a copy's own box
 measures its shell instead.
 
+## As built (#144)
+
+JavaScript placement, decided above, built as follows. #145 and #146 are
+still to come; nothing here is theirs to settle.
+
+**The spacers.** Out-of-flow shells cannot sit at negative offsets, so two
+in-flow spacers, `order: -1` on the one before the slides, push the real
+slides `2L` in and leave the same room after them. Each is sized `2L` less
+one gap, so the scroll range matches a five-set copies layout exactly.
+
+**The run's length, `L`.** Measured from the real slides alone, independent
+of where they are currently translated to (a slide sitting over a buffer
+shell must not throw `L` off by a multiple of itself): the distance from
+the first slide's own start to the last slide's end, plus its trailing
+margin, the viewport's gap and the first slide's own leading margin. This
+settles the open question of non-uniform widths: the formula only reads the
+first and last slide's position, so it holds regardless of what sits
+between them.
+
+**The placement metric and tie rule.** Each real slide is translated onto
+whichever shell's centre is nearest the viewport's centre. A tie, within
+half a pixel of the midpoint between two shells, goes to the slot after,
+matching the SSR estimate's own rounding exactly so server HTML and the
+engine never disagree on an exact tie.
+
+**The stacked progress range.** With a stacked effect (fade, stack), the
+shells are the effect's own snap targets, not out-of-flow boxes: the run
+becomes `5n` shells, five full sets, never three copies, with no spacer and
+no translate. A thrown slide's progress wraps into `(b, b+n]`, `b = -0.9985` (the
+maintainer's ruling, 2026-10-13, on wrapping a thrown card where shells give
+it no copy of its own to land on): within the engine's own precision of -1,
+it returns at the back, keeping the shipped card-stack recipe and its e2e
+test unchanged.
+
+**`DeckState.copies`, and which way the fallback switches.** The engine
+publishes `copies: boolean`, true once the run is too short for a shell to
+have room beside its own slide (length less than the viewport plus the
+widest slide, within half a pixel either way so it never oscillates). The
+plan called this a "widening" switch; built, it is the opposite: `L` grows
+`n` times as fast as the widest slide widening does, so only slides
+_narrowing_ can cross the threshold and switch a mounted deck from shells to
+copies, never widening.
+
+**The start write, and its re-check.** The initial scroll position,
+including the shells' own placement, is written a frame after mount, not
+synchronously with it (WebKit can silently drop an earlier write). The next
+animation frame checks the position again against the deck's own current
+index, and writes it once more if nothing else has moved it since: the only
+way it can still read unmoved is that the first write never took.
+
+**The resize compensation.** A resize or a slide change that moves `L` also
+moves the spacers, which would otherwise shift every slide after the
+first in flow. `layoutShells` is called twice: once to measure the real
+slides' own, briefly stale position before the spacer's new size lands, and
+again after, to read their true settled one. The current index's own shell,
+compared between this settled reading and `known` (the last settle's own
+reading, tagged with the kind it was read under, `kindOf`), gives the whole
+shift to undo by `moveBy` -- the spacer's own share plus whatever a slide
+before the current one adds. `known` must be read under the _same_ kind:
+a slide added or removed moves it within shells' own kind, which this
+compensates; a kind change itself -- stacked to shells, or shells to copies
+-- is `keepPlace`'s shift to make, never this one's.
+
+**Snapping, off while shells are relaid out.** Writing a shell's or a
+spacer's new geometry under mandatory snapping can leave the viewport
+resting off every current snap area for a moment; Chromium re-snaps for
+that at once, on its own, before the compensation above is even read back.
+Snapping turns off for the whole resize-detected refresh or settle, through
+to the settle it leads to, not for a refresh where nothing changed, since
+toggling it with nothing to show for it risks a phantom `scrollend`.
+
+**`overflow-anchor: none`.** Resizing the before-spacer can leave content
+above the viewport's own rest point larger or smaller than it was -- exactly
+what the browser's own scroll anchoring reacts to, adjusting the scroll
+position on its own before the engine's next read of it. Measured in
+WebKit, its adjustment and the engine's own compensation then both move the
+viewport for the same resize, overshooting. A shells deck's viewport gets
+`overflow-anchor: none` at zero specificity (`:where(…)`), opting the whole
+subtree out, so the engine alone ever moves it; a consumer can still
+override it, at their own risk.
+
 ## What is open to the implementation
 
 This records the decided technique, not its code. Left to the stacked PRs
@@ -127,8 +208,6 @@ that build it (#119's brief allows landing placement first, then press
 correction, then the small-deck fallback, provided `main` never ships one
 half-done):
 
-- the exact measurement this needs for the run's length (the distance from
-  a slide to its own shell a set over) where slides are not uniform width;
 - whether the CSS path and the JavaScript fallback can share one
   measurement-and-positioning pass, or need their own.
 
