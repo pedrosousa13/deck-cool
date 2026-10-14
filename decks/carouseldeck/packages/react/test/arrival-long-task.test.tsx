@@ -72,9 +72,9 @@ describe("a long task just after the user's wheel, as a looping Next arrives", (
     async () => {
       const failures: unknown[] = [];
       // Where the scroll is when the wheel turns, and when the long task
-      // starts after it, in ms. 3000 is the copy of the first slide: the
-      // wheel turns as the deck arrives there and jumps off it.
-      for (const at of [2963, 2990, 3000]) {
+      // starts after it, in ms. 4500 is the shell after the first slide:
+      // the wheel turns as the deck arrives there and jumps off it.
+      for (const at of [4463, 4490, 4500]) {
         for (const after of [40, 60, 80]) {
           const onIndexChange = vi.fn();
           const { unmount } = render(

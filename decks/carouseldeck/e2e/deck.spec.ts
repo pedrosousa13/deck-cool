@@ -140,21 +140,14 @@ for (const id of stories) {
   });
 }
 
-/** A loop's copies, as opposed to its slides. */
-const COPIES = '[data-carouseldeck-copy]';
-
 /**
  * Per slide of the playdeck recipe, whether its video is playing; a slide
- * whose player has not loaded yet has no video, and is not playing. The
- * slides by default; pass `COPIES` for a loop's copies instead.
+ * whose player has not loaded yet has no video, and is not playing.
  */
-const videosPlaying = (
-  page: Page,
-  slides = '[data-carouseldeck-slide]:not([data-carouseldeck-copy])'
-) =>
+const videosPlaying = (page: Page) =>
   page
     .getByRole('region', { name: 'Featured slides' })
-    .locator(slides)
+    .locator('[data-carouseldeck-slide]')
     .evaluateAll((slides) =>
       slides.map((slide) => {
         const video = slide.querySelector('video');
@@ -176,13 +169,14 @@ const handlesHeld = (page: Page) =>
     )
   );
 
-/** Whether the copy `selector` picks has a frame of its video to show. */
-const copyHasFrame = (page: Page, selector: string) =>
+/** Whether the slide `selector` picks has a frame of its video to show,
+ * wherever it is currently placed (ADR-0013). */
+const videoHasFrame = (page: Page, selector: string) =>
   page
     .getByRole('region', { name: 'Featured slides' })
     .locator(selector)
-    .evaluate((copy) => {
-      const video = copy.querySelector('video');
+    .evaluate((slide) => {
+      const video = slide.querySelector('video');
       return (
         video !== null &&
         video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
@@ -230,7 +224,7 @@ test("the looping playdeck recipe plays the focal slide's video across the seam 
   await openStory(page, 'deck--playdeck-video-loop');
   const deck = page.getByRole('region', { name: 'Featured slides' });
   /** Steps the deck, and checks the slide it rests on is focal, its video
-   * the one playing, no copy's playing, and every slide's handle held. */
+   * the one playing, and every slide's handle held. */
   const step = async (
     name: 'Previous' | 'Next',
     focal: string,
@@ -241,30 +235,26 @@ test("the looping playdeck recipe plays the focal slide's video across the seam 
       'data-focal'
     );
     await expect.poll(() => videosPlaying(page)).toEqual(playing);
-    expect(await videosPlaying(page, COPIES)).not.toContain(true);
-    // The copies render again at each settle: no copy's ref replaces or
-    // clears a slide's handle.
+    // Each slide mounts once (ADR-0013): a settle never remounts it, so no
+    // handle is ever replaced or cleared, ruling out a reload crossing the
+    // seam as surely as a copy's own player would have.
     expect(await handlesHeld(page)).toEqual([true, true, true, true]);
   };
 
   await expect
     .poll(() => videosPlaying(page))
     .toEqual([true, false, false, false]);
-  expect(await videosPlaying(page, COPIES)).not.toContain(true);
   expect(await handlesHeld(page)).toEqual([true, true, true, true]);
 
-  // Back across the seam: onto the copy of the last slide, then the jump.
+  // Back across the seam: onto slide 4 itself, placed there, then the jump.
   await step('Previous', '4 of 4', [false, false, false, true]);
-  // The copies either side of the seam show a still frame, not a blank.
+  // The slides either side of the seam show a still frame of their own
+  // video, not a blank, wherever they are currently placed.
   await expect
-    .poll(() =>
-      copyHasFrame(page, '[data-carouseldeck-copy=before][aria-label="4 of 4"]')
-    )
+    .poll(() => videoHasFrame(page, '[aria-label="4 of 4"]'))
     .toBe(true);
   await expect
-    .poll(() =>
-      copyHasFrame(page, '[data-carouseldeck-copy=after][aria-label="1 of 4"]')
-    )
+    .poll(() => videoHasFrame(page, '[aria-label="1 of 4"]'))
     .toBe(true);
   // On across the seam, and one more.
   await step('Next', '1 of 4', [true, false, false, false]);
@@ -1286,15 +1276,17 @@ for (const { id, slides, last, axis } of [
   }
 }
 
-test('a loop deck steps across the seam with Prev and Next, and no copy is reachable', async ({
+test('a loop deck steps across the seam with Prev and Next, and no shell is reachable', async ({
   page
 }) => {
   await openStory(page, 'deck--loop');
   const deck = page.getByRole('region', { name: 'Featured slides' });
   const prev = deck.getByRole('button', { name: 'Previous' });
   const next = deck.getByRole('button', { name: 'Next' });
-  // Three sets of slides in the document, one in the accessibility tree.
-  await expect(deck.locator('[data-carouseldeck-slide]')).toHaveCount(18);
+  // Each slide mounts once (ADR-0013): five sets of shells carry its snap
+  // points, only the slides themselves in the accessibility tree.
+  await expect(deck.locator('[data-carouseldeck-slide]')).toHaveCount(6);
+  await expect(deck.locator('[data-carouseldeck-shell]')).toHaveCount(30);
   await expect(deck.getByRole('group', { name: / of 6$/ })).toHaveCount(6);
 
   await expect(prev).toBeEnabled();
@@ -1307,7 +1299,7 @@ test('a loop deck steps across the seam with Prev and Next, and no copy is reach
     ratio: 1
   });
 
-  // Tab walks the slides' buttons and leaves the deck: never into a copy.
+  // Tab walks the slides' buttons and leaves the deck: never into a shell.
   await deck.getByRole('button', { name: 'Action 1' }).focus();
   for (let i = 2; i <= 6; i++) {
     await page.keyboard.press('Tab');
@@ -1316,7 +1308,7 @@ test('a loop deck steps across the seam with Prev and Next, and no copy is reach
     ).toBeFocused();
     expect(
       await page.evaluate(() =>
-        Boolean(document.activeElement?.closest('[data-carouseldeck-copy]'))
+        Boolean(document.activeElement?.closest('[data-carouseldeck-shell]'))
       )
     ).toBe(false);
   }
@@ -1331,7 +1323,7 @@ for (const { id, last } of [
   { id: 'deck--loop-vertical', last: 5 },
   { id: 'deck--loop-right-to-left', last: 5 }
 ] as const) {
-  test(`${id}: with log=1, the event log records a press, the scroll's end, the index and the jump off a copy across the seam`, async ({
+  test(`${id}: with log=1, the event log records a press, the scroll's end, the index and the jump off a shell across the seam`, async ({
     page
   }) => {
     await openStory(page, id, undefined, '&log=1');
@@ -1355,10 +1347,10 @@ for (const { id, last } of [
 
 // A scroll the engine did not start, as a touch swipe's on a phone, settles
 // at its end event: the log reads the rest there before the engine does, so
-// it shows the copy the deck came to rest on, then the jump off it. A key,
-// not a wheel: a wheel event on the copies shifts the deck off them at once
+// it shows the shell the deck came to rest on, then the jump off it. A key,
+// not a wheel: a wheel event on the shells shifts the deck off them at once
 // (#96), and Chromium sends it once its scroll is already there.
-test('deck--loop: with log=1, a key scroll back across the seam logs the rest on a copy, then the jump', async ({
+test('deck--loop: with log=1, a key scroll back across the seam logs the rest on a shell, then the jump', async ({
   page
 }) => {
   await openStory(page, 'deck--loop', undefined, '&log=1');
@@ -1370,7 +1362,7 @@ test('deck--loop: with log=1, a key scroll back across the seam logs the rest on
 
   await expect(deck).toHaveAttribute('data-index', '5');
   await expect(log).toContainText(
-    /\d (scrollsnapchange|scrollend) -?[\d.]+ nearest copy before of slide 6 .*: on a copy, no slide within 1px/
+    /\d (scrollsnapchange|scrollend) -?[\d.]+ nearest shell before1 of slide 6 .*: on a shell, its slide placed there: the engine jumps/
   );
   await expect(log).toContainText(/jump -?[\d.]+ → -?[\d.]+/);
 });
@@ -1607,6 +1599,7 @@ test('the per-breakpoint recipe crossfades below 768px and loops from it, keepin
   await openStory(page, 'recipes--per-breakpoint');
   const deck = page.getByRole('region', { name: 'Featured slides' });
   const viewport = deck.locator('[data-carouseldeck-viewport]');
+  const shells = deck.locator('[data-carouseldeck-shell]');
   const copies = deck.locator('[data-carouseldeck-copy]');
   const slide = (n: number) => deck.getByRole('group', { name: `${n} of 6` });
   const live = deck.locator('[data-carouseldeck-live]');
@@ -1660,7 +1653,8 @@ test('the per-breakpoint recipe crossfades below 768px and loops from it, keepin
 
   // Wide: no effect, and a loop: Previous crosses the seam.
   await expect(viewport).not.toHaveAttribute('data-carouseldeck-effect');
-  await expect(copies).toHaveCount(12);
+  await expect(shells).toHaveCount(30);
+  await expect(copies).toHaveCount(0);
   await deck.getByRole('button', { name: 'Previous' }).click();
   await expect(deck).toHaveAttribute('data-index', '5');
   await deck.getByRole('button', { name: 'Next' }).click();
@@ -1686,7 +1680,8 @@ test('the per-breakpoint recipe crossfades below 768px and loops from it, keepin
   // Wide again: the loop is back, on the same slide.
   expect(await resize(1280)).toEqual([]);
   await expect(viewport).not.toHaveAttribute('data-carouseldeck-effect');
-  await expect(copies).toHaveCount(12);
+  await expect(shells).toHaveCount(30);
+  await expect(copies).toHaveCount(0);
   await expect(deck).toHaveAttribute('data-index', '2');
   expect(await fromStart(3)).toBe(0);
   await expect(live).toHaveText('Slide 3 of 6');

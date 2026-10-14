@@ -414,7 +414,16 @@ export async function expectRestOnASlide(
   expect(current.hasAttribute('data-carouseldeck-copy')).toBe(false);
   const box = current.getBoundingClientRect();
   const view = viewport.getBoundingClientRect();
-  const centre = getComputedStyle(current).scrollSnapAlign.includes('center');
+  // With shells, the real slide's own scroll-snap-align reads `none`
+  // unconditionally (ADR-0013): its mid shell carries the alignment
+  // instead. A deck without shells -- not looping, or a small deck's
+  // copies -- reads the slide itself, as it always has.
+  const index = Number(current.getAttribute('aria-label')!.split(' ')[0]) - 1;
+  const midShells = [
+    ...viewport.querySelectorAll<HTMLElement>('[data-carouseldeck-shell="0"]')
+  ];
+  const aligned = midShells[index] ?? current;
+  const centre = getComputedStyle(aligned).scrollSnapAlign.includes('center');
   expect(
     Math.abs(
       centre
@@ -422,11 +431,7 @@ export async function expectRestOnASlide(
         : box.left - view.left
     )
   ).toBeLessThan(1);
-  const shown = String(
-    Math.floor(
-      (Number(current.getAttribute('aria-label')!.split(' ')[0]) - 1) / pageSize
-    )
-  );
+  const shown = String(Math.floor(index / pageSize));
   expect(root.dataset.index).toBe(shown);
   if (onIndexChange.mock.calls.length > 0) {
     expect(onIndexChange.mock.calls.at(-1)).toEqual([Number(shown)]);

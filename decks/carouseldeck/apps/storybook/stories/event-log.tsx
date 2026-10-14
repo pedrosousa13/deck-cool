@@ -298,40 +298,95 @@ function axisOf(viewport: HTMLElement) {
 
 type Axis = ReturnType<typeof axisOf>;
 
-/** The copies before, the slides and the copies after, as the engine's
- * `slidesOf` orders them; `first` is slide 0's place. */
-function runOf(viewport: HTMLElement) {
+/** One box in the deck's run: a slide, a shell or a copy. `index` is the
+ * slide it stands for; `set` is its own position along the run, 0 for a
+ * slide or its own shell, -2 to 2 for a shell before or after it (ADR-0013),
+ * -1 or 1 for a copy (the small-deck fallback). */
+interface RunBox {
+  box: Element;
+  index: number;
+  set: number;
+}
+
+/** The deck's run, in the order the engine's `slidesOf` places it: shells
+ * mode (the default, ADR-0013) gives all five sets of shells; the
+ * small-deck fallback gives loop's copies, one set each side. `count` is
+ * the slide count. */
+function runOf(viewport: HTMLElement): { run: RunBox[]; count: number } {
   const slides: Element[] = [];
+  const shellSets = new Map<number, Element[]>();
   const before: Element[] = [];
   const after: Element[] = [];
   for (const child of viewport.children) {
+    if (child.hasAttribute('data-carouseldeck-spacer')) continue;
+    const shell = child.getAttribute('data-carouseldeck-shell');
+    if (shell !== null) {
+      const set = Number(shell);
+      const shells = shellSets.get(set);
+      if (shells) shells.push(child);
+      else shellSets.set(set, [child]);
+      continue;
+    }
     const copy = child.getAttribute('data-carouseldeck-copy');
     if (copy === null) slides.push(child);
     else (copy === 'before' ? before : after).push(child);
   }
-  return {
-    run: [...before, ...slides, ...after],
-    first: before.length,
-    count: slides.length
-  };
+  const count = slides.length;
+  if (shellSets.size > 0) {
+    const run = [-2, -1, 0, 1, 2].flatMap((set) =>
+      (shellSets.get(set) ?? []).map((box, index) => ({ box, index, set }))
+    );
+    return { run, count };
+  }
+  const run = [
+    ...before.map((box, index) => ({ box, index, set: -1 })),
+    ...slides.map((box, index) => ({ box, index, set: 0 })),
+    ...after.map((box, index) => ({ box, index, set: 1 }))
+  ];
+  return { run, count };
 }
 
-/** From slide 0 to its copy after the slides, as the engine measures a set;
- * 0 without copies. */
+/** Which mode `run` is in, to name its boxes: shells always give a set past
+ * the two a loop's copies would. */
+const shellsIn = (run: RunBox[]) =>
+  run.some((box) => box.set < -1 || box.set > 1);
+
+const SHELL_SET_NAMES: Record<number, string> = {
+  [-2]: 'shell before2',
+  [-1]: 'shell before1',
+  1: 'shell after1',
+  2: 'shell after2'
+};
+
+/** A run box's name: its own slide, or which shell or copy it stands in for
+ * -- "shell before1 of slide 6" and so on (ADR-0013), or "copy before of
+ * slide 6" for the small-deck fallback. */
+function nameOf({ index, set }: RunBox, shells: boolean): string {
+  if (set === 0) return `slide ${index + 1}`;
+  const label = shells
+    ? SHELL_SET_NAMES[set]
+    : `copy ${set < 0 ? 'before' : 'after'}`;
+  return `${label} of slide ${index + 1}`;
+}
+
+/** From a slide's own box to the one a set after it, as the engine measures
+ * a set; 0 where loop is off. */
 function setLength(viewport: HTMLElement, axis: Axis) {
-  const { run, first, count } = runOf(viewport);
-  if (first === 0 || run.length <= first + count) return 0;
+  const { run } = runOf(viewport);
+  const zero = run.find((box) => box.set === 0 && box.index === 0);
+  const next = run.find((box) => box.set === 1 && box.index === 0);
+  if (!zero || !next) return 0;
   return (
-    axis.span(run[first + count].getBoundingClientRect())[0] -
-    axis.span(run[first].getBoundingClientRect())[0]
+    axis.span(next.box.getBoundingClientRect())[0] -
+    axis.span(zero.box.getBoundingClientRect())[0]
   );
 }
 
 /**
  * Where the deck rests against the snap points, as the engine's settle reads
- * it: each slide's and copy's rest is `snapRest`'s, rounded and unclamped, and
- * the deck is on one within 1px. On a copy and on no slide is where the
- * engine jumps a set back.
+ * it: each slide's, shell's or copy's rest is `snapRest`'s, rounded and
+ * unclamped, and the deck is on one within 1px. Off the slides' own set
+ * (ADR-0013) is where the engine jumps a set back.
  */
 function restReadout(viewport: HTMLElement, axis: Axis) {
   const at = axis.position();
@@ -342,13 +397,14 @@ function restReadout(viewport: HTMLElement, axis: Axis) {
     view[1] - view[0]
   );
   const snapport: [number, number] = [view[0] + padStart, view[1] - padEnd];
-  const { run, first, count } = runOf(viewport);
-  const rests = run.map((box, i) => {
-    const align = axis.snapAlign(box);
+  const { run } = runOf(viewport);
+  const shells = shellsIn(run);
+  const rests = run.map((item) => {
+    const align = axis.snapAlign(item.box);
     if (align === 'none') return null;
-    const [start, end] = axis.span(box.getBoundingClientRect());
+    const [start, end] = axis.span(item.box.getBoundingClientRect());
     const [marginStart, marginEnd] = axis.insets(
-      getComputedStyle(box),
+      getComputedStyle(item.box),
       'scrollMargin',
       0
     );
@@ -359,14 +415,10 @@ function restReadout(viewport: HTMLElement, axis: Axis) {
         : align === 'end'
           ? e - snapport[1]
           : s - snapport[0];
-    const own = i >= first && i < first + count;
-    const slide = (((i - first) % count) + count) % count;
     return {
       rest: Math.round(at + offset),
-      name: own
-        ? `slide ${slide + 1}`
-        : `copy ${i < first ? 'before' : 'after'} of slide ${slide + 1}`,
-      own
+      name: nameOf(item, shells),
+      own: item.set === 0
     };
   });
   const snapping = rests.filter((r) => r !== null);
@@ -378,7 +430,9 @@ function restReadout(viewport: HTMLElement, axis: Axis) {
   const where = snapping.some((r) => r.own && near(r))
     ? 'on a slide'
     : snapping.some(near)
-      ? 'on a copy, no slide within 1px: the engine jumps'
+      ? shells
+        ? 'on a shell, its slide placed there: the engine jumps'
+        : 'on a copy, no slide within 1px: the engine jumps'
       : 'off every snap point by more than 1px';
   return `${round(at)} nearest ${nearest.name} rest ${nearest.rest} Δ${round(
     at - nearest.rest

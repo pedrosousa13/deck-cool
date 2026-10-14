@@ -248,7 +248,7 @@ describe('focus entering a slide during a move', () => {
   );
 
   test(
-    'looping, focus into the first slide as Next crosses the seam onto its copy',
+    'looping, focus into the first slide as Next crosses the seam onto its shell',
     async () => {
       await focusAtEveryDelay(
         { loop: true, defaultIndex: 4 },
@@ -346,7 +346,7 @@ describe('focus entering a slide during a move', () => {
     withoutScrollEnd();
 
     test(
-      'looping, focus into the first slide as Next crosses the seam onto its copy',
+      'looping, focus into the first slide as Next crosses the seam onto its shell',
       async () => {
         expect('onscrollend' in window).toBe(false);
         await focusAtEveryDelay(
@@ -582,22 +582,23 @@ describe('focus within a slide or onto the viewport during a move', () => {
 });
 
 describe('a pointer held on the deck', () => {
-  test('as the deck arrives on a copy, it jumps off the copy only once the pointer lets go', async () => {
+  test('as the deck arrives on a shell, it jumps off the shell only once the pointer lets go', async () => {
     const onIndexChange = vi.fn();
     render(<TestDeck loop defaultIndex={4} onIndexChange={onIndexChange} />);
     const root = screen.getByRole('region', { name: 'Test deck' });
     const viewport = viewportOf(root);
     const box = viewport.getBoundingClientRect();
     const [x, y] = [box.left + 60, (box.top + box.bottom) / 2];
-    // Five copies before the slides: slide 1's copy after them is at 10.
-    const copy = 10 * WIDTH;
+    // Two sets of shells before the slides: slide 1's shell a set after
+    // them is at 15.
+    const shell = 15 * WIDTH;
 
     screen.getByRole('button', { name: 'Next' }).click();
     await sleep(100);
     await mouseAt('mousePressed', x, y, 1);
-    await expect.poll(() => viewport.scrollLeft).toBe(copy);
+    await expect.poll(() => viewport.scrollLeft).toBe(shell);
     await sleep(300);
-    expect(viewport.scrollLeft).toBe(copy);
+    expect(viewport.scrollLeft).toBe(shell);
 
     await mouseAt('mouseReleased', x, y, 0);
     await expectRestOnASlide(viewport, root, onIndexChange);

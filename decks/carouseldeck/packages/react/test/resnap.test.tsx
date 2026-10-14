@@ -163,16 +163,16 @@ describe('a deck at rest off every snap point', () => {
     expect(onIndexChange).not.toHaveBeenCalled();
   });
 
-  test('looping, on the copies, moves on to the nearest and jumps to its slide', async () => {
+  test('looping, on a shell, moves on to the nearest and jumps to its slide', async () => {
     const { root, viewport, next, onIndexChange } = renderDeck({
       loop: true,
       defaultIndex: 4
     });
 
     next.click();
-    // Past the last slide's snap point, 2700, on the way to the first
-    // slide's copy, 3000.
-    await stopPast(viewport, 2850);
+    // Past the last slide's snap point, 4200, on the way to the first
+    // slide's shell, 4500.
+    await stopPast(viewport, 4350);
 
     await expectRestOnASlide(viewport, root, onIndexChange);
     expect(onIndexChange.mock.calls).toEqual([[0]]);

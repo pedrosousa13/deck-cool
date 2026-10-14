@@ -41,11 +41,8 @@ export default defineConfig({
     exclude: ['**/node_modules/**'],
     // Two tests of React 19 alone: a test component that takes `ref` as a
     // prop, and the server-component entry, which React 18 has no use for.
-    // packages/react-18/test covers refs on React 18. #144's staged tests
-    // too, while `loop-shells.ts` is a staging switch: this config resolves
-    // `@carouseldeck/react` to the built dist, so a `../src` context never
-    // reaches the Viewport these tests render.
+    // packages/react-18/test covers refs on React 18.
     testNamePattern:
-      /^(?!.*(ref is the region element|count the slides a server component counted|one instance \(staged\)))/
+      /^(?!.*(ref is the region element|count the slides a server component counted))/
   }
 });

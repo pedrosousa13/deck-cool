@@ -5,7 +5,9 @@ import { viewportOf, WIDTH } from './fixtures';
 
 // Deck.useSlide: which slide a slide's content is in, and whether it is a
 // loop's copy of it, so stateful content such as a video player can render
-// differently in a copy.
+// differently in a copy. Each slide mounts once (ADR-0013): `copy` is
+// undefined unless the deck's set of slides is too narrow for shells and
+// falls back to rendering copies.
 
 /** Writes what useSlide reports where a test can read it. */
 function Probe() {
@@ -17,12 +19,42 @@ function Probe() {
   );
 }
 
-test('useSlide reports the index in each slide and the side in each copy', () => {
+test('useSlide reports copy as undefined in every slide of a deck with shells', () => {
   render(
     <Deck.Root aria-label="Test deck" loop>
       <Deck.Viewport style={{ width: WIDTH }}>
         {Array.from({ length: 3 }, (_, i) => (
           <Deck.Slide key={i}>
+            <Probe />
+          </Deck.Slide>
+        ))}
+      </Deck.Viewport>
+    </Deck.Root>
+  );
+  const viewport = viewportOf(
+    screen.getByRole('region', { name: 'Test deck' })
+  );
+
+  const reported = [
+    ...viewport.querySelectorAll<HTMLElement>('[data-carouseldeck-slide]')
+  ].map((slide) => {
+    const probe = slide.querySelector<HTMLElement>('[data-index]')!;
+    return [Number(probe.dataset.index), probe.dataset.copy];
+  });
+
+  expect(reported).toEqual([
+    [0, 'none'],
+    [1, 'none'],
+    [2, 'none']
+  ]);
+});
+
+test('useSlide reports the index in each slide and the side in each copy, on a small deck that falls back to copies', () => {
+  render(
+    <Deck.Root aria-label="Test deck" loop>
+      <Deck.Viewport style={{ width: WIDTH }}>
+        {Array.from({ length: 3 }, (_, i) => (
+          <Deck.Slide key={i} style={{ width: '40%' }}>
             <Probe />
           </Deck.Slide>
         ))}

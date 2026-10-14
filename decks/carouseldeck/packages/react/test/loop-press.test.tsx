@@ -20,12 +20,13 @@ import {
   WIDTH
 } from './fixtures';
 
-// Loop jumps off a copy at a settle (ADR-0009), and at a press (amended for
-// #48): swipes chained faster than the deck comes to rest are one long
-// scroll, with no settle to jump at, and would run through the copies to an
-// end of the scroll range. A touch or pen pressed on the viewport while it
-// is on the copies, or a mouse drag starting there, moves it a set back onto
-// the slides first, where nothing shows.
+// Loop jumps off a shell at a settle (ADR-0013, as built in ADR-0009), and
+// at a press (amended for #48): swipes chained faster than the deck comes
+// to rest are one long scroll, with no settle to jump at, and would run
+// through the two buffer sets of shells on each side to an end of the
+// scroll range. A touch or pen pressed on the viewport while it is on a
+// shell, or a mouse drag starting there, moves it a set back onto the
+// slides first, where nothing shows.
 
 const HEIGHT = 200;
 
@@ -132,11 +133,12 @@ function renderLoop({
       vertical
         ? viewport.scrollHeight - viewport.clientHeight
         : viewport.scrollWidth - viewport.clientWidth,
-    /** A set's length along the axis: from slide 1 to its copy after the
-     * slides. */
+    /** A set's length along the axis: between two shells a set apart.
+     * Never a real slide, which a placed slot can translate off its own
+     * home at any time (ADR-0013); a shell never moves. */
     length: () =>
-      startOf(viewport.querySelector('[data-carouseldeck-copy=after]')!) -
-      startOf(viewport.querySelector('[data-carouseldeck-slide]')!),
+      startOf(viewport.querySelector('[data-carouseldeck-shell="1"]')!) -
+      startOf(viewport.querySelector('[data-carouseldeck-shell="0"]')!),
     startOf,
     slides: () => (pages ? 10 : 5)
   };
@@ -160,10 +162,19 @@ const shown = (viewport: HTMLElement, startOf: (el: Element) => number) =>
 async function expectRest(deck: ReturnType<typeof renderLoop>) {
   const current = () =>
     deck.viewport.querySelector<HTMLElement>('[data-current]')!;
-  // Its start, or with centred slides its centre, at the viewport's.
+  // Its start, or with centred slides its centre, at the viewport's. With
+  // shells, the real slide's own scroll-snap-align reads `none`
+  // unconditionally (ADR-0013): its mid shell carries the alignment.
   const offset = () => {
     const el = current();
-    const centre = getComputedStyle(el).scrollSnapAlign.includes('center');
+    const index = Number(el.getAttribute('aria-label')!.split(' ')[0]) - 1;
+    const midShells = [
+      ...deck.viewport.querySelectorAll<HTMLElement>(
+        '[data-carouseldeck-shell="0"]'
+      )
+    ];
+    const aligned = midShells[index] ?? el;
+    const centre = getComputedStyle(aligned).scrollSnapAlign.includes('center');
     const size = deck.length() / deck.slides();
     // `|| 0`: -0 is not 0 to `toEqual`.
     return (
@@ -361,7 +372,7 @@ describe('loop, wheel or trackpad flicks chained faster than the deck comes to r
     }
   }
 
-  test('a wheel on the copies moves the deck a set back onto the slides, and nothing shows or is told', async () => {
+  test('a wheel on the shells moves the deck a set back onto the slides, and nothing shows or is told', async () => {
     const deck = renderLoop({ defaultIndex: 4 });
     const { viewport, root, onIndexChange } = deck;
     const told = () => ({
@@ -515,7 +526,7 @@ describe('loop, wheel or trackpad flicks chained faster than the deck comes to r
     ).toBe(true);
   });
 
-  test('a wheel event reads no layout on the slides, a copy and its slide on the copies, and is quick', async () => {
+  test('a wheel event reads no layout on the slides, a shell and its slide, and is quick', async () => {
     // As the Loop story, and more: 24 slides and 48 copies.
     addStyle(
       `.many > * { width: calc(100% / 2.5); scroll-snap-align: center; }`
@@ -580,7 +591,7 @@ describe('loop, wheel or trackpad flicks chained faster than the deck comes to r
   });
 });
 
-describe('loop, a press on the copies', () => {
+describe('loop, a press on the shells', () => {
   beforeEach(parkMouse);
 
   /** What a user is told: the index, what was reported, and the live
@@ -611,14 +622,13 @@ describe('loop, a press on the copies', () => {
     const deck = renderLoop({ defaultIndex: 4 });
     const { viewport, onIndexChange } = deck;
     const box = viewport.getBoundingClientRect();
-    // A finger holds the deck part way into the copy of slide 1, after the
-    // slides.
+    // A finger holds the deck part way into the shell after slide 1.
     const lift = await touchSwipe(viewport, 400, { release: false });
     let lifted = false;
     onTestFinished(async () => {
       if (!lifted) await lift();
     });
-    await expect.poll(() => deck.position()).toBeGreaterThan(3050);
+    await expect.poll(() => deck.position()).toBeGreaterThan(4550);
     await sleep(200);
     const at = [deck.position()];
     const seen = [shown(viewport, deck.startOf)];
@@ -650,14 +660,14 @@ describe('loop, a press on the copies', () => {
     expect(onIndexChange.mock.calls).toEqual([[0]]);
   });
 
-  test('a tap mid-momentum on the copies tells nothing until the deck rests', async () => {
+  test('a tap mid-momentum on the shells tells nothing until the deck rests', async () => {
     const deck = renderLoop({ defaultIndex: 4 });
     const { viewport, onIndexChange } = deck;
     const box = viewport.getBoundingClientRect();
     const finger = { x: box.left + 150, y: box.top + 100, id: 1 };
 
     await touchSwipe(viewport, 250);
-    await expect.poll(() => deck.position()).toBeGreaterThan(2850);
+    await expect.poll(() => deck.position()).toBeGreaterThan(4350);
     const before = told(deck);
     const focus = watchFocus();
     await touchAt('touchStart', [finger]);
@@ -674,8 +684,8 @@ describe('loop, a press on the copies', () => {
   });
 
   for (const [button, from, past, rest] of [
-    ['Next', 4, (at: number) => at > 2850, 1],
-    ['Previous', 0, (at: number) => at < 1350, 3]
+    ['Next', 4, (at: number) => at > 4350, 1],
+    ['Previous', 0, (at: number) => at < 2850, 3]
   ] as const) {
     test(`a tap during two ${button}s across the seam leaves the move going to its slide`, async () => {
       const deck = renderLoop({ defaultIndex: from });
@@ -697,8 +707,8 @@ describe('loop, a press on the copies', () => {
 
       await expectRest(deck);
       expect(onIndexChange.mock.calls).toEqual([[rest]]);
-      // The move went on, undisturbed, to its copy, and jumped off it at
-      // rest: the one jump is from the copy's snap point.
+      // The move went on, undisturbed, to its shell, and jumped off it at
+      // rest: the one jump is from the shell's snap point.
       const way = button === 'Next' ? 1 : -1;
       const steps = at.slice(1).map((p, i) => [at[i], (p - at[i]) * way]);
       const jumps = steps.filter(([, d]) => Math.abs(d) > 750);
@@ -707,7 +717,7 @@ describe('loop, a press on the copies', () => {
     });
   }
 
-  test('with click-to-focus, a tap on a copy mid-move brings its slide to focus', async () => {
+  test('with click-to-focus, a tap on a shell mid-move brings its slide to focus', async () => {
     const deck = renderLoop({
       centred: true,
       clickToFocus: true,
@@ -718,7 +728,7 @@ describe('loop, a press on the copies', () => {
     const box = viewport.getBoundingClientRect();
     const slide = WIDTH / 3.5;
     // One slide on from the centre, once the deck is over half way to the
-    // copy of slide 1, after the slides: the copy of slide 2.
+    // shell after slide 1: the shell after slide 2.
     const finger = {
       x: box.left + WIDTH / 2 + slide,
       y: box.top + 100,
@@ -738,7 +748,7 @@ describe('loop, a press on the copies', () => {
     expect(onIndexChange.mock.calls.at(-1)).toEqual([1]);
   });
 
-  test('a finger down as a move arrives on a copy: nothing is reported or jumped under it as it pans', async () => {
+  test('a finger down as a move arrives on a shell: nothing is reported or jumped under it as it pans', async () => {
     const deck = renderLoop({ defaultIndex: 4 });
     const { viewport, onIndexChange } = deck;
     const box = viewport.getBoundingClientRect();
@@ -751,9 +761,9 @@ describe('loop, a press on the copies', () => {
 
     screen.getByRole('button', { name: 'Next' }).click();
     await touchAt('touchStart', finger(150));
-    // The move arrives on the copy of slide 1 and ends, the finger still
-    // down: the settle waits for it.
-    await expect.poll(() => deck.position()).toBe(3000);
+    // The move arrives on the shell after slide 1 and ends, the finger
+    // still down: the settle waits for it.
+    await expect.poll(() => deck.position()).toBe(4500);
     await sleep(300);
     expect(onIndexChange).not.toHaveBeenCalled();
     // The finger pans: the browser takes it over.
@@ -808,8 +818,8 @@ describe('loop, a press on the copies', () => {
   });
 
   /**
-   * A pen down as a move arrives on the copy of slide 1, then panned: the
-   * browser takes it over with `pointercancel`, and sends none of its
+   * A pen down as a move arrives on the shell after slide 1, then panned:
+   * the browser takes it over with `pointercancel`, and sends none of its
    * events until it lifts. A pen through CDP takes the mouse's path in
    * Chromium, and is never panned, so the test sends the `pointercancel`
    * the browser would. Returns `lift`, the pen's real `pointerup`, which
@@ -835,9 +845,9 @@ describe('loop, a press on the copies', () => {
     screen.getByRole('button', { name: 'Next' }).click();
     await mouseAt('mousePressed', x, y, 1, 'pen');
     expect(id).not.toBe(-1);
-    // The move arrives on the copy of slide 1 and ends, the pen still down:
-    // the settle waits for it.
-    await expect.poll(() => deck.position()).toBe(3000);
+    // The move arrives on the shell after slide 1 and ends, the pen still
+    // down: the settle waits for it.
+    await expect.poll(() => deck.position()).toBe(4500);
     await sleep(300);
     expect(onIndexChange).not.toHaveBeenCalled();
     viewport.dispatchEvent(
@@ -851,7 +861,7 @@ describe('loop, a press on the copies', () => {
     return lift;
   }
 
-  test('a pen down as a move arrives on a copy: nothing is reported or jumped under it as it pans', async () => {
+  test('a pen down as a move arrives on a shell: nothing is reported or jumped under it as it pans', async () => {
     const deck = renderLoop({ defaultIndex: 4 });
     const lift = await penPanOnArrival(deck);
     await sleep(300);
@@ -947,20 +957,23 @@ describe('loop, a press on the copies', () => {
     await expectRest(deck);
   });
 
-  test('a slide resized since the last settle: a press on the copies still shifts by the set as laid out now', async () => {
+  test('a slide resized since the last settle: a press on the shells still shifts by the set as laid out now', async () => {
     const deck = renderLoop({ defaultIndex: 4 });
     const { viewport, onIndexChange } = deck;
     const box = viewport.getBoundingClientRect();
-    // A finger holds the deck part way into the copy of slide 1.
+    // A finger holds the deck part way into the shell after slide 1.
     const lift = await touchSwipe(viewport, 400, { release: false });
     let lifted = false;
     onTestFinished(async () => {
       if (!lifted) await lift();
     });
-    await expect.poll(() => deck.position()).toBeGreaterThan(3050);
+    await expect.poll(() => deck.position()).toBeGreaterThan(4550);
     await sleep(200);
-    // Every slide and copy 20px wider, as a font load widens auto-width
-    // slides: the viewport keeps its size, and nothing settles.
+    // Every slide 20px wider, as a font load widens auto-width slides: the
+    // viewport keeps its size, and nothing settles. The held finger defers
+    // a full resnap, but not the shells' own re-layout: a slide still on
+    // its own CSS estimate keeps its measured home current as it resizes
+    // (ADR-0013), so the picture holds even mid-gesture.
     addStyle('[data-carouseldeck-slide] { min-width: 320px; }');
     await nextFrame();
     await nextFrame();
@@ -987,9 +1000,13 @@ describe('loop, a press on the copies', () => {
     await mouseAt('mouseReleased', box.left + 50, box.top + 50, 0, 'pen');
     lifted = true;
     await lift();
+    // Lets the deck's own settle, and the resize observer behind it, run
+    // out before the next test's deck mounts, rather than leave either
+    // still pending against this one's unmounted viewport.
+    await expectRest(deck);
   });
 
-  test('a press reads no layout on the slides, a copy and its slide on the copies, and is quick', async () => {
+  test('a press reads no layout on the slides, a shell and its slide, and is quick', async () => {
     // As the Loop story, and more: 24 slides and 48 copies.
     addStyle(
       `.many > * { width: calc(100% / 2.5); scroll-snap-align: center; }`
@@ -1047,8 +1064,8 @@ describe('loop, a press on the copies', () => {
     expect(reads.boxes).toBe(0);
     expect([...times].sort((a, b) => a - b)[5]).toBeLessThan(1);
 
-    // On the copies, where a finger holds the deck, a pen's press shifts it:
-    // it measures the copy, its slide and the viewport, and nothing else.
+    // On the shells, where a finger holds the deck, a pen's press shifts it:
+    // it measures the shell, its slide and the viewport, and nothing else.
     const lift = await touchSwipe(viewport, -150, { release: false });
     onTestFinished(async () => {
       await lift();
@@ -1066,13 +1083,13 @@ describe('loop, a press on the copies', () => {
     expect(times[0]).toBeLessThan(5);
   });
 
-  test('a mouse click during a wheel scroll on the copies leaves the scroll going', async () => {
+  test('a mouse click during a wheel scroll on the shells leaves the scroll going', async () => {
     const deck = renderLoop({ defaultIndex: 4 });
     const { viewport } = deck;
     // How far the deck has gone, but for jumps and shifts of a set, as the
     // wheel's own events shift it onto the slides (#96). A step of a set
     // must follow a wheel event that shifted the deck, or be the jump off a
-    // copy at rest, from a snap point: anything else is a shift by the click.
+    // shell at rest, from a snap point: anything else is a shift by the click.
     const at: number[] = [deck.position()];
     let gone = 0;
     let shifts = 0;
@@ -1110,7 +1127,7 @@ describe('loop, a press on the copies', () => {
     const box = viewport.getBoundingClientRect();
 
     const scrolled = gestureScroll(viewport, 900);
-    // Over half a slide onto the copies after the slides.
+    // Over half a slide onto the shells after the slides.
     await expect.poll(() => gone).toBeGreaterThan(150);
     const clicked = at.length;
     await mouseAt('mousePressed', box.left + 50, box.top + 50, 1);
@@ -1130,11 +1147,11 @@ describe('loop, a press on the copies', () => {
   });
 });
 
-// A centred deck's last copies rest past the end of the scroll range, so
+// A centred deck's last shells rest past the end of the scroll range, so
 // the browser rests them clamped to it, where the engine can neither jump
 // off them (their slides a set back rest on no snap point) nor step to them.
 // A deck left there re-snaps to a snap point it can rest on, and jumps off
-// its copy as usual (#48).
+// its shell as usual (#48).
 describe('loop, centred, a drag to the end of the scroll range', () => {
   beforeEach(parkMouse);
 

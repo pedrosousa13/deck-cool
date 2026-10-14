@@ -4,7 +4,6 @@ import { describe, expect, onTestFinished, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import { createDeck } from '@carouseldeck/core';
-import { LoopShells } from '../src/loop-shells';
 import {
   addStyle,
   CENTRED,
@@ -17,17 +16,10 @@ import {
 } from './fixtures';
 import { mouse } from './mouse';
 
-// One instance (ADR-0013, #144): each slide's children mount exactly once,
-// over empty, inert shells that carry the snap points instead of copies.
-// Staged behind the internal `LoopShells` switch (`../src/loop-shells.ts`)
-// while every other suite keeps rendering copies; Task 7 deletes it and
-// these tests lose "(staged)" from their names.
-//
-// Placement across the seam (Task 3), the start write after the first
-// frame and SSR (Task 4), stacked effects (Task 5) and the small-deck
-// fallback (Task 6) are out of scope here: these tests stay within the
-// mid set, where a real slide already sits exactly over its own shell with
-// no translate needed.
+// One instance (ADR-0013): each slide's children mount exactly once, over
+// empty, inert shells that carry the snap points on each side of them,
+// instead of copies; a deck whose set of slides is too narrow for a shell
+// to have room beside its own slide falls back to copies instead (Task 6).
 
 type ShellDeckProps = ComponentProps<typeof Deck.Root> & {
   slides?: number;
@@ -37,9 +29,8 @@ type ShellDeckProps = ComponentProps<typeof Deck.Root> & {
   width?: number;
 };
 
-/** A deck with no stylesheet beyond the consumer's own, wrapped in the
- * staging switch. Unlike `TestDeck` (`fixtures.tsx`), its viewport can take
- * a height, for a vertical deck. */
+/** A deck with no stylesheet beyond the consumer's own. Unlike `TestDeck`
+ * (`fixtures.tsx`), its viewport can take a height, for a vertical deck. */
 function ShellDeck({
   slides = 5,
   viewportClassName,
@@ -69,11 +60,7 @@ const renderShells = (
   { dir }: { dir?: 'ltr' | 'rtl' } = {}
 ) => {
   const onIndexChange = vi.fn();
-  const tree = (
-    <LoopShells value>
-      <ShellDeck loop onIndexChange={onIndexChange} {...props} />
-    </LoopShells>
-  );
+  const tree = <ShellDeck loop onIndexChange={onIndexChange} {...props} />;
   render(dir === 'rtl' ? <div dir="rtl">{tree}</div> : tree);
   const root = screen.getByRole('region', { name: 'Test deck' });
   return { root, viewport: viewportOf(root), onIndexChange };
@@ -96,7 +83,7 @@ const axisStart = (el: Element, vertical: boolean) => {
   return vertical ? rect.top : rect.left;
 };
 
-describe('one instance (staged): structure', () => {
+describe('one instance: structure', () => {
   test('children mount once, and a ref callback points at the one element', async () => {
     const mounts: number[] = [];
     const refs: (HTMLElement | null)[] = [];
@@ -117,17 +104,15 @@ describe('one instance (staged): structure', () => {
       );
     }
     render(
-      <LoopShells value>
-        <Deck.Root aria-label="Test deck" loop>
-          <Deck.Viewport style={{ width: WIDTH }}>
-            {Array.from({ length: 5 }, (_, i) => (
-              <Deck.Slide key={i}>
-                <Probe index={i} />
-              </Deck.Slide>
-            ))}
-          </Deck.Viewport>
-        </Deck.Root>
-      </LoopShells>
+      <Deck.Root aria-label="Test deck" loop>
+        <Deck.Viewport style={{ width: WIDTH }}>
+          {Array.from({ length: 5 }, (_, i) => (
+            <Deck.Slide key={i}>
+              <Probe index={i} />
+            </Deck.Slide>
+          ))}
+        </Deck.Viewport>
+      </Deck.Root>
     );
     await sleep(100);
 
@@ -291,7 +276,7 @@ describe('one instance (staged): structure', () => {
 // aligned rest could then land up to a pixel off. The shell's size now
 // comes from the slide's own computed, subpixel, border-box size instead,
 // still independent of any `translate` or `scale` a consumer writes.
-describe('one instance (staged): subpixel sizes', () => {
+describe('one instance: subpixel sizes', () => {
   const thirds = (align: string) =>
     // Gap enough that the run clears Task 6's own fallback threshold too
     // (decision 4: L >= viewport + widest slide), not only that it loops
@@ -359,7 +344,7 @@ describe('one instance (staged): subpixel sizes', () => {
 // (`startFrame`, comparing `beforeStart`) ran for every deck, looping or
 // not, shells or copies. It now runs only where the viewport is in shells
 // mode at mount, so every other deck behaves exactly as it does on main.
-describe('one instance (staged): the start re-check is scoped to shells', () => {
+describe('one instance: the start re-check is scoped to shells', () => {
   test('a deck without loop, with defaultIndex set, gets no second restOn write after a dropped initial write', async () => {
     // Built directly on `@carouseldeck/core`, not through React, and
     // without mandatory snapping: a mandatory deck's own browser keeps the
@@ -475,7 +460,7 @@ function countBlankFrames(viewport: HTMLElement, vertical: boolean) {
   };
 }
 
-describe('one instance (staged): across the seam', () => {
+describe('one instance: across the seam', () => {
   test('Next from 5 to 1, then Prev from 1 to 5, each report once and land at offset 0', async () => {
     const { root, onIndexChange } = renderShells({ defaultIndex: 4 });
     const next = screen.getByRole('button', { name: 'Next' });
@@ -590,11 +575,7 @@ describe('one instance (staged): across the seam', () => {
           </Deck.Root>
         );
       }
-      render(
-        <LoopShells value>
-          <IframeDeck />
-        </LoopShells>
-      );
+      render(<IframeDeck />);
       const root = screen.getByRole('region', { name: 'Test deck' });
       const viewport = viewportOf(root);
       await sleep(100);
@@ -668,19 +649,17 @@ describe('one instance (staged): across the seam', () => {
       );
     }
     render(
-      <LoopShells value>
-        <Deck.Root aria-label="Test deck" loop defaultIndex={4}>
-          <Deck.Prev />
-          <Deck.Viewport style={{ width: WIDTH, height: 50 }}>
-            {Array.from({ length: 5 }, (_, i) => (
-              <Deck.Slide key={i}>
-                <Probe index={i} />
-              </Deck.Slide>
-            ))}
-          </Deck.Viewport>
-          <Deck.Next />
-        </Deck.Root>
-      </LoopShells>
+      <Deck.Root aria-label="Test deck" loop defaultIndex={4}>
+        <Deck.Prev />
+        <Deck.Viewport style={{ width: WIDTH, height: 50 }}>
+          {Array.from({ length: 5 }, (_, i) => (
+            <Deck.Slide key={i}>
+              <Probe index={i} />
+            </Deck.Slide>
+          ))}
+        </Deck.Viewport>
+        <Deck.Next />
+      </Deck.Root>
     );
     await sleep(100);
     const root = screen.getByRole('region', { name: 'Test deck' });
@@ -774,26 +753,24 @@ function CopyProbe() {
   );
 }
 
-describe('one instance (staged): fallback to copies', () => {
+describe('one instance: fallback to copies', () => {
   test('3 slides at 40% of the viewport (L = 1.2V) render copies, not shells, and loop across the seam both ways', async () => {
     // L = 3 * 0.4V = 1.2V; the threshold is V + 0.4V - 0.5 = 1.4V - 0.5:
     // comfortably a fallback (decision 4) at any realistic viewport width.
     addStyle('.forty > [data-carouseldeck-slide] { width: 40%; }');
     render(
-      <LoopShells value>
-        <Deck.Root aria-label="Test deck" loop>
-          <Deck.Prev />
-          <Deck.Viewport className="forty" style={{ width: WIDTH }}>
-            {Array.from({ length: 3 }, (_, i) => (
-              <Deck.Slide key={i}>
-                Slide {i + 1}
-                <CopyProbe />
-              </Deck.Slide>
-            ))}
-          </Deck.Viewport>
-          <Deck.Next />
-        </Deck.Root>
-      </LoopShells>
+      <Deck.Root aria-label="Test deck" loop>
+        <Deck.Prev />
+        <Deck.Viewport className="forty" style={{ width: WIDTH }}>
+          {Array.from({ length: 3 }, (_, i) => (
+            <Deck.Slide key={i}>
+              Slide {i + 1}
+              <CopyProbe />
+            </Deck.Slide>
+          ))}
+        </Deck.Viewport>
+        <Deck.Next />
+      </Deck.Root>
     );
     const root = screen.getByRole('region', { name: 'Test deck' });
     const viewport = viewportOf(root);
@@ -900,18 +877,16 @@ describe('one instance (staged): fallback to copies', () => {
 
   test('a shells deck reports copy === undefined everywhere, with exactly n probes', async () => {
     render(
-      <LoopShells value>
-        <Deck.Root aria-label="Test deck" loop>
-          <Deck.Viewport style={{ width: WIDTH }}>
-            {Array.from({ length: 5 }, (_, i) => (
-              <Deck.Slide key={i}>
-                Slide {i + 1}
-                <CopyProbe />
-              </Deck.Slide>
-            ))}
-          </Deck.Viewport>
-        </Deck.Root>
-      </LoopShells>
+      <Deck.Root aria-label="Test deck" loop>
+        <Deck.Viewport style={{ width: WIDTH }}>
+          {Array.from({ length: 5 }, (_, i) => (
+            <Deck.Slide key={i}>
+              Slide {i + 1}
+              <CopyProbe />
+            </Deck.Slide>
+          ))}
+        </Deck.Viewport>
+      </Deck.Root>
     );
     await sleep(100);
 
@@ -932,7 +907,7 @@ describe('one instance (staged): fallback to copies', () => {
 // is covered by the same rule as the spacer's own delta, not a special
 // case of it.
 
-describe('one instance (staged): keeping the picture when L changes', () => {
+describe('one instance: keeping the picture when L changes', () => {
   test('a slide resized mid-deck does not move the visible slide, in shells mode', async () => {
     const { root, viewport } = renderShells({
       slides: 5,
@@ -1026,7 +1001,7 @@ describe('one instance (staged): keeping the picture when L changes', () => {
 // itself wrote on the real slides, so nothing shells wrote leaks into
 // copies' or a plain deck's own layout.
 
-describe('one instance (staged): cleanup leaving shells mode', () => {
+describe('one instance: cleanup leaving shells mode', () => {
   const realSlidesIn = (viewport: HTMLElement) => [
     ...viewport.querySelectorAll<HTMLElement>(
       ':scope > [data-carouseldeck-slide]:not([data-carouseldeck-copy])'
@@ -1051,11 +1026,7 @@ describe('one instance (staged): cleanup leaving shells mode', () => {
         </Deck.Root>
       );
     }
-    const { rerender } = render(
-      <LoopShells value>
-        <ToggleDeck loop />
-      </LoopShells>
-    );
+    const { rerender } = render(<ToggleDeck loop />);
     const root = screen.getByRole('region', { name: 'Test deck' });
     const viewport = viewportOf(root);
     await sleep(100);
@@ -1063,11 +1034,7 @@ describe('one instance (staged): cleanup leaving shells mode', () => {
       25
     );
 
-    rerender(
-      <LoopShells value>
-        <ToggleDeck loop={false} />
-      </LoopShells>
-    );
+    rerender(<ToggleDeck loop={false} />);
     await sleep(100);
 
     const slides = realSlidesIn(viewport);
@@ -1146,11 +1113,7 @@ describe('one instance (staged): cleanup leaving shells mode', () => {
         </Deck.Root>
       );
     }
-    const { rerender } = render(
-      <LoopShells value>
-        <ToggleDeck loop />
-      </LoopShells>
-    );
+    const { rerender } = render(<ToggleDeck loop />);
     const root = screen.getByRole('region', { name: 'Test deck' });
     const viewport = viewportOf(root);
     await sleep(100);
@@ -1160,11 +1123,7 @@ describe('one instance (staged): cleanup leaving shells mode', () => {
     for (const slide of slides) expect(observed.has(slide)).toBe(true);
     for (const slide of slides) expect(unobserved.has(slide)).toBe(false);
 
-    rerender(
-      <LoopShells value>
-        <ToggleDeck loop={false} />
-      </LoopShells>
-    );
+    rerender(<ToggleDeck loop={false} />);
     await sleep(100);
 
     for (const slide of slides) expect(unobserved.has(slide)).toBe(true);

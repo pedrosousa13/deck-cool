@@ -73,30 +73,46 @@ export interface DeckEngine {
  * move. The browser does the scrolling and snapping; the engine reads where
  * it settled from layout, so slide size, gap and alignment stay plain CSS.
  *
- * The slides are the viewport's children, except snap targets and copies
- * (see `slidesOf`): where an effect stacks the slides in one place, an empty
- * snap target per slide lays out along the axis in its stead, and the engine
- * measures each slide by its target.
+ * The slides are the viewport's children, except snap targets, copies,
+ * shells and spacers (see `slidesOf`): where an effect stacks the slides in
+ * one place, an empty snap target per slide, or per shell with loop, lays
+ * out along the axis in its stead, and the engine measures each slide by
+ * its target.
  *
- * Loop (clone and jump, ADR-0006, as built in ADR-0009): where the viewport
- * holds a copy of every slide before the slides and another after them, each
- * marked `data-carouseldeck-copy` (`before` or `after`; DOM order does not
- * matter), scrolling past the last snap point arrives at the first, and
- * back. The copies are the caller's to render, inert and `aria-hidden`. Only
- * the slides' snap points are counted: a step across the seam scrolls on
- * onto the copies, and when the viewport comes to rest on a copy's snap
- * point the engine jumps it, instantly, a set of slides back onto the
- * identical slide's snap point. Never mid-motion: a jump then would show and
- * stop momentum. But a touch or pen pressed on the copies, a mouse drag
- * starting there, or a wheel event there along the axis, moves the deck a
- * set onto the slides at once, where nothing shows, so swipes and trackpad
- * or wheel flicks chained faster than the deck rests never run out of
- * copies (see `shiftOffCopies`). A set of slides no longer than the
- * viewport has nothing to loop: the engine then reports one snap point, as
- * for any deck whose slides all fit, and the caller should drop the copies.
+ * Loop: each slide mounts once (ADR-0013, as built in #144). Two in-flow
+ * spacers push the slides two sets in, and five sets of empty, inert,
+ * `aria-hidden` shells -- marked `data-carouseldeck-shell`, `-2` to `2`, `0`
+ * the slides' own set -- carry the snap points either side of them, and in
+ * their own set's stead: the real slides carry `scroll-snap-align: none`
+ * unconditionally instead. A scroll listener moves whichever real slide is
+ * nearest the viewport onto its shell by `translate`, in the same task as
+ * the scroll event that moved it, so there is never a blank frame at the
+ * seam (`place`). A set of slides too narrow for a shell to have room
+ * beside its own slide -- its length less than the viewport plus its widest
+ * slide -- falls back to rendering full copies instead (clone and jump,
+ * ADR-0006, as built in ADR-0009): a copy of every slide before the slides
+ * and another after them, each marked `data-carouseldeck-copy` (`before` or
+ * `after`; DOM order does not matter), inert and `aria-hidden`, the
+ * caller's to render. `DeckState.copies` says which the caller should be
+ * rendering.
  *
- * It also writes to each slide, and each copy, for CSS to read, once a
- * frame while the viewport scrolls and whenever it settles, never through
+ * Either way, scrolling past the last snap point arrives at the first, and
+ * back, with no visible jump. Only the slides' own snap points are counted:
+ * a step across the seam scrolls on past them, onto a shell or a copy, and
+ * once the viewport comes to rest on one the engine jumps it, instantly, a
+ * set of slides back onto the identical slide's snap point. Never
+ * mid-motion: a jump then would show and stop momentum. But a touch or pen
+ * pressed past the slides, a mouse drag starting there, or a wheel event
+ * there along the axis, moves the deck a set onto the slides at once, where
+ * nothing shows, so swipes and trackpad or wheel flicks chained faster than
+ * the deck rests never run out of room (`shiftOffCopies`, `moveBy`). A set
+ * of slides no longer than the viewport has nothing to loop: the engine
+ * then reports one snap point, as for any deck whose slides all fit, and
+ * the caller should drop whichever it was rendering.
+ *
+ * It also writes to each slide, and each copy, for CSS to read -- never a
+ * shell, which has no content for a consumer's CSS to read -- once a frame
+ * while the viewport scrolls and whenever it settles, never through
  * `onChange` (ADR-0003):
  *
  * - `--deck-slide-progress`: the slide's progress, its signed distance from the
@@ -163,8 +179,13 @@ export function createDeck(
   // as of the last settle or refresh (see `shapeOf`).
   let shape = '';
   // The snap points as of the last settle, for a press to read where the
-  // deck is without measuring (see `shiftOffCopies`).
+  // deck is without measuring (see `shiftOffCopies`), and the kind they were
+  // read under (`kindOf`): `compensateShift` reads this back, since a slide
+  // added or removed moves `known` to a shape that is still this one's own
+  // kind -- its coordinates read the same way, only shifted -- while `loop`
+  // or an effect changing is a kind of its own, never this one's to read.
   let known: Geometry = { points: [], slides: [], length: 0, sets: 0 };
+  let knownKind = '';
 
   // Shells mode only (ADR-0013): each real slide's current placement, as
   // `place` last wrote it onto it -- the slot it sits over (-2 to 2, 0 its
@@ -192,7 +213,9 @@ export function createDeck(
     shifted = null;
     userInput = false;
     userScroll = false;
-    shape = shapeOf(viewport);
+    // Read once: `knownKind`, below, is this same read, not a second one.
+    const kind = kindOf(viewport);
+    shape = [kind, slidesOf(viewport).first].join();
     placeOwed = null;
     const along = axis();
     // Review of Task 6, findings 1 and 2: `placement` still holds
@@ -235,7 +258,7 @@ export function createDeck(
     const resized = !!(
       previous &&
       placement &&
-      placement.length !== previous.length
+      lengthMoved(placement.length, previous.length)
     );
     const { style } = viewport;
     const snap = style.scrollSnapType;
@@ -245,6 +268,7 @@ export function createDeck(
       if (previous && placement) compensateShift(previous, along);
       const geometry = snapPoints(viewport, along);
       known = geometry;
+      knownKind = kind;
       jumpOffCopies(along, geometry);
       place(viewport, along, placement, placedAt);
       // Its own settle reports where the deck comes to rest.
@@ -340,10 +364,26 @@ export function createDeck(
   // the user has in hand. Both `refresh` (a resize) and `settle` (any
   // other layout slipping in between two of the engine's own reads) call
   // it, each under its own snapping-off window.
+  //
+  // `known` must be this same kind's own reading (`kindOf`): a slide added
+  // or removed moves it within the same kind -- shells still read as
+  // shells, only shifted by the slide, which is exactly the shift above
+  // keeps. But `loop` or an effect changing kind from under it -- stacked
+  // to shells, or shells to copies -- can reach this with `placement`
+  // already the new kind's own, fresh-measured twice over (the two reads
+  // above), while `known` is still a reading from the kind the deck is
+  // leaving: a coordinate of a different mechanism entirely, not a
+  // shifted one of this kind's (#144 regression: the one-instance loop).
+  // Moving between kinds is `keepPlace`'s compensation, never this one's.
   const compensateShift = (previous: Placement, along: Axis) => {
-    if (!placement || placement.length === previous.length) return;
+    if (!placement || !lengthMoved(placement.length, previous.length)) return;
     placement = layoutShells(viewport, along, placedAt);
     if (!placement) return;
+    // Re-measuring above, into `placement`, runs regardless: `place`, below
+    // this call in both callers, needs it fresh whether or not there is a
+    // shift here to make. Only the shift itself, against `known`, is this
+    // kind's alone to make.
+    if (kindOf(viewport) !== knownKind) return;
     const idx = state.index;
     if (idx < 0 || idx >= known.points.length) return;
     const now = snapPoints(viewport, along);
@@ -1044,8 +1084,14 @@ export function createDeck(
     // shells altogether (`loop` off, or a switch to copies), which strips
     // what shells wrote onto the real slides instead. Stacked shells
     // (Task 5) write neither translate nor spacers, so `placement` is
-    // always null there: this never runs for them.
+    // always null there: this never runs for them. A slide still on its
+    // own CSS estimate -- entering non-stacked shells mode mid-life, as
+    // turning loop back on or a stacked effect switching to a plain one
+    // can, or simply resized since -- keeps `placedAt` matching it, so
+    // this layout's own `layoutShells`, below, finds its true home, not
+    // its estimate's rect.
     const previous = placement;
+    seedPlacedAt(along, placedAt, slidesOf(viewport).slides);
     placement = layoutShells(viewport, along, placedAt);
     if (previous && !placement && slidesOf(viewport).sets !== 2) {
       clearShells(slidesOf(viewport).slides, placedAt);
@@ -1053,7 +1099,7 @@ export function createDeck(
     const resized = !!(
       previous &&
       placement &&
-      placement.length !== previous.length
+      lengthMoved(placement.length, previous.length)
     );
     // Moving the shells under a mandatory snapping scrollport, below and
     // in the settle this can lead to, can leave it resting off every
@@ -1166,40 +1212,7 @@ export function createDeck(
     settle();
   };
 
-  // Shells mode only (#144, decision 6): a real slide starts translated by
-  // `Deck.Slide`'s own CSS estimate, `--carouseldeck-placed`, wherever it
-  // renders placed `k` sets from its own. `layoutShells`, below, is about
-  // to read every slide's current rect to find its home with that
-  // translate removed, the same way it always does, through `placedAt` --
-  // but nothing has written `placedAt` yet, so without this it would
-  // assume no slide has one, and read a translated slide's rect as its
-  // home outright, off by the very translate decision 6 asks for. Seeded
-  // here, once, from the inline custom property React itself wrote, never
-  // from computed style (the plan's defect 2): `place`, right after,
-  // overwrites every entry with the engine's own measured placement.
-  {
-    const along = axis();
-    for (const slide of slidesOf(viewport).slides) {
-      if (!(slide instanceof HTMLElement)) continue;
-      const kn = parseFloat(
-        slide.style.getPropertyValue('--carouseldeck-placed')
-      );
-      if (!Number.isFinite(kn) || kn === 0) continue;
-      // Its own computed, subpixel, border-box size (#144, review of Task
-      // 4), never its rendered rect's or `offsetWidth`/`offsetHeight`'s
-      // whole-pixel one: a consumer's progress-driven `scale` would
-      // otherwise make this offset, and so `layoutShells`' first length and
-      // homes, off by the same amount the scale is (the CSS `translate`
-      // itself, decision 6, resolves against the border box too, never the
-      // scaled rect), and rounding to the nearest pixel would throw an
-      // `end`- or `center`-aligned rest off by up to half of one.
-      const size = borderBoxSize(
-        getComputedStyle(slide),
-        along.vertical ? 'height' : 'width'
-      );
-      placedAt.set(slide, { slot: 0, offset: kn * size });
-    }
-  }
+  seedPlacedAt(axis(), placedAt, slidesOf(viewport).slides);
 
   // With one slide per snap point, server HTML already rests here where the
   // browser honours `scroll-initial-target`, and this scroll is a no-op.
@@ -1657,7 +1670,9 @@ const PROGRESS = '--deck-slide-progress';
 /** Marks a viewport child as a snap target rather than a slide. */
 export const SNAP_TARGET = 'data-carouseldeck-snap-target';
 /** Marks a viewport child as a loop's copy of a slide rather than a slide:
- * `before` the slides, or `after` them. */
+ * `before` the slides, or `after` them. Only a deck whose set of slides is
+ * too narrow for shells renders these (ADR-0013, `DeckState.copies`); every
+ * other looping deck renders shells instead. */
 export const COPY = 'data-carouseldeck-copy';
 /** Marks a viewport child as a shell (ADR-0013): an empty, inert,
  * `aria-hidden` stand-in for a slide, out of flow, carrying its snap point
@@ -1703,6 +1718,17 @@ function releaseVelocity(
 
 const clamp = (index: number, count: number) =>
   Math.min(Math.max(index, 0), count - 1);
+
+/** Whether `L` moved enough to be a real resize, not the float epsilon two
+ * reads of the same, unchanged layout can differ by (`layoutShells` measures
+ * subpixel boxes): read a slide apart, mid-settle, before and after a write
+ * that never touched a slide's size at all, as `compensateShift`'s own
+ * caller does, and they can disagree in the last decimal despite nothing
+ * having moved. The tolerance stays sub-pixel, not a whole one: a slide's
+ * own resize that only moves `L` by a fraction of a pixel is still a real
+ * resize, and should still be compensated, where the noise two reads of an
+ * untouched layout differ by is finer still. */
+const lengthMoved = (a: number, b: number) => Math.abs(a - b) >= 0.01;
 
 /** `index` wrapped onto 0 up to `count`, as a loop's copies are onto the
  * slides. */
@@ -1822,6 +1848,23 @@ function slidesOf(viewport: HTMLElement): {
 
 /**
  * Whether the viewport holds loop's copies, and whether it holds snap
+ * targets or shells: which of the three, as `loop` or an effect changes,
+ * decides how its coordinates read -- copies, snap targets and shells are
+ * three different mechanisms, each its own coordinate space, never
+ * interchangeable (`compensateShift` reads this back, as `knownKind`, for
+ * exactly that reason). `shapeOf` folds `first` in too: a slide added to or
+ * removed from a looping deck, as its copy before the slides moves every
+ * slide by one (#146), moves the snap points under the viewport the same as
+ * the other three do, but within the very same kind -- its own coordinates
+ * still read the same way, only shifted.
+ */
+const kindOf = (viewport: HTMLElement) =>
+  [COPY, SNAP_TARGET, SHELL]
+    .map((marker) => viewport.querySelector(`:scope > [${marker}]`) !== null)
+    .join();
+
+/**
+ * Whether the viewport holds loop's copies, and whether it holds snap
  * targets: when either comes or goes, as when `loop` or an effect changes,
  * the snap points move under the viewport (ADR-0007, ADR-0009). So does a
  * slide added to or removed from a looping deck, as its copy before the
@@ -1830,12 +1873,7 @@ function slidesOf(viewport: HTMLElement): {
  * to those already there, leave it as it is.
  */
 const shapeOf = (viewport: HTMLElement) =>
-  [
-    ...[COPY, SNAP_TARGET, SHELL].map(
-      (marker) => viewport.querySelector(`:scope > [${marker}]`) !== null
-    ),
-    slidesOf(viewport).first
-  ].join();
+  [kindOf(viewport), slidesOf(viewport).first].join();
 
 /**
  * Gives each loop copy, or shell, its slide's snap alignment, inline: CSS
@@ -1924,6 +1962,44 @@ function borderBoxSize(
       (parseFloat(style[`border${side}Width`]) || 0),
     base
   );
+}
+
+/**
+ * Keeps `placedAt` matching a real slide's own CSS estimate,
+ * `--carouseldeck-placed` (decision 6), for as long as the slide is still
+ * on it -- no inline `translate` of its own yet, `place` never having had
+ * reason to write one over it. `layoutShells`, right after, is about to
+ * read every slide's current rect to find its home with that translate
+ * removed, through `placedAt`, never computed style; a slide still on its
+ * estimate has no entry there yet (at mount, or entering non-stacked
+ * shells mode mid-life -- switching from a stacked effect to a plain one,
+ * or turning loop back on, can), so without this it would read a
+ * translated slide's rect as its home outright, off by the estimate's own
+ * translate. The estimate's `calc()` scales with the slide's own size, so
+ * its offset, `k` sets times the slide count, is read fresh here each
+ * time too -- cached at the size an earlier call measured, a resize
+ * narrowing or widening the slide afterwards would otherwise throw
+ * `layoutShells`' own home for it off by the difference. Once `place`
+ * writes an inline `translate`, the slide carries its own fixed value
+ * instead, and this leaves it alone.
+ */
+function seedPlacedAt(
+  along: Axis,
+  placedAt: WeakMap<Element, { slot: number; offset: number }>,
+  slides: Element[]
+) {
+  for (const slide of slides) {
+    if (!(slide instanceof HTMLElement) || slide.style.translate) continue;
+    const kn = parseFloat(
+      slide.style.getPropertyValue('--carouseldeck-placed')
+    );
+    if (!Number.isFinite(kn) || kn === 0) continue;
+    const size = borderBoxSize(
+      getComputedStyle(slide),
+      along.vertical ? 'height' : 'width'
+    );
+    placedAt.set(slide, { slot: kn / slides.length, offset: kn * size });
+  }
 }
 
 /**

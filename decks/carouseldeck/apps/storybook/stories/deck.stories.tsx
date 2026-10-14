@@ -375,11 +375,12 @@ const withLog = (decorators: Story['decorators']) =>
 /**
  * With `loop`, scrolling past the last slide arrives at the first, and back:
  * Prev and Next are never disabled, and a drag, a flick or a wheel crosses the
- * seam. The viewport holds a copy of every slide on each side of the slides,
- * inert and hidden from assistive technology; when the deck comes to rest on
- * a copy it jumps, unseen, to the identical slide. Here two and a half
- * slides are in view, centred, so the last slide's copy shows before the
- * first. Indexes, Dots and Counter count the slides only.
+ * seam. Each slide mounts once (ADR-0013): the viewport moves the slide
+ * nearest it onto whichever of five sets of empty, inert shells, hidden from
+ * assistive technology, is nearest; when the deck comes to rest on one it
+ * jumps, unseen, back onto the identical slide's own. Here two and a half
+ * slides are in view, centred, so slide 6, placed a set before slide 1,
+ * peeks in before it. Indexes, Dots and Counter count the slides only.
  */
 export const Loop: Story = {
   args: { loop: true },
@@ -709,10 +710,10 @@ export const PlaydeckVideo: Story = {
 /**
  * The recipe with `loop`, as a feed usually is: the focal slide's video plays
  * across the seam both ways. Each slide's content calls `Deck.useSlide()`: a
- * slide registers its player by its index, and a copy shows the video's first
- * frame, still, so no copy's player replaces or clears a slide's. The story
- * puts the recipe's player handles on `window.playdeckPlayers` for the
- * end-to-end tests.
+ * slide mounts once (ADR-0013) and registers its player by its own index, so
+ * nothing re-mounts, reloads or clears another slide's player crossing the
+ * seam. The story puts the recipe's player handles on
+ * `window.playdeckPlayers` for the end-to-end tests.
  */
 export const PlaydeckVideoLoop: Story = {
   render: () => (

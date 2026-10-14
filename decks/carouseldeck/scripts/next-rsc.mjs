@@ -84,7 +84,7 @@ const expected = [
   'Slide one',
   'Slide two',
   'Slide three',
-  'data-carouseldeck-copy="after"',
+  'data-carouseldeck-shell="1"',
   'data-carouseldeck-effect="fade"',
   'data-carouseldeck-effect="curve"',
   '<style data-precedence="carouseldeck"',
@@ -103,8 +103,8 @@ if (html.includes('aria-label="Go to page 4"')) {
 }
 // Each slide carries its progress as the deck starts, its distance from the
 // starting slide, so an effect, or CSS on progress, draws from the first
-// paint: in document order, the slides, then a loop's copies after them,
-// then those before (#125).
+// paint (#125). One instance (ADR-0013): the fade deck's own three slides
+// carry it, never a loop's copies.
 const fade = html.indexOf('data-carouseldeck-effect="fade"');
 const curve = html.indexOf('data-carouseldeck-effect="curve"');
 /**
@@ -122,7 +122,7 @@ const checkProgress = (effect, part, expected) => {
     );
   }
 };
-checkProgress('fade', html.slice(fade, curve), '0,1,2,3,4,5,-3,-2,-1');
+checkProgress('fade', html.slice(fade, curve), '0,1,2');
 checkProgress('curve', html.slice(curve), '-1,0,1');
 if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL: ${failure}`);

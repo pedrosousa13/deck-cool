@@ -23,7 +23,6 @@ import {
   type DeckEngine,
   type Orientation
 } from '@carouseldeck/core';
-import { LoopShells } from './loop-shells.js';
 import { ServerSlides } from './server-slides.js';
 import { slidesIn } from './slides-in.js';
 
@@ -130,15 +129,17 @@ interface RootBaseProps extends ComponentProps<'div'> {
    * Defaults to horizontal. */
   orientation?: Orientation;
   /** Whether scrolling past the last snap point arrives at the first, and
-   * back, with no visible jump: Prev and Next are then never disabled.
-   * `Deck.Viewport` renders a copy of every slide on each side of the
-   * slides, inert and `aria-hidden`, and the deck jumps from a copy to its
-   * slide once it rests (clone and jump, ADR-0006, as built in ADR-0009).
-   * Indexes, Dots and Counter count the slides' snap points only, never the
-   * copies'. A copy renders the slide's children again, so their state is
-   * their own and an `id` in a slide repeats; `useSlide` tells them whether
-   * they are in a copy. A deck whose slides all fit does not loop and renders
-   * no copies. Defaults to false. */
+   * back, with no visible jump: Prev and Next are then never disabled. Each
+   * slide's children mount once: `Deck.Viewport` moves the slide nearest the
+   * viewport onto empty, inert, `aria-hidden` shells that carry the snap
+   * points on each side of it, by `translate` (ADR-0013). A deck whose set
+   * of slides is too narrow for a shell to have room beside its own slide
+   * falls back to rendering full copies instead (clone and jump, ADR-0006,
+   * as built in ADR-0009): a copy renders the slide's children again, so
+   * their state is their own and an `id` in a slide repeats; `useSlide`
+   * tells them whether they are in one. Indexes, Dots and Counter count the
+   * slides' snap points only, never a shell's or a copy's. A deck whose
+   * slides all fit does not loop and renders neither. Defaults to false. */
   loop?: boolean;
   /** Moves the deck one snap point on every this many milliseconds, counted
    * from when it comes to rest, and stops at the last, unless the deck
@@ -675,8 +676,10 @@ export interface UseSlideResult {
 
 /** The slide a component is rendered in: its index, and whether it is a
  * loop's copy, so stateful content, such as a video player, can render
- * differently in a copy, which is inert and never focal. Throws outside a
- * `Deck.Slide`. */
+ * differently in a copy, which is inert and never focal. Each slide mounts
+ * once: `copy` is undefined unless the deck's set of slides is too narrow
+ * for shells and falls back to rendering copies (ADR-0013). Throws outside
+ * a `Deck.Slide`. */
 export function useSlide(): UseSlideResult {
   const slide = use(SlideContext);
   if (!slide) throw new Error('Deck.useSlide must be inside Deck.Slide');
@@ -697,11 +700,13 @@ export interface Effect {
    * CSS overrides any of them (ADR-0003). */
   css: string;
   /** The structural styles the effect needs, set inline as the deck's own
-   * are, for a deck of `count` slides, a loop's copies included. With
-   * `target`, the viewport holds an empty snap target per slide, and per
-   * copy, in the order they run, after the slides, styled by it: the slides
-   * stack in one place, the engine measures each by its target, and every
-   * slide but the focal one is inert, as it cannot be seen. */
+   * are, for a deck of `count` slides: with loop, a small deck's three sets
+   * of copies, or, with shells (ADR-0013), all five sets of them instead,
+   * each a shell rather than a copy. With `target`, the viewport holds an
+   * empty snap target per slide, per copy or per shell, in the order they
+   * run, after the slides, styled by it: the slides stack in one place, the
+   * engine measures each by its target, and every slide but the focal one
+   * is inert, as it cannot be seen. */
   layout?: (
     orientation: Orientation,
     count: number
@@ -733,8 +738,11 @@ const viewportStyles: Record<Orientation, CSSProperties> = {
 };
 
 /** The native scroll container. Its children are the deck's slides; with
- * `loop`, a copy of every slide on each side of them; an `effect` may add a
- * snap target after them for each. */
+ * `loop`, two in-flow spacers and empty shells carrying their snap points on
+ * each side of them (ADR-0013), or, where the set of slides is too narrow
+ * for a shell to have room beside its own slide, a copy of every slide on
+ * each side instead; an `effect` may add a snap target after them for each
+ * slide, copy or shell. */
 export function Viewport({ style, children, effect, ...props }: ViewportProps) {
   const {
     viewportRef,
@@ -748,15 +756,12 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
     // loop's copies at all.
     copies: fallback
   } = useDeckContext('Viewport');
-  // Staging switch for #144: shells instead of copies, for the new tests
-  // only (not exported from the package entry). Deleted in Task 7.
-  const shellsOn = use(LoopShells);
   const vertical = orientation === 'vertical';
   const slides = Children.toArray(children);
   // A deck whose slides all fit has nothing to loop (see createDeck).
   const looping = loop && !everySlideFits(count);
-  const shells = looping && shellsOn && !fallback;
-  const copies = looping && (!shellsOn || fallback);
+  const shells = looping && !fallback;
+  const copies = looping && fallback;
   // Whether the effect stacks the slides in one place: known from calling
   // its layout once -- stacked or not never depends on the count passed
   // in, only the grid it draws does.
@@ -1042,6 +1047,9 @@ const deckDefaults =
 const initialTarget = { scrollInitialTarget: 'nearest' } as CSSProperties;
 
 /** One slide, labelled "n of m". Its size and alignment are consumer CSS.
+ * With loop, it mounts once: shells carry its snap points on each side, and
+ * `translate` moves it onto whichever is nearest the viewport (ADR-0013); a
+ * deck too narrow for shells copies it instead.
  * For CSS to read, it carries `--deck-slide-index`, its index, and
  * `--deck-slide-count`, the number of slides, copies not counted, from the
  * first render; `--deck-slide-progress`, its signed distance from the focal

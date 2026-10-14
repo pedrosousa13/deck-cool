@@ -16,9 +16,10 @@ import {
 } from './fixtures';
 
 // An app that picks `effect` or `loop` by breakpoint, as from a media query,
-// switches them on a mounted deck. Loop's copies, or fade's stacked slides
-// over snap targets, move the snap points under the viewport: the deck stays
-// at its current index, as if it had mounted that way.
+// switches them on a mounted deck. Loop's shells, a small deck's copies, or
+// fade's stacked slides over snap targets, move the snap points under the
+// viewport: the deck stays at its current index, as if it had mounted that
+// way.
 
 const SLIDES = 6;
 
@@ -83,23 +84,36 @@ const renderSwitch = (defaultIndex: number, layout: Layout = {}) => {
 
 /**
  * Where the deck rests, as `[index, current slide, offset]`: the offset is
- * from the viewport's start to the box slide `index` snaps by, its own or,
- * where an effect stacks the slides, its snap target. 0 when the deck rests
- * on the snap point of that slide, a slide, never a copy.
+ * from the viewport's start to the box slide `index` snaps by -- its own
+ * mid shell (ADR-0013), a small deck's copy, or, where an effect stacks the
+ * slides, its snap target. 0 when the deck rests on the snap point of that
+ * slide, a slide, never a copy.
  */
 const restOf = (root: HTMLElement, viewport: HTMLElement, index: number) => {
   const targets = viewport.querySelectorAll(
     ':scope > [data-carouseldeck-snap-target]'
   );
-  const before = viewport.querySelectorAll(
-    ':scope > [data-carouseldeck-copy=before]'
-  ).length;
+  const slides = viewport.querySelectorAll(
+    ':scope > [data-carouseldeck-slide]:not([data-carouseldeck-copy])'
+  );
+  // With loop and a stacked effect, the targets are the shells themselves,
+  // all five sets of them (ADR-0013, Task 5): the own set starts two sets
+  // in, not after a small deck's own copies before (always 0, with shells).
+  const stackedShells =
+    targets.length > 0 && targets[0].hasAttribute('data-carouseldeck-shell');
+  const before = stackedShells
+    ? 2 * slides.length
+    : viewport.querySelectorAll(':scope > [data-carouseldeck-copy=before]')
+        .length;
+  const midShells = viewport.querySelectorAll(
+    ':scope > [data-carouseldeck-shell="0"]'
+  );
   const box =
     targets.length > 0
       ? targets[before + index]
-      : viewport.querySelectorAll(
-          ':scope > [data-carouseldeck-slide]:not([data-carouseldeck-copy])'
-        )[index];
+      : midShells.length > 0
+        ? midShells[index]
+        : slides[index];
   const current = root.querySelector('[data-current]');
   return [
     root.dataset.index,
@@ -207,7 +221,7 @@ describe('switching effect or loop on a mounted deck', () => {
       loop: true
     });
 
-    // Next from the last slide heads for the first slide's copy after them.
+    // Next from the last slide heads for the first slide's shell after them.
     next.click();
     switchTo({ effect: fade });
 

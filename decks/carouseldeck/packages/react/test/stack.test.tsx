@@ -4,8 +4,6 @@ import { describe, expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import { stack } from '@carouseldeck/react/stack';
-// Internal: see the test that uses it.
-import { LoopShells } from '../src/loop-shells';
 import {
   expectSettledTo,
   expectSnaps,
@@ -130,32 +128,28 @@ describe('stack', () => {
     expect(topDown(zIndex())).toEqual([1, 2, 3, 0]);
   });
 
-  test('looping, brings a slide leaving back in at the back as its copy', async () => {
+  test('looping, brings a slide leaving back in at the back once thrown', async () => {
     const { zIndex, hold } = renderDeck({ slides: 3, loop: true });
 
     await hold(0.6);
 
-    // The slides, then the copies after them: slide 1's copy is at the back
-    // of the three cards on top, and slide 1 itself is below them.
+    // Slide 1 mounts once (ADR-0013): thrown behind the seam, it comes back
+    // in at the back of the stack rather than vanishing past -1.
     const z = zIndex();
-    expect(topDown(z).slice(0, 3)).toEqual([1, 2, 3]);
-    expect(z[0]).toBeLessThan(z[3]!);
+    expect(z[0]).toBeLessThan(z[1]!);
+    expect(z[0]).toBeLessThan(z[2]!);
   });
 });
 
-// One instance (staged, #144, Task 5): with shells, a stacked effect's
-// shells are its own snap targets, and the run stays at the real slides,
-// never 3n copies. A thrown card's progress wraps into the back of the
-// stack directly (the maintainer's ruling on ADR-0013's fork): held past
-// the last card, two cards that would be invisible past -1 without a copy
-// to land on instead read as if just behind the top of the stack.
-describe('one instance (staged): stack with shells', () => {
+// With shells, a stacked effect's shells are its own snap targets, and the
+// run stays at the real slides, never 3n copies. A thrown card's progress
+// wraps into the back of the stack directly (the maintainer's ruling on
+// ADR-0013's fork): held past the last card, two cards that would be
+// invisible past -1 without a copy to land on instead read as if just
+// behind the top of the stack.
+describe('one instance: stack with shells', () => {
   test('held 0.6 into a throw crossing the seam, the thrown slide is below the other two', async () => {
-    render(
-      <LoopShells value>
-        <StackDeck slides={3} loop defaultIndex={2} />
-      </LoopShells>
-    );
+    render(<StackDeck slides={3} loop defaultIndex={2} />);
     const viewport = viewportOf(
       screen.getByRole('region', { name: 'Test deck' })
     );
@@ -179,13 +173,13 @@ describe('one instance (staged): stack with shells', () => {
 });
 
 describe('--deck-slide-count on a stack', () => {
-  test('is the number of slides, on each slide and copy', () => {
+  test('is the number of slides, each mounted once', () => {
     const { slides } = renderDeck({ slides: 3, loop: true });
 
     expect(
       slides().map((slide) =>
         slide.style.getPropertyValue('--deck-slide-count')
       )
-    ).toEqual(Array(9).fill('3'));
+    ).toEqual(Array(3).fill('3'));
   });
 });

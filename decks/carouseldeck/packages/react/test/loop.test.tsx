@@ -25,10 +25,12 @@ import {
   withoutScrollEnd
 } from './fixtures';
 
-// Loop (GLOSSARY.md; clone and jump, ADR-0006, as built in ADR-0009): a
-// full set of inert, aria-hidden copies of the slides on each side of them,
-// and a jump of one set length onto the identical slides once the viewport
-// rests on a copy.
+// Loop (GLOSSARY.md; ADR-0013): each slide mounts once, moved by `translate`
+// onto whichever of five sets of empty, inert, aria-hidden shells is
+// nearest the viewport, and a jump of one set length onto the slides' own
+// set once the viewport rests on another. A deck whose set of slides is too
+// narrow for a shell to have room beside its own slide falls back to
+// copies instead (clone and jump, ADR-0006, as built in ADR-0009).
 
 const renderLoop = (props: Parameters<typeof TestDeck>[0] = {}) => {
   const onIndexChange = vi.fn();
@@ -59,8 +61,8 @@ const renderLoop = (props: Parameters<typeof TestDeck>[0] = {}) => {
         .querySelectorAll('button'),
     counter: () =>
       root.querySelector('[data-carouseldeck-counter]')?.textContent,
-    /** Where a slide (copies are out of the accessibility tree, so never a
-     * copy) starts, from the viewport's start edge. */
+    /** Where a slide (shells and copies are out of the accessibility tree,
+     * so never one) starts, from the viewport's start edge. */
     offsetOf: (label: string) =>
       Math.round(
         screen.getByRole('group', { name: label }).getBoundingClientRect()
@@ -71,6 +73,10 @@ const renderLoop = (props: Parameters<typeof TestDeck>[0] = {}) => {
 
 const copiesIn = (viewport: HTMLElement) => [
   ...viewport.querySelectorAll('[data-carouseldeck-copy]')
+];
+
+const shellsIn = (viewport: HTMLElement) => [
+  ...viewport.querySelectorAll('[data-carouseldeck-shell]')
 ];
 
 describe('loop', () => {
@@ -251,12 +257,13 @@ describe('loop', () => {
     });
   }
 
-  test('a copy resting off its slide plus a set, as WebKit rests one, is arrived at and jumped off', async () => {
-    // Measured in WebKit: a copy can rest a pixel or two off its slide's
-    // rest plus a set's length. A scroll margin on the copies alone moves
-    // their rests 2px here, in every browser.
+  test('a shell resting off its slide plus a set, as WebKit rests one, is arrived at and jumped off', async () => {
+    // Measured in WebKit: a shell can rest a pixel or two off its slide's
+    // rest plus a set's length. A scroll margin on the slides moves their
+    // shells' rests 2px here, in every browser: alignCopies copies it onto
+    // every shell (decision 7), since a shell has no margin of its own.
     addStyle(
-      '.margined > [data-carouseldeck-copy] { scroll-margin-left: 2px; }'
+      '.margined > [data-carouseldeck-slide] { scroll-margin-left: 2px; }'
     );
     const { root, viewport, next, onIndexChange } = renderLoop({
       defaultIndex: 4,
@@ -271,12 +278,19 @@ describe('loop', () => {
 
     next.click();
 
-    await expectRestOnASlide(viewport, root, onIndexChange);
-    expect(onIndexChange.mock.calls).toEqual([[0]]);
-    // To the copy's rest, then the jump off it to its slide's.
+    await expect.poll(() => onIndexChange.mock.calls).toEqual([[0]]);
+    await sleep(500);
+    // The margin shifts every set's rest, including the slides' own, so the
+    // deck settles 2px short of flush with the slide rather than exactly
+    // on it; snapping is still back on, and nothing moves it further.
+    expect(root.dataset.index).toBe('0');
+    expect(viewport.style.scrollSnapType).not.toBe('none');
+    expect(viewport.scrollLeft).toBe(2998);
+    // To the shell's rest, a set past the slides' own (2L = 10 widths),
+    // then the jump off it back onto the slides' own set.
     expect(scrolls).toEqual([
-      { left: 2998, behavior: 'smooth' },
-      { left: 1500, behavior: 'instant' }
+      { left: 4498, behavior: 'smooth' },
+      { left: 2998, behavior: 'instant' }
     ]);
   });
 
@@ -445,7 +459,7 @@ describe('loop', () => {
 
     rerender(<TestDeck defaultIndex={2} loop />);
 
-    expect(copiesIn(viewport)).toHaveLength(10);
+    expect(shellsIn(viewport)).toHaveLength(25);
     expect(offsetOf('3 of 5')).toBe(0);
     await sleep(300);
     expect(offsetOf('3 of 5')).toBe(0);
@@ -453,54 +467,51 @@ describe('loop', () => {
 
     rerender(<TestDeck defaultIndex={2} />);
 
-    expect(copiesIn(viewport)).toEqual([]);
+    expect(shellsIn(viewport)).toEqual([]);
     await expectSettledTo(() => offsetOf('3 of 5'), 0);
     expect(root.dataset.index).toBe('2');
   });
 
-  test('a deck whose slides all fit renders no copies and no controls', async () => {
+  test('a deck whose slides all fit renders no shells and no controls', async () => {
     addStyle('.fit > * { width: 25%; }');
     const { container } = render(
       <TestDeck loop slides={3} viewportClassName="fit" />
     );
     const viewport = viewportOf(container.firstElementChild as HTMLElement);
 
-    await expect.poll(() => copiesIn(viewport)).toEqual([]);
+    await expect.poll(() => shellsIn(viewport)).toEqual([]);
     expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
     expect(viewport.scrollWidth).toBe(viewport.clientWidth);
   });
 });
 
-describe('loop copies', () => {
-  test('a full set of copies sits on each side of the slides', () => {
+describe('loop shells', () => {
+  test('all five sets of shells sit on each side of the slides', () => {
     const { viewport } = renderLoop();
 
-    const labels = (selector: string) =>
-      [...viewport.querySelectorAll(selector)].map((slide) =>
-        slide.getAttribute('aria-label')
-      );
-    expect(labels('[data-carouseldeck-copy=before]')).toEqual(
-      labels('[data-carouseldeck-slide]:not([data-carouseldeck-copy])')
-    );
-    expect(labels('[data-carouseldeck-copy=after]')).toHaveLength(5);
+    for (const set of [-2, -1, 0, 1, 2]) {
+      expect(
+        viewport.querySelectorAll(`[data-carouseldeck-shell="${set}"]`)
+      ).toHaveLength(5);
+    }
     // Laid out before the slides, and after them.
     const left = (selector: string) =>
       viewport.querySelector(selector)!.getBoundingClientRect().left;
-    expect(left('[data-carouseldeck-copy=before]')).toBeLessThan(
-      left('[aria-label="1 of 5"]:not([data-carouseldeck-copy])')
+    expect(left('[data-carouseldeck-shell="-1"]')).toBeLessThan(
+      left('[aria-label="1 of 5"]')
     );
-    expect(left('[data-carouseldeck-copy=after]')).toBeGreaterThan(
-      left('[aria-label="5 of 5"]:not([data-carouseldeck-copy])')
+    expect(left('[data-carouseldeck-shell="1"]')).toBeGreaterThan(
+      left('[aria-label="5 of 5"]')
     );
   });
 
-  test('every copy is inert and aria-hidden', () => {
+  test('every shell is inert and aria-hidden', () => {
     const { viewport } = renderLoop();
 
-    expect(copiesIn(viewport)).toHaveLength(10);
-    for (const copy of copiesIn(viewport)) {
-      expect(copy.getAttribute('aria-hidden')).toBe('true');
-      expect(copy.hasAttribute('inert')).toBe(true);
+    expect(shellsIn(viewport)).toHaveLength(25);
+    for (const shell of shellsIn(viewport)) {
+      expect(shell.getAttribute('aria-hidden')).toBe('true');
+      expect(shell.hasAttribute('inert')).toBe(true);
     }
   });
 
@@ -519,7 +530,7 @@ describe('loop copies', () => {
     ]);
   });
 
-  test('tabbing never lands on a copy', async () => {
+  test('tabbing never lands on a shell', async () => {
     const { prev } = renderLoop();
     prev.focus();
 
@@ -529,13 +540,13 @@ describe('loop copies', () => {
       if (document.activeElement) visited.push(document.activeElement);
     }
 
-    expect(visited.some((el) => el.closest('[data-carouseldeck-copy]'))).toBe(
+    expect(visited.some((el) => el.closest('[data-carouseldeck-shell]'))).toBe(
       false
     );
     expect(visited.map((el) => el.textContent)).toContain('Button 5');
   });
 
-  test('a copy is never current or focal', async () => {
+  test('a shell is never current or focal', async () => {
     const { viewport, next } = renderLoop({ defaultIndex: 4 });
 
     await userEvent.click(next);
@@ -544,17 +555,19 @@ describe('loop copies', () => {
     for (const marker of ['data-current', 'data-focal']) {
       const marked = viewport.querySelectorAll(`[${marker}]`);
       expect(marked).toHaveLength(1);
-      expect(marked[0].hasAttribute('data-carouseldeck-copy')).toBe(false);
+      expect(marked[0].hasAttribute('data-carouseldeck-shell')).toBe(false);
       expect(marked[0].getAttribute('aria-label')).toBe('1 of 5');
     }
   });
 
-  test('without loop there are no copies', () => {
+  test('without loop there are no shells or copies', () => {
     render(<TestDeck />);
 
-    expect(
-      copiesIn(viewportOf(screen.getByRole('region', { name: 'Test deck' })))
-    ).toEqual([]);
+    const viewport = viewportOf(
+      screen.getByRole('region', { name: 'Test deck' })
+    );
+    expect(shellsIn(viewport)).toEqual([]);
+    expect(copiesIn(viewport)).toEqual([]);
   });
 });
 
@@ -626,20 +639,20 @@ describe('loop, presses that outrun the copies', () => {
   });
 
   /** From slide 4, Next six times at once, then twice more once the deck is
-   * on the copies after the slides: the last presses outrun the copies. */
+   * on the shells after the slides: the last presses outrun them. */
   const outrun = async () => {
     const deck = renderLoop({ defaultIndex: 3 });
     for (let i = 0; i < 6; i++) deck.next.click();
-    await expect.poll(() => deck.viewport.scrollLeft).toBeGreaterThan(3600);
+    await expect.poll(() => deck.viewport.scrollLeft).toBeGreaterThan(4500);
     deck.next.click();
     deck.next.click();
     return deck;
   };
 
-  test('a mouse drag after the deck rests at the end of the copies settles, with snapping back', async () => {
+  test('a mouse drag after the deck rests at the end of the shells settles, with snapping back', async () => {
     const { viewport, root, onIndexChange } = await outrun();
-    // At rest at the end of the copies, it jumps back a set.
-    await expect.poll(() => viewport.scrollLeft).toBeLessThan(3000);
+    // At rest at the end of the shells, it jumps back a set.
+    await expect.poll(() => viewport.scrollLeft).toBeLessThan(4500);
 
     await mouseDrag(viewport, 100, { holdMs: 150 });
 
@@ -949,10 +962,10 @@ describe("loop and the deck's other features", () => {
       ...viewport.querySelectorAll<HTMLElement>('[data-carouseldeck-slide]')
     ];
     const box = viewport.getBoundingClientRect();
-    // Each frame: every slide or copy in view, as its distance from the
-    // viewport's start in slides, and the progress it carries.
+    // Each frame: every slide in view, as its distance from the viewport's
+    // start in slides, and the progress it carries.
     const frames: [number, number][][] = [];
-    let copyAtStart = false;
+    let placedAtStart = false;
     let done = false;
     const sample = () => {
       const frame: [number, number][] = [];
@@ -963,11 +976,17 @@ describe("loop and the deck's other features", () => {
           at,
           Number(slide.style.getPropertyValue('--deck-slide-progress'))
         ]);
+        // The engine writes `translate` inline only where the slot it
+        // places a slide at changes; a slide placed since its first paint,
+        // by `Deck.Slide`'s own CSS estimate (decision 6), and never moved
+        // since, still reads it through the stylesheet rule that estimate
+        // uses, so the computed value, not the inline one, says whether a
+        // slide is translated over another's shell.
         if (
           Math.abs(at) < 0.01 &&
-          slide.hasAttribute('data-carouseldeck-copy')
+          getComputedStyle(slide).translate !== 'none'
         ) {
-          copyAtStart = true;
+          placedAtStart = true;
         }
       }
       frames.push(frame);
@@ -983,20 +1002,21 @@ describe("loop and the deck's other features", () => {
     done = true;
     await nextFrame();
 
-    // It came to rest on a copy before the jump.
-    expect(copyAtStart).toBe(true);
+    // It came to rest on a slide translated over another's shell, before
+    // the jump places it back over its own.
+    expect(placedAtStart).toBe(true);
     for (const frame of frames) {
       for (const [at, progress] of frame) {
         // A frame's paint can trail the scroll by one frame's worth.
         expect(Math.abs(progress - at)).toBeLessThan(0.25);
       }
     }
-    // At rest, the slide at the start is the first, and its neighbours are
-    // the copies either side.
+    // At rest, the slide at the start is the first, placed over its own
+    // shell again.
     expect(frames.at(-1)!.map(([, progress]) => progress)).toEqual([0]);
   });
 
-  test('centred, the copy of the last slide shows before the first, which is focal', async () => {
+  test('centred, slide 5 placed before the first shows there, which is focal', async () => {
     addStyle(CENTRED);
     const onFocalChange = vi.fn();
     const { viewport, root } = renderLoop({
@@ -1012,9 +1032,9 @@ describe("loop and the deck's other features", () => {
       return Math.round((r.left + r.right) / 2);
     };
     expect(centre(focal)).toBe(centre(viewport));
-    const before = viewport.querySelector(
-      '[data-carouseldeck-copy=before][aria-label="5 of 5"]'
-    )!;
+    // Slide 5 itself, translated onto the shell before the first (ADR-0013),
+    // not a copy of it.
+    const before = screen.getByRole('group', { name: '5 of 5' });
     expect(before.hasAttribute('data-in-view')).toBe(true);
     expect(
       Number(
@@ -1028,7 +1048,7 @@ describe("loop and the deck's other features", () => {
     expect(root.dataset.index).toBe('4');
   });
 
-  test('with click-to-focus, clicking a copy in view brings its slide to focus across the seam', async () => {
+  test('with click-to-focus, clicking slide 5 in view before the first brings it to focus across the seam', async () => {
     addStyle(CENTRED);
     const { viewport, onIndexChange } = renderLoop({
       viewportClassName: 'centred',
@@ -1044,11 +1064,12 @@ describe("loop and the deck's other features", () => {
       },
       { once: true }
     );
-    const copy = viewport
-      .querySelector('[data-carouseldeck-copy=before][aria-label="5 of 5"]')!
+    // Slide 5 itself, translated onto the shell before the first (ADR-0013).
+    const before = screen
+      .getByRole('group', { name: '5 of 5' })
       .getBoundingClientRect();
-    const x = copy.right - 10;
-    const y = (copy.top + copy.bottom) / 2;
+    const x = before.right - 10;
+    const y = (before.top + before.bottom) / 2;
 
     await mouseAt('mousePressed', x, y, 1);
     await mouseAt('mouseReleased', x, y, 0);
@@ -1092,7 +1113,7 @@ describe('loop with an effect', () => {
   ];
   const opacityOf = (el: Element) => Number(getComputedStyle(el).opacity);
 
-  test('fade crossfades from the last slide to the first, with a copy, and never flashes', async () => {
+  test('fade crossfades from the last slide to the first, and never flashes', async () => {
     const onIndexChange = vi.fn();
     render(
       <EffectDeck
@@ -1104,12 +1125,12 @@ describe('loop with an effect', () => {
     const viewport = viewportOf(
       screen.getByRole('region', { name: 'Test deck' })
     );
+    // One instance (ADR-0013): with shells, a stacked effect's shells are
+    // its own snap targets, so the run stays at the real slides, never 3n
+    // copies.
     const run = runOf(viewport);
-    const slides = run.filter(
-      (el) => !el.hasAttribute('data-carouseldeck-copy')
-    );
-    expect(run).toHaveLength(12);
-    // A copy is stacked with the slides, as every slide of a fade is.
+    expect(run).toHaveLength(4);
+    // Every slide of a fade is stacked in one place.
     const box = viewport.getBoundingClientRect();
     for (const el of run) {
       expect(Math.round(el.getBoundingClientRect().left - box.left)).toBe(0);
@@ -1129,13 +1150,13 @@ describe('loop with an effect', () => {
     await expectSettledTo(() => onIndexChange.mock.calls, [[0]]);
     done = true;
     await nextFrame();
-    expect(slides.map(opacityOf)).toEqual([1, 0, 0, 0]);
+    expect(run.map(opacityOf)).toEqual([1, 0, 0, 0]);
     for (const total of shown) expect(total).toBeCloseTo(1, 1);
-    expect(slides[0].hasAttribute('inert')).toBe(false);
-    expect(run.filter((el) => !el.hasAttribute('inert'))).toEqual([slides[0]]);
+    expect(run[0].hasAttribute('inert')).toBe(false);
+    expect(run.filter((el) => !el.hasAttribute('inert'))).toEqual([run[0]]);
   });
 
-  test('curve draws a copy in view on the arc, as its place in the run puts it', async () => {
+  test('curve draws slide 6 in view on the arc, placed before the first', async () => {
     addStyle(`.effect > [data-carouseldeck-slide] {
       width: 100px;
       scroll-snap-align: center;
@@ -1145,29 +1166,22 @@ describe('loop with an effect', () => {
     render(
       <EffectDeck effect={curve} slides={6} onIndexChange={onIndexChange} />
     );
-    const viewport = viewportOf(
-      screen.getByRole('region', { name: 'Test deck' })
-    );
     const angle = (el: Element) => {
       const m = new DOMMatrix(
         getComputedStyle(el.firstElementChild!).transform
       );
       return Math.round((Math.atan2(m.b, m.a) * 180) / Math.PI);
     };
-    const copyOfLast = () =>
-      viewport.querySelector(
-        '[data-carouseldeck-copy=before][aria-label="6 of 6"]'
-      )!;
     const slide = (n: number) =>
       screen.getByRole('group', { name: `${n} of 6` });
     await sleep(100);
 
-    // Before the first slide, the last slide's copy turns as the second
-    // slide does, the other way.
+    // Before the first slide, slide 6 itself, placed there (ADR-0013),
+    // turns as the second slide does, the other way.
     const turn = angle(slide(2));
     expect(turn).toBeGreaterThan(0);
     expect(angle(slide(1))).toBe(0);
-    expect(angle(copyOfLast())).toBe(-turn);
+    expect(angle(slide(6))).toBe(-turn);
 
     await userEvent.click(screen.getByRole('button', { name: 'Previous' }));
 

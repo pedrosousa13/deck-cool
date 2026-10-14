@@ -76,7 +76,9 @@ test('server HTML holds the styles before the viewport, unescaped, and React 18 
   expect(warnings).toEqual([]);
 });
 
-test('a loop copy is inert', () => {
+// Two full-width slides is the boundary (ADR-0013, decision 4): a set no
+// shorter than the viewport plus its widest slide keeps shells.
+test('a loop shell is inert', () => {
   render(
     <Deck.Root aria-label="Slides" loop>
       <Deck.Viewport style={{ width: 300 }}>
@@ -85,13 +87,11 @@ test('a loop copy is inert', () => {
       </Deck.Viewport>
     </Deck.Root>
   );
-  const copies = document.querySelectorAll('[data-carouseldeck-copy]');
+  const shells = document.querySelectorAll('[data-carouseldeck-shell]');
 
-  expect(copies.length).toBeGreaterThan(0);
-  for (const copy of copies) expect(copy).toHaveAttribute('inert', '');
-  for (const slide of document.querySelectorAll(
-    '[data-carouseldeck-slide]:not([data-carouseldeck-copy])'
-  )) {
+  expect(shells.length).toBeGreaterThan(0);
+  for (const shell of shells) expect(shell).toHaveAttribute('inert', '');
+  for (const slide of document.querySelectorAll('[data-carouseldeck-slide]')) {
     expect(slide).not.toHaveAttribute('inert');
   }
 });

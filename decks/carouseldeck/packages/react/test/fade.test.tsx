@@ -5,8 +5,6 @@ import { describe, expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import { fade } from '@carouseldeck/react/fade';
-// Internal: see the tests that use it.
-import { LoopShells } from '../src/loop-shells';
 import {
   addStyle,
   expectSettledTo,
@@ -267,10 +265,12 @@ describe('fade in server HTML', () => {
       progress: [-2, -1, 0, 1]
     },
     {
+      // With shells, a stacked slide's progress wraps into the back of the
+      // stack instead of a copy landing there (ADR-0013, the maintainer's
+      // ruling on its fork; `wrapStackedProgress`).
       name: 'looping, at defaultIndex 1',
       props: { loop: true, defaultIndex: 1 },
-      // The slides, then the copies after them, then those before.
-      progress: [-1, 0, 1, 2, 3, 4, 5, 6, -5, -4, -3, -2]
+      progress: [3, 0, 1, 2]
     }
   ])(
     'gives each slide its progress and hydrates without changing it, $name',
@@ -285,18 +285,11 @@ describe('fade in server HTML', () => {
   );
 });
 
-// One instance (staged, #144, Task 5): with shells, a stacked effect's
-// shells are its own snap targets (`data-carouseldeck-shell` and
-// `data-carouseldeck-snap-target` together), so the run stays at the real
-// slides, never 3n copies. A thrown slide's progress wraps into the back
-// of the stack instead of a copy landing there (the maintainer's ruling
-// on ADR-0013's fork, `wrapStackedProgress`).
+// With shells, a stacked effect's shells are its own snap targets
+// (`data-carouseldeck-shell` and `data-carouseldeck-snap-target` together),
+// so the run stays at the real slides, never 3n copies.
 const renderShellsFade = (props: FadeDeckProps = {}) => {
-  render(
-    <LoopShells value>
-      <FadeDeck loop {...props} />
-    </LoopShells>
-  );
+  render(<FadeDeck loop {...props} />);
   const root = screen.getByRole('region', { name: 'Test deck' });
   return {
     ...readDeck(root),
@@ -306,7 +299,7 @@ const renderShellsFade = (props: FadeDeckProps = {}) => {
   };
 };
 
-describe('one instance (staged): fade with shells', () => {
+describe('one instance: fade with shells', () => {
   test('crossing the seam, opacity sums to 1 throughout, the run stays at 4 slides stacked at 0, and exactly one is focal at rest', async () => {
     const { opacity, offsets, inert, slides, next } = renderShellsFade({
       defaultIndex: 3
@@ -335,24 +328,6 @@ describe('one instance (staged): fade with shells', () => {
     for (const count of counts) expect(count).toBe(4);
     expect(stacked.every(Boolean)).toBe(true);
     expect(inert().filter((i) => !i)).toHaveLength(1);
-  });
-});
-
-describe('one instance (staged): fade in server HTML', () => {
-  test('wraps a real slide thrown to the back into the nearest slot behind the stack, looping at defaultIndex 1', async () => {
-    const painted = (viewport: HTMLElement) =>
-      slidesOf(viewport).map((slide) => getComputedStyle(slide).opacity);
-    const { viewport, server, serverProgress, hydrated } =
-      await serverThenHydrated(
-        <LoopShells value>
-          <FadeDeck loop defaultIndex={1} />
-        </LoopShells>,
-        painted
-      );
-
-    expect(serverProgress).toEqual([3, 0, 1, 2]);
-    expect(progressOf(viewport)).toEqual(serverProgress);
-    expect(hydrated).toEqual(server);
   });
 });
 

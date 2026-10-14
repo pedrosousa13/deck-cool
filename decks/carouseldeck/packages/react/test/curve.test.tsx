@@ -5,8 +5,6 @@ import { describe, expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import { curve } from '@carouseldeck/react/curve';
-// Internal: see the test that uses it.
-import { LoopShells } from '../src/loop-shells';
 import {
   addStyle,
   expectSettledTo,
@@ -465,11 +463,12 @@ describe('curve in server HTML', () => {
       expected: range(-2, 3)
     },
     {
-      // Each copy by its own place in the run: those after the slides go on
-      // from the last, those before lead up to the first.
+      // Each real slide's progress wrapped into its own nearest slot
+      // (ADR-0013): `p = i + k·n − s`, `k` clamped to the two buffer sets
+      // either side, rather than running on forever as a copy's would.
       name: 'looping, at defaultIndex 1',
       props: { loop: true, defaultIndex: 1 },
-      expected: [...range(-1, 4), ...range(5, 10), ...range(-7, -2)]
+      expected: ['-1', '0', '1', '2', '3', '-2']
     }
   ])('gives each slide its progress $name', ({ props, expected }) => {
     expect(serverProgress(renderToString(<CurveDeck {...props} />))).toEqual(
@@ -568,18 +567,14 @@ describe('curve in server HTML', () => {
   });
 });
 
-// Task 5 (#144): curve has no stacking target, so a real slide placed over
-// a shell is translated onto it exactly as any non-stacked shells deck's
-// is (Task 3); this is a regression check that the translate still
-// composes with curve's own content transform once an effect is in play.
-describe('one instance (staged): curve with shells', () => {
+// Curve has no stacking target, so a real slide placed over a shell is
+// translated onto it exactly as any non-stacked shells deck's is
+// (ADR-0013): this is a regression check that the translate still composes
+// with curve's own content transform once an effect is in play.
+describe('one instance: curve with shells', () => {
   test("placed before slide 1, slide '6 of 6' turns the mirror of slide 2's turn", async () => {
     addStyle(SLIDE_CSS);
-    render(
-      <LoopShells value>
-        <CurveDeck loop defaultIndex={0} />
-      </LoopShells>
-    );
+    render(<CurveDeck loop defaultIndex={0} />);
     const root = screen.getByRole('region', { name: 'Test deck' });
     const { angles } = readDeck(root);
     await nextFrame();
@@ -589,37 +584,6 @@ describe('one instance (staged): curve with shells', () => {
     expect(a[5]).toBe(-a[1]!);
     expect(a[5]).not.toBe(0);
     expect(root.dataset.index).toBe('0');
-  });
-});
-
-// One instance (staged, #144): with shells, a real slide placed k sets away
-// wraps its progress by k times the slide count instead of running on
-// forever as a copy's distance would (decision, Task 4 notes): `p = i + k·n
-// − s`, `k` clamped to the two buffer sets either side. Curve has no
-// stacking target, so it is in scope here; stacked effects are Task 5's.
-describe('one instance (staged): curve in server HTML', () => {
-  test('gives each real slide its progress wrapped into the nearest slot, looping at defaultIndex 1', async () => {
-    addStyle(SLIDE_CSS);
-    const painted = (viewport: HTMLElement) =>
-      [
-        ...viewport.querySelectorAll<HTMLElement>(
-          ':scope > [data-carouseldeck-slide]'
-        )
-      ].map((slide) => [
-        getComputedStyle(slide).opacity,
-        getComputedStyle(slide.firstElementChild!).transform
-      ]);
-    const { viewport, server, serverProgress, hydrated } =
-      await serverThenHydrated(
-        <LoopShells value>
-          <CurveDeck loop defaultIndex={1} />
-        </LoopShells>,
-        painted
-      );
-
-    expect(serverProgress).toEqual([-1, 0, 1, 2, 3, -2]);
-    expect(progressOf(viewport)).toEqual(serverProgress);
-    expect(hydrated).toEqual(server);
   });
 });
 

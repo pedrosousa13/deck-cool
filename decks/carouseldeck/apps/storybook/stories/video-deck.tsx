@@ -76,9 +76,10 @@ export function VideoDeck({
   );
 }
 
-/** A slide's player, registered by the slide's index. A loop's copy renders
- * the slide again: it shows the video's first frame, still, and registers
- * nothing, so it never replaces or clears the slide's player. */
+/** A slide's player, registered by the slide's index. Each slide mounts
+ * once (ADR-0013): only a small-deck fallback's copy of it renders this
+ * again, showing the video's first frame, still, and registering nothing,
+ * so it never replaces or clears the slide's own player. */
 function SlideVideo({
   source,
   register
