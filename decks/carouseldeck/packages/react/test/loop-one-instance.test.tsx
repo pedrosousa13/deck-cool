@@ -19,7 +19,7 @@ import { mouse } from './mouse';
 // One instance (ADR-0013): each slide's children mount exactly once, over
 // empty, inert shells that carry the snap points on each side of them,
 // instead of copies; a deck whose set of slides is too narrow for a shell
-// to have room beside its own slide falls back to copies instead (Task 6).
+// to have room beside its own slide falls back to copies instead.
 
 type ShellDeckProps = ComponentProps<typeof Deck.Root> & {
   slides?: number;
@@ -186,8 +186,8 @@ describe('one instance: structure', () => {
       const length =
         axisStart(after[0], vertical) - axisStart(mid[0], vertical);
       expect(Math.abs(length)).toBeGreaterThan(1);
-      // Against the mid shell, slide i's own home: with Task 3's
-      // placement live, a slide away from the viewport sits nearest
+      // Against the mid shell, slide i's own home: with placement live, a
+      // slide away from the viewport sits nearest
       // whichever slot that is, not always its own, so its current rect
       // is no longer a stand-in for its home.
       for (let set = -2; set <= 2; set++) {
@@ -237,10 +237,10 @@ describe('one instance: structure', () => {
     expect(root.dataset.index).toBe('3');
   });
 
-  // Task 4 (#144): the mount's own scroll write may be dropped (WebKit, the
-  // prototype's history) or never settle-debounced at all in a fast test, so
-  // this checks the rest lands within two frames, not the ~100ms a settle's
-  // debounce would otherwise hide behind.
+  // #144 (ADR-0013): the mount's own scroll write may be dropped (WebKit,
+  // the prototype's history) or never settle-debounced at all in a fast
+  // test, so this checks the rest lands within two frames, not the ~100ms
+  // a settle's debounce would otherwise hide behind.
   test('rests at defaultIndex within two frames, with no debounce to hide behind', async () => {
     const { root, viewport } = renderShells({ defaultIndex: 3 });
     await nextFrame();
@@ -269,22 +269,22 @@ describe('one instance: structure', () => {
   });
 });
 
-// Review of Task 4, fixup 1 (#144): a slide whose width is not a whole
-// pixel (3 slides each `calc(100% / 3)` of a viewport whose own width is
-// not divisible by 3) was given a shell rounded to the nearest whole
-// pixel, through `offsetWidth`/`offsetHeight`: an `end`- or `center`-
-// aligned rest could then land up to a pixel off. The shell's size now
-// comes from the slide's own computed, subpixel, border-box size instead,
-// still independent of any `translate` or `scale` a consumer writes.
+// #144: a slide whose width is not a whole pixel (3 slides each
+// `calc(100% / 3)` of a viewport whose own width is not divisible by 3)
+// was given a shell rounded to the nearest whole pixel, through
+// `offsetWidth`/`offsetHeight`: an `end`- or `center`-aligned rest could
+// then land up to a pixel off. The shell's size now comes from the
+// slide's own computed, subpixel, border-box size instead, still
+// independent of any `translate` or `scale` a consumer writes.
 describe('one instance: subpixel sizes', () => {
   const thirds = (align: string) =>
-    // Gap enough that the run clears Task 6's own fallback threshold too
-    // (decision 4: L >= viewport + widest slide), not only that it loops
-    // at all: three slides each a third of the 1000px viewport are, on
-    // their own, exactly the small deck that decision describes, however
-    // large the viewport -- the gap is what gives this one enough room to
-    // stay in shells, and the subpixel width under test comes from the
-    // 1000px viewport not dividing evenly by 3, independent of it.
+    // Gap enough that the run clears the fallback-to-copies threshold too
+    // (L >= viewport + widest slide), not only that it loops at all: three
+    // slides each a third of the 1000px viewport are, on their own,
+    // exactly a small deck, however large the viewport -- the gap is what
+    // gives this one enough room to stay in shells, and the subpixel width
+    // under test comes from the 1000px viewport not dividing evenly by 3,
+    // independent of it.
     `.thirds { column-gap: 180px; }
      .thirds > [data-carouseldeck-slide] { width: calc(100% / 3); scroll-snap-align: ${align}; }`;
 
@@ -340,7 +340,7 @@ describe('one instance: subpixel sizes', () => {
   }
 });
 
-// Review of Task 4, fixup 2 (#144): the rAF re-check after mount
+// #144 (ADR-0013): the rAF re-check after mount
 // (`startFrame`, comparing `beforeStart`) ran for every deck, looping or
 // not, shells or copies. It now runs only where the viewport is in shells
 // mode at mount, so every other deck behaves exactly as it does on main.
@@ -380,8 +380,8 @@ describe('one instance: the start re-check is scoped to shells', () => {
     const original = viewport.scrollTo.bind(viewport);
     viewport.scrollTo = ((...args: Parameters<typeof original>) => {
       calls++;
-      // The first write is dropped, as WebKit can before the first paint
-      // (decision 5): a real call, that does not move the position.
+      // The first write is dropped, as WebKit can before the first paint:
+      // a real call, that does not move the position.
       if (calls === 1) return;
       return original(...args);
     }) as typeof viewport.scrollTo;
@@ -402,7 +402,7 @@ describe('one instance: the start re-check is scoped to shells', () => {
   });
 });
 
-// Task 3 (#144): placement over the seam. A real slide is translated onto
+// #144 (ADR-0013): placement over the seam. A real slide is translated onto
 // whichever shell is nearest the viewport, the engine jumps a whole set at
 // rest as it always has, and a press or wheel event on the shells shifts
 // the deck a set the same way it does on copies. Progress and in-view
@@ -591,18 +591,23 @@ describe('one instance: across the seam', () => {
       for (let loop = 0; loop < 3; loop++) {
         for (let i = 0; i < 5; i++) {
           await userEvent.click(next);
-          await sleep(60);
+          await sleep(600);
         }
         readings.push(counterAt());
       }
+      // Three full loops of five presses, with 5 slides: back at the same
+      // index proves it actually went all the way round three times, not
+      // just across one seam.
+      await expectSettledTo(() => root.dataset.index, '4');
       await sleep(400);
       for (let loop = 0; loop < 3; loop++) {
         for (let i = 0; i < 5; i++) {
           await userEvent.click(prev);
-          await sleep(60);
+          await sleep(600);
         }
         readings.push(counterAt());
       }
+      await expectSettledTo(() => root.dataset.index, '4');
       await sleep(400);
 
       // Started outside the iframe: a pointer over its own document never
@@ -734,11 +739,11 @@ describe('one instance: across the seam', () => {
   });
 });
 
-// Task 6 (#144, decision 4): a deck whose run is too short for a shell to
-// have room beside its own slide -- L less than the viewport plus its
-// widest slide -- keeps today's copies instead. The threshold is measured
-// from the real slides alone, so it reads the same whichever is rendered,
-// and the engine corrects a wrong first guess (shells) once it settles.
+// ADR-0013 (#144): a deck whose run is too short for a shell to have room
+// beside its own slide -- L less than the viewport plus its widest slide
+// -- keeps today's copies instead. The threshold is measured from the
+// real slides alone, so it reads the same whichever is rendered, and the
+// engine corrects a wrong first guess (shells) once it settles.
 
 /** A slide's content, reporting `Deck.useSlide()` where a test can read
  * it. */
@@ -756,7 +761,7 @@ function CopyProbe() {
 describe('one instance: fallback to copies', () => {
   test('3 slides at 40% of the viewport (L = 1.2V) render copies, not shells, and loop across the seam both ways', async () => {
     // L = 3 * 0.4V = 1.2V; the threshold is V + 0.4V - 0.5 = 1.4V - 0.5:
-    // comfortably a fallback (decision 4) at any realistic viewport width.
+    // comfortably a fallback at any realistic viewport width.
     addStyle('.forty > [data-carouseldeck-slide] { width: 40%; }');
     render(
       <Deck.Root aria-label="Test deck" loop>
@@ -816,8 +821,7 @@ describe('one instance: fallback to copies', () => {
 
   test('2 full-width slides, exactly at the boundary (L = 2V), keep shells', async () => {
     // L = 2V; the threshold is V + V - 0.5 = 2V - 0.5: L clears it, so the
-    // boundary itself keeps shells (decision 4, and the plan's own risk
-    // note on it).
+    // boundary itself keeps shells.
     const { viewport } = renderShells({ slides: 2 });
     await sleep(100);
 
@@ -829,23 +833,20 @@ describe('one instance: fallback to copies', () => {
     );
   });
 
-  // The plan describes this test as "widening the slides", but decision
-  // 4's own formula, copies = L < viewport + widest - 0.5, is monotonic
-  // the other way whenever there is more than one slide: widening every
-  // slide by the same amount grows L by n times that amount against
-  // widest's one time, so it only ever entrenches shells, never leaves it
-  // (checked directly: 3 slides at 40% above is a fallback; the same 3
-  // slides at 60% each, L = 1.8V against a threshold of V + 0.6V - 0.5,
-  // comfortably clears it and keeps shells). A live switch from shells to
-  // copies needs the slides to narrow instead; this proves the engine's
-  // own live threshold crossing, with the index kept, in the direction
-  // the formula actually allows -- flagged here rather than guessed at
-  // silently, since it reads the opposite of the plan's own wording.
+  // `fallbackToCopies`'s formula, copies = L < viewport + widest - 0.5, is
+  // monotonic in one direction whenever there is more than one slide:
+  // widening every slide by the same amount grows L by n times that
+  // amount against widest's one time, so it only ever entrenches shells,
+  // never leaves it (checked directly: 3 slides at 40% above is a
+  // fallback; the same 3 slides at 60% each, L = 1.8V against a threshold
+  // of V + 0.6V - 0.5, comfortably clears it and keeps shells). A live
+  // switch from shells to copies needs the slides to narrow instead; this
+  // proves the engine's own live threshold crossing, with the index kept,
+  // in the only direction the formula allows.
   //
-  // Run at a non-zero index too (review of Task 6, finding 2): the
-  // resize compensation now anchors on the current index's own snap point
-  // (the fix for finding 1), which keeps the picture, and so the index,
-  // for a slide at any position, not only the first.
+  // Run at a non-zero index too: the resize compensation anchors on the
+  // current index's own snap point, which keeps the picture, and so the
+  // index, for a slide at any position, not only the first.
   for (const index of [1, 2]) {
     test(`narrowing the slides on a mounted deck switches it to copies, keeping its index (index ${index})`, async () => {
       addStyle('.narrowing > [data-carouseldeck-slide] { width: 60%; }');
@@ -898,8 +899,8 @@ describe('one instance: fallback to copies', () => {
   });
 });
 
-// Decision 8 (#144, Task 6, amended by the review): a resize that moves L,
-// and so the spacers' size, scrolls by the delta in the same task, so the
+// ADR-0013, "The resize compensation" (#144): a resize that moves L, and
+// so the spacers' size, scrolls by the delta in the same task, so the
 // picture stays put. Anchored on the current index's own snap point -- the
 // offset from `along.position` to it, read before this refresh's layout
 // and again after, moved by the difference -- so a slide before the
@@ -936,12 +937,11 @@ describe('one instance: keeping the picture when L changes', () => {
     expect(root.dataset.index).toBe('0');
   });
 
-  // Review of Task 6, finding 1: the compensation covered only the
-  // before-spacer's own delta, which happens to be the whole of index 0's
-  // own shift (nothing of its own precedes the first slide), but leaves a
-  // slide before the current index uncompensated: widening or narrowing
-  // slide 2 (nth-child 2, index 1) shifts slide 4's own home (index 3) by
-  // the same amount, which the spacer-only rule never read.
+  // A spacer-only compensation covers only index 0's own shift (nothing
+  // of its own precedes the first slide), but leaves a slide before the
+  // current index uncompensated: widening or narrowing slide 2 (nth-child
+  // 2, index 1) shifts slide 4's own home (index 3) by the same amount,
+  // which a spacer-only rule never reads.
   const beforeCurrentCases: [
     string,
     { viewportClassName?: string; orientation?: Deck.Orientation },
@@ -996,7 +996,7 @@ describe('one instance: keeping the picture when L changes', () => {
   }
 });
 
-// Task 6: leaving shells mode, whether `loop` turns off or a resize
+// ADR-0013: leaving shells mode, whether `loop` turns off or a resize
 // switches the deck to copies, strips every inline style the engine
 // itself wrote on the real slides, so nothing shells wrote leaks into
 // copies' or a plain deck's own layout.
@@ -1078,10 +1078,10 @@ describe('one instance: cleanup leaving shells mode', () => {
     }
   });
 
-  // Review of Task 6, finding 3: `settle` observes every real slide with
-  // the deck's own ResizeObserver in shells mode, but nothing unobserved
-  // them on leaving it, so a slide kept firing `refresh` long after the
-  // engine had stopped caring where it sat.
+  // `settle` observes every real slide with the deck's own
+  // `ResizeObserver` in shells mode, but nothing unobserved them on
+  // leaving it, so a slide kept firing `refresh` long after the engine
+  // had stopped caring where it sat.
   test('loop turned off on a mounted shells deck unobserves every real slide', async () => {
     const RealResizeObserver = window.ResizeObserver;
     const observed = new Set<Element>();

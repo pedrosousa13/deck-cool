@@ -261,7 +261,7 @@ describe('loop', () => {
     // Measured in WebKit: a shell can rest a pixel or two off its slide's
     // rest plus a set's length. A scroll margin on the slides moves their
     // shells' rests 2px here, in every browser: alignCopies copies it onto
-    // every shell (decision 7), since a shell has no margin of its own.
+    // every shell, since a shell has no margin of its own.
     addStyle(
       '.margined > [data-carouseldeck-slide] { scroll-margin-left: 2px; }'
     );
@@ -978,7 +978,7 @@ describe("loop and the deck's other features", () => {
         ]);
         // The engine writes `translate` inline only where the slot it
         // places a slide at changes; a slide placed since its first paint,
-        // by `Deck.Slide`'s own CSS estimate (decision 6), and never moved
+        // by `Deck.Slide`'s own CSS estimate, and never moved
         // since, still reads it through the stylesheet rule that estimate
         // uses, so the computed value, not the inline one, says whether a
         // slide is translated over another's shell.

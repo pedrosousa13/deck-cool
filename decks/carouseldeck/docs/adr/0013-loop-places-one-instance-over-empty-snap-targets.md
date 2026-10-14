@@ -157,18 +157,22 @@ test unchanged.
 **`DeckState.copies`, and which way the fallback switches.** The engine
 publishes `copies: boolean`, true once the run is too short for a shell to
 have room beside its own slide (length less than the viewport plus the
-widest slide, within half a pixel either way so it never oscillates). The
-plan called this a "widening" switch; built, it is the opposite: `L` grows
-`n` times as fast as the widest slide widening does, so only slides
-_narrowing_ can cross the threshold and switch a mounted deck from shells to
-copies, never widening.
+widest slide, less half a pixel's tolerance against an exact boundary). It
+never oscillates between the two ways of measuring the threshold, since
+both read the real slides' own layout, whichever technique is currently
+rendered: `L` grows `n` times as fast as the widest slide widening does, so
+only slides _narrowing_ can cross the threshold and switch a mounted deck
+from shells to copies, never widening. Always false with a stacked effect:
+a stacked shell is never translated, so a short run needs no room beside
+it, and the fallback never raises for one.
 
 **The start write, and its re-check.** The initial scroll position,
-including the shells' own placement, is written a frame after mount, not
-synchronously with it (WebKit can silently drop an earlier write). The next
-animation frame checks the position again against the deck's own current
-index, and writes it once more if nothing else has moved it since: the only
-way it can still read unmoved is that the first write never took.
+including the shells' own placement, is written synchronously, in the
+constructor. In shells mode only, the next animation frame checks the
+position again against the deck's own current index (WebKit can silently
+drop a write made before the first paint), and writes it once more if
+nothing else has moved it since: the only way it can still read unmoved is
+that the first write never took.
 
 **The resize compensation.** A resize or a slide change that moves `L` also
 moves the spacers, which would otherwise shift every slide after the

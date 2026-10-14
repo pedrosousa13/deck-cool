@@ -210,12 +210,12 @@ test('index={NaN} renders and hydrates as index 0', async () => {
 
 // Server HTML holds a loop's shells and spacers too (ADR-0013), not copies,
 // so it already starts on the slide at defaultIndex, not a shell, and
-// hydration moves nothing. The before-spacer's own SSR estimate (decision
-// 6) pushes the slides two sets in, same as a 5-set copies layout would:
-// shells carry no content, so only their estimated inset is compared here,
-// never their size, which decision 6 does not estimate (they are
-// `opacity:0` and `inert`, so a size change at mount, if it ever showed as
-// a shift, would still paint nothing a person sees).
+// hydration moves nothing. The before-spacer's own SSR estimate pushes the
+// slides two sets in, same as a 5-set copies layout would: shells carry no
+// content, so only their estimated inset is compared here, never their
+// size, which the estimate does not cover (they are `opacity:0` and
+// `inert`, so a size change at mount, if it ever showed as a shift, would
+// still paint nothing a person sees).
 test('a looping deck with shells starts on the slide at defaultIndex without layout shift', async () => {
   const slideOffset = (viewport: HTMLElement) =>
     viewport.querySelector('[aria-label="3 of 5"]')!.getBoundingClientRect()

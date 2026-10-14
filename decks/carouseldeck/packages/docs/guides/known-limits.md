@@ -9,7 +9,9 @@ description: 'Known limits of carouseldeck: a small looping deck still renders c
   before #144: their state is their own, and effects, refs and `id`s inside
   them run again. Avoid `id`s in such a deck's slides, or make them unique
   outside the slide. Two full-width slides, exactly at that boundary, still
-  get shells. `Deck.useSlide()` reports `'before'`/`'after'` only in a
+  get shells. A stacked deck (fade, stack) never falls back: its shells are
+  the effect's own snap targets, never translated, so a short run needs no
+  room beside them. `Deck.useSlide()` reports `'before'`/`'after'` only in a
   small deck's copies; everywhere else `copy` is always `undefined`, since a
   real slide is never a copy of itself.
 - **A looping slide's `translate` is the deck's.** The engine moves it onto

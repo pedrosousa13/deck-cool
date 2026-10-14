@@ -97,8 +97,8 @@ const restOf = (root: HTMLElement, viewport: HTMLElement, index: number) => {
     ':scope > [data-carouseldeck-slide]:not([data-carouseldeck-copy])'
   );
   // With loop and a stacked effect, the targets are the shells themselves,
-  // all five sets of them (ADR-0013, Task 5): the own set starts two sets
-  // in, not after a small deck's own copies before (always 0, with shells).
+  // all five sets of them (ADR-0013): the own set starts two sets in, not
+  // after a small deck's own copies before (always 0, with shells).
   const stackedShells =
     targets.length > 0 && targets[0].hasAttribute('data-carouseldeck-shell');
   const before = stackedShells

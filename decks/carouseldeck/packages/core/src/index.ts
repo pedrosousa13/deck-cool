@@ -11,13 +11,14 @@ export interface DeckState {
    * several slides are in view; -1 if no slide snaps. */
   focal: number;
   /** Whether a looping deck has fallen back to rendering copies rather than
-   * shells (ADR-0013, decision 4): true once the run is too short for a
-   * shell to have room beside its own slide -- its length less than the
-   * viewport plus its widest slide -- measured the same way whichever is
-   * rendered, so this never oscillates between the two ways of measuring
-   * it. Always false without `loop`, where every slide fits, or where an
-   * effect stacks the slides (Task 5's own fallback is not raised here).
-   * The caller decides what to render from it. */
+   * shells (ADR-0013): true once the run is too short for a shell to have
+   * room beside its own slide -- its length less than the viewport plus
+   * its widest slide -- measured the same way whichever is rendered, so
+   * this never oscillates between the two ways of measuring it. Always
+   * false without `loop`, where every slide fits, or where an effect
+   * stacks the slides: a stacked deck's shells are never translated, so a
+   * short run needs no room beside them, and this fallback never raises
+   * for it. The caller decides what to render from it. */
   copies: boolean;
 }
 
@@ -131,6 +132,16 @@ export interface DeckEngine {
  * - `data-in-view`: present on each slide with at least one pixel inside the
  *   viewport's scrollport, partly in view included. It hides nothing.
  */
+
+/** Shells mode only (ADR-0013): a real slide's current placement -- the
+ * slot it sits over (-2 to 2, 0 its own) and the logical translate (along
+ * the axis) that puts it there. */
+interface Placed {
+  slot: number;
+  offset: number;
+}
+type PlacedAt = WeakMap<Element, Placed>;
+
 export function createDeck(
   viewport: HTMLElement,
   options: DeckOptions
@@ -187,26 +198,55 @@ export function createDeck(
   let known: Geometry = { points: [], slides: [], length: 0, sets: 0 };
   let knownKind = '';
 
-  // Shells mode only (ADR-0013): each real slide's current placement, as
-  // `place` last wrote it onto it -- the slot it sits over (-2 to 2, 0 its
-  // own) and the logical translate (along the axis) that puts it there.
   // `layoutShells` reads a slide's offset to measure its home independent
   // of it; `writeProgress`, `onClick` and `onFocusIn` read a slide's slot
   // to find where it currently reads as placed. Never read from computed
-  // style (the two defects #144's plan calls out). A `WeakMap` needs no
-  // cleanup as slides come and go.
-  const placedAt = new WeakMap<Element, { slot: number; offset: number }>();
+  // style, which cannot tell the engine's own translate apart from a
+  // consumer's. A `WeakMap` needs no cleanup as slides come and go.
+  const placedAt: PlacedAt = new WeakMap();
   // The geometry `place` needs to keep placing every real slide with no
   // further box read, mid-scroll: cached by the last `layoutShells`, null
   // outside shells mode.
   let placement: Placement | null = null;
-  // Shells mode only (#144, decision 8, review finding 3): the real slides
-  // `settle` currently has the deck's own `ResizeObserver` watching, so a
-  // slide no longer among them -- the deck has left shells mode, or the
-  // slide itself is gone -- is unobserved in the same settle, rather than
-  // going on to fire `refresh` for an engine that has stopped caring where
-  // it sits. Empty outside shells mode.
+  // Shells mode only (ADR-0013): the real slides `settle` currently has
+  // the deck's own `ResizeObserver` watching, so a slide no longer among
+  // them -- the deck has left shells mode, or the slide itself is gone --
+  // is unobserved in the same settle, rather than going on to fire
+  // `refresh` for an engine that has stopped caring where it sits. Empty
+  // outside shells mode.
   let observedSlides = new Set<Element>();
+
+  // `settle` and `refresh` both re-measure the shells before anything else
+  // runs, then keep scroll snapping off for as long as a resize moves L
+  // (ADR-0013, "Snapping, off while shells are relaid out"): a mandatory
+  // snapping scrollport can otherwise re-snap mid-write, undoing
+  // `compensateShift`'s own write before it is even read back. Off only
+  // where a resize actually moves L -- a call that writes nothing new
+  // would only risk the phantom `scrollend` a bare toggle can fire, with
+  // nothing to show for it. `relayout` does whatever `layoutShells` call
+  // each caller needs; it runs after `previous` is captured, so either
+  // caller's own read of it is the same.
+  const beginShellsRelayout = (
+    along: Axis,
+    relayout: () => Placement | null
+  ) => {
+    const previous = placement;
+    placement = relayout();
+    const resized = !!(
+      previous &&
+      placement &&
+      lengthMoved(placement.length, previous.length)
+    );
+    const { style } = viewport;
+    const snap = style.scrollSnapType;
+    if (resized) style.scrollSnapType = 'none';
+    return {
+      previous,
+      endRelayout: () => {
+        if (resized) style.scrollSnapType = snap;
+      }
+    };
+  };
 
   const settle = () => {
     refreshOwed = false;
@@ -218,29 +258,26 @@ export function createDeck(
     shape = [kind, slidesOf(viewport).first].join();
     placeOwed = null;
     const along = axis();
-    // Review of Task 6, findings 1 and 2: `placement` still holds
-    // whichever shell geometry the engine last measured, from this same
-    // settle's own last run or from a `refresh` in between -- compared
-    // against the fresh one below, this tells apart a resize that only
-    // moves L (`compensateShift` below keeps the picture) from no change
-    // at all. A settle can find L already moved with no `refresh` of its
-    // own in between: a scrollend arriving late, after a resize's CSS has
-    // already landed but before its `ResizeObserver` entry has, is not
-    // rare in WebKit (the plan's own "WebKit scrollLeft timing" risk) --
-    // so this reads `previous` the same way `refresh` does, rather than
-    // trusting that only `refresh` ever sees a changed layout.
-    const previous = placement;
-    placement = layoutShells(viewport, along, placedAt);
-    // Shells mode only (#144, decision 8): a real slide's own resize, as
-    // content loading can bring with no resize of the viewport at all,
-    // must still move the shells and the spacers -- `layoutShells` caches
-    // L across scroll events, so nothing else would notice. The same
-    // observer that already watches the viewport; observing an element
-    // it already watches is a no-op, so this never piles up duplicates.
-    // A slide no longer among them -- the deck has left shells mode, as
-    // `clearShells` already strips its inline styles for, or the slide
-    // itself has gone -- is unobserved here instead (review finding 3): it
-    // never fires `refresh` for an engine that has moved on.
+    // `placement` still holds whichever shell geometry the engine last
+    // measured, from this same settle's own last run or a `refresh` in
+    // between -- compared against the fresh one below, this tells apart a
+    // resize that only moves L (`compensateShift` keeps the picture) from
+    // no change at all. A settle can find L already moved with no
+    // `refresh` in between: a late `scrollend`, after a resize's CSS lands
+    // but before its `ResizeObserver` entry fires, is not rare in WebKit.
+    const { previous, endRelayout } = beginShellsRelayout(along, () =>
+      layoutShells(viewport, along, placedAt)
+    );
+    // Shells mode only (ADR-0013): a real slide's own resize, as content
+    // loading can bring with no resize of the viewport at all, must still
+    // move the shells and the spacers -- `layoutShells` caches L across
+    // scroll events, so nothing else would notice. The same
+    // `ResizeObserver` already watches the viewport; observing an element
+    // it already watches is a no-op. A slide no longer among them -- the
+    // deck has left shells mode, as `clearShells` already strips its
+    // inline styles for, or the slide itself has gone -- is unobserved
+    // here instead, so it never fires `refresh` for an engine that has
+    // moved on.
     const nowObserved = placement
       ? new Set(slidesOf(viewport).slides)
       : new Set<Element>();
@@ -249,20 +286,6 @@ export function createDeck(
     }
     for (const slide of nowObserved) resizes.observe(slide);
     observedSlides = nowObserved;
-    // See `refresh`'s own identical wrap: writing the shells' new geometry
-    // (just above) can leave the viewport resting off every current snap
-    // area for a moment, and a mandatory snapping scrollport can re-snap
-    // for that at once, undoing `compensateShift`'s own write before it is
-    // even read back. Off through this whole settle, since it reads the
-    // final resting position `compensateShift` leaves.
-    const resized = !!(
-      previous &&
-      placement &&
-      lengthMoved(placement.length, previous.length)
-    );
-    const { style } = viewport;
-    const snap = style.scrollSnapType;
-    if (resized) style.scrollSnapType = 'none';
     try {
       alignCopies(viewport);
       if (previous && placement) compensateShift(previous, along);
@@ -288,7 +311,7 @@ export function createDeck(
         copies: fallbackToCopies(viewport, along, placement, geometry)
       });
     } finally {
-      if (resized) style.scrollSnapType = snap;
+      endRelayout();
     }
   };
 
@@ -340,41 +363,17 @@ export function createDeck(
     if (resnapFrom !== null) resnapFrom += delta;
   };
 
-  // Shells mode only (#144, decision 8; review of Task 6, finding 1):
-  // keeps the picture when L has moved since `previous`, `layoutShells`'s
-  // own last return before this one. `layoutShells` reads a slide's home
-  // from where it currently sits before writing the spacer's own new
-  // size (decision 2's own point: L comes from the slides alone, never
-  // the spacer) -- so `placement`'s own `homes`, and the shells just
-  // written from them, are briefly stale by exactly the spacer's own
-  // change: the real slides, normal flow after it, only pick that up once
-  // the write has landed. A second call now, with the new spacer already
-  // in place, reads every slide's true, settled position instead --
-  // `length` comes out the same either way, so this never loops.
-  //
-  // The current index's own shell, read fresh against this settled
-  // placement, compared with `known`'s own reading of the same shell from
-  // before this layout, is then the whole shift: the spacer's own share,
-  // for every slide alike, since it sits before all of them in flow, plus
-  // whatever a slide before the current one in flow adds on top of it --
-  // 0 on both counts where nothing before the current index changed, as
-  // at index 0. Keeping that offset unchanged keeps the current slide's
-  // own offset from the viewport unchanged too, a held drag or a move in
-  // flight included: `state.index` is still the snap point nearest what
-  // the user has in hand. Both `refresh` (a resize) and `settle` (any
-  // other layout slipping in between two of the engine's own reads) call
-  // it, each under its own snapping-off window.
-  //
-  // `known` must be this same kind's own reading (`kindOf`): a slide added
-  // or removed moves it within the same kind -- shells still read as
-  // shells, only shifted by the slide, which is exactly the shift above
-  // keeps. But `loop` or an effect changing kind from under it -- stacked
-  // to shells, or shells to copies -- can reach this with `placement`
-  // already the new kind's own, fresh-measured twice over (the two reads
-  // above), while `known` is still a reading from the kind the deck is
-  // leaving: a coordinate of a different mechanism entirely, not a
-  // shifted one of this kind's (#144 regression: the one-instance loop).
-  // Moving between kinds is `keepPlace`'s compensation, never this one's.
+  // Shells mode only (ADR-0013, "The resize compensation"): keeps the
+  // picture steady when a resize or a slide change moves L. `layoutShells`
+  // reads a slide's home before the spacer's own new size lands, so this
+  // re-measures, with the new spacer already in place, into every slide's
+  // true, settled position. The current index's own shell, read fresh
+  // against that settled placement and compared with `known`'s reading of
+  // it from before this layout, is then the whole shift to undo: the
+  // spacer's own share plus whatever a slide before the current one adds.
+  // `known` must be the same kind's own reading (`kindOf`): a kind change
+  // -- stacked to shells, or shells to copies -- is `keepPlace`'s shift to
+  // make, never this one's.
   const compensateShift = (previous: Placement, along: Axis) => {
     if (!placement || !lengthMoved(placement.length, previous.length)) return;
     placement = layoutShells(viewport, along, placedAt);
@@ -1076,43 +1075,23 @@ export function createDeck(
   const refresh = () => {
     followViewport(0);
     const along = axis();
-    // Shells mode, leaving it or staying (#144, Task 6): `placement` still
+    // Shells mode, leaving it or staying (ADR-0013): `placement` still
     // holds the geometry from before this layout, measured the same way
-    // whichever is now rendered (decision 4's own point), so comparing it
-    // against the fresh one below tells apart a resize that only moves L,
-    // which keeps the picture still (decision 8), from a move out of
-    // shells altogether (`loop` off, or a switch to copies), which strips
-    // what shells wrote onto the real slides instead. Stacked shells
-    // (Task 5) write neither translate nor spacers, so `placement` is
-    // always null there: this never runs for them. A slide still on its
-    // own CSS estimate -- entering non-stacked shells mode mid-life, as
-    // turning loop back on or a stacked effect switching to a plain one
-    // can, or simply resized since -- keeps `placedAt` matching it, so
-    // this layout's own `layoutShells`, below, finds its true home, not
-    // its estimate's rect.
-    const previous = placement;
-    seedPlacedAt(along, placedAt, slidesOf(viewport).slides);
-    placement = layoutShells(viewport, along, placedAt);
+    // whichever is now rendered, so comparing it against the fresh one
+    // below tells apart a resize that only moves L, which keeps the
+    // picture still, from a move out of shells altogether (`loop` off, or
+    // a switch to copies), which strips what shells wrote onto the real
+    // slides instead. Stacked shells write neither translate nor spacers,
+    // so `placement` is always null there: this never runs for them.
+    // `seedPlacedAt`, just below, keeps a slide still on its own CSS
+    // estimate matching it first.
+    const { previous, endRelayout } = beginShellsRelayout(along, () => {
+      seedPlacedAt(along, placedAt, slidesOf(viewport).slides);
+      return layoutShells(viewport, along, placedAt);
+    });
     if (previous && !placement && slidesOf(viewport).sets !== 2) {
       clearShells(slidesOf(viewport).slides, placedAt);
     }
-    const resized = !!(
-      previous &&
-      placement &&
-      lengthMoved(placement.length, previous.length)
-    );
-    // Moving the shells under a mandatory snapping scrollport, below and
-    // in the settle this can lead to, can leave it resting off every
-    // current snap area for a moment mid-write: Chromium re-snaps for
-    // that at once, on its own, to whichever shell now measures nearest,
-    // undoing the compensation before it is even read back. Off only
-    // where a resize actually moves L -- an ordinary settle's own
-    // `layoutShells` writes nothing new, so toggling it there too would
-    // only risk the phantom `scrollend` a bare toggle can fire, with
-    // nothing to show for it.
-    const { style } = viewport;
-    const snap = style.scrollSnapType;
-    if (resized) style.scrollSnapType = 'none';
     try {
       alignCopies(viewport);
       if (previous && placement) compensateShift(previous, along);
@@ -1141,7 +1120,7 @@ export function createDeck(
         }
       }
     } finally {
-      if (resized) style.scrollSnapType = snap;
+      endRelayout();
     }
   };
 
@@ -1225,15 +1204,15 @@ export function createDeck(
   // A resize can add or remove snap points without any scroll, and only
   // Chromium reports that through `scrollsnapchange`. Created before the
   // mount's own first `settle` (below), which, in shells mode, observes
-  // every real slide with it too (#144, decision 8): that first settle
+  // every real slide with it too (ADR-0013): that first settle
   // runs synchronously, within this very constructor.
   const resizes = new ResizeObserver(refresh);
   resizes.observe(viewport);
   const beforeStart = axis().position;
-  // Shells mode only (review of Task 4): whether a buffer set's shell could
-  // even be where a dropped write below leaves the deck resting, which is
-  // the only way this is wrong -- a deck with no shells rests wherever the
-  // browser puts it, same as it always has on main.
+  // Shells mode only (ADR-0013): whether a buffer set's shell could even be
+  // where a dropped write below leaves the deck resting, which is the only
+  // way this is wrong -- a deck with no shells rests wherever the browser
+  // puts it, same as it always has on main.
   const shellsAtMount = slidesOf(viewport).sets === 2;
   layoutShells(viewport, axis(), placedAt);
   alignCopies(viewport);
@@ -1614,7 +1593,7 @@ export function createDeck(
         if (slide instanceof HTMLElement) slide.style.removeProperty(PROGRESS);
       }
       // Shells mode writes onto the real slides, which are never in `run`
-      // there (ADR-0013): removed here too (#144, Task 6's `clearShells`).
+      // there (ADR-0013): removed here too (`clearShells`).
       if (atDestroy.sets === 2) clearShells(atDestroy.slides, placedAt);
       resizes.disconnect();
       dirs.disconnect();
@@ -1792,9 +1771,9 @@ function slidesOf(viewport: HTMLElement): {
   /** With loop, how many sets of copies, or of shells, sit before the
    * slides (and after them); 0 without. Shells always give 2. */
   sets: number;
-  /** Shells mode only (#144, Task 5): whether the shells are also an
-   * effect's snap targets, each stacking its own slide in one place rather
-   * than standing in for one out of flow. Always false outside shells. */
+  /** Shells mode only (ADR-0013): whether the shells are also an effect's
+   * snap targets, each stacking its own slide in one place rather than
+   * standing in for one out of flow. Always false outside shells. */
   stacked: boolean;
 } {
   const slides: Element[] = [];
@@ -1821,8 +1800,8 @@ function slidesOf(viewport: HTMLElement): {
   if (shellSets.size > 0) {
     const run = [-2, -1, 0, 1, 2].flatMap((set) => shellSets.get(set) ?? []);
     // A shell is also a snap target only where an effect stacks the slides
-    // (#144, Task 5): every shell carries both markers then, so the first
-    // one answers for all of them.
+    // (ADR-0013): every shell carries both markers then, so the first one
+    // answers for all of them.
     const stacked = run.length > 0 && run[0].hasAttribute(SNAP_TARGET);
     return {
       slides,
@@ -1889,9 +1868,9 @@ const shapeOf = (viewport: HTMLElement) =>
 function alignCopies(viewport: HTMLElement) {
   const { slides, run, first, sets, stacked } = slidesOf(viewport);
   const shells = sets === 2;
-  // Stacked mode (#144, Task 5): the real slides keep the alignment the
-  // effect gives them (`none`), and the shells its targets' (`start`),
-  // neither read from nor copied onto the other.
+  // Stacked mode (ADR-0013): the real slides keep the alignment the effect
+  // gives them (`none`), and the shells its targets' (`start`), neither
+  // read from nor copied onto the other.
   if ((first === 0 && !shells) || (shells && stacked)) return;
   const own = slides.filter(
     (slide): slide is HTMLElement => slide instanceof HTMLElement
@@ -1931,7 +1910,7 @@ interface Placement {
   /** Each real slide's own centre, content-coordinate, with no
    * translate: `place` compares the viewport's centre against these. */
   centres: number[];
-  /** The run's length, `L` (decision 2). */
+  /** The run's length, `L` (ADR-0013). */
   length: number;
   /** The viewport's own size along the axis, cached here so `place` reads
    * no box. */
@@ -1939,8 +1918,8 @@ interface Placement {
 }
 
 /** `style`'s border-box size along `dimension`, subpixel and independent of
- * any `scale` or `translate` (#144, review of Task 4): `getBoundingClientRect`
- * bakes a `scale` in, and `offsetWidth`/`offsetHeight` round to the nearest
+ * any `scale` or `translate` (#144): `getBoundingClientRect` bakes a
+ * `scale` in, and `offsetWidth`/`offsetHeight` round to the nearest
  * whole pixel, off by up to half a pixel for an `end`- or `center`-aligned
  * rest. `width`/`height` is the content box under the default `box-sizing`,
  * so its padding and border are added back; `border-box` counts them
@@ -1966,39 +1945,33 @@ function borderBoxSize(
 
 /**
  * Keeps `placedAt` matching a real slide's own CSS estimate,
- * `--carouseldeck-placed` (decision 6), for as long as the slide is still
- * on it -- no inline `translate` of its own yet, `place` never having had
- * reason to write one over it. `layoutShells`, right after, is about to
- * read every slide's current rect to find its home with that translate
+ * `--carouseldeck-placed` (ADR-0013), for as long as the slide is still on
+ * it -- no inline `translate` of its own yet. `layoutShells`, right after,
+ * reads every slide's current rect to find its home with that translate
  * removed, through `placedAt`, never computed style; a slide still on its
  * estimate has no entry there yet (at mount, or entering non-stacked
- * shells mode mid-life -- switching from a stacked effect to a plain one,
- * or turning loop back on, can), so without this it would read a
- * translated slide's rect as its home outright, off by the estimate's own
- * translate. The estimate's `calc()` scales with the slide's own size, so
- * its offset, `k` sets times the slide count, is read fresh here each
- * time too -- cached at the size an earlier call measured, a resize
- * narrowing or widening the slide afterwards would otherwise throw
- * `layoutShells`' own home for it off by the difference. Once `place`
- * writes an inline `translate`, the slide carries its own fixed value
- * instead, and this leaves it alone.
+ * shells mode mid-life), so without this it would read a translated
+ * slide's rect as its home outright, off by the estimate's own translate.
+ * The estimate's `calc()` scales with the slide's own size, so its offset,
+ * `k` sets times the slide count, is read fresh here each time too. Once
+ * `place` writes an inline `translate`, the slide carries its own fixed
+ * value instead, and this leaves it alone.
  */
-function seedPlacedAt(
-  along: Axis,
-  placedAt: WeakMap<Element, { slot: number; offset: number }>,
-  slides: Element[]
-) {
+function seedPlacedAt(along: Axis, placedAt: PlacedAt, slides: Element[]) {
   for (const slide of slides) {
     if (!(slide instanceof HTMLElement) || slide.style.translate) continue;
-    const kn = parseFloat(
+    const kTimesCount = parseFloat(
       slide.style.getPropertyValue('--carouseldeck-placed')
     );
-    if (!Number.isFinite(kn) || kn === 0) continue;
+    if (!Number.isFinite(kTimesCount) || kTimesCount === 0) continue;
     const size = borderBoxSize(
       getComputedStyle(slide),
       along.vertical ? 'height' : 'width'
     );
-    placedAt.set(slide, { slot: kn / slides.length, offset: kn * size });
+    placedAt.set(slide, {
+      slot: kTimesCount / slides.length,
+      offset: kTimesCount * size
+    });
   }
 }
 
@@ -2008,12 +1981,12 @@ function seedPlacedAt(
  * `translate` the engine itself has placed there (read from `placedAt`,
  * never from computed style: it can hold several components, and a
  * vertical deck's or an RTL one's is not simply its first) — and the run's
- * length `L`, from a slide to its own shell a set over (decision 2: the
- * distance from the first slide's start to the last slide's end, plus its
- * trailing margin, the viewport's gap and the first slide's own leading
- * margin, each with its own already-placed translate removed first, so a
- * slide sitting over a buffer shell never throws `L` off by a multiple of
- * itself). The spacers each take `2L` less one gap, so the scroll range
+ * length `L`, from a slide to its own shell a set over -- the distance
+ * from the first slide's start to the last slide's end, plus its trailing
+ * margin, the viewport's gap and the first slide's own leading margin,
+ * each with its own already-placed translate removed first, so a slide
+ * sitting over a buffer shell never throws `L` off by a multiple of
+ * itself. The spacers each take `2L` less one gap, so the scroll range
  * matches a five-set copies layout; shell `(k, i)` sits at slide `i`'s home
  * plus `k·L`, sized to match it, placed with logical insets so RTL needs
  * no special case. Written only where a value differs, so a settle lays
@@ -2023,14 +1996,14 @@ function seedPlacedAt(
 function layoutShells(
   viewport: HTMLElement,
   along: Axis,
-  placedAt: WeakMap<Element, { slot: number; offset: number }>
+  placedAt: PlacedAt
 ): Placement | null {
   const { slides, run, sets, stacked } = slidesOf(viewport);
   const n = slides.length;
-  // Stacked mode (#144, Task 5): the shells are an effect's own snap
-  // targets, laid out and sized by it (a CSS grid track), never out of
-  // flow or positioned by measuring the slides -- there is no spacer and
-  // no translate either, so nothing here applies.
+  // Stacked mode (ADR-0013, "The stacked progress range"): the shells are
+  // an effect's own snap targets, laid out and sized by it (a CSS grid
+  // track), never out of flow or positioned by measuring the slides --
+  // there is no spacer and no translate either, so nothing here applies.
   if (sets !== 2 || n === 0 || stacked) return null;
   const write = (
     el: Element,
@@ -2047,13 +2020,14 @@ function layoutShells(
     along.span(slide.getBoundingClientRect())
   );
   // The engine's own last-written translate (logical, along the axis),
-  // never read from computed style (the plan's defect 2): a slide not yet
+  // read from `placedAt`, never from computed style, which cannot tell a
+  // consumer's own `translate` apart from the engine's: a slide not yet
   // placed has none.
   const offsets = slides.map((slide) => placedAt.get(slide)?.offset ?? 0);
   // Each slide's own computed style, read once: its border-box size, below,
-  // comes from it rather than its rendered rect's (#144) or `offsetWidth`/
-  // `offsetHeight`'s (review of Task 4) -- a consumer's progress-driven
-  // `scale` (ADR-0003's own docs example) shrinks or grows the rect
+  // comes from it rather than its rendered rect's (#144) or
+  // `offsetWidth`/`offsetHeight`'s -- a consumer's progress-driven `scale`
+  // (ADR-0003's own docs example) shrinks or grows the rect
   // `along.span` reads, and `offsetWidth`/`offsetHeight` round to the
   // nearest whole pixel, off by up to half a pixel for an `end`- or
   // `center`-aligned rest; this stays the slide's true, subpixel size
@@ -2065,16 +2039,14 @@ function layoutShells(
   // Each slide's start, from its span's own centre -- unmoved by a centred
   // `scale`, unlike either edge -- less half its true size, with its own
   // already-placed translate removed: independent of a consumer's scale
-  // and of where `place` last put it (the plan's defect 1 and 2, and
-  // scale, together).
+  // and of where `place` last put it.
   const starts = spans.map(
     ([start, end], i) => (start + end) / 2 - sizes[i] / 2 - offsets[i]
   );
 
   // `length` (L) comes from the slides' own geometry alone, never from
   // where the spacers put them: computed first, so the spacers can be
-  // sized from it before anything reads a slide's position (the plan's
-  // defect 1).
+  // sized from it before anything reads a slide's position.
   const [marginStart0] = along.insets(styles[0], 'margin', 0);
   const [, marginEndN] = along.insets(styles[n - 1], 'margin', 0);
   const start0 = starts[0];
@@ -2093,12 +2065,11 @@ function layoutShells(
   const view = along.view();
   const position = along.position;
   // Each slide's home, with its own already-placed translate removed, so
-  // it is independent of where `place` last put it (the plan's defect 1
-  // and 2 together).
+  // it is independent of where `place` last put it.
   const homes = starts.map((start) => start - view[0] + position);
 
-  // Each slide's own border-box size across the axis, the same subpixel way
-  // (#144, review of Task 4).
+  // Each slide's own border-box size across the axis, the same subpixel
+  // way (#144).
   const crosses = styles.map((style) =>
     borderBoxSize(style, along.vertical ? 'width' : 'height')
   );
@@ -2121,15 +2092,14 @@ function layoutShells(
   };
 }
 
-/** Shells mode's own small-deck fallback (#144, decision 4): the run's
- * length L -- `layoutShells`' own measurement where there is one, or
- * `snapPoints`'s otherwise, the same quantity either way -- against the
- * viewport plus the widest real slide. Strictly less, so an exact
- * boundary (two full-width slides, no gap) keeps shells. False where the
- * deck does not loop at all, or where an effect stacks the slides: a
- * stacked run's own snap targets share one place rather than laying out
- * along the axis, so this L is not theirs to measure, and Task 5's own
- * fallback is not raised here. */
+/** Shells mode's own small-deck fallback (ADR-0013): the run's length L --
+ * `layoutShells`' own measurement where there is one, or `snapPoints`'s
+ * otherwise, the same quantity either way -- against the viewport plus
+ * the widest real slide. Strictly less, so an exact boundary (two
+ * full-width slides, no gap) keeps shells. False where the deck does not
+ * loop at all, or where an effect stacks the slides: a stacked shell is
+ * never translated, so a short run needs no room beside it, and this
+ * fallback never applies there. */
 function fallbackToCopies(
   viewport: HTMLElement,
   along: Axis,
@@ -2151,23 +2121,18 @@ function fallbackToCopies(
   return length < viewEnd - viewStart + widest - 0.5;
 }
 
-/** Shells mode only (#144, Task 6): leaving it, whether `loop` turns off
- * or a resize switches the deck to copies, strips every inline style the
- * engine itself wrote on the real slides -- `translate` and `scroll-snap-
- * align` (`alignCopies` and `place`), plus `scroll-margin` defensively,
- * though shells mode never actually writes that one onto a real slide --
- * and forgets each slide's placement, so nothing shells wrote ever leaks
- * into copies' or a plain deck's own layout. */
-function clearShells(
-  slides: Element[],
-  placedAt: WeakMap<Element, { slot: number; offset: number }>
-) {
+/** Shells mode only (ADR-0013): leaving it, whether `loop` turns off or a
+ * resize switches the deck to copies, strips every inline style the
+ * engine itself wrote on the real slides -- `translate` and
+ * `scroll-snap-align` (`alignCopies` and `place`) -- and forgets each
+ * slide's placement, so nothing shells wrote ever leaks into copies' or a
+ * plain deck's own layout. */
+function clearShells(slides: Element[], placedAt: PlacedAt) {
   for (const slide of slides) {
     placedAt.delete(slide);
     if (!(slide instanceof HTMLElement)) continue;
     slide.style.removeProperty('translate');
     slide.style.removeProperty('scroll-snap-align');
-    slide.style.removeProperty('scroll-margin');
   }
 }
 
@@ -2184,9 +2149,9 @@ function nearestSlot(delta: number, length: number): number {
 /**
  * Shells mode only (ADR-0013): places each real slide, by `translate`,
  * over whichever shell slot is nearest the viewport's centre -- ported
- * from the prototype's `place` and `nearestK` (decision 3). Reads only
- * `geometry`, as `layoutShells` last left it, and `along.position`: no box
- * or computed style, so this is safe to call on every scroll event (the
+ * from the prototype's `place` and `nearestK`. Reads only `geometry`, as
+ * `layoutShells` last left it, and `along.position`: no box or computed
+ * style, so this is safe to call on every scroll event (the
  * press and wheel tests' "reads N boxes" guarantees). Written, and
  * `placedAt` updated, only where the slot differs, so a settle or a
  * scroll event moves nothing twice. A no-op outside shells mode.
@@ -2195,7 +2160,7 @@ function place(
   viewport: HTMLElement,
   along: Axis,
   geometry: Placement | null,
-  placedAt: WeakMap<Element, { slot: number; offset: number }>
+  placedAt: PlacedAt
 ) {
   if (!geometry || geometry.length === 0) return;
   const { centres, length, view } = geometry;
@@ -2494,7 +2459,7 @@ function writeProgress(
   viewport: HTMLElement,
   axis: Axis,
   align: string,
-  placedAt: WeakMap<Element, { slot: number; offset: number }>
+  placedAt: PlacedAt
 ) {
   const view = axis.view();
   // With loop, the copies too, each by its own place in the run: a copy in
@@ -2521,8 +2486,8 @@ function writeProgress(
   };
   if (sets === 2) {
     own.forEach((slide, i) => {
-      // Stacked mode (#144, Task 5): a slide is never translated onto
-      // another slot, so its own box, always `first + i`, is the one to
+      // Stacked mode (ADR-0013): a slide is never translated onto another
+      // slot, so its own box, always `first + i`, is the one to
       // measure it by; its progress wraps into the back of the stack
       // instead (the maintainer's ruling on the fork, `wrapStackedProgress`).
       if (stacked) {
@@ -2541,7 +2506,7 @@ function writeProgress(
   run.forEach((slide, i) => write(slide, i));
 }
 
-/** A stacked, looping slide's progress with shells (ADR-0013, Task 5; the
+/** A stacked, looping slide's progress with shells (ADR-0013; the
  * maintainer's ruling on the fork, 2026-10-13): wrapped into `(b, b + n]`,
  * `b = -0.9985` -- a slide thrown to within the engine's precision returns
  * at the back, rather than carrying on past -1 with nowhere shown, as

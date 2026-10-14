@@ -76,8 +76,8 @@ test('server HTML holds the styles before the viewport, unescaped, and React 18 
   expect(warnings).toEqual([]);
 });
 
-// Two full-width slides is the boundary (ADR-0013, decision 4): a set no
-// shorter than the viewport plus its widest slide keeps shells.
+// Two full-width slides is the boundary (ADR-0013): a set no shorter than
+// the viewport plus its widest slide keeps shells.
 test('a loop shell is inert', () => {
   render(
     <Deck.Root aria-label="Slides" loop>
