@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ComponentProps } from 'react';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, onTestFinished, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import { createDeck } from '@carouseldeck/core';
@@ -865,39 +865,38 @@ describe('one instance (staged): fallback to copies', () => {
   // the formula actually allows -- flagged here rather than guessed at
   // silently, since it reads the opposite of the plan's own wording.
   //
-  // Rests at the first slide, not the second: decision 8's own
-  // compensation keeps the spacer's delta from moving the picture, which
-  // is exactly the first slide's own home (nothing of its own precedes
-  // it, so only the spacer does). A later slide's home also carries every
-  // slide before it, which this rule, scoped to the spacer alone, does
-  // not claim to keep still when those resize too -- not what this test
-  // is about.
-  test('narrowing the slides on a mounted deck switches it to copies, keeping its index', async () => {
-    addStyle('.narrowing > [data-carouseldeck-slide] { width: 60%; }');
-    const { root, viewport } = renderShells({
-      slides: 3,
-      viewportClassName: 'narrowing',
-      defaultIndex: 0
+  // Run at a non-zero index too (review of Task 6, finding 2): the
+  // resize compensation now anchors on the current index's own snap point
+  // (the fix for finding 1), which keeps the picture, and so the index,
+  // for a slide at any position, not only the first.
+  for (const index of [1, 2]) {
+    test(`narrowing the slides on a mounted deck switches it to copies, keeping its index (index ${index})`, async () => {
+      addStyle('.narrowing > [data-carouseldeck-slide] { width: 60%; }');
+      const { root, viewport } = renderShells({
+        slides: 3,
+        viewportClassName: 'narrowing',
+        defaultIndex: index
+      });
+      await sleep(100);
+      expect(
+        viewport.querySelectorAll('[data-carouseldeck-shell]')
+      ).toHaveLength(15);
+      expect(root.dataset.index).toBe(String(index));
+
+      addStyle('.narrowing > [data-carouseldeck-slide] { width: 40%; }');
+      await nextFrame();
+      await nextFrame();
+      await sleep(100);
+
+      expect(
+        viewport.querySelectorAll('[data-carouseldeck-shell]')
+      ).toHaveLength(0);
+      expect(
+        viewport.querySelectorAll('[data-carouseldeck-copy]')
+      ).toHaveLength(6);
+      expect(root.dataset.index).toBe(String(index));
     });
-    await sleep(100);
-    expect(viewport.querySelectorAll('[data-carouseldeck-shell]')).toHaveLength(
-      15
-    );
-    expect(root.dataset.index).toBe('0');
-
-    addStyle('.narrowing > [data-carouseldeck-slide] { width: 40%; }');
-    await nextFrame();
-    await nextFrame();
-    await sleep(100);
-
-    expect(viewport.querySelectorAll('[data-carouseldeck-shell]')).toHaveLength(
-      0
-    );
-    expect(viewport.querySelectorAll('[data-carouseldeck-copy]')).toHaveLength(
-      6
-    );
-    expect(root.dataset.index).toBe('0');
-  });
+  }
 
   test('a shells deck reports copy === undefined everywhere, with exactly n probes', async () => {
     render(
@@ -924,11 +923,14 @@ describe('one instance (staged): fallback to copies', () => {
   });
 });
 
-// Decision 8 (#144, Task 6): a resize that moves L, and so the spacers'
-// size, scrolls by the delta in the same task, so the picture stays put.
-// Scoped to the spacer's own delta, measured from the first real slide's
-// home (nothing of its own precedes it): a slide resizing after the one
-// in view moves only the spacer under it, which this corrects exactly.
+// Decision 8 (#144, Task 6, amended by the review): a resize that moves L,
+// and so the spacers' size, scrolls by the delta in the same task, so the
+// picture stays put. Anchored on the current index's own snap point -- the
+// offset from `along.position` to it, read before this refresh's layout
+// and again after, moved by the difference -- so a slide before the
+// current one in its set, which shifts the current slide's own home too,
+// is covered by the same rule as the spacer's own delta, not a special
+// case of it.
 
 describe('one instance (staged): keeping the picture when L changes', () => {
   test('a slide resized mid-deck does not move the visible slide, in shells mode', async () => {
@@ -958,6 +960,65 @@ describe('one instance (staged): keeping the picture when L changes', () => {
     expect(Math.abs(offset() - before)).toBeLessThanOrEqual(1);
     expect(root.dataset.index).toBe('0');
   });
+
+  // Review of Task 6, finding 1: the compensation covered only the
+  // before-spacer's own delta, which happens to be the whole of index 0's
+  // own shift (nothing of its own precedes the first slide), but leaves a
+  // slide before the current index uncompensated: widening or narrowing
+  // slide 2 (nth-child 2, index 1) shifts slide 4's own home (index 3) by
+  // the same amount, which the spacer-only rule never read.
+  const beforeCurrentCases: [
+    string,
+    { viewportClassName?: string; orientation?: Deck.Orientation },
+    { dir?: 'rtl' },
+    string
+  ][] = [
+    ['widened', {}, {}, '600px'],
+    ['narrowed', {}, {}, '40px'],
+    ['widened, rtl', {}, { dir: 'rtl' }, '600px'],
+    ['widened, vertical', { orientation: 'vertical' }, {}, '600px']
+  ];
+
+  for (const [name, props, opts, size] of beforeCurrentCases) {
+    test(`a slide before the current one (slide 2) resizing does not move the visible slide or its index (${name})`, async () => {
+      const vertical = props.orientation === 'vertical';
+      const rtl = opts.dir === 'rtl';
+      const { root, viewport } = renderShells(
+        {
+          ...props,
+          slides: 5,
+          viewportClassName: 'resize-before',
+          defaultIndex: 3
+        },
+        { dir: opts.dir }
+      );
+      await sleep(100);
+      const offsetOf = () => {
+        const v = viewport.getBoundingClientRect();
+        const s = screen
+          .getByRole('group', { name: '4 of 5' })
+          .getBoundingClientRect();
+        return Math.round(
+          vertical ? s.top - v.top : rtl ? s.right - v.right : s.left - v.left
+        );
+      };
+      const before = offsetOf();
+      expect(before).toBe(0);
+      expect(root.dataset.index).toBe('3');
+
+      addStyle(
+        `.resize-before > [data-carouseldeck-slide]:nth-child(2) { ${
+          vertical ? 'height' : 'width'
+        }: ${size}; }`
+      );
+      await nextFrame();
+      await nextFrame();
+      await sleep(100);
+
+      expect(Math.abs(offsetOf() - before)).toBeLessThanOrEqual(1);
+      expect(root.dataset.index).toBe('3');
+    });
+  }
 });
 
 // Task 6: leaving shells mode, whether `loop` turns off or a resize
@@ -1048,5 +1109,64 @@ describe('one instance (staged): cleanup leaving shells mode', () => {
         scrollMargin: ''
       });
     }
+  });
+
+  // Review of Task 6, finding 3: `settle` observes every real slide with
+  // the deck's own ResizeObserver in shells mode, but nothing unobserved
+  // them on leaving it, so a slide kept firing `refresh` long after the
+  // engine had stopped caring where it sat.
+  test('loop turned off on a mounted shells deck unobserves every real slide', async () => {
+    const RealResizeObserver = window.ResizeObserver;
+    const observed = new Set<Element>();
+    const unobserved = new Set<Element>();
+    class SpyResizeObserver extends RealResizeObserver {
+      observe(target: Element, options?: ResizeObserverOptions) {
+        observed.add(target);
+        super.observe(target, options);
+      }
+      unobserve(target: Element) {
+        unobserved.add(target);
+        super.unobserve(target);
+      }
+    }
+    window.ResizeObserver =
+      SpyResizeObserver as unknown as typeof ResizeObserver;
+    onTestFinished(() => {
+      window.ResizeObserver = RealResizeObserver;
+    });
+
+    function ToggleDeck({ loop }: { loop: boolean }) {
+      return (
+        <Deck.Root aria-label="Test deck" loop={loop} defaultIndex={2}>
+          <Deck.Viewport style={{ width: WIDTH }}>
+            {Array.from({ length: 5 }, (_, i) => (
+              <Deck.Slide key={i}>Slide {i + 1}</Deck.Slide>
+            ))}
+          </Deck.Viewport>
+        </Deck.Root>
+      );
+    }
+    const { rerender } = render(
+      <LoopShells value>
+        <ToggleDeck loop />
+      </LoopShells>
+    );
+    const root = screen.getByRole('region', { name: 'Test deck' });
+    const viewport = viewportOf(root);
+    await sleep(100);
+
+    const slides = realSlidesIn(viewport);
+    expect(slides).toHaveLength(5);
+    for (const slide of slides) expect(observed.has(slide)).toBe(true);
+    for (const slide of slides) expect(unobserved.has(slide)).toBe(false);
+
+    rerender(
+      <LoopShells value>
+        <ToggleDeck loop={false} />
+      </LoopShells>
+    );
+    await sleep(100);
+
+    for (const slide of slides) expect(unobserved.has(slide)).toBe(true);
   });
 });

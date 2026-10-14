@@ -179,6 +179,13 @@ export function createDeck(
   // further box read, mid-scroll: cached by the last `layoutShells`, null
   // outside shells mode.
   let placement: Placement | null = null;
+  // Shells mode only (#144, decision 8, review finding 3): the real slides
+  // `settle` currently has the deck's own `ResizeObserver` watching, so a
+  // slide no longer among them -- the deck has left shells mode, or the
+  // slide itself is gone -- is unobserved in the same settle, rather than
+  // going on to fire `refresh` for an engine that has stopped caring where
+  // it sits. Empty outside shells mode.
+  let observedSlides = new Set<Element>();
 
   const settle = () => {
     refreshOwed = false;
@@ -188,6 +195,18 @@ export function createDeck(
     shape = shapeOf(viewport);
     placeOwed = null;
     const along = axis();
+    // Review of Task 6, findings 1 and 2: `placement` still holds
+    // whichever shell geometry the engine last measured, from this same
+    // settle's own last run or from a `refresh` in between -- compared
+    // against the fresh one below, this tells apart a resize that only
+    // moves L (`compensateShift` below keeps the picture) from no change
+    // at all. A settle can find L already moved with no `refresh` of its
+    // own in between: a scrollend arriving late, after a resize's CSS has
+    // already landed but before its `ResizeObserver` entry has, is not
+    // rare in WebKit (the plan's own "WebKit scrollLeft timing" risk) --
+    // so this reads `previous` the same way `refresh` does, rather than
+    // trusting that only `refresh` ever sees a changed layout.
+    const previous = placement;
     placement = layoutShells(viewport, along, placedAt);
     // Shells mode only (#144, decision 8): a real slide's own resize, as
     // content loading can bring with no resize of the viewport at all,
@@ -195,30 +214,58 @@ export function createDeck(
     // L across scroll events, so nothing else would notice. The same
     // observer that already watches the viewport; observing an element
     // it already watches is a no-op, so this never piles up duplicates.
-    if (placement) {
-      for (const slide of slidesOf(viewport).slides) resizes.observe(slide);
+    // A slide no longer among them -- the deck has left shells mode, as
+    // `clearShells` already strips its inline styles for, or the slide
+    // itself has gone -- is unobserved here instead (review finding 3): it
+    // never fires `refresh` for an engine that has moved on.
+    const nowObserved = placement
+      ? new Set(slidesOf(viewport).slides)
+      : new Set<Element>();
+    for (const slide of observedSlides) {
+      if (!nowObserved.has(slide)) resizes.unobserve(slide);
     }
-    alignCopies(viewport);
-    const geometry = snapPoints(viewport, along);
-    known = geometry;
-    jumpOffCopies(along, geometry);
-    place(viewport, along, placement, placedAt);
-    // Its own settle reports where the deck comes to rest.
-    if (resnap(along, geometry)) return;
-    const { points, slides } = geometry;
-    const index = indexAt(geometry, along.position);
-    const slide = slides.indexOf(index);
-    const run = slidesOf(viewport);
-    align =
-      slide === -1 ? 'start' : along.snapAlign(run.boxes[run.first + slide]);
-    paint(along);
-    publish({
-      index,
-      count: points.length,
-      slide,
-      focal: slide === -1 ? -1 : focalSlide(viewport, along, align),
-      copies: fallbackToCopies(viewport, along, placement, geometry)
-    });
+    for (const slide of nowObserved) resizes.observe(slide);
+    observedSlides = nowObserved;
+    // See `refresh`'s own identical wrap: writing the shells' new geometry
+    // (just above) can leave the viewport resting off every current snap
+    // area for a moment, and a mandatory snapping scrollport can re-snap
+    // for that at once, undoing `compensateShift`'s own write before it is
+    // even read back. Off through this whole settle, since it reads the
+    // final resting position `compensateShift` leaves.
+    const resized = !!(
+      previous &&
+      placement &&
+      placement.length !== previous.length
+    );
+    const { style } = viewport;
+    const snap = style.scrollSnapType;
+    if (resized) style.scrollSnapType = 'none';
+    try {
+      alignCopies(viewport);
+      if (previous && placement) compensateShift(previous, along);
+      const geometry = snapPoints(viewport, along);
+      known = geometry;
+      jumpOffCopies(along, geometry);
+      place(viewport, along, placement, placedAt);
+      // Its own settle reports where the deck comes to rest.
+      if (resnap(along, geometry)) return;
+      const { points, slides } = geometry;
+      const index = indexAt(geometry, along.position);
+      const slide = slides.indexOf(index);
+      const run = slidesOf(viewport);
+      align =
+        slide === -1 ? 'start' : along.snapAlign(run.boxes[run.first + slide]);
+      paint(along);
+      publish({
+        index,
+        count: points.length,
+        slide,
+        focal: slide === -1 ? -1 : focalSlide(viewport, along, align),
+        copies: fallbackToCopies(viewport, along, placement, geometry)
+      });
+    } finally {
+      if (resized) style.scrollSnapType = snap;
+    }
   };
 
   // Resting on a copy, jump one set of slides onto the identical slide: only
@@ -267,6 +314,41 @@ export function createDeck(
     if (drag === 'dragging') dragAt += delta;
     if (taken) taken.at += delta;
     if (resnapFrom !== null) resnapFrom += delta;
+  };
+
+  // Shells mode only (#144, decision 8; review of Task 6, finding 1):
+  // keeps the picture when L has moved since `previous`, `layoutShells`'s
+  // own last return before this one. `layoutShells` reads a slide's home
+  // from where it currently sits before writing the spacer's own new
+  // size (decision 2's own point: L comes from the slides alone, never
+  // the spacer) -- so `placement`'s own `homes`, and the shells just
+  // written from them, are briefly stale by exactly the spacer's own
+  // change: the real slides, normal flow after it, only pick that up once
+  // the write has landed. A second call now, with the new spacer already
+  // in place, reads every slide's true, settled position instead --
+  // `length` comes out the same either way, so this never loops.
+  //
+  // The current index's own shell, read fresh against this settled
+  // placement, compared with `known`'s own reading of the same shell from
+  // before this layout, is then the whole shift: the spacer's own share,
+  // for every slide alike, since it sits before all of them in flow, plus
+  // whatever a slide before the current one in flow adds on top of it --
+  // 0 on both counts where nothing before the current index changed, as
+  // at index 0. Keeping that offset unchanged keeps the current slide's
+  // own offset from the viewport unchanged too, a held drag or a move in
+  // flight included: `state.index` is still the snap point nearest what
+  // the user has in hand. Both `refresh` (a resize) and `settle` (any
+  // other layout slipping in between two of the engine's own reads) call
+  // it, each under its own snapping-off window.
+  const compensateShift = (previous: Placement, along: Axis) => {
+    if (!placement || placement.length === previous.length) return;
+    placement = layoutShells(viewport, along, placedAt);
+    if (!placement) return;
+    const idx = state.index;
+    if (idx < 0 || idx >= known.points.length) return;
+    const now = snapPoints(viewport, along);
+    const to = now.points[idx];
+    if (to !== undefined) moveBy(to - known.points[idx], along);
   };
 
   // A touch or pen pressed on the viewport, or a mouse drag as it starts,
@@ -986,14 +1068,8 @@ export function createDeck(
     const snap = style.scrollSnapType;
     if (resized) style.scrollSnapType = 'none';
     try {
-      if (resized && previous && placement) {
-        // The before-spacer's own size is `2L - gap` (decision 2): grown
-        // or shrunk by twice L's own change, which otherwise shifts
-        // everything after it -- the real slides and the shells -- by
-        // that much too.
-        moveBy(2 * (placement.length - previous.length), along);
-      }
       alignCopies(viewport);
+      if (previous && placement) compensateShift(previous, along);
       // Loop's copies or an effect's snap targets came or went, as when
       // `loop` or an effect changes on a mounted deck: the snap points
       // moved under the viewport, and where the browser puts it then is

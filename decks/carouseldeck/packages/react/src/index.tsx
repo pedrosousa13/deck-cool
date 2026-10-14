@@ -1007,6 +1007,17 @@ const deckDefaults =
   // viewport becomes their containing block, unless the consumer already
   // gives it a non-static position.
   ':where([data-carouseldeck-loop=shells]){position:relative}' +
+  // The engine alone moves a shells deck's scroll position (ADR-0006):
+  // resizing the before-spacer (decision 8) can leave content above the
+  // viewport's own rest point larger or smaller than it was, which is
+  // exactly what the browser's own scroll anchoring reacts to, adjusting
+  // the scroll position on its own, before the engine's next read of it
+  // (review of Task 6, finding 1 -- measured in WebKit). Its own
+  // adjustment and the engine's own compensation would then both move the
+  // viewport for the same resize, overshooting. `overflow-anchor: none`
+  // opts the whole shells subtree out, leaving the engine the only thing
+  // that ever moves it.
+  ':where([data-carouseldeck-loop=shells]){overflow-anchor:none}' +
   // A real slide's SSR estimate (#144, decision 6): placed `k` sets away
   // from its own, before the engine measures, translated by `k` set
   // lengths -- `--carouseldeck-placed`, `k * n` -- exact under the default
