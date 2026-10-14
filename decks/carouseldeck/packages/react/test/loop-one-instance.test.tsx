@@ -542,6 +542,53 @@ describe('one instance: across the seam', () => {
     });
   }
 
+  // Each real slide must sit exactly over one of its own shells, not just
+  // on the right slot. A slide whose slot is unchanged when L changes, as
+  // a resize changes it, must still move to its shell at the new L, or the
+  // gap it leaves beside the next slide shows as a blank frame as it
+  // crosses the viewport. The mount-time estimate must not set L wrong
+  // either: in WebKit, a centred deck's subpixel slides render it 1.5px
+  // off what the engine records for it.
+  test('each real slide sits over one of its own shells, at rest, across the seam each way, and after a resize (centred)', async () => {
+    addStyle(CENTRED);
+    const { viewport, onIndexChange } = renderShells({
+      viewportClassName: 'centred',
+      defaultIndex: 4
+    });
+    const offShells = () =>
+      slidesIn(viewport).flatMap((slide, i) => {
+        const off = Math.min(
+          ...[-2, -1, 0, 1, 2].map((set) =>
+            Math.abs(
+              axisStart(slide, false) -
+                axisStart(shellsAt(viewport, set)[i], false)
+            )
+          )
+        );
+        return off < 0.5 ? [] : [{ slide: i, off }];
+      });
+    await sleep(100);
+    expect(offShells()).toEqual([]);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await expectSettledTo(() => onIndexChange.mock.calls, [[0]]);
+    expect(offShells()).toEqual([]);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    await expectSettledTo(() => onIndexChange.mock.calls, [[0], [4]]);
+    expect(offShells()).toEqual([]);
+
+    // Slide 3 widening moves L, with slides 1 and 2 still on the slot
+    // after: they have to move with it.
+    addStyle(
+      '.centred > [data-carouseldeck-slide]:nth-child(3) { width: 120px; }'
+    );
+    await nextFrame();
+    await nextFrame();
+    await sleep(100);
+    expect(offShells()).toEqual([]);
+  });
+
   test(
     "an iframe's running counter never reloads across the seam, by press, wheel and drag",
     { timeout: 30_000 },

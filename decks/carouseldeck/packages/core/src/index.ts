@@ -134,11 +134,14 @@ export interface DeckEngine {
  */
 
 /** Shells mode only (ADR-0013): a real slide's current placement -- the
- * slot it sits over (-2 to 2, 0 its own) and the logical translate (along
- * the axis) that puts it there. */
+ * slot it sits over (-2 to 2, 0 its own), the logical translate (along
+ * the axis) that puts it there, and the axis' `sign` it was written
+ * under: a change of direction since leaves the physical translate,
+ * `offset * sign`, where it was. */
 interface Placed {
   slot: number;
   offset: number;
+  sign: 1 | -1;
 }
 type PlacedAt = WeakMap<Element, Placed>;
 
@@ -1953,9 +1956,12 @@ function borderBoxSize(
  * shells mode mid-life), so without this it would read a translated
  * slide's rect as its home outright, off by the estimate's own translate.
  * The estimate's `calc()` scales with the slide's own size, so its offset,
- * `k` sets times the slide count, is read fresh here each time too. Once
- * `place` writes an inline `translate`, the slide carries its own fixed
- * value instead, and this leaves it alone.
+ * `k` sets times the slide count, is read fresh here each time too, and
+ * written inline in its place: WebKit resolves the estimate's percentage
+ * against the box snapped to device pixels, so a subpixel slide does not
+ * render where `placedAt` would say, and `layoutShells` would measure L
+ * off by `k` times the slide count times the snapping. Once the slide
+ * carries an inline `translate`, this leaves it alone.
  */
 function seedPlacedAt(along: Axis, placedAt: PlacedAt, slides: Element[]) {
   for (const slide of slides) {
@@ -1968,11 +1974,34 @@ function seedPlacedAt(along: Axis, placedAt: PlacedAt, slides: Element[]) {
       getComputedStyle(slide),
       along.vertical ? 'height' : 'width'
     );
-    placedAt.set(slide, {
-      slot: kTimesCount / slides.length,
-      offset: kTimesCount * size
-    });
+    writePlaced(
+      slide,
+      along,
+      placedAt,
+      kTimesCount / slides.length,
+      kTimesCount * size
+    );
   }
+}
+
+/** Records a real slide's slot and offset in `placedAt`, and writes the
+ * same offset as its inline `translate`, so the two never disagree. */
+function writePlaced(
+  slide: Element,
+  along: Axis,
+  placedAt: PlacedAt,
+  slot: number,
+  offset: number
+) {
+  placedAt.set(slide, { slot, offset, sign: along.sign });
+  if (!(slide instanceof HTMLElement)) return;
+  const value =
+    slot === 0
+      ? 'none'
+      : along.vertical
+        ? `0px ${offset}px`
+        : `${offset * along.sign}px 0px`;
+  if (slide.style.translate !== value) slide.style.translate = value;
 }
 
 /**
@@ -2022,8 +2051,12 @@ function layoutShells(
   // The engine's own last-written translate (logical, along the axis),
   // read from `placedAt`, never from computed style, which cannot tell a
   // consumer's own `translate` apart from the engine's: a slide not yet
-  // placed has none.
-  const offsets = slides.map((slide) => placedAt.get(slide)?.offset ?? 0);
+  // placed has none. Written under the other direction, it reads the
+  // other way along this one.
+  const offsets = slides.map((slide) => {
+    const placed = placedAt.get(slide);
+    return placed ? placed.offset * placed.sign * along.sign : 0;
+  });
   // Each slide's own computed style, read once: its border-box size, below,
   // comes from it rather than its rendered rect's (#144) or
   // `offsetWidth`/`offsetHeight`'s -- a consumer's progress-driven `scale`
@@ -2168,17 +2201,19 @@ function place(
   const centre = along.position + view / 2;
   slides.forEach((slide, i) => {
     const slot = nearestSlot(centre - centres[i], length);
-    if (placedAt.get(slide)?.slot === slot) return;
     const offset = slot * length;
-    placedAt.set(slide, { slot, offset });
-    if (!(slide instanceof HTMLElement)) return;
-    const value =
-      slot === 0
-        ? 'none'
-        : along.vertical
-          ? `0px ${offset}px`
-          : `${offset * along.sign}px 0px`;
-    if (slide.style.translate !== value) slide.style.translate = value;
+    // The offset and direction too, not only the slot: once L is
+    // re-measured, or the direction changes, a slide whose slot is
+    // unchanged still has to move to its shell.
+    const placed = placedAt.get(slide);
+    if (
+      placed?.slot === slot &&
+      placed.offset === offset &&
+      placed.sign === along.sign
+    ) {
+      return;
+    }
+    writePlaced(slide, along, placedAt, slot, offset);
   });
 }
 
