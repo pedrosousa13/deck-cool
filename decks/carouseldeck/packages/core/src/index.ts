@@ -10,6 +10,15 @@ export interface DeckState {
    * the current slide's `scroll-snap-align`. Not the current slide where
    * several slides are in view; -1 if no slide snaps. */
   focal: number;
+  /** Whether a looping deck has fallen back to rendering copies rather than
+   * shells (ADR-0013, decision 4): true once the run is too short for a
+   * shell to have room beside its own slide -- its length less than the
+   * viewport plus its widest slide -- measured the same way whichever is
+   * rendered, so this never oscillates between the two ways of measuring
+   * it. Always false without `loop`, where every slide fits, or where an
+   * effect stacks the slides (Task 5's own fallback is not raised here).
+   * The caller decides what to render from it. */
+  copies: boolean;
 }
 
 /** The axis a deck scrolls along. Horizontal follows the writing direction,
@@ -111,14 +120,21 @@ export function createDeck(
   options: DeckOptions
 ): DeckEngine {
   // Not a reachable state, so the first settle always publishes.
-  let state: DeckState = { index: -1, count: 0, slide: -1, focal: -1 };
+  let state: DeckState = {
+    index: -1,
+    count: 0,
+    slide: -1,
+    focal: -1,
+    copies: false
+  };
 
   const publish = (next: DeckState) => {
     if (
       next.index === state.index &&
       next.count === state.count &&
       next.slide === state.slide &&
-      next.focal === state.focal
+      next.focal === state.focal &&
+      next.copies === state.copies
     ) {
       return;
     }
@@ -173,6 +189,15 @@ export function createDeck(
     placeOwed = null;
     const along = axis();
     placement = layoutShells(viewport, along, placedAt);
+    // Shells mode only (#144, decision 8): a real slide's own resize, as
+    // content loading can bring with no resize of the viewport at all,
+    // must still move the shells and the spacers -- `layoutShells` caches
+    // L across scroll events, so nothing else would notice. The same
+    // observer that already watches the viewport; observing an element
+    // it already watches is a no-op, so this never piles up duplicates.
+    if (placement) {
+      for (const slide of slidesOf(viewport).slides) resizes.observe(slide);
+    }
     alignCopies(viewport);
     const geometry = snapPoints(viewport, along);
     known = geometry;
@@ -191,7 +216,8 @@ export function createDeck(
       index,
       count: points.length,
       slide,
-      focal: slide === -1 ? -1 : focalSlide(viewport, along, align)
+      focal: slide === -1 ? -1 : focalSlide(viewport, along, align),
+      copies: fallbackToCopies(viewport, along, placement, geometry)
     });
   };
 
@@ -218,6 +244,29 @@ export function createDeck(
       jumping = true;
       along.scrollTo(geometry.points[point], 'instant');
     }
+  };
+
+  // Moves the deck by `delta` without it ever looking like it moved (#144,
+  // decisions 3 and 8): snapping off for the write, as the browser would
+  // otherwise snap it, which shows (a drag has it off already; measured in
+  // Chromium, snapping put back while a finger is down, or mid wheel
+  // gesture, snaps nothing), then placed again at once, in the same task,
+  // so nothing paints a wrong frame. `shiftOffCopies` uses it to move the
+  // deck a set onto the slides; the spacer compensation below, for a
+  // resize that moves L, uses it to keep the picture still. Either way,
+  // positions kept from before the move go with it; `jumping`, `relaidOut`
+  // and `userScroll` are untouched; a no-op move leaves it so.
+  const moveBy = (delta: number, along: Axis) => {
+    if (delta === 0) return;
+    const { style } = viewport;
+    const snap = style.scrollSnapType;
+    style.scrollSnapType = 'none';
+    along.scrollTo(along.position + delta, 'instant');
+    style.scrollSnapType = snap;
+    place(viewport, along, placement, placedAt);
+    if (drag === 'dragging') dragAt += delta;
+    if (taken) taken.at += delta;
+    if (resnapFrom !== null) resnapFrom += delta;
   };
 
   // A touch or pen pressed on the viewport, or a mouse drag as it starts,
@@ -267,22 +316,11 @@ export function createDeck(
     const from = restOf(copy);
     if (to === null || from === null) return null;
     const shift = Math.min(Math.max(to, 0), along.max()) - from;
-    // Snapping off for the shift, as the browser would snap it, which shows;
-    // a drag has it off already. Measured in Chromium, snapping put back
-    // while a finger is down, or mid wheel gesture, snaps nothing.
-    const { style } = viewport;
-    const snap = style.scrollSnapType;
-    style.scrollSnapType = 'none';
-    along.scrollTo(at + shift, 'instant');
-    style.scrollSnapType = snap;
-    // In the same task as the shift's scroll (ADR-0013): no waiting on the
+    // `moveBy` turns snapping off for the write and places again at once,
+    // in the same task as the shift's scroll (ADR-0013): no waiting on the
     // browser's own, possibly later, scroll event for a frame to paint
     // correctly.
-    place(viewport, along, placement, placedAt);
-    // Positions kept from before the shift move with it.
-    if (drag === 'dragging') dragAt += shift;
-    if (taken) taken.at += shift;
-    if (resnapFrom !== null) resnapFrom += shift;
+    moveBy(shift, along);
     return at + shift;
   };
 
@@ -915,30 +953,73 @@ export function createDeck(
 
   const refresh = () => {
     followViewport(0);
-    placement = layoutShells(viewport, axis(), placedAt);
-    alignCopies(viewport);
-    // Loop's copies or an effect's snap targets came or went, as when `loop`
-    // or an effect changes on a mounted deck: the snap points moved under
-    // the viewport, and where the browser puts it then is no snap point of
-    // the deck's own choosing. Noted at once, so a later refresh, as the
-    // resize the new layout can bring, does not count it twice.
-    const next = shapeOf(viewport);
-    if (next !== shape) {
-      shape = next;
-      if (keepPlace()) return;
+    const along = axis();
+    // Shells mode, leaving it or staying (#144, Task 6): `placement` still
+    // holds the geometry from before this layout, measured the same way
+    // whichever is now rendered (decision 4's own point), so comparing it
+    // against the fresh one below tells apart a resize that only moves L,
+    // which keeps the picture still (decision 8), from a move out of
+    // shells altogether (`loop` off, or a switch to copies), which strips
+    // what shells wrote onto the real slides instead. Stacked shells
+    // (Task 5) write neither translate nor spacers, so `placement` is
+    // always null there: this never runs for them.
+    const previous = placement;
+    placement = layoutShells(viewport, along, placedAt);
+    if (previous && !placement && slidesOf(viewport).sets !== 2) {
+      clearShells(slidesOf(viewport).slides, placedAt);
     }
-    if (!scrolling && !move && drag !== 'dragging') {
-      settle();
-      relaidAt = axis().position;
-      awaitQuiet();
-    } else {
-      paint();
-      // A move settles at its own end, and so do a drag and the user's
-      // scroll (see `relaidAt`).
-      if (!move && drag === 'idle' && !userScroll) {
-        refreshOwed = true;
-        awaitQuiet();
+    const resized = !!(
+      previous &&
+      placement &&
+      placement.length !== previous.length
+    );
+    // Moving the shells under a mandatory snapping scrollport, below and
+    // in the settle this can lead to, can leave it resting off every
+    // current snap area for a moment mid-write: Chromium re-snaps for
+    // that at once, on its own, to whichever shell now measures nearest,
+    // undoing the compensation before it is even read back. Off only
+    // where a resize actually moves L -- an ordinary settle's own
+    // `layoutShells` writes nothing new, so toggling it there too would
+    // only risk the phantom `scrollend` a bare toggle can fire, with
+    // nothing to show for it.
+    const { style } = viewport;
+    const snap = style.scrollSnapType;
+    if (resized) style.scrollSnapType = 'none';
+    try {
+      if (resized && previous && placement) {
+        // The before-spacer's own size is `2L - gap` (decision 2): grown
+        // or shrunk by twice L's own change, which otherwise shifts
+        // everything after it -- the real slides and the shells -- by
+        // that much too.
+        moveBy(2 * (placement.length - previous.length), along);
       }
+      alignCopies(viewport);
+      // Loop's copies or an effect's snap targets came or went, as when
+      // `loop` or an effect changes on a mounted deck: the snap points
+      // moved under the viewport, and where the browser puts it then is
+      // no snap point of the deck's own choosing. Noted at once, so a
+      // later refresh, as the resize the new layout can bring, does not
+      // count it twice.
+      const next = shapeOf(viewport);
+      if (next !== shape) {
+        shape = next;
+        if (keepPlace()) return;
+      }
+      if (!scrolling && !move && drag !== 'dragging') {
+        settle();
+        relaidAt = axis().position;
+        awaitQuiet();
+      } else {
+        paint();
+        // A move settles at its own end, and so do a drag and the user's
+        // scroll (see `relaidAt`).
+        if (!move && drag === 'idle' && !userScroll) {
+          refreshOwed = true;
+          awaitQuiet();
+        }
+      }
+    } finally {
+      if (resized) style.scrollSnapType = snap;
     }
   };
 
@@ -1052,6 +1133,13 @@ export function createDeck(
   // slides, before `restOn`'s own read of the snap points, which runs
   // before `settle`'s (ADR-0013): without it, the mid shells have no
   // `scroll-snap-align` yet, and there is nowhere to rest.
+  // A resize can add or remove snap points without any scroll, and only
+  // Chromium reports that through `scrollsnapchange`. Created before the
+  // mount's own first `settle` (below), which, in shells mode, observes
+  // every real slide with it too (#144, decision 8): that first settle
+  // runs synchronously, within this very constructor.
+  const resizes = new ResizeObserver(refresh);
+  resizes.observe(viewport);
   const beforeStart = axis().position;
   // Shells mode only (review of Task 4): whether a buffer set's shell could
   // even be where a dropped write below leaves the deck resting, which is
@@ -1151,10 +1239,6 @@ export function createDeck(
   viewport.addEventListener('wheel', onWheel, { passive: true });
   viewport.addEventListener('keydown', onKeyDown);
   viewport.addEventListener('focusin', onFocusIn);
-  // A resize can add or remove snap points without any scroll, and only
-  // Chromium reports that through `scrollsnapchange`.
-  const resizes = new ResizeObserver(refresh);
-  resizes.observe(viewport);
   // A media query can change which slides snap, as when a breakpoint changes
   // the page size, without resizing the viewport at all.
   window.addEventListener('resize', refresh);
@@ -1440,16 +1524,9 @@ export function createDeck(
         slide.removeAttribute(IN_VIEW);
         if (slide instanceof HTMLElement) slide.style.removeProperty(PROGRESS);
       }
-      // Shells mode writes `scroll-snap-align` onto the real slides, which
-      // are never in `run` there (ADR-0013): removed here too.
-      if (atDestroy.sets === 2) {
-        for (const slide of atDestroy.slides) {
-          if (slide instanceof HTMLElement) {
-            slide.style.removeProperty('scroll-snap-align');
-            slide.style.removeProperty('translate');
-          }
-        }
-      }
+      // Shells mode writes onto the real slides, which are never in `run`
+      // there (ADR-0013): removed here too (#144, Task 6's `clearShells`).
+      if (atDestroy.sets === 2) clearShells(atDestroy.slides, placedAt);
       resizes.disconnect();
       dirs.disconnect();
       window.removeEventListener('resize', refresh);
@@ -1890,6 +1967,56 @@ function layoutShells(
     length,
     view: view[1] - view[0]
   };
+}
+
+/** Shells mode's own small-deck fallback (#144, decision 4): the run's
+ * length L -- `layoutShells`' own measurement where there is one, or
+ * `snapPoints`'s otherwise, the same quantity either way -- against the
+ * viewport plus the widest real slide. Strictly less, so an exact
+ * boundary (two full-width slides, no gap) keeps shells. False where the
+ * deck does not loop at all, or where an effect stacks the slides: a
+ * stacked run's own snap targets share one place rather than laying out
+ * along the axis, so this L is not theirs to measure, and Task 5's own
+ * fallback is not raised here. */
+function fallbackToCopies(
+  viewport: HTMLElement,
+  along: Axis,
+  placement: Placement | null,
+  geometry: Geometry
+): boolean {
+  const { slides, sets, stacked } = slidesOf(viewport);
+  if (sets === 0 || slides.length === 0 || stacked) return false;
+  const length = placement ? placement.length : geometry.length;
+  if (length === 0) return false;
+  const widest = slides.reduce((max, slide) => {
+    const size = borderBoxSize(
+      getComputedStyle(slide),
+      along.vertical ? 'height' : 'width'
+    );
+    return Math.max(max, size);
+  }, 0);
+  const [viewStart, viewEnd] = along.view();
+  return length < viewEnd - viewStart + widest - 0.5;
+}
+
+/** Shells mode only (#144, Task 6): leaving it, whether `loop` turns off
+ * or a resize switches the deck to copies, strips every inline style the
+ * engine itself wrote on the real slides -- `translate` and `scroll-snap-
+ * align` (`alignCopies` and `place`), plus `scroll-margin` defensively,
+ * though shells mode never actually writes that one onto a real slide --
+ * and forgets each slide's placement, so nothing shells wrote ever leaks
+ * into copies' or a plain deck's own layout. */
+function clearShells(
+  slides: Element[],
+  placedAt: WeakMap<Element, { slot: number; offset: number }>
+) {
+  for (const slide of slides) {
+    placedAt.delete(slide);
+    if (!(slide instanceof HTMLElement)) continue;
+    slide.style.removeProperty('translate');
+    slide.style.removeProperty('scroll-snap-align');
+    slide.style.removeProperty('scroll-margin');
+  }
 }
 
 /** The slot `k` (clamped to the two buffer sets each side, ADR-0013)

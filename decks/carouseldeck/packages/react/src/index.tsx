@@ -41,6 +41,12 @@ interface DeckContextValue {
   slide: number | null;
   /** The focal slide; null until the viewport has been measured. */
   focal: number | null;
+  /** Whether the engine has fallen back to rendering loop's copies rather
+   * than shells (#144, decision 4): false until it measures a run too
+   * short for shells to have room, so `Viewport` renders shells first and
+   * corrects if the engine's own measurement says otherwise. Meaningless
+   * without `loop`. */
+  copies: boolean;
   /** The slides in Deck.Viewport, for the first render only, before any
    * measurement: Dots and Counter then count a page per slide. Null after, or
    * where Root cannot see Viewport's children. */
@@ -205,7 +211,16 @@ export function Root({
     count: number | null;
     slide: number | null;
     focal: number | null;
-  }>({ index: initialIndex, count: null, slide: null, focal: null });
+    copies: boolean;
+  }>({
+    index: initialIndex,
+    count: null,
+    slide: null,
+    focal: null,
+    // Unmeasured: Viewport renders shells first, the engine's own first
+    // settle corrects it (#144, decision 4) before the first paint.
+    copies: false
+  });
   const viewportRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<DeckEngine>(null);
   const onIndexChangeRef = useRef(onIndexChange);
@@ -721,8 +736,18 @@ const viewportStyles: Record<Orientation, CSSProperties> = {
  * `loop`, a copy of every slide on each side of them; an `effect` may add a
  * snap target after them for each. */
 export function Viewport({ style, children, effect, ...props }: ViewportProps) {
-  const { viewportRef, engineRef, orientation, loop, count, initialIndex } =
-    useDeckContext('Viewport');
+  const {
+    viewportRef,
+    engineRef,
+    orientation,
+    loop,
+    count,
+    initialIndex,
+    // The engine's own small-deck fallback (#144, decision 4); renamed so
+    // it does not shadow `copies` below, which is whether to render
+    // loop's copies at all.
+    copies: fallback
+  } = useDeckContext('Viewport');
   // Staging switch for #144: shells instead of copies, for the new tests
   // only (not exported from the package entry). Deleted in Task 7.
   const shellsOn = use(LoopShells);
@@ -730,8 +755,8 @@ export function Viewport({ style, children, effect, ...props }: ViewportProps) {
   const slides = Children.toArray(children);
   // A deck whose slides all fit has nothing to loop (see createDeck).
   const looping = loop && !everySlideFits(count);
-  const shells = looping && shellsOn;
-  const copies = looping && !shellsOn;
+  const shells = looping && shellsOn && !fallback;
+  const copies = looping && (!shellsOn || fallback);
   // Whether the effect stacks the slides in one place: known from calling
   // its layout once -- stacked or not never depends on the count passed
   // in, only the grid it draws does.

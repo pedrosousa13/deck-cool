@@ -293,11 +293,14 @@ describe('one instance (staged): structure', () => {
 // still independent of any `translate` or `scale` a consumer writes.
 describe('one instance (staged): subpixel sizes', () => {
   const thirds = (align: string) =>
-    // A few pixels of gap, so the three slides' run is longer than the
-    // 1000px viewport by more than a pixel: with none, three slides at
-    // exactly a third of it each would all fit, and the deck would not
-    // loop at all.
-    `.thirds { column-gap: 6px; }
+    // Gap enough that the run clears Task 6's own fallback threshold too
+    // (decision 4: L >= viewport + widest slide), not only that it loops
+    // at all: three slides each a third of the 1000px viewport are, on
+    // their own, exactly the small deck that decision describes, however
+    // large the viewport -- the gap is what gives this one enough room to
+    // stay in shells, and the subpixel width under test comes from the
+    // 1000px viewport not dividing evenly by 3, independent of it.
+    `.thirds { column-gap: 180px; }
      .thirds > [data-carouseldeck-slide] { width: calc(100% / 3); scroll-snap-align: ${align}; }`;
 
   for (const align of ['end', 'center'] as const) {
@@ -749,5 +752,301 @@ describe('one instance (staged): across the seam', () => {
     // The visible slide only; the rest, placed nearest the viewport but
     // off to either side, are not.
     expect(expected.filter(Boolean)).toHaveLength(1);
+  });
+});
+
+// Task 6 (#144, decision 4): a deck whose run is too short for a shell to
+// have room beside its own slide -- L less than the viewport plus its
+// widest slide -- keeps today's copies instead. The threshold is measured
+// from the real slides alone, so it reads the same whichever is rendered,
+// and the engine corrects a wrong first guess (shells) once it settles.
+
+/** A slide's content, reporting `Deck.useSlide()` where a test can read
+ * it. */
+function CopyProbe() {
+  const { index, copy } = Deck.useSlide();
+  return (
+    <span
+      data-testid="copy-probe"
+      data-index={index}
+      data-copy={copy ?? 'none'}
+    />
+  );
+}
+
+describe('one instance (staged): fallback to copies', () => {
+  test('3 slides at 40% of the viewport (L = 1.2V) render copies, not shells, and loop across the seam both ways', async () => {
+    // L = 3 * 0.4V = 1.2V; the threshold is V + 0.4V - 0.5 = 1.4V - 0.5:
+    // comfortably a fallback (decision 4) at any realistic viewport width.
+    addStyle('.forty > [data-carouseldeck-slide] { width: 40%; }');
+    render(
+      <LoopShells value>
+        <Deck.Root aria-label="Test deck" loop>
+          <Deck.Prev />
+          <Deck.Viewport className="forty" style={{ width: WIDTH }}>
+            {Array.from({ length: 3 }, (_, i) => (
+              <Deck.Slide key={i}>
+                Slide {i + 1}
+                <CopyProbe />
+              </Deck.Slide>
+            ))}
+          </Deck.Viewport>
+          <Deck.Next />
+        </Deck.Root>
+      </LoopShells>
+    );
+    const root = screen.getByRole('region', { name: 'Test deck' });
+    const viewport = viewportOf(root);
+    await sleep(100);
+
+    expect(viewport.querySelectorAll('[data-carouseldeck-shell]')).toHaveLength(
+      0
+    );
+    const copies = [...viewport.querySelectorAll('[data-carouseldeck-copy]')];
+    expect(copies).toHaveLength(6);
+
+    const probeOf = (slide: Element) =>
+      slide.querySelector<HTMLElement>('[data-testid="copy-probe"]')!;
+    // `slidesIn` also matches copies (each is a `Deck.Slide` rendered
+    // again, carrying `data-carouseldeck-slide` the same as the real
+    // ones): the real slides alone are the ones without a `copy` marker.
+    const realSlides = [
+      ...viewport.querySelectorAll<HTMLElement>(
+        ':scope > [data-carouseldeck-slide]:not([data-carouseldeck-copy])'
+      )
+    ];
+    expect(realSlides).toHaveLength(3);
+    for (const slide of realSlides) {
+      expect(probeOf(slide).dataset.copy).toBe('none');
+    }
+    for (const copy of copies) {
+      expect(probeOf(copy).dataset.copy).toBe(
+        copy.getAttribute('data-carouseldeck-copy')
+      );
+    }
+
+    const next = screen.getByRole('button', { name: 'Next' });
+    const prev = screen.getByRole('button', { name: 'Previous' });
+    for (let i = 0; i < 3; i++) {
+      await userEvent.click(next);
+      await expectSettledTo(() => root.dataset.index, String((i + 1) % 3));
+    }
+    for (let i = 0; i < 3; i++) {
+      await userEvent.click(prev);
+      await expectSettledTo(() => root.dataset.index, String((2 - i) % 3));
+    }
+  });
+
+  test('2 full-width slides, exactly at the boundary (L = 2V), keep shells', async () => {
+    // L = 2V; the threshold is V + V - 0.5 = 2V - 0.5: L clears it, so the
+    // boundary itself keeps shells (decision 4, and the plan's own risk
+    // note on it).
+    const { viewport } = renderShells({ slides: 2 });
+    await sleep(100);
+
+    expect(viewport.querySelectorAll('[data-carouseldeck-shell]')).toHaveLength(
+      10
+    );
+    expect(viewport.querySelectorAll('[data-carouseldeck-copy]')).toHaveLength(
+      0
+    );
+  });
+
+  // The plan describes this test as "widening the slides", but decision
+  // 4's own formula, copies = L < viewport + widest - 0.5, is monotonic
+  // the other way whenever there is more than one slide: widening every
+  // slide by the same amount grows L by n times that amount against
+  // widest's one time, so it only ever entrenches shells, never leaves it
+  // (checked directly: 3 slides at 40% above is a fallback; the same 3
+  // slides at 60% each, L = 1.8V against a threshold of V + 0.6V - 0.5,
+  // comfortably clears it and keeps shells). A live switch from shells to
+  // copies needs the slides to narrow instead; this proves the engine's
+  // own live threshold crossing, with the index kept, in the direction
+  // the formula actually allows -- flagged here rather than guessed at
+  // silently, since it reads the opposite of the plan's own wording.
+  //
+  // Rests at the first slide, not the second: decision 8's own
+  // compensation keeps the spacer's delta from moving the picture, which
+  // is exactly the first slide's own home (nothing of its own precedes
+  // it, so only the spacer does). A later slide's home also carries every
+  // slide before it, which this rule, scoped to the spacer alone, does
+  // not claim to keep still when those resize too -- not what this test
+  // is about.
+  test('narrowing the slides on a mounted deck switches it to copies, keeping its index', async () => {
+    addStyle('.narrowing > [data-carouseldeck-slide] { width: 60%; }');
+    const { root, viewport } = renderShells({
+      slides: 3,
+      viewportClassName: 'narrowing',
+      defaultIndex: 0
+    });
+    await sleep(100);
+    expect(viewport.querySelectorAll('[data-carouseldeck-shell]')).toHaveLength(
+      15
+    );
+    expect(root.dataset.index).toBe('0');
+
+    addStyle('.narrowing > [data-carouseldeck-slide] { width: 40%; }');
+    await nextFrame();
+    await nextFrame();
+    await sleep(100);
+
+    expect(viewport.querySelectorAll('[data-carouseldeck-shell]')).toHaveLength(
+      0
+    );
+    expect(viewport.querySelectorAll('[data-carouseldeck-copy]')).toHaveLength(
+      6
+    );
+    expect(root.dataset.index).toBe('0');
+  });
+
+  test('a shells deck reports copy === undefined everywhere, with exactly n probes', async () => {
+    render(
+      <LoopShells value>
+        <Deck.Root aria-label="Test deck" loop>
+          <Deck.Viewport style={{ width: WIDTH }}>
+            {Array.from({ length: 5 }, (_, i) => (
+              <Deck.Slide key={i}>
+                Slide {i + 1}
+                <CopyProbe />
+              </Deck.Slide>
+            ))}
+          </Deck.Viewport>
+        </Deck.Root>
+      </LoopShells>
+    );
+    await sleep(100);
+
+    const probes = screen.getAllByTestId('copy-probe');
+    expect(probes).toHaveLength(5);
+    for (const probe of probes) {
+      expect(probe.dataset.copy).toBe('none');
+    }
+  });
+});
+
+// Decision 8 (#144, Task 6): a resize that moves L, and so the spacers'
+// size, scrolls by the delta in the same task, so the picture stays put.
+// Scoped to the spacer's own delta, measured from the first real slide's
+// home (nothing of its own precedes it): a slide resizing after the one
+// in view moves only the spacer under it, which this corrects exactly.
+
+describe('one instance (staged): keeping the picture when L changes', () => {
+  test('a slide resized mid-deck does not move the visible slide, in shells mode', async () => {
+    const { root, viewport } = renderShells({
+      slides: 5,
+      viewportClassName: 'resize-mid',
+      defaultIndex: 0
+    });
+    await sleep(100);
+    const visible = screen.getByRole('group', { name: '1 of 5' });
+    const offset = () =>
+      Math.round(
+        visible.getBoundingClientRect().left -
+          viewport.getBoundingClientRect().left
+      );
+    const before = offset();
+
+    // Slide 4 (nth-child 4, index 3): after the visible slide, so widening
+    // it moves only the spacer under the visible one, nothing of its own.
+    addStyle(
+      '.resize-mid > [data-carouseldeck-slide]:nth-child(4) { width: 600px; }'
+    );
+    await nextFrame();
+    await nextFrame();
+    await sleep(100);
+
+    expect(Math.abs(offset() - before)).toBeLessThanOrEqual(1);
+    expect(root.dataset.index).toBe('0');
+  });
+});
+
+// Task 6: leaving shells mode, whether `loop` turns off or a resize
+// switches the deck to copies, strips every inline style the engine
+// itself wrote on the real slides, so nothing shells wrote leaks into
+// copies' or a plain deck's own layout.
+
+describe('one instance (staged): cleanup leaving shells mode', () => {
+  const realSlidesIn = (viewport: HTMLElement) => [
+    ...viewport.querySelectorAll<HTMLElement>(
+      ':scope > [data-carouseldeck-slide]:not([data-carouseldeck-copy])'
+    )
+  ];
+
+  const engineStylesOf = (slide: HTMLElement) => ({
+    translate: slide.style.translate,
+    scrollSnapAlign: slide.style.scrollSnapAlign,
+    scrollMargin: slide.style.scrollMargin
+  });
+
+  test('loop turned off on a mounted shells deck leaves no engine-written inline style on any real slide', async () => {
+    function ToggleDeck({ loop }: { loop: boolean }) {
+      return (
+        <Deck.Root aria-label="Test deck" loop={loop} defaultIndex={2}>
+          <Deck.Viewport style={{ width: WIDTH }}>
+            {Array.from({ length: 5 }, (_, i) => (
+              <Deck.Slide key={i}>Slide {i + 1}</Deck.Slide>
+            ))}
+          </Deck.Viewport>
+        </Deck.Root>
+      );
+    }
+    const { rerender } = render(
+      <LoopShells value>
+        <ToggleDeck loop />
+      </LoopShells>
+    );
+    const root = screen.getByRole('region', { name: 'Test deck' });
+    const viewport = viewportOf(root);
+    await sleep(100);
+    expect(viewport.querySelectorAll('[data-carouseldeck-shell]')).toHaveLength(
+      25
+    );
+
+    rerender(
+      <LoopShells value>
+        <ToggleDeck loop={false} />
+      </LoopShells>
+    );
+    await sleep(100);
+
+    const slides = realSlidesIn(viewport);
+    expect(slides).toHaveLength(5);
+    for (const slide of slides) {
+      expect(engineStylesOf(slide)).toEqual({
+        translate: '',
+        scrollSnapAlign: '',
+        scrollMargin: ''
+      });
+    }
+  });
+
+  test('narrowing into copies on a mounted shells deck leaves no engine-written inline style on any real slide', async () => {
+    addStyle('.cleanup > [data-carouseldeck-slide] { width: 60%; }');
+    const { viewport } = renderShells({
+      slides: 3,
+      viewportClassName: 'cleanup'
+    });
+    await sleep(100);
+    expect(viewport.querySelectorAll('[data-carouseldeck-shell]')).toHaveLength(
+      15
+    );
+
+    addStyle('.cleanup > [data-carouseldeck-slide] { width: 40%; }');
+    await nextFrame();
+    await nextFrame();
+    await sleep(100);
+    expect(viewport.querySelectorAll('[data-carouseldeck-copy]')).toHaveLength(
+      6
+    );
+
+    const slides = realSlidesIn(viewport);
+    expect(slides).toHaveLength(3);
+    for (const slide of slides) {
+      expect(engineStylesOf(slide)).toEqual({
+        translate: '',
+        scrollSnapAlign: '',
+        scrollMargin: ''
+      });
+    }
   });
 });
