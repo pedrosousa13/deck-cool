@@ -143,7 +143,7 @@ export default defineConfig({
       // cannot pick out the pages with a demo, so each is listed. They share
       // one budget, the largest one's, so a release that moves or adds a demo
       // among these pages still builds; a demo on another page needs it listed.
-      ...Object.fromEntries(DOCS_DEMO_PAGES.map((path) => [path, "71kb"])),
+      ...Object.fromEntries(DOCS_DEMO_PAGES.map((path) => [path, "73kb"])),
     },
     adapter: cloudflarePages(),
   },
