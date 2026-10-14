@@ -1,5 +1,18 @@
 # @slidedeck/core
 
+## 1.3.0
+
+### Minor Changes
+
+- 749e8d3: A looping deck mounts each slide once instead of rendering it again in copies before and after: the engine moves the one slide, by `translate`, onto whichever of its five sets of empty, inert shells sits nearest the viewport, so a slide's state, refs, effects, ids and media stay the same across the seam and the jump. A deck too short for a shell to have room beside its own slide still falls back to rendering copies as before, and `Deck.useSlide()` reports them there; a stacked deck (fade, stack) never falls back, since its shells are never translated and so need no extra room.
+
+  A consumer may notice: a looping slide's computed `scroll-snap-align` now reads `none`, since its shell carries the snap point instead; `translate` on a looping slide belongs to the deck, so a consumer's own `translate` there is overwritten; a translated slide's `position: fixed` descendants are now contained by it; `Deck.useSlide().copy` is `undefined` everywhere except a small deck's fallback copies; and core exports two new markers, `SHELL` and `SPACER`, next to `COPY` and `SNAP_TARGET`, plus a new `DeckState.copies` field reporting which way a looping deck is rendering.
+
+### Patch Changes
+
+- cc8b628: A mouse drag whose `setPointerCapture` throws, as a busy main thread can make it when it delivers the pointer's move after the pointer itself is gone, no longer sticks in "dragging" with no pointer left to release it: the engine tries capture before anything else changes, so a throw there leaves the drag never started.
+- 83454b5: A looping deck no longer strands the counter on the wrong slide when a slide is added or removed while its own jump off a copy still has a scroll end pending with the browser: the deck now goes back to the current index once that scroll ends too, instead of reading it from wherever the jump's uncompensated scroll left the viewport.
+
 ## 1.2.0
 
 ### Minor Changes
