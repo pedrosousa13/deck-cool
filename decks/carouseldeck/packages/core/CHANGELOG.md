@@ -1,5 +1,15 @@
 # @slidedeck/core
 
+## 1.3.1
+
+### Patch Changes
+
+- 8a7de54: A looping deck's JavaScript placement path no longer leaves a real slide's translate on the wrong axis after `setOrientation`: the deck forgets each slide's own placement on an axis change, instead of reading its old-axis offset back out along the new axis, so a slide whose slot does not change writes no translate at all.
+- d3ef7ea: A looping deck's Next and Prev no longer stall once rapid presses outrun the deck's own settle: before, a press could ask to step past the shells the scroll range reaches, where the browser clamps the write and fires no event to jump off at, pinning the deck there for every press after. A press now corrects the position into the middle set first, synchronously, so it always has a full set of room ahead of it.
+- 5b7efab: A looping slide now places itself with a scroll-driven animation where the browser supports one (Chromium 115+, Safari 26+), rather than a scroll listener on every scroll event; Firefox, and Safari before 26, still get the scroll listener.
+
+  A consumer may notice: a looping slide now always contains its `position: fixed` descendants and starts a stacking context, for as long as it loops, not only while it is translated to a different slot; and each looping slide carries one placement animation of its own, which `slide.getAnimations()` and `document.getAnimations()` list alongside a consumer's own.
+
 ## 1.3.0
 
 ### Minor Changes

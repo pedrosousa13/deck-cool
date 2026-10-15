@@ -1,5 +1,14 @@
 # @carouseldeck/react-18
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [8a7de54]
+- Updated dependencies [d3ef7ea]
+- Updated dependencies [5b7efab]
+  - @carouseldeck/core@1.3.1
+
 ## 1.3.0
 
 ### Minor Changes
