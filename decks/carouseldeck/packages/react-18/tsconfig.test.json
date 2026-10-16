@@ -9,7 +9,8 @@
     "types": [],
     "paths": {
       "@carouseldeck/react": ["./dist/index.d.ts"],
-      "@carouseldeck/react/fade": ["./dist/fade.d.ts"]
+      "@carouseldeck/react/fade": ["./dist/fade.d.ts"],
+      "@carouseldeck/react/stack": ["./dist/stack.d.ts"]
     }
   },
   "include": ["test/consumer.tsx"]

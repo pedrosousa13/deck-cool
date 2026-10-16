@@ -26,6 +26,10 @@
       "types": "./dist/curve.d.ts",
       "default": "./dist/curve.js"
     },
+    "./stack": {
+      "types": "./dist/stack.d.ts",
+      "default": "./dist/stack.js"
+    },
     "./theme.css": {
       "default": "./dist/theme.css"
     }

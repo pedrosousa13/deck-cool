@@ -21,7 +21,7 @@ export default defineConfig({
         replacement: here('./packages/core/src/index.ts')
       },
       {
-        find: /^@carouseldeck\/react\/(fade|curve)$/,
+        find: /^@carouseldeck\/react\/(fade|curve|stack)$/,
         replacement: `${react18}dist/$1.js`
       },
       {

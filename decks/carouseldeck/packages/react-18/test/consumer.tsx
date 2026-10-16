@@ -3,6 +3,7 @@
 import { createRef } from 'react';
 import * as Deck from '@carouseldeck/react';
 import { fade } from '@carouseldeck/react/fade';
+import { stack } from '@carouseldeck/react/stack';
 
 const region = createRef<HTMLDivElement>();
 const slide = createRef<HTMLDivElement>();
@@ -25,3 +26,5 @@ export const App = () => (
 
 // @ts-expect-error -- orientation is horizontal or vertical
 void (<Deck.Root orientation="rtl" />);
+
+void (<Deck.Viewport effect={stack} />);

@@ -69,7 +69,12 @@ export default defineConfig({
       apply: 'build',
       closeBundle() {
         mkdirSync(here('dist'), { recursive: true });
-        for (const file of ['index.d.ts', 'fade.d.ts', 'curve.d.ts']) {
+        for (const file of [
+          'index.d.ts',
+          'fade.d.ts',
+          'curve.d.ts',
+          'stack.d.ts'
+        ]) {
           copyFileSync(here(`../react/dist/${file}`), here(`dist/${file}`));
         }
         copyFileSync(`${source}theme.css`, here('dist/theme.css'));
@@ -81,7 +86,8 @@ export default defineConfig({
       entry: {
         index: `${source}index.tsx`,
         fade: `${source}fade.ts`,
-        curve: `${source}curve.ts`
+        curve: `${source}curve.ts`,
+        stack: `${source}stack.ts`
       },
       formats: ['es'],
       fileName: (_format, name) => `${name}.js`
