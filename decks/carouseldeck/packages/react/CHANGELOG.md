@@ -1,5 +1,11 @@
 # @slidedeck/react
 
+## 1.3.3
+
+### Patch Changes
+
+- @carouseldeck/core@1.3.3
+
 ## 1.3.2
 
 ### Patch Changes

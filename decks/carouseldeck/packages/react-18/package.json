@@ -1,6 +1,6 @@
 {
   "name": "@carouseldeck/react-18",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "@carouseldeck/react built for React 18: headless, composable carousel primitives on native scroll snap.",
   "license": "MIT",
   "homepage": "https://carousel.deck.cool",

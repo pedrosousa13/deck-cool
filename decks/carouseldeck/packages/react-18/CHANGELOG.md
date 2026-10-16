@@ -1,5 +1,12 @@
 # @carouseldeck/react-18
 
+## 1.3.3
+
+### Patch Changes
+
+- 1aec379: `@carouseldeck/react-18` now ships the stack effect at `@carouseldeck/react-18/stack`, as `@carouseldeck/react` does.
+- @carouseldeck/core@1.3.3
+
 ## 1.3.2
 
 ### Patch Changes

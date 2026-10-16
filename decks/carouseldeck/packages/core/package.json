@@ -1,6 +1,6 @@
 {
   "name": "@carouseldeck/core",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "Framework-neutral engine for carouseldeck, a headless carousel built on native scroll snap.",
   "license": "MIT",
   "homepage": "https://carousel.deck.cool",
