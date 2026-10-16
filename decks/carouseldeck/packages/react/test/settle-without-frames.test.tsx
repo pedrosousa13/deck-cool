@@ -4,7 +4,9 @@ import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import {
   addStyle,
+  expectRestOnASlide,
   expectSettledTo,
+  sleep,
   TestDeck,
   viewportOf,
   WIDTH
@@ -236,3 +238,34 @@ test('in a hidden document, where no frame renders, a stopped move still settles
   await expectSettledTo(() => viewport.scrollLeft, index * WIDTH);
   expect(root.dataset.index).toBe(String(index));
 });
+
+// #163: a burst of rapid arrow-key presses that ends right at the scroll
+// range's edge can leave the published index one behind where the viewport
+// actually rests. The browser's native key scroll snaps through each slide
+// on the way, settling (and reporting) correctly at every one of them; but
+// the final key's own scroll, clamped at the hard edge, can end with no
+// `scrollend` or `scrollsnapchange` of its own, so nothing ever corrects the
+// last, mid-burst report once the viewport goes on past it. 7 slides: 40
+// presses is not a multiple of 7, so landing on the wrong slide would show.
+test(
+  '40 ArrowRight presses 50ms apart rest on the last slide, then 40 ArrowLeft back rest on the first',
+  { timeout: 30_000 },
+  async () => {
+    const { root, viewport, onIndexChange } = renderDeck({ slides: 7 });
+    viewport.focus();
+
+    for (let i = 0; i < 40; i++) {
+      await userEvent.keyboard('{ArrowRight}');
+      await sleep(50);
+    }
+    await expectRestOnASlide(viewport, root, onIndexChange);
+    expect(root.dataset.index).toBe('6');
+
+    for (let i = 0; i < 40; i++) {
+      await userEvent.keyboard('{ArrowLeft}');
+      await sleep(50);
+    }
+    await expectRestOnASlide(viewport, root, onIndexChange);
+    expect(root.dataset.index).toBe('0');
+  }
+);

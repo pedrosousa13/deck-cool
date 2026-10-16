@@ -7,6 +7,7 @@ import { createDeck } from '@carouseldeck/core';
 import {
   addStyle,
   CENTRED,
+  expectRestOnASlide,
   expectSettledTo,
   nextFrame,
   pagesOf,
@@ -2049,16 +2050,6 @@ describe.each(['css', 'js'] as const)(
 // for it the way it is for a press of Next or Prev: this only checks that
 // the position never pins at an edge, that it rests on a real slide once
 // the run stops, and that the deck still answers a press after.
-//
-// Deliberately not `expectRestOnASlide` (fixtures.tsx): that also checks
-// the rest against the engine's own current-index bookkeeping
-// (`data-current`, `root.dataset.index`), and a burst of rapid native key
-// scrolls in Chromium can desync that bookkeeping by exactly one slide from
-// where the browser actually rests, with no loop involved at all -- the
-// same desync reproduces on a deck with `loop` left off, pinned at its
-// plain scroll range's own hard edge. That is a pre-existing bug of its
-// own, outside what #146 corrects; this test checks the loop seam alone, by
-// the viewport's own geometry.
 describe.each(['css', 'js'] as const)(
   'one instance: 40 arrow-key presses 50 ms apart, never stalled at rest (%s)',
   (path) => {
@@ -2104,40 +2095,11 @@ describe.each(['css', 'js'] as const)(
       }
     }
 
-    /** Waits for `viewport.scrollLeft` to stop moving, the same rest
-     * `expectRestOnASlide` waits for, without its further checks against
-     * the engine's own current-index bookkeeping (see the comment above). */
-    async function waitForRest(viewport: HTMLElement) {
-      let last = NaN;
-      await expect
-        .poll(
-          async () => {
-            const at = viewport.scrollLeft;
-            await sleep(300);
-            const still = at === last && at === viewport.scrollLeft;
-            last = viewport.scrollLeft;
-            return still;
-          },
-          { timeout: 8000 }
-        )
-        .toBe(true);
-    }
-
-    /** Whether some real slide's own box sits flush with the viewport's
-     * start, as a slide at rest, start-aligned (`renderShells` sets no
-     * `centred`), always does: a deck pinned at the seam, or resting
-     * between shells with no real slide placed over the visible one, has
-     * none. */
-    function restsOnARealSlide(viewport: HTMLElement) {
-      const view = viewport.getBoundingClientRect();
-      return slidesIn(viewport).some(
-        (slide) => Math.abs(slide.getBoundingClientRect().left - view.left) < 1
-      );
-    }
-
     test('ArrowRight then ArrowLeft: never pins at the edge, and keeps answering a press', async () => {
       placementPath(path);
-      const { viewport } = renderShells({ slides: SLIDES });
+      const { root, viewport, onIndexChange } = renderShells({
+        slides: SLIDES
+      });
       expectPlacementPath(viewport, path);
       const next = screen.getByRole('button', { name: 'Next' });
       viewport.focus();
@@ -2147,31 +2109,22 @@ describe.each(['css', 'js'] as const)(
         pressKeys('{ArrowRight}', 40)
       );
       expect(rightSpan).toBeLessThan(500);
-      await waitForRest(viewport);
-      expect(
-        Math.min(viewport.scrollLeft, max - viewport.scrollLeft)
-      ).toBeGreaterThan(1);
-      expect(restsOnARealSlide(viewport)).toBe(true);
+      await expectRestOnASlide(viewport, root, onIndexChange);
 
       const leftSpan = await longestEdgeSpan(viewport, max, () =>
         pressKeys('{ArrowLeft}', 40)
       );
       expect(leftSpan).toBeLessThan(500);
-      await waitForRest(viewport);
-      expect(
-        Math.min(viewport.scrollLeft, max - viewport.scrollLeft)
-      ).toBeGreaterThan(1);
-      expect(restsOnARealSlide(viewport)).toBe(true);
+      await expectRestOnASlide(viewport, root, onIndexChange);
 
       // The deck still answers a press after the run: one more key, settled,
       // then Next, settled, and the position moved on.
       await pressKeys('{ArrowRight}', 1);
-      await waitForRest(viewport);
+      await expectRestOnASlide(viewport, root, onIndexChange);
       const before = viewport.scrollLeft;
       next.click();
-      await waitForRest(viewport);
+      await expectRestOnASlide(viewport, root, onIndexChange);
       expect(viewport.scrollLeft).not.toBe(before);
-      expect(restsOnARealSlide(viewport)).toBe(true);
     });
   }
 );
