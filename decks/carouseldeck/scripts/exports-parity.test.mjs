@@ -1,6 +1,6 @@
 // @carouseldeck/react-18 ships the same entries as @carouseldeck/react, so a
 // consumer's subpath import resolves the same way on both (packages/react-18/
-// AGENTS.md). The one allowed difference is the `react-server` condition:
+// README.md). The one allowed difference is the `react-server` condition:
 // React 18 has no server components.
 
 import assert from 'node:assert/strict';
