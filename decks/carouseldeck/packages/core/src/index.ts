@@ -752,7 +752,7 @@ export function createDeck(
   // `resnap` below and to tell quiet a scroll clamped there, with no
   // `scrollend` or `scrollsnapchange` of its own to confirm it, has nowhere
   // left to be cut short from.
-  const onSnapPoint = (along: Axis) => {
+  const restsOnSnapPoint = (along: Axis) => {
     const at = along.position;
     const restOf = snapRest(viewport, along);
     const copyRestOf = snapRest(viewport, along, false);
@@ -779,7 +779,7 @@ export function createDeck(
     // is no rest: the browser rests it at the end, but the deck could not
     // jump off it, as its slide a set back would rest on no snap point
     // (#48). So a deck there re-snaps to one within the scroll range.
-    if (onSnapPoint(along)) {
+    if (restsOnSnapPoint(along)) {
       resnapFrom = null;
       taken = null;
       confirm = null;
@@ -969,14 +969,16 @@ export function createDeck(
     // going -- a finger yet to lift -- a key has nothing left to wait on
     // once it is quiet, so settling it here never cuts it short, where a
     // rapid run of presses can otherwise end clamped on a point with no
-    // `scrollend` or `scrollsnapchange` of its own to confirm it.
+    // `scrollend` or `scrollsnapchange` of its own to confirm it. `onScroll`
+    // re-arms this quiet for as long as the key scroll keeps scrolling, so
+    // it only checks the rest once the viewport has actually gone still.
     else if (
       !move &&
       !shifted?.ended &&
       (!scrolling ||
         (hasScrollEnd &&
           (!refreshOwed || userScroll) &&
-          !(keyScroll && onSnapPoint(axis()))))
+          !(keyScroll && restsOnSnapPoint(axis()))))
     ) {
       refreshOwed = false;
       return;
@@ -1009,7 +1011,12 @@ export function createDeck(
     // The user's scroll goes on from the shift: its end is to come.
     if (shifted && Math.abs(axis().position - shifted.at) >= 1) shifted = null;
     if (move) move.stalled = false;
-    if (!hasScrollEnd || move || confirm || refreshOwed) awaitQuiet();
+    // A key scroll re-arms quiet on every scroll event too (#163): its rest
+    // check above only means something once the scroll itself has stopped,
+    // not merely 100ms after the key that started it.
+    if (!hasScrollEnd || move || confirm || refreshOwed || keyScroll) {
+      awaitQuiet();
+    }
   };
   // A scroll whose end event never comes must not leave `scrolling` set for
   // good: a refresh would then only paint, a settle owed to a pointer would
@@ -1044,7 +1051,8 @@ export function createDeck(
   // `scrollsnapchange` of its own to confirm it -- a rapid run of key
   // presses can leave its last one clamped with neither. Set by every
   // `takeOver`, so a later wheel or pointer gesture clears it as surely as
-  // a key sets it.
+  // a key sets it, and cleared once it settles (`scrollEnded`), so a later
+  // scroll of the engine's own does not inherit its re-arming of quiet.
   let keyScroll = false;
   // Whether the engine's own jump off a copy (`jumpOffCopies`) has a scroll
   // still pending with the browser: set where it starts that scroll,
@@ -1091,8 +1099,8 @@ export function createDeck(
     // only the gesture's first (#163): `endMove` just stopped whatever
     // quiet an already-going scroll was relying on, and a rapid run of key
     // presses keeps `userScroll` true throughout, so only re-arming here
-    // ever gives it another chance to confirm a scroll `onSnapPoint` left
-    // with no end event of its own.
+    // ever gives it another chance to confirm a scroll `restsOnSnapPoint`
+    // left with no end event of its own.
     if (!userScroll || key) awaitQuiet();
   };
 
@@ -1223,6 +1231,10 @@ export function createDeck(
     }
     scrolling = false;
     jumping = false;
+    // The key scroll this settles, if any, is over: a later scroll with
+    // nothing to do with it, the engine's own included, must not inherit
+    // its re-arming of quiet (#163).
+    keyScroll = false;
     // A new layout may have moved the snap points under a move or the jump
     // still going (`relaidOut`): rest on the move's target, or the jump's,
     // the current index.

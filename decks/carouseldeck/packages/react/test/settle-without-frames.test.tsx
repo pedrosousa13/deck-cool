@@ -239,14 +239,24 @@ test('in a hidden document, where no frame renders, a stopped move still settles
   expect(root.dataset.index).toBe(String(index));
 });
 
+/** The page the Dots' `aria-current` names, from `renderDeck`'s own
+ * `Deck.Dots` controls. */
+const currentDotIndex = (root: HTMLElement) => {
+  const current = root.querySelector(
+    '[data-carouseldeck-dots] [aria-current]'
+  )!;
+  return Number(current.getAttribute('aria-label')!.split(' ').at(-1)) - 1;
+};
+
 // #163: a burst of rapid arrow-key presses that ends right at the scroll
 // range's edge can leave the published index one behind where the viewport
 // actually rests. The browser's native key scroll snaps through each slide
 // on the way, settling (and reporting) correctly at every one of them; but
 // the final key's own scroll, clamped at the hard edge, can end with no
 // `scrollend` or `scrollsnapchange` of its own, so nothing ever corrects the
-// last, mid-burst report once the viewport goes on past it. 7 slides: 40
-// presses is not a multiple of 7, so landing on the wrong slide would show.
+// last, mid-burst report once the viewport goes on past it. 40 presses is
+// well more than enough to run the deck into that edge; the bug is the last
+// one ending clamped there with no end event, not which slide it lands on.
 test(
   '40 ArrowRight presses 50ms apart rest on the last slide, then 40 ArrowLeft back rest on the first',
   { timeout: 30_000 },
@@ -260,6 +270,7 @@ test(
     }
     await expectRestOnASlide(viewport, root, onIndexChange);
     expect(root.dataset.index).toBe('6');
+    expect(currentDotIndex(root)).toBe(6);
 
     for (let i = 0; i < 40; i++) {
       await userEvent.keyboard('{ArrowLeft}');
@@ -267,5 +278,36 @@ test(
     }
     await expectRestOnASlide(viewport, root, onIndexChange);
     expect(root.dataset.index).toBe('0');
+    expect(currentDotIndex(root)).toBe(0);
   }
 );
+
+// #163: quiet used to check a key scroll's rest a fixed 100ms after the key
+// that started it, not 100ms after the scroll itself last moved, so a single
+// native key scroll still going past that point -- an End or Home over many
+// snap points, or just a slow one -- could be settled while only passing
+// near one of them. A vertical deck of many short slides gives the browser's
+// own End scroll plenty of snap points to pass near on its way to the last:
+// every `onIndexChange` call it makes along the way must already be the
+// slide it finally rests on.
+test('an End key scroll over many snap points never reports one it only passed near', async () => {
+  addStyle(`
+    .short-slides { height: 300px; }
+    .short-slides > * { height: 20px; min-height: 20px; flex: none; }
+  `);
+  const { root, viewport, onIndexChange } = renderDeck({
+    slides: 40,
+    orientation: 'vertical',
+    viewportClassName: 'short-slides'
+  });
+  viewport.focus();
+
+  await userEvent.keyboard('{End}');
+  await expectRestOnASlide(viewport, root, onIndexChange);
+
+  const final = Number(root.dataset.index);
+  for (const [index] of onIndexChange.mock.calls) {
+    expect(index).toBe(final);
+  }
+  expect(currentDotIndex(root)).toBe(final);
+});
