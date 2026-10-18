@@ -11,6 +11,13 @@ from your own components. It returns:
   when the deck snaps in pages.
 - `count`: the number of snap points, or `null` until the viewport is
   measured, as on the server.
+- `slide` and `focal`: the current slide and the focal slide, always a slide
+  even where `count` and `index` count pages. Both are `null` until the
+  viewport is measured, as on the server; `focal` is `-1` where no slide
+  snaps.
+- `slideCount`: the number of slides, as opposed to `count`, the snap
+  points: fewer where the deck snaps in pages. A loop's extra copies are
+  never counted.
 - `loop`: whether `Deck.Root` has `loop`.
 - `fits`: whether every slide fits, where the built-in controls are absent.
 - `canPrev` and `canNext`: whether `Deck.Prev` and `Deck.Next` are enabled.

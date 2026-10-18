@@ -86,6 +86,9 @@ test("useDeck reports the deck's state and its moves", () => {
   expectTypeOf<Deck.UseDeckResult>().toEqualTypeOf<{
     index: number;
     count: number | null;
+    slide: number | null;
+    focal: number | null;
+    slideCount: number;
     loop: boolean;
     fits: boolean;
     canPrev: boolean;

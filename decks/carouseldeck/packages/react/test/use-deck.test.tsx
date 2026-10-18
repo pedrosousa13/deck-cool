@@ -1,8 +1,8 @@
-import { createRef, Profiler, type ReactNode } from 'react';
+import { act, createRef, Profiler, type ReactNode } from 'react';
 import { renderToString } from 'react-dom/server';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, test, vi } from 'vitest';
+import { page, userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import {
   addStyle,
@@ -20,12 +20,25 @@ import {
 
 /** Writes what useDeck reports where a test can read it. */
 function Probe() {
-  const { index, count, loop, fits, canPrev, canNext } = Deck.useDeck();
+  const {
+    index,
+    count,
+    slide,
+    focal,
+    slideCount,
+    loop,
+    fits,
+    canPrev,
+    canNext
+  } = Deck.useDeck();
   return (
     <span
       data-probe=""
       data-index={index}
       data-count={count ?? 'null'}
+      data-slide={slide ?? 'null'}
+      data-focal={focal ?? 'null'}
+      data-slide-count={slideCount}
       data-loop={loop}
       data-fits={fits}
       data-can-prev={canPrev}
@@ -39,6 +52,9 @@ const probed = () => {
   return {
     index: Number(probe.index),
     count: probe.count === 'null' ? null : Number(probe.count),
+    slide: probe.slide === 'null' ? null : Number(probe.slide),
+    focal: probe.focal === 'null' ? null : Number(probe.focal),
+    slideCount: Number(probe.slideCount),
     loop: probe.loop === 'true',
     fits: probe.fits === 'true',
     canPrev: probe.canPrev === 'true',
@@ -84,27 +100,72 @@ describe('useDeck reports the state the built-in controls show', () => {
     [
       'at the start',
       { defaultIndex: 0 },
-      { index: 0, count: 5, loop: false, canPrev: false, canNext: true }
+      {
+        index: 0,
+        count: 5,
+        slide: 0,
+        focal: 0,
+        slideCount: 5,
+        loop: false,
+        canPrev: false,
+        canNext: true
+      }
     ],
     [
       'in the middle',
       { defaultIndex: 2 },
-      { index: 2, count: 5, loop: false, canPrev: true, canNext: true }
+      {
+        index: 2,
+        count: 5,
+        slide: 2,
+        focal: 2,
+        slideCount: 5,
+        loop: false,
+        canPrev: true,
+        canNext: true
+      }
     ],
     [
       'at the end',
       { defaultIndex: 4 },
-      { index: 4, count: 5, loop: false, canPrev: true, canNext: false }
+      {
+        index: 4,
+        count: 5,
+        slide: 4,
+        focal: 4,
+        slideCount: 5,
+        loop: false,
+        canPrev: true,
+        canNext: false
+      }
     ],
     [
       'at the start of a loop',
       { defaultIndex: 0, loop: true },
-      { index: 0, count: 5, loop: true, canPrev: true, canNext: true }
+      {
+        index: 0,
+        count: 5,
+        slide: 0,
+        focal: 0,
+        slideCount: 5,
+        loop: true,
+        canPrev: true,
+        canNext: true
+      }
     ],
     [
       'at the end of a loop',
       { defaultIndex: 4, loop: true },
-      { index: 4, count: 5, loop: true, canPrev: true, canNext: true }
+      {
+        index: 4,
+        count: 5,
+        slide: 4,
+        focal: 4,
+        slideCount: 5,
+        loop: true,
+        canPrev: true,
+        canNext: true
+      }
     ]
   ] as const)('%s', (_, props, expected) => {
     renderDeck(props);
@@ -126,6 +187,9 @@ describe('useDeck reports the state the built-in controls show', () => {
     expect(probed()).toEqual({
       index: 0,
       count: 4,
+      slide: 0,
+      focal: 0,
+      slideCount: 10,
       loop: false,
       fits: false,
       canPrev: false,
@@ -135,12 +199,20 @@ describe('useDeck reports the state the built-in controls show', () => {
     for (let page = 1; page < 4; page++) {
       await userEvent.click(screen.getByRole('button', { name: 'Next' }));
       await expect.poll(() => probed().index).toBe(page);
-      const { index, count, canPrev, canNext } = probed();
+      const { index, count, slide, focal, slideCount, canPrev, canNext } =
+        probed();
       expect({ index, count, canPrev, canNext }).toEqual({
         index: builtIns().index,
         count: builtIns().count,
         canPrev: builtIns().canPrev,
         canNext: builtIns().canNext
+      });
+      // Pages of three: the page Counter counts is not the slide useDeck
+      // reports as current and focal.
+      expect({ slide, focal, slideCount }).toEqual({
+        slide: page * 3,
+        focal: page * 3,
+        slideCount: 10
       });
     }
     expect(probed().canNext).toBe(false);
@@ -153,6 +225,9 @@ describe('useDeck reports the state the built-in controls show', () => {
     expect(probed()).toEqual({
       index: 0,
       count: 1,
+      slide: 0,
+      focal: 0,
+      slideCount: 4,
       loop: false,
       fits: true,
       canPrev: false,
@@ -382,9 +457,137 @@ test('before the viewport is measured, useDeck clamps index as Counter does', ()
   const probe = container.querySelector<HTMLElement>('[data-probe]')!.dataset;
   expect(probe.index).toBe('4');
   expect(probe.count).toBe('null');
+  expect(probe.slide).toBe('null');
+  expect(probe.focal).toBe('null');
+  expect(probe.slideCount).toBe('5');
   expect(
     container.querySelector('[data-carouseldeck-counter]')!.textContent
   ).toBe('5 / 5');
+});
+
+/** The slide `data-current` and `data-focal` mark, a loop's copy never one:
+ * the ground truth `slide` and `focal` must agree with. */
+const markers = (viewport: HTMLElement) => {
+  const slides = [
+    ...viewport.querySelectorAll(
+      ':scope > [data-carouseldeck-slide]:not([data-carouseldeck-copy])'
+    )
+  ];
+  return {
+    current: slides.findIndex((slide) => slide.hasAttribute('data-current')),
+    focal: slides.findIndex((slide) => slide.hasAttribute('data-focal'))
+  };
+};
+
+test('with pages of three, slide and focal can differ, and never count a page, after Next, Dots, the keyboard and scrollTo', async () => {
+  addStyle(`.pages > * { width: calc(100% / 3); } ${pagesOf(3)}`);
+  const handle = createRef<Deck.RootHandle>();
+  render(
+    <TestDeck
+      slides={10}
+      viewportClassName="pages"
+      handleRef={handle}
+      controls={
+        <>
+          <Deck.Dots />
+          <Probe />
+        </>
+      }
+    />
+  );
+  const root = screen.getByRole('region', { name: 'Test deck' });
+  const viewport = viewportOf(root);
+  const dots = () =>
+    within(root)
+      .getByRole('group', { name: 'Choose page' })
+      .querySelectorAll('button');
+
+  const expectAgrees = () => {
+    const truth = markers(viewport);
+    expect(probed().slide).toBe(truth.current);
+    expect(probed().focal).toBe(truth.focal);
+    expect(probed().slideCount).toBe(10);
+  };
+
+  expectAgrees();
+  expect(probed()).toMatchObject({ index: 0, slide: 0, focal: 0 });
+
+  await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await expectSettledTo(() => probed().index, 1);
+  expectAgrees();
+  expect(probed()).toMatchObject({ slide: 3, focal: 3 });
+
+  await userEvent.click(dots()[2]);
+  await expectSettledTo(() => probed().index, 2);
+  expectAgrees();
+  expect(probed()).toMatchObject({ slide: 6, focal: 6 });
+
+  viewport.focus();
+  await userEvent.keyboard('{ArrowRight}');
+  await expectSettledTo(() => probed().index, 3);
+  expectAgrees();
+  // The last page holds slide 9 alone, past the end of the scroll range: it
+  // rests where slide 7 is at the start, so the current slide and the focal
+  // slide differ, and neither is the page Counter would show (3).
+  expect(probed()).toMatchObject({ slide: 9, focal: 7 });
+
+  act(() => handle.current!.scrollTo(0));
+  await expectSettledTo(() => probed().index, 0);
+  expectAgrees();
+  expect(probed()).toMatchObject({ slide: 0, focal: 0 });
+});
+
+test('with loop, slide, focal and slideCount never count a loop copy', async () => {
+  const onFocalChange = vi.fn();
+  render(
+    <TestDeck
+      loop
+      onFocalChange={onFocalChange}
+      controls={
+        <>
+          <Deck.Counter />
+          <Probe />
+        </>
+      }
+    />
+  );
+
+  expect(probed()).toMatchObject({ slide: 0, focal: 0, slideCount: 5 });
+
+  await userEvent.click(screen.getByRole('button', { name: 'Previous' }));
+  await expectSettledTo(() => probed().index, 4);
+  expect(probed()).toMatchObject({ slide: 4, focal: 4, slideCount: 5 });
+
+  await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await expectSettledTo(() => probed().index, 0);
+  expect(probed()).toMatchObject({ slide: 0, focal: 0, slideCount: 5 });
+});
+
+describe('focal when no slide snaps', () => {
+  // Restores Vitest's default browser viewport, as the breakpoint tests
+  // elsewhere do.
+  afterEach(() => page.viewport(414, 896));
+
+  test('is -1, matching onFocalChange', async () => {
+    addStyle(
+      '@media (min-width: 600px) { .no-snap > * { scroll-snap-align: none; } }'
+    );
+    await page.viewport(400, 600);
+    const onFocalChange = vi.fn();
+    render(
+      <TestDeck
+        viewportClassName="no-snap"
+        onFocalChange={onFocalChange}
+        controls={<Probe />}
+      />
+    );
+    await expect.poll(() => probed().focal).toBe(0);
+
+    await page.viewport(800, 600);
+
+    await expect.poll(() => probed().focal).toBe(-1);
+    expect(onFocalChange.mock.calls).toEqual([[-1]]);
+  });
 });
 
 test('useDeck outside a deck names the missing primitive', () => {
