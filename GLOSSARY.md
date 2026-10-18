@@ -179,7 +179,7 @@ _Avoid_: debounce, idle
 
 #### Outputs
 
-carouseldeck writes only `--deck-slide-*`; the consumer sets every other `--deck-*`; the private `--carouseldeck-*` variables are never public (ADR-0010).
+carouseldeck writes only `--deck-slide-*` on a slide, and `--deck-step` and `--deck-view` on the viewport (ADR-0014); the consumer sets every other `--deck-*`; the private `--carouseldeck-*` variables are never public (ADR-0010).
 
 **Progress**:
 How far a slide is from the focal position, in slides, signed the way the deck
@@ -196,6 +196,21 @@ _Avoid_: offset, distance in pixels
 A slide with any part showing in the viewport, partly shown included. Marked
 `data-in-view`; it hides nothing. Never React state.
 _Avoid_: visible, active
+
+**Step**:
+The distance from one real slide to the next along the axis (its size plus
+the gap), as a plain, unitless number on the viewport, `--deck-step`, for CSS
+to divide pixels by without dividing one length by another (ADR-0014).
+Written at measure time only: mount, resize, a slide added or removed, never
+a scroll frame. Unset before measurement, and with fewer than two real
+slides.
+_Avoid_: slide width, cell size
+
+**View**:
+The viewport's size along the axis, in multiples of `--deck-step`, as a
+plain, unitless number on the viewport, `--deck-view` (ADR-0014). Unset
+wherever `--deck-step` is.
+_Avoid_: slides per view, viewport size
 
 **Effect**:
 A transition built on progress while the viewport keeps scrolling natively —
