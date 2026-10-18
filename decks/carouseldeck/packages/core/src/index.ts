@@ -144,14 +144,16 @@ export interface DeckEngine {
  * removed -- and only where a value differs, never per scroll frame or
  * through `onChange`:
  *
- * - `--deck-step`: the distance from one real slide to the next along the
- *   axis (its size plus the gap), measured from the real slides' own
- *   measuring boxes (their snap targets or shells, where the deck has any).
- *   Where they differ in size, the mean distance from one's start to the
- *   next's. Unset with fewer than two real slides, which have no "next" to
- *   measure a step from.
- * - `--deck-view`: the viewport's size along the axis, in multiples of
- *   `--deck-step`. Unset wherever `--deck-step` is.
+ * - `--deck-viewport-step`: the distance from one real slide to the next
+ *   along the axis (its size plus the gap), measured from the real slides'
+ *   own measuring boxes (their snap targets or shells, where the deck has
+ *   any), independent of a consumer's own centred `scale` on them
+ *   (ADR-0014). Where they differ in size, the mean distance from one's
+ *   start to the next's. Unset with fewer than two real slides, which have
+ *   no "next" to measure a step from.
+ * - `--deck-viewport-span`: the viewport's size along the axis, in
+ *   multiples of `--deck-viewport-step`. Unset wherever
+ *   `--deck-viewport-step` is.
  */
 
 /** Shells mode only (ADR-0013): a real slide's current placement -- the
@@ -573,7 +575,7 @@ export function createDeck(
       const run = slidesOf(viewport);
       align =
         slide === -1 ? 'start' : along.snapAlign(run.boxes[run.first + slide]);
-      writeGeometry(viewport, along);
+      writeGeometry(viewport, along, run);
       paint(along);
       publish({
         index,
@@ -1942,7 +1944,7 @@ export function createDeck(
         if (slide instanceof HTMLElement) slide.style.removeProperty(PROGRESS);
       }
       viewport.style.removeProperty(STEP);
-      viewport.style.removeProperty(VIEW);
+      viewport.style.removeProperty(SPAN);
       // Shells mode writes onto the real slides, which are never in `run`
       // there (ADR-0013): removed here too (`clearShells`), along with
       // any placer and its pin, on the CSS path (`forgetPlaced`).
@@ -1999,8 +2001,12 @@ const SCROLL_KEYS = new Set([
 ]);
 
 const PROGRESS = '--deck-slide-progress';
-const STEP = '--deck-step';
-const VIEW = '--deck-view';
+const STEP = '--deck-viewport-step';
+const SPAN = '--deck-viewport-span';
+/** Decimal digits written to a `--deck-*` custom property: `writeProgress`
+ * and `writeGeometry` share it, so a step or a span reads to the same
+ * precision as progress does, finer than any layout rounds to. */
+const ROUND_PRECISION = 1000;
 /** Marks a viewport child as a snap target rather than a slide. */
 export const SNAP_TARGET = 'data-carouseldeck-snap-target';
 /** Marks a viewport child as a loop's copy of a slide rather than a slide:
@@ -2890,58 +2896,75 @@ function focalSlide(viewport: HTMLElement, axis: Axis, align: string): number {
 }
 
 /**
- * `--deck-step` and `--deck-view` (see `createDeck`, ADR-0014): the distance
- * from one real slide to the next along the axis, and the viewport's size
- * along it in multiples of that distance. Measured from the real slides' own
- * measuring boxes (`slidesOf`'s `boxes`: a snap target or shell where the
- * deck has one, a slide's own box otherwise, never a copy -- the same boxes
- * `snapPoints` and `writeProgress` measure by), the mean distance from one's
- * start to the next's along the axis: exact where every slide is the same
- * size, since then every consecutive distance is the same; an average where
- * they differ. With shells, those are the real slides' own, unshifted set
- * (`first` to `first + n`), never a buffer set a slide may currently be
- * translated onto, so a shell deck's step reads the same wherever its slides
- * are placed right now. Null with fewer than two real slides, which have no
- * "next" to measure a step from.
+ * `--deck-viewport-step` and `--deck-viewport-span` (see `createDeck`,
+ * ADR-0014): the distance from one real slide to the next along the axis,
+ * and the viewport's size along it in multiples of that distance. Measured
+ * from the real slides' own measuring boxes (`slidesOf`'s `boxes`: a snap
+ * target or shell where the deck has one, a slide's own box otherwise,
+ * never a copy -- the same boxes `snapPoints` and `writeProgress` measure
+ * by), sliced to the real slides' own, unshifted set (`first` to
+ * `first + n`), never a buffer set a slide may currently be translated onto,
+ * so a shell deck's step reads the same wherever its slides are placed right
+ * now.
  *
- * Fade and stack lay out one snap target per slide, each exactly the
- * viewport's own size along the axis (`stackedLayout`): their step is
- * therefore always about the viewport's size, and `--deck-view` always about
- * 1, true to what is measured but not a useful count of visible slides,
- * since only one slide is ever shown. The docs say so, rather than this
- * inventing a slide-sized value fade and stack do not lay out.
+ * Each box's start is its centre, which a consumer's own centred `scale`
+ * leaves where it is, less half its true, untransformed size
+ * (`borderBoxSize`, as `layoutShells` already reads a real slide's size):
+ * independent of a consumer's own centred `scale` on it, where
+ * `getBoundingClientRect()` alone is not (ADR-0014). The step is the mean
+ * distance from one box's start to the next's: exact where every slide is
+ * the same size, since then every consecutive distance is the same; an
+ * average where they differ, read off the first and last box alone. Null
+ * with fewer than two real slides, which have no "next" to measure a step
+ * from.
+ *
+ * Fade and stack read a true, if unexciting, value from the same formula
+ * (ADR-0014): see there for why.
  */
 function measureGeometry(
-  viewport: HTMLElement,
+  run: ReturnType<typeof slidesOf>,
   along: Axis
 ): { step: number; view: number } | null {
-  const { slides, boxes, first } = slidesOf(viewport);
+  const { slides, boxes, first } = run;
   const n = slides.length;
   if (n < 2) return null;
   const own = boxes.slice(first, first + n);
-  const starts = own.map((box) => along.span(box.getBoundingClientRect())[0]);
+  const sizeDim = along.vertical ? 'height' : 'width';
+  const sizes = own.map((box) => borderBoxSize(getComputedStyle(box), sizeDim));
+  const starts = own.map((box, i) => {
+    const [start, end] = along.span(box.getBoundingClientRect());
+    return (start + end) / 2 - sizes[i] / 2;
+  });
   const step = (starts[n - 1] - starts[0]) / (n - 1);
   if (!(step > 0)) return null;
   const [viewStart, viewEnd] = along.view();
   return { step, view: (viewEnd - viewStart) / step };
 }
 
-/** Writes `--deck-step` and `--deck-view` to the viewport (`measureGeometry`),
- * only where a value differs from what is there, so a settle that moves
- * neither writes nothing: never per scroll frame, since neither changes as
- * the deck scrolls. Removed where there are too few real slides to measure a
- * step from, rather than left stale. */
-function writeGeometry(viewport: HTMLElement, along: Axis) {
-  const geometry = measureGeometry(viewport, along);
+/** Writes `--deck-viewport-step` and `--deck-viewport-span` to the viewport
+ * (`measureGeometry`), only where a value differs from what is there, so a
+ * settle that moves neither writes nothing: never per scroll frame, since
+ * neither changes as the deck scrolls. Removed where there are too few real
+ * slides to measure a step from, rather than left stale. `run` is `settle`'s
+ * own `slidesOf(viewport)`, already read for the index and the alignment, so
+ * this walks the viewport's children no further time. */
+function writeGeometry(
+  viewport: HTMLElement,
+  along: Axis,
+  run: ReturnType<typeof slidesOf>
+) {
+  const geometry = measureGeometry(run, along);
   const write = (name: string, value: number | undefined) => {
     const next =
-      value === undefined ? '' : String(Math.round(value * 10000) / 10000);
+      value === undefined
+        ? ''
+        : String(Math.round(value * ROUND_PRECISION) / ROUND_PRECISION);
     if (viewport.style.getPropertyValue(name) === next) return;
     if (next === '') viewport.style.removeProperty(name);
     else viewport.style.setProperty(name, next);
   };
   write(STEP, geometry?.step);
-  write(VIEW, geometry?.view);
+  write(SPAN, geometry?.view);
 }
 
 /**
@@ -2975,7 +2998,9 @@ function writeProgress(
       slide.toggleAttribute(IN_VIEW, inView);
     }
     if (!(slide instanceof HTMLElement)) return;
-    const progress = String(Math.round(raw * 1000) / 1000);
+    const progress = String(
+      Math.round(raw * ROUND_PRECISION) / ROUND_PRECISION
+    );
     if (slide.style.getPropertyValue(PROGRESS) !== progress) {
       slide.style.setProperty(PROGRESS, progress);
     }

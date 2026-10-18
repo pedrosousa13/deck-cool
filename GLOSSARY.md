@@ -179,7 +179,7 @@ _Avoid_: debounce, idle
 
 #### Outputs
 
-carouseldeck writes only `--deck-slide-*` on a slide, and `--deck-step` and `--deck-view` on the viewport (ADR-0014); the consumer sets every other `--deck-*`; the private `--carouseldeck-*` variables are never public (ADR-0010).
+carouseldeck writes only `--deck-slide-*` on a slide, or `--deck-viewport-*` on the viewport (ADR-0010, ADR-0014); the consumer sets every other `--deck-*`; the private `--carouseldeck-*` variables are never public.
 
 **Progress**:
 How far a slide is from the focal position, in slides, signed the way the deck
@@ -199,18 +199,18 @@ _Avoid_: visible, active
 
 **Step**:
 The distance from one real slide to the next along the axis (its size plus
-the gap), as a plain, unitless number on the viewport, `--deck-step`, for CSS
-to divide pixels by without dividing one length by another (ADR-0014).
-Written at measure time only: mount, resize, a slide added or removed, never
-a scroll frame. Unset before measurement, and with fewer than two real
-slides.
+the gap), as a plain, unitless number on the viewport, `--deck-viewport-step`,
+for CSS to divide pixels by without dividing one length by another
+(ADR-0014). Written at measure time only: mount, resize, a slide added or
+removed, never a scroll frame. Unset before measurement, and with fewer
+than two real slides.
 _Avoid_: slide width, cell size
 
-**View**:
-The viewport's size along the axis, in multiples of `--deck-step`, as a
-plain, unitless number on the viewport, `--deck-view` (ADR-0014). Unset
-wherever `--deck-step` is.
-_Avoid_: slides per view, viewport size
+**Span**:
+The viewport's size along the axis, in multiples of `--deck-viewport-step`,
+as a plain, unitless number on the viewport, `--deck-viewport-span`
+(ADR-0014). Unset wherever `--deck-viewport-step` is.
+_Avoid_: view, slides per view, viewport size
 
 **Effect**:
 A transition built on progress while the viewport keeps scrolling natively —
@@ -225,26 +225,28 @@ Made by the maintainer on 2026-10-08.
 - **All sites in one repo.** The umbrella site and every package site live here, all built with Pagedeck. slidedeck's site already runs on Pagedeck, so it is ported first.
 - **Addresses.**
 
-  | Site | Address |
-  | --- | --- |
-  | Umbrella | `deck.cool` |
-  | carouseldeck | `carousel.deck.cool` (slidedeck's old `slide.deck.cool` redirects here, #105) |
-  | playdeck | `play.deck.cool`. `playdeck.video` 301s to it (ruled 2026-10-10, done 2026-10-12, #65) |
-  | pagedeck | `page.deck.cool`, with its landing page and docs merged into one site and the docs under `/docs` |
+  | Site         | Address                                                                                          |
+  | ------------ | ------------------------------------------------------------------------------------------------ |
+  | Umbrella     | `deck.cool`                                                                                      |
+  | carouseldeck | `carousel.deck.cool` (slidedeck's old `slide.deck.cool` redirects here, #105)                    |
+  | playdeck     | `play.deck.cool`. `playdeck.video` 301s to it (ruled 2026-10-10, done 2026-10-12, #65)           |
+  | pagedeck     | `page.deck.cool`, with its landing page and docs merged into one site and the docs under `/docs` |
 
   Cloudflare's free certificate covers one subdomain level (`*.deck.cool`), so no deck gets a second level such as `docs.page.deck.cool`.
+
 - **Dark by default.** slidedeck.pages.dev's Apple-style layout is the starting point: the system SF font stack, a 980px measure, a 52px translucent bar, pill buttons and 28px tiles.
 - **The packages ship no CSS, and the sites say so.** No site shows off shared tokens or a type scale.
 - **Favicons are round 2**: one card shape, arranged a different way per deck, on a dark `#1c1c1e` tile. Files in `design/favicons/`.
 
-  | Deck | Arrangement | Accent |
-  | --- | --- | --- |
-  | deck.cool | three cards, fanned | the three accents below |
-  | carouseldeck | three cards in a row, the middle one in front | `#2997ff` |
-  | playdeck | three cards stepping down: the outline reads as play | `#ff5c86` |
-  | pagedeck | three stacked sections, the middle one lit (the island) | `#3ddc97` |
+  | Deck         | Arrangement                                             | Accent                  |
+  | ------------ | ------------------------------------------------------- | ----------------------- |
+  | deck.cool    | three cards, fanned                                     | the three accents below |
+  | carouseldeck | three cards in a row, the middle one in front           | `#2997ff`               |
+  | playdeck     | three cards stepping down: the outline reads as play    | `#ff5c86`               |
+  | pagedeck     | three stacked sections, the middle one lit (the island) | `#3ddc97`               |
 
   Accepted risks: at 16px pagedeck's bars can read as a hamburger menu, and carouseldeck's arrangement is close to the stock "view carousel" icon.
+
 - **Motion.** One easing curve, `cubic-bezier(.32,.72,0,1)`. Every animation holds still under `prefers-reduced-motion`. Only Firefox animates an SVG favicon, so sites ship the still icon as the favicon and animate the icon only inside a page (the Family bar, the umbrella site's cards). pagedeck never animates its favicon by script, because that would cost JavaScript on pages that otherwise ship none.
 - **formdeck is parked.** It is not ready, and stays out of every site and design until the maintainer says it is. Its design is kept in `design/favicons/parked/` and on the canvas: two cards meeting in a check mark, amber `#ffb020` with dark text on amber fills. When it is ready it gets `form.deck.cool`.
 - **The umbrella site links no GitHub profile.** Made by the maintainer on 2026-10-09: the links it had went to the maintainer's personal profile. Each package site links its own deck's repo instead. The umbrella footer keeps its npm link.

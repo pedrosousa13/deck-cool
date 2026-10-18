@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import type { Effect } from '@carouseldeck/react';
+import { curve } from '@carouseldeck/react/curve';
 import { fade } from '@carouseldeck/react/fade';
 import {
   addStyle,
@@ -14,12 +15,13 @@ import {
   WIDTH
 } from './fixtures';
 
-// --deck-step and --deck-view (ADR-0014): the viewport's own measured
-// geometry, written as plain, unitless numbers so CSS can divide pixels by
-// them without dividing one length by another. Written on `Deck.Viewport`
-// alone, at measure time -- mount, resize, a slide added or removed -- never
-// per scroll frame (GLOSSARY.md, "carouseldeck writes only `--deck-slide-*`"
-// is amended by ADR-0014 for these two, the viewport's own).
+// --deck-viewport-step and --deck-viewport-span (ADR-0014, amended for
+// #187): the viewport's own measured geometry, written as plain, unitless
+// numbers so CSS can divide pixels by them without dividing one length by
+// another. Written on `Deck.Viewport` alone, at measure time -- mount,
+// resize, a slide added or removed -- never per scroll frame (GLOSSARY.md,
+// "carouseldeck writes only `--deck-slide-*`" is amended by ADR-0010 and
+// ADR-0014 for these two, the viewport's own).
 
 type GeometryDeckProps = ComponentProps<typeof Deck.Root> & {
   slides?: number;
@@ -32,6 +34,24 @@ type GeometryDeckProps = ComponentProps<typeof Deck.Root> & {
 // 160px slides, a 16px gap: a step of 176.
 const STEPPED = `.stepped { gap: 16px; } .stepped > * { width: 160px; }`;
 const STEPPED_VERTICAL = `.stepped-vertical { gap: 16px; } .stepped-vertical > * { height: 160px; }`;
+// Same sizing, plus a common progress recipe (the progress guide's own
+// example): off-focal slides scale down, about their own centre, so the
+// scale differs from one slide to the next.
+const SCALED = `
+  .scaled { gap: 16px; }
+  .scaled > [data-carouseldeck-slide] {
+    width: 160px;
+    scale: calc(
+      1 -
+        min(
+          max(var(--deck-slide-progress, 0), -1 * var(--deck-slide-progress, 0)),
+          1
+        ) *
+        0.2
+    );
+    transform-origin: center;
+  }
+`;
 
 function GeometryDeck({
   slides = 5,
@@ -72,49 +92,41 @@ const renderDeck = (props: GeometryDeckProps = {}) => {
     get next() {
       return screen.getByRole('button', { name: 'Next' });
     },
-    step: () => viewport.style.getPropertyValue('--deck-step'),
-    view: () => viewport.style.getPropertyValue('--deck-view')
+    step: () => viewport.style.getPropertyValue('--deck-viewport-step'),
+    span: () => viewport.style.getPropertyValue('--deck-viewport-span')
   };
 };
 
 /**
- * Counts how many times `--deck-step` or `--deck-view` actually changes
- * value on the viewport: a `MutationObserver` on its own style attribute,
- * counting only where a value differs from the last read, the same test
+ * Counts every mutation record the viewport's own `style` attribute
+ * produces while the caller scrolls it: every one, not only those where
+ * `--deck-viewport-step` or `--deck-viewport-span` comes out a different
+ * string, so a settle that rewrites either to the value it already had
+ * still fails this -- `writeGeometry`'s own equality check is what should
+ * keep that write from ever reaching the DOM. The same test
  * `countTranslateWrites` (loop-one-instance.test.tsx) makes for a real
- * slide's `translate` -- proving the properties are never rewritten while
- * the deck scrolls, not merely that the string happens to come out the
- * same each time.
+ * slide's `translate`.
  */
 function countGeometryWrites(viewport: HTMLElement) {
-  const read = (): [string, string] => [
-    viewport.style.getPropertyValue('--deck-step'),
-    viewport.style.getPropertyValue('--deck-view')
-  ];
-  let last = read();
   let changes = 0;
-  const check = () => {
-    const next = read();
-    if (next[0] !== last[0] || next[1] !== last[1]) changes++;
-    last = next;
-  };
-  const observer = new MutationObserver(() => check());
+  const observer = new MutationObserver((records) => {
+    changes += records.length;
+  });
   observer.observe(viewport, { attributes: true, attributeFilter: ['style'] });
   return () => {
-    observer.takeRecords();
-    check();
+    changes += observer.takeRecords().length;
     observer.disconnect();
     return changes;
   };
 }
 
-describe('--deck-step and --deck-view', () => {
+describe('--deck-viewport-step and --deck-viewport-span', () => {
   test('are the slide-to-slide step and the viewport in steps, as plain numbers', () => {
     addStyle(STEPPED);
-    const { step, view } = renderDeck({ viewportClassName: 'stepped' });
+    const { step, span } = renderDeck({ viewportClassName: 'stepped' });
 
     expect(step()).toBe('176');
-    expect(Number(view())).toBeCloseTo(600 / 176, 2);
+    expect(Number(span())).toBeCloseTo(600 / 176, 2);
   });
 
   test('inherits onto every slide, for consumer CSS to read', () => {
@@ -124,9 +136,9 @@ describe('--deck-step and --deck-view', () => {
       '[data-carouseldeck-slide]'
     )!;
 
-    expect(getComputedStyle(slide).getPropertyValue('--deck-step').trim()).toBe(
-      '176'
-    );
+    expect(
+      getComputedStyle(slide).getPropertyValue('--deck-viewport-step').trim()
+    ).toBe('176');
   });
 
   test('is unset before measurement, in server HTML', () => {
@@ -136,31 +148,31 @@ describe('--deck-step and --deck-view', () => {
     const viewport = viewportOf(container);
 
     expect(viewport.getAttribute('style') ?? '').not.toMatch(
-      /--deck-(step|view)/
+      /--deck-viewport-(step|span)/
     );
   });
 
   test('is unset with fewer than two real slides', () => {
     addStyle(STEPPED);
-    const { step, view } = renderDeck({
+    const { step, span } = renderDeck({
       viewportClassName: 'stepped',
       slides: 1
     });
 
     expect(step()).toBe('');
-    expect(view()).toBe('');
+    expect(span()).toBe('');
   });
 
-  test('updates --deck-view on a resize, without moving --deck-step', async () => {
+  test('updates --deck-viewport-span on a resize, without moving --deck-viewport-step', async () => {
     addStyle(STEPPED);
-    const { viewport, step, view } = renderDeck({
+    const { viewport, step, span } = renderDeck({
       viewportClassName: 'stepped'
     });
     expect(step()).toBe('176');
 
     viewport.style.width = '976px';
 
-    await expect.poll(() => Number(view())).toBeCloseTo(976 / 176, 2);
+    await expect.poll(() => Number(span())).toBeCloseTo(976 / 176, 2);
     expect(step()).toBe('176');
   });
 
@@ -172,14 +184,14 @@ describe('--deck-step and --deck-view', () => {
     const { rerender } = render(<Toggle slides={2} />);
     const root = screen.getByRole('region', { name: 'Test deck' });
     const viewport = viewportOf(root);
-    expect(viewport.style.getPropertyValue('--deck-step')).toBe('176');
+    expect(viewport.style.getPropertyValue('--deck-viewport-step')).toBe('176');
 
     rerender(<Toggle slides={1} />);
 
     await expect
-      .poll(() => viewport.style.getPropertyValue('--deck-step'))
+      .poll(() => viewport.style.getPropertyValue('--deck-viewport-step'))
       .toBe('');
-    expect(viewport.style.getPropertyValue('--deck-view')).toBe('');
+    expect(viewport.style.getPropertyValue('--deck-viewport-span')).toBe('');
   });
 
   test('picks up a slide added back, rather than staying unset', async () => {
@@ -190,33 +202,33 @@ describe('--deck-step and --deck-view', () => {
     const { rerender } = render(<Toggle slides={1} />);
     const root = screen.getByRole('region', { name: 'Test deck' });
     const viewport = viewportOf(root);
-    expect(viewport.style.getPropertyValue('--deck-step')).toBe('');
+    expect(viewport.style.getPropertyValue('--deck-viewport-step')).toBe('');
 
     rerender(<Toggle slides={2} />);
 
     await expect
-      .poll(() => viewport.style.getPropertyValue('--deck-step'))
+      .poll(() => viewport.style.getPropertyValue('--deck-viewport-step'))
       .toBe('176');
   });
 
   test('runs the same way in a vertical deck, the block axis', () => {
     addStyle(STEPPED_VERTICAL);
-    const { step, view } = renderDeck({
+    const { step, span } = renderDeck({
       orientation: 'vertical',
       viewportClassName: 'stepped-vertical',
       viewportHeight: 600
     });
 
     expect(step()).toBe('176');
-    expect(Number(view())).toBeCloseTo(600 / 176, 2);
+    expect(Number(span())).toBeCloseTo(600 / 176, 2);
   });
 
   test('writes neither property while the deck scrolls', async () => {
     addStyle(STEPPED);
-    const { root, viewport, next, step, view } = renderDeck({
+    const { root, viewport, next, step, span } = renderDeck({
       viewportClassName: 'stepped'
     });
-    const before = { step: step(), view: view() };
+    const before = { step: step(), span: span() };
     const stop = countGeometryWrites(viewport);
 
     await userEvent.click(next);
@@ -224,43 +236,89 @@ describe('--deck-step and --deck-view', () => {
 
     expect(stop()).toBe(0);
     expect(step()).toBe(before.step);
-    expect(view()).toBe(before.view);
+    expect(span()).toBe(before.span);
+  });
+
+  // A common progress recipe (the progress guide's own example): scaling a
+  // slide about its own centre, differently per slide since the scale
+  // reads `--deck-slide-progress`, must not skew the step `writeGeometry`
+  // reads back out from the scaled boxes (ADR-0014).
+  test('measures the step independent of a consumer scale on the slides', () => {
+    addStyle(SCALED);
+    const { step } = renderDeck({ viewportClassName: 'scaled' });
+
+    expect(step()).toBe('176');
   });
 });
 
-describe('--deck-step under an effect that stacks the slides', () => {
-  // Fade and stack lay out one snap target per slide, each exactly the
-  // viewport's own size along the axis (`stackedLayout`), so the step
-  // between them is the viewport's size, and the viewport reads as about
-  // one step wide: true to what fade and stack actually measure, not a
-  // slide-sized value they do not lay out (ADR-0014).
-  test('is the viewport’s own size, so --deck-view reads about 1', () => {
-    const { step, view } = renderDeck({ effect: fade, viewportWidth: WIDTH });
+describe('--deck-viewport-step under an effect that stacks the slides', () => {
+  // Fade and stack lay out one snap target per slide, each the viewport's
+  // own size along the axis: see ADR-0014 for why that is the true, if
+  // unexciting, step and span to report.
+  test('is the viewport’s own size, so --deck-viewport-span reads about 1', () => {
+    const { step, span } = renderDeck({ effect: fade, viewportWidth: WIDTH });
 
     expect(Number(step())).toBeCloseTo(WIDTH, 0);
-    expect(Number(view())).toBeCloseTo(1, 2);
+    expect(Number(span())).toBeCloseTo(1, 2);
+  });
+
+  // Curve transforms only a slide's children, never the slide's own box
+  // (ADR-0008), so it never feeds a transformed box to `measureGeometry` in
+  // the first place; pinned here since #178 builds curve's own recipe on
+  // top of the step.
+  test('curve leaves the step at the slides’ own size', () => {
+    addStyle(STEPPED);
+    const { step } = renderDeck({
+      effect: curve,
+      viewportClassName: 'stepped'
+    });
+
+    expect(step()).toBe('176');
   });
 });
 
-describe('--deck-step with loop', () => {
-  // A set of slides this much wider than the viewport, no gap, is loop's
-  // shells territory (ADR-0013): the step still reads as one slide's own
-  // width, the same as without loop.
+describe('--deck-viewport-step with loop', () => {
+  // Slides narrower than the viewport, with a gap, so the step and a bug
+  // that measured the viewport instead could not read the same number
+  // (ADR-0013's shells territory: the slides' own run is much wider than
+  // the viewport).
   test('shells do not change the step', async () => {
+    addStyle(STEPPED);
     const { step, next } = renderDeck({
       loop: true,
-      viewportWidth: WIDTH,
+      viewportClassName: 'stepped',
       slides: 6
     });
 
-    expect(Number(step())).toBeCloseTo(WIDTH, 0);
+    expect(step()).toBe('176');
 
     // Steps across the seam, onto shells and back onto the slides' own set:
     // the step reads the same throughout.
     for (let i = 0; i < 8; i++) {
       await userEvent.click(next);
       await sleep(60);
-      expect(Number(step())).toBeCloseTo(WIDTH, 0);
+      expect(step()).toBe('176');
+    }
+  });
+
+  // Few enough slides that the run falls back to copies rather than shells
+  // (ADR-0013: `length < viewport + widest slide`, as the narrowing tests
+  // in loop-one-instance.test.tsx also measure by): the step and span read
+  // the same real slides' geometry either way.
+  test('copies do not change the step either', async () => {
+    addStyle(STEPPED);
+    const { step, next } = renderDeck({
+      loop: true,
+      viewportClassName: 'stepped',
+      slides: 4
+    });
+
+    expect(step()).toBe('176');
+
+    for (let i = 0; i < 4; i++) {
+      await userEvent.click(next);
+      await sleep(60);
+      expect(step()).toBe('176');
     }
   });
 });

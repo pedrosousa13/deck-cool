@@ -40,5 +40,9 @@ such as the viewport, needs a namespace of its own, and the consumer may
 already use any `--deck-*` name outside `--deck-slide-*`: that is a new
 decision, not this one.
 
+**The viewport's own namespace exists now (amended for #187).**
+`--deck-viewport-step` and `--deck-viewport-span` are its first two outputs;
+ADR-0014 records the decision.
+
 Slidedeck's private working values, such as fade's and curve's, stay
 `--slidedeck-*` and are never public.
