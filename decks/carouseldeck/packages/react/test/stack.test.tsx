@@ -5,9 +5,11 @@ import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import { stack } from '@carouseldeck/react/stack';
 import {
+  addStyle,
   expectSettledTo,
   expectSnaps,
   nextFrame,
+  pagesOf,
   viewportOf,
   WIDTH
 } from './fixtures';
@@ -17,12 +19,23 @@ import {
 
 const HEIGHT = 200;
 
-type StackDeckProps = ComponentProps<typeof Deck.Root> & { slides?: number };
+type StackDeckProps = ComponentProps<typeof Deck.Root> & {
+  slides?: number;
+  viewportClassName?: string;
+};
 
-function StackDeck({ slides = 4, ...props }: StackDeckProps) {
+function StackDeck({
+  slides = 4,
+  viewportClassName,
+  ...props
+}: StackDeckProps) {
   return (
     <Deck.Root aria-label="Test deck" {...props}>
-      <Deck.Viewport effect={stack} style={{ width: WIDTH, height: HEIGHT }}>
+      <Deck.Viewport
+        effect={stack}
+        className={viewportClassName}
+        style={{ width: WIDTH, height: HEIGHT }}
+      >
         {Array.from({ length: slides }, (_, i) => (
           <Deck.Slide key={i}>
             <button type="button">Button {i + 1}</button>
@@ -36,13 +49,13 @@ function StackDeck({ slides = 4, ...props }: StackDeckProps) {
 
 const renderDeck = (props: StackDeckProps = {}) => {
   render(<StackDeck {...props} />);
-  const viewport = viewportOf(
-    screen.getByRole('region', { name: 'Test deck' })
-  );
+  const root = screen.getByRole('region', { name: 'Test deck' });
+  const viewport = viewportOf(root);
   const slides = () => [
     ...viewport.querySelectorAll<HTMLElement>('[data-carouseldeck-slide]')
   ];
   return {
+    root,
     viewport,
     slides,
     next: screen.getByRole('button', { name: 'Next' }),
@@ -101,6 +114,18 @@ describe('stack', () => {
     await userEvent.click(next);
 
     await expectSettledTo(inert, [true, false, true, true]);
+  });
+
+  // Pages guide, "under an effect" (#181): stack lays slides out as fade
+  // does, over its own snap targets, so a stylesheet's group snapping
+  // (pages) does not apply either.
+  test('steps one slide at a time, with group snapping not applying', async () => {
+    addStyle(pagesOf(2));
+    const { next, root } = renderDeck({ viewportClassName: 'pages' });
+
+    await userEvent.click(next);
+
+    await expect.poll(() => root.getAttribute('data-index')).toBe('1');
   });
 
   test('puts the focal slide on top, and the slides after it behind it in order', async () => {

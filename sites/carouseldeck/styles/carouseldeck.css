@@ -1863,14 +1863,12 @@ main .docs-sidebar a {
   gap: 16px;
 }
 
-@media (min-width: 640px) {
-  .example-pages-prop [data-carouseldeck-slide] {
-    width: calc((100% - 2 * 16px) / 3);
-  }
+.example-pages-prop [data-carouseldeck-slide] {
+  width: calc((100% - 2 * 16px) / 3);
 }
 
 /* Pages per breakpoint: two slides to a page below 640px, three from it,
-   both marked from data (data-page-start, data-page-start-640). */
+   both marked from data (data-page-start, data-page-start-wide). */
 .example-pages-breakpoints [data-carouseldeck-viewport] {
   gap: 16px;
 }
@@ -1892,11 +1890,11 @@ main .docs-sidebar a {
     width: calc((100% - 2 * 16px) / 3);
   }
 
-  .example-pages-breakpoints [data-carouseldeck-slide][data-page-start-640] {
+  .example-pages-breakpoints [data-carouseldeck-slide][data-page-start-wide] {
     scroll-snap-align: start;
   }
 
-  .example-pages-breakpoints [data-carouseldeck-slide]:not([data-page-start-640]) {
+  .example-pages-breakpoints [data-carouseldeck-slide]:not([data-page-start-wide]) {
     scroll-snap-align: none;
   }
 }

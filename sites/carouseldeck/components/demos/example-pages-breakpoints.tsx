@@ -12,7 +12,7 @@ function Products({ names }: { names: string[] }) {
         <Deck.Slide
           key={name}
           data-page-start={i % 2 === 0 ? "" : undefined}
-          data-page-start-640={i % 3 === 0 ? "" : undefined}
+          data-page-start-wide={i % 3 === 0 ? "" : undefined}
         >
           {name}
         </Deck.Slide>

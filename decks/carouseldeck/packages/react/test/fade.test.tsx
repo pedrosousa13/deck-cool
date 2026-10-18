@@ -237,6 +237,51 @@ describe('fade', () => {
     expect(root.getAttribute('data-index')).toBe('1');
   });
 
+  // Pages guide, "a page size from data" (#181): the Pages guide's one
+  // recipe for a page size that is not in the stylesheet marks each page's
+  // first slide inline (`style={{ scrollSnapAlign: ... }}`). `Deck.Slide`
+  // merges that after the effect's own `slide.style`, so it does land on the
+  // DOM (checked below) -- but fade's targets, not the slides, are what
+  // scroll-snap-align actually snaps on, so it steps one slide at a time
+  // regardless, the same as the stylesheet recipe above.
+  test('an inline page-start style on the slide has no effect: still one slide at a time', async () => {
+    function InlinePagesDeck({ pageSize = 2 }: { pageSize?: number }) {
+      return (
+        <Deck.Root aria-label="Test deck">
+          <Deck.Viewport effect={fade} style={{ width: WIDTH, height: HEIGHT }}>
+            {Array.from({ length: 4 }, (_, i) => (
+              <Deck.Slide
+                key={i}
+                style={{
+                  scrollSnapAlign: i % pageSize === 0 ? 'start' : 'none'
+                }}
+              >
+                <button type="button">Button {i + 1}</button>
+              </Deck.Slide>
+            ))}
+          </Deck.Viewport>
+          <Deck.Next />
+        </Deck.Root>
+      );
+    }
+    render(<InlinePagesDeck />);
+    const root = screen.getByRole('region', { name: 'Test deck' });
+    const viewport = viewportOf(root);
+    const next = screen.getByRole('button', { name: 'Next' });
+    const slides = slidesOf(viewport);
+    const opacity = () =>
+      slides.map((slide) => Number(getComputedStyle(slide).opacity));
+
+    // The merge in Deck.Slide (`...slide.style, ...style`) does let the
+    // consumer's inline style win over fade's own `scrollSnapAlign: 'none'`.
+    expect(getComputedStyle(slides[0]!).scrollSnapAlign).toBe('start');
+
+    await userEvent.click(next);
+
+    await expectSettledTo(opacity, [0, 1, 0, 0]);
+    expect(root.getAttribute('data-index')).toBe('1');
+  });
+
   test('server HTML shows only the starting slide, and only it is reachable', async () => {
     const container = document.createElement('div');
     container.innerHTML = renderToString(<FadeDeck defaultIndex={2} />);

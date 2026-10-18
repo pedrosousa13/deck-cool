@@ -284,16 +284,36 @@ describe("the docs' demos in a browser", () => {
   // 640px, three from it, both marked from data (#181). 8 slides make 4
   // pages of 2, or 3 pages of 3 (the last one short).
   test.each([
-    [390, 4],
-    [1280, 3],
-  ])("at %ipx, the per-breakpoint pages demo's Next moves one page of %i", async (width, pages) => {
+    [390, 2, 4],
+    [1280, 3, 3],
+  ])("at %ipx, the per-breakpoint pages demo's Next moves a page of %i (%i pages in all)", async (width, pageSize, pageCount) => {
     const { page } = await visit("/docs/guides/pages/", { width, reducedMotion: "reduce" });
     await hydrated(page);
     const deck = page.locator(".example-pages-breakpoints");
     const counter = () => deck.locator("[data-carouseldeck-counter]").textContent();
-    await expect.poll(counter).toBe(`1 / ${pages}`);
+    const current = () => deck.locator("[data-current]").getAttribute("aria-label");
+    await expect.poll(counter).toBe(`1 / ${pageCount}`);
+    expect(await current()).toBe("1 of 8");
     await deck.locator("[data-carouseldeck-next]").click();
-    await expect.poll(counter).toBe(`2 / ${pages}`);
+    await expect.poll(counter).toBe(`2 / ${pageCount}`);
+    // The first slide of the second page: slide 3 of 8 at 390px (pages of
+    // 2), slide 4 of 8 at 1280px (pages of 3).
+    expect(await current()).toBe(`${pageSize + 1} of 8`);
+  });
+
+  // Pages guide, "one page size": an inline style wins at every breakpoint,
+  // so one width proves it (#181).
+  test("the one-page-size pages demo's Next moves a page of 3, to slide 4 of 8", async () => {
+    const { page } = await visit("/docs/guides/pages/", { width: 1280, reducedMotion: "reduce" });
+    await hydrated(page);
+    const deck = page.locator(".example-pages-prop");
+    const counter = () => deck.locator("[data-carouseldeck-counter]").textContent();
+    const current = () => deck.locator("[data-current]").getAttribute("aria-label");
+    await expect.poll(counter).toBe("1 / 3");
+    expect(await current()).toBe("1 of 8");
+    await deck.locator("[data-carouseldeck-next]").click();
+    await expect.poll(counter).toBe("2 / 3");
+    expect(await current()).toBe("4 of 8");
   });
 });
 

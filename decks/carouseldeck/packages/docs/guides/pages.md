@@ -76,23 +76,28 @@ import * as Deck from '@carouseldeck/react';
 
 function Products({ names }: { names: string[] }) {
   return (
-    <Deck.Viewport>
-      {names.map((name, i) => (
-        <Deck.Slide
-          key={name}
-          data-page-start={i % 2 === 0 ? '' : undefined}
-          data-page-start-640={i % 3 === 0 ? '' : undefined}
-        >
-          {name}
-        </Deck.Slide>
-      ))}
-    </Deck.Viewport>
+    <Deck.Root aria-label="Products" className="products">
+      <Deck.Viewport>
+        {names.map((name, i) => (
+          <Deck.Slide
+            key={name}
+            data-page-start={i % 2 === 0 ? '' : undefined}
+            data-page-start-wide={i % 3 === 0 ? '' : undefined}
+          >
+            {name}
+          </Deck.Slide>
+        ))}
+      </Deck.Viewport>
+    </Deck.Root>
   );
 }
 ```
 
 ```css
 /* Two slides to a page below 640px, three from it. */
+.products [data-carouseldeck-slide] {
+  width: 50%;
+}
 .products [data-carouseldeck-slide][data-page-start] {
   scroll-snap-align: start;
 }
@@ -101,10 +106,13 @@ function Products({ names }: { names: string[] }) {
 }
 
 @media (min-width: 640px) {
-  .products [data-carouseldeck-slide][data-page-start-640] {
+  .products [data-carouseldeck-slide] {
+    width: calc(100% / 3);
+  }
+  .products [data-carouseldeck-slide][data-page-start-wide] {
     scroll-snap-align: start;
   }
-  .products [data-carouseldeck-slide]:not([data-page-start-640]) {
+  .products [data-carouseldeck-slide]:not([data-page-start-wide]) {
     scroll-snap-align: none;
   }
 }
@@ -115,8 +123,12 @@ above.
 
 ### Under an effect
 
-Fade and stack each stack every slide over its own snap target and ignore
-slide width, alignment and pages ([Effects](./effects.md)): both show one
-slide at a time, so there is no group for either recipe above to mark.
-Curve keeps the slides in the flow, with the consumer's alignment and pages
+Fade and stack both lay every slide over its own snap target
+([Effects](./effects.md)) and ignore slide width, alignment and pages.
+Both recipes above mark the slide, never its target, so neither reaches
+what fade or stack actually snaps on: a browser test shows Next and a drag
+still move one slide at a time under either effect, with or without a page
+recipe. `Deck.Slide`'s own `style` does win over the effect's there, as
+any consumer style does, but it changes nothing a user can see. Curve
+keeps the slides in the flow, with the consumer's alignment and pages
 untouched, so both recipes hold under it.
