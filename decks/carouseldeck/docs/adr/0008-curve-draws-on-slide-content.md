@@ -45,3 +45,32 @@ clips it (`overflow: hidden` across the axis, as `clip` cannot pair with
 
 Server HTML carries each slide's starting progress, so a curve deck draws
 its arc before hydration (amended for #125; see ADR-0011).
+
+## Amended for #179
+
+Curve now orders its slides as well as drawing them: a zero-specificity
+`z-index` rule on `--deck-slide-progress`, highest at the focal position,
+lower as the distance from it grows, the same on both sides, following the
+stack effect's shape (ADR-0012). Each curve slide is already a stacking
+context of its own, from the layout containment above, so `z-index` applies
+to it with no further change.
+
+The opacity fade stays the radius's by default, but a consumer can switch it
+to follow the viewport instead: `--deck-curve-fade-view: 1` fades a slide by
+how much of it is in the viewport (ADR-0014's `--deck-viewport-span`),
+restoring the fade keen-slider gave before the move to curve. A keyword
+switch would need style queries, which Firefox lacks, so the switch is a
+plain number, consistent with the radius's own `--deck-curve-radius`.
+
+The switch assumes a slide is one step wide (`--deck-viewport-step`), the
+gap left out: CSS cannot otherwise turn the slide's own width into the same
+unit `--deck-viewport-span` counts in (ADR-0014), and the error this leaves,
+at most half the gap's share of the step, is small next to a typical gap.
+It also assumes `scroll-snap-align: center`, the curve recipes' own
+alignment: there, the viewport's two edges sit at
+`--deck-viewport-span / 2` on either side of the focal position. At
+`start` or `end` the edges sit elsewhere in the same unit (the viewport's
+near edge at the focal position itself, the far one a whole
+`--deck-viewport-span` away), and the switch does not correct for either:
+a consumer snapping at `start` or `end` who wants the viewport-based fade
+needs their own CSS on `--deck-viewport-span` and `--deck-slide-progress`.

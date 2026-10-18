@@ -7,7 +7,7 @@ import type { HeaderField } from "@pagedeck/core";
  */
 export const DECK_STYLE_HASHES = {
   "carouseldeck-slide": "'sha256-jrtu+DT8BpejPhdZ7+RJZ6lGjfioOpBSX2FkUIwW1bU='",
-  "carouseldeck-slide carouseldeck-curve": "'sha256-HvUZiCIUw4Jo2u8VQhiGcO+dij7aME2zumllFsOm96o='",
+  "carouseldeck-slide carouseldeck-curve": "'sha256-U5IHYA6Mcz7L8B5aP7gqr+hXZhGdBCwq7tFqtVWEZS0='",
   "carouseldeck-slide carouseldeck-fade": "'sha256-jQj7ezKefFX6270bZr4IenYxedFg+2M/DwPX+/46pno='",
   "carouseldeck-slide carouseldeck-stack": "'sha256-INfuHUSN6w3e7j1dQKlI1j+Ql+mQTRViIWTRaGsq0J8='",
 } as const;

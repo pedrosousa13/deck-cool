@@ -120,6 +120,8 @@ const readDeck = (root: HTMLElement) => {
         (slide) =>
           Math.round(Number(getComputedStyle(slide).opacity) * 100) / 100
       ),
+    zIndex: () =>
+      slides().map((slide) => Number(getComputedStyle(slide).zIndex)),
     progress: () => progressOf(viewport)
   };
 };
@@ -421,6 +423,123 @@ describe('curve', () => {
 
     expect(opacity()).toEqual([0, 0, 1, 0, 0, 0]);
     expect(angles()).toEqual([-90, -90, 0, 90, 90, 90]);
+  });
+
+  // #179: the curve paints by distance from the focal slide, highest on top,
+  // in the same zero-specificity rules as the rest of its CSS (ADR-0008,
+  // amended), following the stack effect's shape (ADR-0012).
+  test('stacks the slides by distance from the focal slide, focal on top, equal distance equal', () => {
+    const { zIndex } = renderDeck({ defaultIndex: 2 });
+
+    const z = zIndex();
+    expect(z[2]).toBeGreaterThan(z[1]!);
+    expect(z[2]).toBeGreaterThan(z[3]!);
+    expect(z[1]).toBe(z[3]);
+    expect(z[0]).toBe(z[4]);
+  });
+});
+
+// Loop's shells and a small deck's copies both carry a real slide (ADR-0013):
+// the paint order reads the same `--deck-slide-progress` either way, so the
+// focal slide stays on top under both.
+describe('curve paint order with loop', () => {
+  test('keeps the focal slide on top under shells', async () => {
+    const { viewport, zIndex, slides } = renderDeck({
+      slides: 8,
+      loop: true,
+      defaultIndex: 3
+    });
+    await expect.poll(() => viewport.dataset.carouseldeckLoop).toBe('shells');
+
+    const z = zIndex();
+    z.forEach((value) => expect(Number.isFinite(value)).toBe(true));
+    const focal = slides().findIndex((slide) =>
+      slide.hasAttribute('data-focal')
+    );
+    expect(z[focal]).toBe(Math.max(...z));
+  });
+
+  test('keeps the focal slide on top under a deck too small for shells (copies)', async () => {
+    const { viewport, zIndex, slides } = renderDeck(
+      { slides: 3, loop: true },
+      '.curved > [data-carouseldeck-slide] { width: 110px; }'
+    );
+    await expect.poll(() => viewport.dataset.carouseldeckLoop).toBe('copies');
+
+    const z = zIndex();
+    z.forEach((value) => expect(Number.isFinite(value)).toBe(true));
+    const focal = slides().findIndex((slide) =>
+      slide.hasAttribute('data-focal')
+    );
+    expect(z[focal]).toBe(Math.max(...z));
+  });
+});
+
+// #179: a consumer can switch the curve's fade from the radius to following
+// the viewport (ADR-0014's --deck-viewport-span), restoring the fade
+// keen-slider gave, fully opaque while at least half a slide is in the
+// viewport.
+//
+// A slide is approximated as one step wide (--deck-viewport-step), the gap
+// left out, so its own half-width is always 0.5 of a slide, the same unit
+// --deck-viewport-span counts in: the error is the gap's own share of the
+// step, at most half of it, and only at the fade's edge. The switch assumes
+// `scroll-snap-align: center`, the curve recipes' own alignment, where the
+// viewport's edges sit at ±(--deck-viewport-span / 2) from the focal slide;
+// `start` or `end` put them somewhere else and are not handled.
+//
+// Two slides fit the 200px viewport (SIZE 100px each, no gap): span is 2, so
+// the viewport's half-width is 1 slide and a slide one slide away has its
+// centre exactly on the viewport's edge, half of it in view.
+describe('curve fade by visibility (--deck-curve-fade-view)', () => {
+  const NO_PADDING_TWO_UP = { width: SIZE * 2, paddingInline: 0 };
+
+  test('fades by visibility instead of radius once the switch is on', () => {
+    const { opacity } = renderDeck({
+      defaultIndex: 2,
+      viewportStyle: {
+        ...NO_PADDING_TWO_UP,
+        '--deck-curve-fade-view': 1
+      } as CSSProperties
+    });
+
+    // AROUND_2 = [-2, -1, 0, 1, 2, 3]: a slide a slide away (half in view) is
+    // fully opaque, and one two slides away (fully outside) is gone.
+    expect(opacity()).toEqual([0, 1, 1, 1, 0, 0]);
+  });
+
+  test('keeps the radius-based fade when the switch is off', () => {
+    const { opacity } = renderDeck({
+      defaultIndex: 2,
+      viewportStyle: NO_PADDING_TWO_UP as CSSProperties
+    });
+
+    expect(opacity()).toEqual(AROUND_2.map((p) => FADE[Math.abs(p)]));
+  });
+
+  test('falls back to the radius fade before --deck-viewport-span is measured, even with the switch on', () => {
+    addStyle(SLIDE_CSS);
+    const container = document.createElement('div');
+    try {
+      container.innerHTML = renderToString(
+        <CurveDeck
+          defaultIndex={2}
+          viewportStyle={{ '--deck-curve-fade-view': 1 } as CSSProperties}
+        />
+      );
+      document.body.append(container);
+      const viewport = viewportOf(container);
+      const opacity = [
+        ...viewport.querySelectorAll<HTMLElement>('[data-carouseldeck-slide]')
+      ].map(
+        (slide) =>
+          Math.round(Number(getComputedStyle(slide).opacity) * 100) / 100
+      );
+
+      expect(opacity).toEqual(AROUND_2.map((p) => FADE[Math.abs(p)]));
+    } finally {
+      container.remove();
+    }
   });
 });
 
