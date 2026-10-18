@@ -2,21 +2,24 @@
    deck measures: 160px slides 16px apart, a step of 176, the fallback's own
    number too, for the same arc before the deck has measured. */
 .showcase [data-carouseldeck-viewport] {
-  --w: 160px;
-  --h: 200px;
+  --curve-slide-width: 160px;
+  --curve-slide-height: 200px;
   --deck-curve-radius: calc(528 / var(--deck-viewport-step, 176));
   gap: 16px;
   /* The first and last slides centred too. */
-  padding-inline: calc(50% - var(--w) / 2);
+  padding-inline: calc(50% - var(--curve-slide-width) / 2);
   /* Room for the arc while the deck moves. Above, the lift: w / (8 × r).
      Below, a slide about to fade out: r × w + (w − h) / 2. */
-  padding-block: calc(var(--w) / (8 * var(--deck-curve-radius)))
-    calc(var(--deck-curve-radius) * var(--w) + (var(--w) - var(--h)) / 2);
+  padding-block: calc(var(--curve-slide-width) / (8 * var(--deck-curve-radius)))
+    calc(
+      var(--deck-curve-radius) * var(--curve-slide-width) +
+        (var(--curve-slide-width) - var(--curve-slide-height)) / 2
+    );
 }
 .showcase [data-carouseldeck-slide] {
-  width: var(--w);
+  width: var(--curve-slide-width);
   scroll-snap-align: center;
 }
 .showcase .card {
-  height: var(--h);
+  height: var(--curve-slide-height);
 }

@@ -1930,16 +1930,21 @@ main .docs-sidebar a {
   padding-block: 7px 150px;
 }
 
-.example-curve [data-carouseldeck-slide],
-.example-curve-size [data-carouseldeck-slide] {
+.example-curve [data-carouseldeck-slide] {
   width: 160px;
   min-height: 0;
   background: none;
   scroll-snap-align: center;
 }
 
-.example-curve .card,
-.example-curve-size .card {
+.example-curve-size [data-carouseldeck-slide] {
+  width: var(--curve-slide-width);
+  min-height: 0;
+  background: none;
+  scroll-snap-align: center;
+}
+
+.example-curve .card {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1949,17 +1954,26 @@ main .docs-sidebar a {
   background-color: var(--tile);
 }
 
+.example-curve-size .card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--curve-slide-height);
+  border-radius: 20px;
+  background-color: var(--tile);
+}
+
 /* Size a curve: the recipe's own radius in pixels and room for the arc, on
-   --deck-viewport-step. --w and --h match the slide's and card's size
-   above. */
+   --deck-viewport-step. */
 .example-curve-size [data-carouseldeck-viewport] {
-  --w: 160px;
-  --h: 200px;
+  --curve-slide-width: 160px;
+  --curve-slide-height: 200px;
   --deck-curve-radius: calc(528 / var(--deck-viewport-step, 176));
   gap: 16px;
-  padding-inline: calc(50% - var(--w) / 2);
-  padding-block: calc(var(--w) / (8 * var(--deck-curve-radius)))
-    calc(var(--deck-curve-radius) * var(--w) + (var(--w) - var(--h)) / 2);
+  padding-inline: calc(50% - var(--curve-slide-width) / 2);
+  padding-block: calc(var(--curve-slide-width) / (8 * var(--deck-curve-radius)))
+    calc(var(--deck-curve-radius) * var(--curve-slide-width) + (var(--curve-slide-width) - var(--curve-slide-height)) / 2);
 }
 
 /* Centre the first and last slide. */

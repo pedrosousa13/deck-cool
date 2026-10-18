@@ -29,6 +29,14 @@ import {
 const SIZE = 100;
 /** Three slides in view, the focal one in the middle. */
 const SPAN = SIZE * 3;
+/** The gap in the size-a-curve recipe's own CSS. */
+const GAP = 16;
+
+/** A slide's turn from its progress and the radius, in degrees:
+ * asin(clamp(progress / radiusInSlides)). */
+const turn = (progress: number, radiusInSlides: number) =>
+  (Math.asin(Math.min(Math.max(progress / radiusInSlides, -1), 1)) * 180) /
+  Math.PI;
 
 type CurveDeckProps = ComponentProps<typeof Deck.Root> & {
   slides?: number;
@@ -183,10 +191,8 @@ describe('curve', () => {
     expect(progress()).toEqual(
       [0, 1, 2, 3, 4, 5].map((i) => expect.closeTo(i - way, 2))
     );
-    const turn = (p: number) =>
-      round((Math.asin(Math.min(Math.max(p / 4, -1), 1)) * 180) / Math.PI);
     expect(angles().slice(0, 3)).toEqual(
-      [0, 1, 2].map((i) => expect.closeTo(turn(i - way), 0))
+      [0, 1, 2].map((i) => expect.closeTo(turn(i - way, 4), 0))
     );
     await letGo();
   });
@@ -624,14 +630,6 @@ describe('curve under reduced motion', () => {
 // the slide's own width, the step it measures, as a consumer with fluid
 // slides sees; the radius in slides should move with it too, so the circle
 // the slides turn on stays the same 528px, at either width.
-const GAP = 16;
-
-/** A slide's turn from its progress and the radius, in degrees: both are
- * what the recipe's calc() alone should determine. */
-const expectedTurn = (progress: number, radiusInSlides: number) =>
-  (Math.asin(Math.min(Math.max(progress / radiusInSlides, -1), 1)) * 180) /
-  Math.PI;
-
 describe('the size-a-curve recipe: a radius in pixels from --deck-viewport-step', () => {
   test.each([100, 300])(
     'calc(528 / var(--deck-viewport-step, 176)) resolves to a 528px radius under %dpx slides',
@@ -656,8 +654,8 @@ describe('the size-a-curve recipe: a radius in pixels from --deck-viewport-step'
       expect(step).toBeCloseTo(slideWidth + GAP, 0);
       const radiusInSlides = 528 / step;
 
-      expect(angles()[1]).toBeCloseTo(expectedTurn(1, radiusInSlides), 0);
-      expect(angles()[2]).toBeCloseTo(expectedTurn(2, radiusInSlides), 0);
+      expect(angles()[1]).toBeCloseTo(turn(1, radiusInSlides), 0);
+      expect(angles()[2]).toBeCloseTo(turn(2, radiusInSlides), 0);
     }
   );
 });
