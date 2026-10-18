@@ -1,15 +1,16 @@
-// `react/jsx-runtime` for @carouseldeck/react's source, built for React 18:
-// the host elements React 18 renders differently, rendered as it does.
-import { version } from 'react';
+// `react/jsx-runtime` for @carouseldeck/react's source, built for React 18
+// and 19: a host element each version renders differently, rendered as that
+// version needs.
 import {
   Fragment,
   jsx as reactJsx,
   jsxs as reactJsxs
 } from 'react/jsx-runtime';
+import { isReact18 as isReact18Version, version } from './react-version';
 
 export { Fragment };
 
-const isReact18 = version.startsWith('18.');
+const isReact18 = isReact18Version(version);
 
 type Props = Record<string, unknown> & { children?: unknown };
 type Jsx = typeof reactJsx;

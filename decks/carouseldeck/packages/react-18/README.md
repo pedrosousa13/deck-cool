@@ -27,6 +27,13 @@ run on React 18, and on React 19:
   per deck, because neither build hoists them through React's own resource
   API, and its CSS is set as HTML, so neither version's server renderer
   escapes `>`.
+
+  A consumer passing `inert` to a deck primitive should pass `inert={true}`
+  (or `inert` alone), which this build renders correctly on React 18 and 19.
+  Never `inert=""`: React 19 treats `inert` as a boolean prop and an empty
+  string as falsy, so it removes the attribute, leaving the element not
+  inert, as on `@carouseldeck/react`.
+
 - Every component in the source is wrapped in `forwardRef` (`src/with-ref.ts`),
   so a `ref` reaches its element the way `forwardRef` passes it, on both
   versions.
@@ -40,7 +47,8 @@ server components either.
 (`test/consumer.tsx`) with React 18's types. It then runs the React package's
 tests on React 18 against the build (`vitest.react-18.config.ts` at the repo
 root), with this package's own tests in `test/`. `pnpm test:react-19` runs the
-same tests on React 19 against the same build (`vitest.react-19.config.ts`),
-aliased to the React 19 the workspace already has for `@carouseldeck/react`.
-A test specific to one version's own quirks is excluded from the other's run,
-by name, in its config.
+same type-check with React 19's types instead, then the same tests on React
+19 against the same build (`vitest.react-19.config.ts`), aliased to the
+React 19 the workspace already has for `@carouseldeck/react`. A test
+specific to one version's own quirks is excluded from the other's run, by
+name, in its config.

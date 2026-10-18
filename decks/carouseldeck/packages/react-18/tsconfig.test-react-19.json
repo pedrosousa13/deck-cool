@@ -1,0 +1,19 @@
+// A consumer of the React 18 build, type-checked with React 19's own types
+// (the workspace's own @types/react): run by `pnpm test:react-19`, after the
+// build. tsconfig.test.json checks the same file with React 18's own types.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": [],
+    "paths": {
+      "@carouseldeck/react": ["./dist/index.d.ts"],
+      "@carouseldeck/react/fade": ["./dist/fade.d.ts"],
+      "@carouseldeck/react/stack": ["./dist/stack.d.ts"],
+      "react": ["../../node_modules/@types/react"],
+      "react/jsx-runtime": ["../../node_modules/@types/react/jsx-runtime"]
+    }
+  },
+  "include": ["test/consumer.tsx"]
+}

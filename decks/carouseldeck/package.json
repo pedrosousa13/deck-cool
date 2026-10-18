@@ -12,7 +12,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:react-18": "pnpm --filter @carouseldeck/react-18... build && tsc -p packages/react-18/tsconfig.test.json && vitest run -c vitest.react-18.config.ts",
-    "test:react-19": "pnpm --filter @carouseldeck/react-18... build && vitest run -c vitest.react-19.config.ts",
+    "test:react-19": "pnpm --filter @carouseldeck/react-18... build && tsc -p packages/react-18/tsconfig.test-react-19.json && vitest run -c vitest.react-19.config.ts",
     "test:scripts": "node --test scripts/*.test.mjs",
     "build": "pnpm --filter \"./**\" --filter \"!carouseldeck\" build",
     "test:e2e": "playwright test",

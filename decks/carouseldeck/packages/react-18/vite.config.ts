@@ -87,7 +87,11 @@ export default defineConfig({
         index: `${source}index.tsx`,
         fade: `${source}fade.ts`,
         curve: `${source}curve.ts`,
-        stack: `${source}stack.ts`
+        stack: `${source}stack.ts`,
+        // Not in package.json's `exports`, so no consumer can import it: the
+        // workspace's own vitest configs alias it, to read the React
+        // version this build's dist itself saw.
+        'react-version': here('src/react-version.ts')
       },
       formats: ['es'],
       fileName: (_format, name) => `${name}.js`

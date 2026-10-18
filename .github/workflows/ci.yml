@@ -159,7 +159,7 @@ jobs:
   # once hung CI for 15 minutes on a slow mirror.
   #
   # The image is pinned by digest, and must match @playwright/test in
-  # pnpm-lock.yaml. To bump it with Playwright: change the tag in all three
+  # pnpm-lock.yaml. To bump it with Playwright: change the tag in all four
   # jobs, then pin the digest the tag now names, from
   #   docker buildx imagetools inspect mcr.microsoft.com/playwright:v<version>-noble
   # (the index's `Digest:`).
@@ -267,7 +267,7 @@ jobs:
         run: pnpm --dir decks/carouseldeck verify --job unit-react-19 --shard="$SHARD" "--changed=$BASE"
 
   # The e2e suite, one Playwright project per job, in the image
-  # carouseldeck-unit uses: keep the three in step.
+  # carouseldeck-unit uses: keep the four in step.
   carouseldeck-e2e:
     needs: changes
     if: needs.changes.outputs.e2e == 'true'

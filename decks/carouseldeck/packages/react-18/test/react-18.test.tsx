@@ -6,9 +6,36 @@ import { renderToString } from 'react-dom/server';
 import { expect, test, vi } from 'vitest';
 import * as Deck from '@carouseldeck/react';
 import { fade } from '@carouseldeck/react/fade';
+import { version as distVersion } from '@carouseldeck/react-18/react-version';
+import { warnIfUnsupportedReactVersion } from '../src/react-version';
 
 test('runs on React 18', () => {
   expect(version).toMatch(/^18\./);
+});
+
+// Excluded from the React 18 run: the sanity check above already covers it.
+// Checks the version the built dist itself imports, not only this file's
+// own `react` import, which a broken alias in just one of the two configs
+// would not catch.
+test('runs on React 19', () => {
+  expect(version).toMatch(/^19\./);
+  expect(distVersion).toMatch(/^19\./);
+});
+
+test('logs no development error on this React version', () => {
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  warnIfUnsupportedReactVersion(version);
+  expect(error).not.toHaveBeenCalled();
+  error.mockRestore();
+});
+
+test('logs a development error naming another major version', () => {
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  warnIfUnsupportedReactVersion('17.2.0');
+  expect(error).toHaveBeenCalledWith(
+    expect.stringContaining('this is React 17.2.0')
+  );
+  error.mockRestore();
 });
 
 // Viewport aside: a consumer's ref there replaces the deck's own, on React 19
@@ -94,6 +121,22 @@ test('a loop shell is inert', () => {
   for (const slide of document.querySelectorAll('[data-carouseldeck-slide]')) {
     expect(slide).not.toHaveAttribute('inert');
   }
+});
+
+// Runs on React 18 and 19: `inert={true}` (or `inert` alone), the one way
+// that works on both, unlike `inert=""`, which only React 18 needs.
+test('a consumer’s inert={true} makes a deck primitive inert, on 18 and 19', () => {
+  render(
+    <Deck.Root aria-label="Slides">
+      <Deck.Viewport style={{ width: 300 }}>
+        <Deck.Slide inert>One</Deck.Slide>
+        <Deck.Slide>Two</Deck.Slide>
+      </Deck.Viewport>
+    </Deck.Root>
+  );
+
+  expect(screen.getByText('One')).toHaveAttribute('inert', '');
+  expect(screen.getByText('Two')).not.toHaveAttribute('inert');
 });
 
 test('a consumer’s inert="", as React 18 writes it, stays inert', () => {
