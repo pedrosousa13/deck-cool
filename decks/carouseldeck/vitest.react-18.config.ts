@@ -39,10 +39,10 @@ export default defineConfig({
     ],
     // Not the base config's, which leaves this package's tests to this one.
     exclude: ['**/node_modules/**'],
-    // Two tests of React 19 alone: a test component that takes `ref` as a
-    // prop, and the server-component entry, which React 18 has no use for.
-    // packages/react-18/test covers refs on React 18.
+    // Tests of React 19 alone: a test component that takes `ref` as a prop,
+    // and the server-component entry (`ServerSlidesProvider`), which React
+    // 18 has no use for. packages/react-18/test covers refs on React 18.
     testNamePattern:
-      /^(?!.*(ref is the region element|count the slides a server component counted))/
+      /^(?!.*(ref is the region element|count the slides a server component counted|server entry reports its count))/
   }
 });

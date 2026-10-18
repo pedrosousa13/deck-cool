@@ -13,11 +13,14 @@ from your own components. It returns:
   measured, as on the server.
 - `slide` and `focal`: the current slide and the focal slide, always a slide
   even where `count` and `index` count pages. Both are `null` until the
-  viewport is measured, as on the server; `focal` is `-1` where no slide
-  snaps.
+  viewport is measured, as on the server, and `-1` where no slide snaps;
+  `focal`'s `-1` matches what `onFocalChange` reports.
 - `slideCount`: the number of slides, as opposed to `count`, the snap
-  points: fewer where the deck snaps in pages. A loop's extra copies are
-  never counted.
+  points: fewer where the deck snaps in pages. A loop's shells and its
+  copies are never counted. Known before the viewport is measured too,
+  from the slides in `Deck.Viewport` or a server entry's count; `null`
+  where `Deck.Root` cannot see them yet, as when `Deck.Viewport` sits
+  inside your own component.
 - `loop`: whether `Deck.Root` has `loop`.
 - `fits`: whether every slide fits, where the built-in controls are absent.
 - `canPrev` and `canNext`: whether `Deck.Prev` and `Deck.Next` are enabled.

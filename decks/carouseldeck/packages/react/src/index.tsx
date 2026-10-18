@@ -46,14 +46,12 @@ interface DeckContextValue {
    * if the engine's own measurement says otherwise. Meaningless without
    * `loop`. */
   copies: boolean;
-  /** The slides in Deck.Viewport, for the first render only, before any
-   * measurement: Dots and Counter then count a page per slide. Null after, or
-   * where Root cannot see Viewport's children. */
-  slides: number | null;
   /** The number of slides, as `UseDeckResult.slideCount` reports it: the
-   * same walk as `slides`, kept after measurement too, since it needs none.
-   * 0 where Root cannot see Viewport's children. */
-  slideCount: number;
+   * walk Dots and Counter also need, before measurement -- null where Root
+   * cannot see Viewport's children -- and the engine's own measured count
+   * after, which needs no walk and excludes a loop's shells and copies
+   * (ADR-0009, ADR-0013). */
+  slideCount: number | null;
   initialIndex: number;
   orientation: Orientation;
   /** Whether Root has `loop`. */
@@ -217,6 +215,7 @@ export function Root({
     slide: number | null;
     focal: number | null;
     copies: boolean;
+    slideCount: number | null;
   }>({
     index: initialIndex,
     count: null,
@@ -224,7 +223,8 @@ export function Root({
     focal: null,
     // Unmeasured: Viewport renders shells first, the engine's own first
     // settle corrects it (ADR-0013) before the first paint.
-    copies: false
+    copies: false,
+    slideCount: null
   });
   const viewportRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<DeckEngine>(null);
@@ -478,10 +478,10 @@ export function Root({
   // server. Rendered from a server component, Root cannot recognise the
   // Viewport, a client reference here: the server component counted it.
   const serverSlides = use(ServerSlides);
-  // The walk Dots and Counter need only before measurement, and
-  // `slideCount` always: it is static, so measurement adds nothing to it.
+  // The walk Dots and Counter need before measurement, null where Root
+  // cannot see Viewport's children: `state.slideCount`, the engine's own
+  // measured count, takes over once it is no longer null.
   const walkedSlides = slidesIn(children, Viewport) ?? serverSlides;
-  const slides = state.count === null ? walkedSlides : null;
 
   // A deck nested in a slide counts its own slides.
   return (
@@ -489,8 +489,7 @@ export function Root({
       <DeckContext
         value={{
           ...state,
-          slides,
-          slideCount: walkedSlides ?? 0,
+          slideCount: state.slideCount ?? walkedSlides,
           initialIndex,
           orientation,
           loop,
@@ -1135,7 +1134,8 @@ export interface UseDeckResult {
   count: number | null;
   /** The current slide, the one `data-current` marks: a slide even where
    * `count` counts pages. Null until the viewport is measured, as on the
-   * server; until then, `Deck.Slide` marks the slide the deck starts at. */
+   * server; until then, `Deck.Slide` marks the slide the deck starts at.
+   * -1 where no slide snaps, as `focal` is then too. */
   slide: number | null;
   /** The focal slide, the one `data-focal` marks, matching what
    * `onFocalChange` reports: -1 where no slide snaps. Null until the
@@ -1143,10 +1143,14 @@ export interface UseDeckResult {
    * the slide the deck starts at. */
   focal: number | null;
   /** The number of slides, as opposed to `count`, the snap points: fewer
-   * where the deck snaps in pages. Loop copies are not counted (ADR-0009).
-   * Known from the first render, as the slides Root can see; 0 where it
-   * cannot (Dots and Counter then render empty too). */
-  slideCount: number;
+   * where the deck snaps in pages. A loop's shells and its copies are both
+   * left out (ADR-0009, ADR-0013). Before the viewport is measured, the
+   * slides Root can see walking Deck.Viewport's children, or the server
+   * entry's count (ADR-0011); null where Root cannot see them, as with a
+   * Viewport inside a custom component, or one rendered from a React server
+   * component with no server entry. The engine's own measured count after,
+   * which follows a slide added or removed after mount. */
+  slideCount: number | null;
   /** Whether `Deck.Root` has `loop`. */
   loop: boolean;
   /** Whether every slide fits, so there is nowhere to go: Prev, Next, Dots,
@@ -1170,10 +1174,10 @@ export interface UseDeckResult {
  * slides Root can see, as `usePages` clamps it for Dots and Counter. */
 function useDeckState(primitive: string): UseDeckResult {
   const deck = useDeckContext(primitive);
-  const { count, slides, slide, focal, slideCount, loop, userMove } = deck;
+  const { count, slide, focal, slideCount, loop, userMove } = deck;
   const index =
-    count === null && slides
-      ? clampSlide(deck.initialIndex, slides)
+    count === null && slideCount
+      ? clampSlide(deck.initialIndex, slideCount)
       : deck.index;
   const fits = everySlideFits(count);
   return {
@@ -1277,10 +1281,16 @@ export function Next(props: ComponentProps<'button'>) {
  * there; a deck whose snap points differ corrects at hydration (ADR-0003).
  * `count` is null only where Root cannot see Viewport's slides. */
 function usePages(primitive: string) {
-  const { index, count, slides, initialIndex, userMove } =
+  const { index, count, slideCount, initialIndex, userMove } =
     useDeckContext(primitive);
-  if (count !== null || slides === null) return { index, count, userMove };
-  return { index: clampSlide(initialIndex, slides), count: slides, userMove };
+  if (count !== null || slideCount === null) {
+    return { index, count, userMove };
+  }
+  return {
+    index: clampSlide(initialIndex, slideCount),
+    count: slideCount,
+    userMove
+  };
 }
 
 /** A labelled group of buttons, one per page: one per snap point, so with

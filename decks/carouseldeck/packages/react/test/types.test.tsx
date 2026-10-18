@@ -88,7 +88,7 @@ test("useDeck reports the deck's state and its moves", () => {
     count: number | null;
     slide: number | null;
     focal: number | null;
-    slideCount: number;
+    slideCount: number | null;
     loop: boolean;
     fits: boolean;
     canPrev: boolean;

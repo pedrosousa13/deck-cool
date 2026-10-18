@@ -1,14 +1,22 @@
-import { act, createRef, Profiler, type ReactNode } from 'react';
+import {
+  act,
+  createRef,
+  Profiler,
+  type ComponentProps,
+  type ReactNode
+} from 'react';
 import { renderToString } from 'react-dom/server';
 import { render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
+import { ServerSlidesProvider } from '../src/server-slides';
 import {
   addStyle,
   expectSettledTo,
   pagesOf,
   parkMouse,
+  serverThenHydrated,
   sleep,
   TestDeck,
   viewportOf,
@@ -38,7 +46,7 @@ function Probe() {
       data-count={count ?? 'null'}
       data-slide={slide ?? 'null'}
       data-focal={focal ?? 'null'}
-      data-slide-count={slideCount}
+      data-slide-count={slideCount ?? 'null'}
       data-loop={loop}
       data-fits={fits}
       data-can-prev={canPrev}
@@ -47,14 +55,19 @@ function Probe() {
   );
 }
 
+/** A probed field that is `null` until the viewport is measured, read back
+ * from its string attribute. */
+const parseNullable = (value: string | undefined) =>
+  value === 'null' ? null : Number(value);
+
 const probed = () => {
   const probe = document.querySelector<HTMLElement>('[data-probe]')!.dataset;
   return {
     index: Number(probe.index),
-    count: probe.count === 'null' ? null : Number(probe.count),
-    slide: probe.slide === 'null' ? null : Number(probe.slide),
-    focal: probe.focal === 'null' ? null : Number(probe.focal),
-    slideCount: Number(probe.slideCount),
+    count: parseNullable(probe.count),
+    slide: parseNullable(probe.slide),
+    focal: parseNullable(probe.focal),
+    slideCount: parseNullable(probe.slideCount),
     loop: probe.loop === 'true',
     fits: probe.fits === 'true',
     canPrev: probe.canPrev === 'true',
@@ -465,6 +478,53 @@ test('before the viewport is measured, useDeck clamps index as Counter does', ()
   ).toBe('5 / 5');
 });
 
+/** Stands in for a Viewport rendered from a React server component: a
+ * client reference, which Root cannot recognise either. */
+function Hidden(props: ComponentProps<typeof Deck.Viewport>) {
+  return <Deck.Viewport {...props} />;
+}
+
+test('where Root cannot see Viewport, slideCount is null before measurement and the real count after', async () => {
+  const deck = (
+    <Deck.Root aria-label="Hidden viewport">
+      <Hidden style={{ width: WIDTH }}>
+        <Deck.Slide>One</Deck.Slide>
+        <Deck.Slide>Two</Deck.Slide>
+        <Deck.Slide>Three</Deck.Slide>
+      </Hidden>
+      <Probe />
+    </Deck.Root>
+  );
+  const readSlideCount = (viewport: HTMLElement) =>
+    viewport
+      .closest('[data-index]')!
+      .querySelector<HTMLElement>('[data-probe]')!.dataset.slideCount;
+
+  const { server, hydrated } = await serverThenHydrated(deck, readSlideCount);
+
+  expect(server).toBe('null');
+  expect(hydrated).toBe('3');
+});
+
+test('a server entry reports its count as slideCount before measurement, where Root still cannot see the Viewport itself', () => {
+  const container = document.createElement('div');
+  container.innerHTML = renderToString(
+    <ServerSlidesProvider count={3}>
+      <Deck.Root aria-label="Server entry">
+        <Hidden style={{ width: WIDTH }}>
+          <Deck.Slide>One</Deck.Slide>
+          <Deck.Slide>Two</Deck.Slide>
+          <Deck.Slide>Three</Deck.Slide>
+        </Hidden>
+        <Probe />
+      </Deck.Root>
+    </ServerSlidesProvider>
+  );
+
+  const probe = container.querySelector<HTMLElement>('[data-probe]')!.dataset;
+  expect(probe.slideCount).toBe('3');
+});
+
 /** The slide `data-current` and `data-focal` mark, a loop's copy never one:
  * the ground truth `slide` and `focal` must agree with. */
 const markers = (viewport: HTMLElement) => {
@@ -502,30 +562,30 @@ test('with pages of three, slide and focal can differ, and never count a page, a
       .getByRole('group', { name: 'Choose page' })
       .querySelectorAll('button');
 
-  const expectAgrees = () => {
+  const expectProbeMatchesMarkers = () => {
     const truth = markers(viewport);
     expect(probed().slide).toBe(truth.current);
     expect(probed().focal).toBe(truth.focal);
     expect(probed().slideCount).toBe(10);
   };
 
-  expectAgrees();
+  expectProbeMatchesMarkers();
   expect(probed()).toMatchObject({ index: 0, slide: 0, focal: 0 });
 
   await userEvent.click(screen.getByRole('button', { name: 'Next' }));
   await expectSettledTo(() => probed().index, 1);
-  expectAgrees();
+  expectProbeMatchesMarkers();
   expect(probed()).toMatchObject({ slide: 3, focal: 3 });
 
   await userEvent.click(dots()[2]);
   await expectSettledTo(() => probed().index, 2);
-  expectAgrees();
+  expectProbeMatchesMarkers();
   expect(probed()).toMatchObject({ slide: 6, focal: 6 });
 
   viewport.focus();
   await userEvent.keyboard('{ArrowRight}');
   await expectSettledTo(() => probed().index, 3);
-  expectAgrees();
+  expectProbeMatchesMarkers();
   // The last page holds slide 9 alone, past the end of the scroll range: it
   // rests where slide 7 is at the start, so the current slide and the focal
   // slide differ, and neither is the page Counter would show (3).
@@ -533,7 +593,7 @@ test('with pages of three, slide and focal can differ, and never count a page, a
 
   act(() => handle.current!.scrollTo(0));
   await expectSettledTo(() => probed().index, 0);
-  expectAgrees();
+  expectProbeMatchesMarkers();
   expect(probed()).toMatchObject({ slide: 0, focal: 0 });
 });
 
@@ -557,10 +617,57 @@ test('with loop, slide, focal and slideCount never count a loop copy', async () 
   await userEvent.click(screen.getByRole('button', { name: 'Previous' }));
   await expectSettledTo(() => probed().index, 4);
   expect(probed()).toMatchObject({ slide: 4, focal: 4, slideCount: 5 });
+  expect(onFocalChange.mock.calls).toEqual([[4]]);
 
   await userEvent.click(screen.getByRole('button', { name: 'Next' }));
   await expectSettledTo(() => probed().index, 0);
   expect(probed()).toMatchObject({ slide: 0, focal: 0, slideCount: 5 });
+  expect(onFocalChange.mock.calls).toEqual([[4], [0]]);
+});
+
+test('with a deck too small for shells, slide, focal and slideCount never count a loop copy, across the wrap', async () => {
+  // Three 110px slides in a 300px viewport: short of the room a shell
+  // needs beside its own slide (ADR-0013), so loop falls back to
+  // rendering copies (ADR-0009) rather than shells.
+  addStyle('.copies > * { width: 110px; }');
+  render(
+    <TestDeck
+      slides={3}
+      loop
+      viewportClassName="copies"
+      controls={
+        <>
+          <Deck.Counter />
+          <Probe />
+        </>
+      }
+    />
+  );
+  const root = screen.getByRole('region', { name: 'Test deck' });
+  const viewport = viewportOf(root);
+  await expect.poll(() => viewport.dataset.carouseldeckLoop).toBe('copies');
+
+  const expectProbeMatchesMarkers = () => {
+    const truth = markers(viewport);
+    expect(probed().slide).toBe(truth.current);
+    expect(probed().focal).toBe(truth.focal);
+    expect(probed().slideCount).toBe(3);
+  };
+
+  expectProbeMatchesMarkers();
+  expect(probed()).toMatchObject({ slide: 0, focal: 0 });
+
+  // Prev on the first snap point moves across the seam to the last slide.
+  await userEvent.click(screen.getByRole('button', { name: 'Previous' }));
+  await expectSettledTo(() => probed().index, 2);
+  expectProbeMatchesMarkers();
+  expect(probed()).toMatchObject({ slide: 2, focal: 2 });
+
+  // Next back across the same seam returns to the first.
+  await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await expectSettledTo(() => probed().index, 0);
+  expectProbeMatchesMarkers();
+  expect(probed()).toMatchObject({ slide: 0, focal: 0 });
 });
 
 describe('focal when no slide snaps', () => {

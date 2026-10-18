@@ -20,6 +20,10 @@ export interface DeckState {
    * short run needs no room beside them, and this fallback never raises
    * for it. The caller decides what to render from it. */
   copies: boolean;
+  /** The number of real slides: the run measured, shells and copies
+   * excluded (ADR-0009, ADR-0013). Follows a slide added or removed after
+   * mount. */
+  slideCount: number;
 }
 
 /** The axis a deck scrolls along. Horizontal follows the writing direction,
@@ -158,7 +162,8 @@ export function createDeck(
     count: 0,
     slide: -1,
     focal: -1,
-    copies: false
+    copies: false,
+    slideCount: -1
   };
 
   const publish = (next: DeckState) => {
@@ -167,7 +172,8 @@ export function createDeck(
       next.count === state.count &&
       next.slide === state.slide &&
       next.focal === state.focal &&
-      next.copies === state.copies
+      next.copies === state.copies &&
+      next.slideCount === state.slideCount
     ) {
       return;
     }
@@ -559,7 +565,8 @@ export function createDeck(
         count: points.length,
         slide,
         focal: slide === -1 ? -1 : focalSlide(viewport, along, align),
-        copies: fallbackToCopies(viewport, along, placement, geometry)
+        copies: fallbackToCopies(viewport, along, placement, geometry),
+        slideCount: run.slides.length
       });
     } finally {
       endRelayout();
