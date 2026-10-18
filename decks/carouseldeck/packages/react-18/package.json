@@ -45,8 +45,8 @@
     "@carouseldeck/core": "workspace:*"
   },
   "peerDependencies": {
-    "react": ">=18 <19",
-    "react-dom": ">=18 <19"
+    "react": ">=18 <20",
+    "react-dom": ">=18 <20"
   },
   "devDependencies": {
     "@carouseldeck/react": "workspace:*",

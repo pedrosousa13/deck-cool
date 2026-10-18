@@ -16,7 +16,8 @@ pnpm verify
 
 It runs every gate in order and stops at the first failure: `format:check`,
 `lint`, `typecheck`, `test` (vitest in browser mode), `test:react-18` (the
-same tests on React 18, against `@carouseldeck/react-18`'s build), `test:scripts`
+same tests on React 18, against `@carouseldeck/react-18`'s build),
+`test:react-19` (the same, on React 19), `test:scripts`
 (the scripts' own tests), `build`, `docs:check` (the code blocks in
 the package README and the docs type-check), `compare:check` (the
 README's and the docs' comparison table is fresh), `test:packages` (publint and attw on the
@@ -35,22 +36,23 @@ another ref). `RULES` in `scripts/verify.mjs` maps each changed path to the
 gates it needs, first match wins, and a path no rule matches needs every gate.
 
 `--only lint,typecheck` runs those gates, `--project=webkit` runs `test:e2e`
-in one browser, `--shard=1/4` runs `test` and `test:react-18` in one vitest
-shard of four, and `--dry-run` lists the gates without running them. With no
-arguments, `pnpm verify` runs every gate, as before.
+in one browser, `--shard=1/4` runs `test`, `test:react-18` and `test:react-19`
+in one vitest shard of four, and `--dry-run` lists the gates without running
+them. With no arguments, `pnpm verify` runs every gate, as before.
 
 CI (deck-cool's root `.github/workflows/ci.yml`) runs the same list, split
 into parallel jobs by `CI_JOBS` in `scripts/verify.mjs`: `changes` works out
 which gates the change needs, then `checks` (the gates with no browser but
 the next two), `packages` (`test:packages`), `next` (`test:next`), `unit`
-(vitest, one job per shard of four), `unit-react-18` (`test:react-18`, the
-same way) and `e2e` (one job per browser) each run `pnpm verify --job
+(vitest, one job per shard of four), `unit-react-18` and `unit-react-19`
+(`test:react-18` and `test:react-19`, the same way) and `e2e` (one job per
+browser) each run `pnpm verify --job
 <name>`. `ci.yml` runs on every push, not on a pull request: on a branch, the base
 is the merge base with `origin/main`; on `main`, the commit before the push.
 A job with nothing to run in that diff is skipped. `unit`,
-`unit-react-18` and `e2e` run in Playwright's container image, pinned by
-digest in the root `ci.yml`: bump it with `@playwright/test`, as the comment
-there says.
+`unit-react-18`, `unit-react-19` and `e2e` run in Playwright's container
+image, pinned by digest in the root `ci.yml`: bump it with `@playwright/test`,
+as the comment there says.
 `scripts/verify.test.mjs` fails if the jobs do not cover every gate, so a gate
 added to the list runs in CI with no second list to update. CI does not
 replace running `pnpm verify` locally; it catches the time you forgot.
@@ -83,11 +85,12 @@ Formatting is checked, never written by the gate. Run
 
 ## React 18
 
-`packages/react-18` builds `packages/react/src`, unchanged, for React 18, so
-the React 19 package ships nothing for it: its README says how. Write the
-source for React 19 alone. When the source uses a React API or a host element
-prop that React 18 handles differently, `test:react-18` fails: adapt it in
-`packages/react-18/src`, never in the source.
+`packages/react-18` builds `packages/react/src`, unchanged, for React 18 and
+19, so the React 19 package ships nothing for it: its README says how. Write
+the source for React 19 alone. When the source uses a React API or a host
+element prop that React 18 or 19 handles differently, `test:react-18` or
+`test:react-19` fails: adapt it in `packages/react-18/src`, never in the
+source.
 
 ## Releasing
 

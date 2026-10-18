@@ -12,8 +12,8 @@
 //   pnpm verify --only lint,typecheck   those steps, in list order
 //   pnpm verify --job unit              one CI job's steps
 //   pnpm verify --project=webkit ...    test:e2e in one Playwright project
-//   pnpm verify --shard=1/4 ...         test and test:react-18 (vitest) in
-//                                       one shard of four
+//   pnpm verify --shard=1/4 ...         test, test:react-18 and test:react-19
+//                                       (vitest) in one shard of four
 //   pnpm verify --dry-run ...           print the steps, run none
 //   pnpm verify --ci-jobs ...           print `<job>=true|false` for each CI
 //                                       job: whether it has a step to run
@@ -36,6 +36,8 @@ export const STEPS = [
   // The React package's tests again, on React 18, against
   // @carouseldeck/react-18's build.
   'test:react-18',
+  // The same, on React 19.
+  'test:react-19',
   'test:scripts',
   'build',
   // The README's and the docs package's code blocks against the built
@@ -52,7 +54,7 @@ export const STEPS = [
 ];
 
 /** The vitest steps, which `--shard` splits. */
-const SHARDED = ['test', 'test:react-18'];
+const SHARDED = ['test', 'test:react-18', 'test:react-19'];
 
 /**
  * CI's parallel jobs, by the steps each runs: `pnpm verify --job <name>` in
@@ -79,6 +81,8 @@ export const CI_JOBS = {
   unit: ['test'],
   // The same, for test:react-18: its own job, so `unit` takes no longer.
   'unit-react-18': ['test:react-18'],
+  // The same, for test:react-19: its own job too.
+  'unit-react-19': ['test:react-19'],
   // No browser. Apart from `unit`, whose vitest run is CI's longest job.
   packages: ['test:packages'],
   next: ['test:next'],
@@ -240,7 +244,9 @@ export function plan(argv, changed = changedSince) {
     throw new Error('--project needs test:e2e among the steps');
   }
   if (shard !== undefined && !wanted.some((step) => SHARDED.includes(step))) {
-    throw new Error('--shard needs test or test:react-18 among the steps');
+    throw new Error(
+      '--shard needs test, test:react-18 or test:react-19 among the steps'
+    );
   }
   const steps = (
     since === undefined

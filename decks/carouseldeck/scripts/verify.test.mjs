@@ -49,13 +49,20 @@ test('--project with no test:e2e to take it is refused', () => {
 });
 
 test('--shard goes to the vitest steps alone', () => {
-  assert.deepEqual(plan(['--only', 'lint,test,test:react-18', '--shard=2/4']), [
-    { step: 'lint', args: [] },
-    { step: 'test', args: ['--shard=2/4'] },
-    { step: 'test:react-18', args: ['--shard=2/4'] }
-  ]);
+  assert.deepEqual(
+    plan(['--only', 'lint,test,test:react-18,test:react-19', '--shard=2/4']),
+    [
+      { step: 'lint', args: [] },
+      { step: 'test', args: ['--shard=2/4'] },
+      { step: 'test:react-18', args: ['--shard=2/4'] },
+      { step: 'test:react-19', args: ['--shard=2/4'] }
+    ]
+  );
   assert.deepEqual(plan(['--job', 'unit-react-18', '--shard=3/4']), [
     { step: 'test:react-18', args: ['--shard=3/4'] }
+  ]);
+  assert.deepEqual(plan(['--job', 'unit-react-19', '--shard=3/4']), [
+    { step: 'test:react-19', args: ['--shard=3/4'] }
   ]);
   assert.throws(
     () => plan(['--only', 'lint', '--shard=1/4']),
@@ -279,6 +286,7 @@ test('ciJobs says which CI jobs have a step to run', () => {
     checks: true,
     unit: true,
     'unit-react-18': true,
+    'unit-react-19': true,
     packages: true,
     next: true,
     e2e: true
@@ -287,6 +295,7 @@ test('ciJobs says which CI jobs have a step to run', () => {
     checks: true,
     unit: false,
     'unit-react-18': false,
+    'unit-react-19': false,
     packages: false,
     next: false,
     e2e: false
@@ -295,6 +304,7 @@ test('ciJobs says which CI jobs have a step to run', () => {
     checks: true,
     unit: false,
     'unit-react-18': false,
+    'unit-react-19': false,
     packages: false,
     next: false,
     e2e: true
@@ -306,6 +316,7 @@ test('ciJobs says which CI jobs have a step to run', () => {
       checks: true,
       unit: true,
       'unit-react-18': true,
+      'unit-react-19': true,
       packages: true,
       next: true,
       e2e: true
@@ -317,6 +328,7 @@ test('ciJobs says which CI jobs have a step to run', () => {
     checks: false,
     unit: false,
     'unit-react-18': false,
+    'unit-react-19': false,
     packages: false,
     next: false,
     e2e: false
@@ -326,6 +338,7 @@ test('ciJobs says which CI jobs have a step to run', () => {
 test('each vitest run, test:packages and test:next each have a CI job of their own', () => {
   assert.deepEqual(CI_JOBS.unit, ['test']);
   assert.deepEqual(CI_JOBS['unit-react-18'], ['test:react-18']);
+  assert.deepEqual(CI_JOBS['unit-react-19'], ['test:react-19']);
   assert.deepEqual(CI_JOBS.packages, ['test:packages']);
   assert.deepEqual(CI_JOBS.next, ['test:next']);
 });

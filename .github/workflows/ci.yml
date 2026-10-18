@@ -56,6 +56,7 @@ jobs:
       checks: ${{ steps.plan.outputs.checks }}
       unit: ${{ steps.plan.outputs.unit }}
       unit-react-18: ${{ steps.plan.outputs.unit-react-18 }}
+      unit-react-19: ${{ steps.plan.outputs.unit-react-19 }}
       packages: ${{ steps.plan.outputs.packages }}
       next: ${{ steps.plan.outputs.next }}
       e2e: ${{ steps.plan.outputs.e2e }}
@@ -233,6 +234,38 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: pnpm --dir decks/carouseldeck verify --job unit-react-18 --shard="$SHARD" "--changed=$BASE"
 
+  # The same, on React 19.
+  carouseldeck-unit-react-19:
+    needs: changes
+    if: needs.changes.outputs.unit-react-19 == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1/4, 2/4, 3/4, 4/4]
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user 1001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - run: |
+          mkdir -p "$RUNNER_TEMP/corepack"
+          corepack enable --install-directory "$RUNNER_TEMP/corepack"
+          echo "$RUNNER_TEMP/corepack" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - env:
+          BASE: ${{ needs.changes.outputs.base }}
+          SHARD: ${{ matrix.shard }}
+        run: pnpm --dir decks/carouseldeck verify --job unit-react-19 --shard="$SHARD" "--changed=$BASE"
+
   # The e2e suite, one Playwright project per job, in the image
   # carouseldeck-unit uses: keep the three in step.
   carouseldeck-e2e:
@@ -269,7 +302,7 @@ jobs:
   # The one check to require in branch protection: it passes when every job
   # passed, or was skipped because the change needs none of its gates.
   verify:
-    needs: [sites, changes, carouseldeck-checks, carouseldeck-packages, carouseldeck-next, carouseldeck-unit, carouseldeck-unit-react-18, carouseldeck-e2e]
+    needs: [sites, changes, carouseldeck-checks, carouseldeck-packages, carouseldeck-next, carouseldeck-unit, carouseldeck-unit-react-18, carouseldeck-unit-react-19, carouseldeck-e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

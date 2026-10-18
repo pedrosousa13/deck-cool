@@ -8,8 +8,7 @@ import {
   useEffect,
   useLayoutEffect as useReactLayoutEffect,
   version,
-  type Context,
-  type Provider
+  type Context
 } from 'react';
 
 export {
@@ -25,24 +24,37 @@ export {
 // Left in the build for the consumer's bundler to replace, as in the source.
 declare const process: { env: { NODE_ENV?: string } };
 
-if (process.env.NODE_ENV !== 'production' && !version.startsWith('18.')) {
+if (
+  process.env.NODE_ENV !== 'production' &&
+  !version.startsWith('18.') &&
+  !version.startsWith('19.')
+) {
   console.error(
-    `@carouseldeck/react-18 is for React 18, and this is React ${version}. ` +
-      'Use @carouseldeck/react with React 19.'
+    `@carouseldeck/react-18 is for React 18 and 19, and this is React ${version}. ` +
+      'Use @carouseldeck/react for React 19 alone.'
   );
 }
 
+/** The real context a shimmed one stands in for, so `use` can read it: a
+ * context is its own provider on React 19 (`Provider` is the context
+ * itself), but a separate object on React 18, so neither version's own
+ * shape is read here. */
+const REAL_CONTEXT = Symbol('realContext');
+
 /** A context the source renders as its own provider, as React 19 does:
- * here, React 18's provider, which `use` reads the context through. */
-export const createContext = <T>(value: T) =>
-  createReactContext(value).Provider as unknown as Context<T>;
+ * here, its `Provider`, which `use` reads the context through. On React 19
+ * that already is the context; on React 18 a separate object. */
+export const createContext = <T>(value: T) => {
+  const context = createReactContext(value);
+  (context.Provider as unknown as Record<symbol, Context<T>>)[REAL_CONTEXT] =
+    context;
+  return context.Provider as unknown as Context<T>;
+};
 
 /** React 18 has no `use`; the source reads contexts with it, and nothing
  * else. */
 export const use = <T>(context: Context<T>): T =>
-  useContext(
-    (context as unknown as Provider<T> & { _context: Context<T> })._context
-  );
+  useContext((context as unknown as Record<symbol, Context<T>>)[REAL_CONTEXT]);
 
 /** React 18 warns about a layout effect on the server; React 19 does not. */
 export const useLayoutEffect =
