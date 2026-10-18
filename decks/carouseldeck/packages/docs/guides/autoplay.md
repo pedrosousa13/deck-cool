@@ -31,7 +31,10 @@ export function Hero() {
 
 - A pointer over the deck, or a hidden tab, pauses it.
 - Focus entering the deck, other than on the toggle, or the user moving the
-  deck, stops it until the toggle starts it again.
+  deck, stops it until the toggle starts it again. Every move through
+  `useDeck()` or the `handleRef` handle counts as the user's, as a built-in
+  control's does. A controlled `index` change does not: it moves the deck
+  without stopping autoplay.
 - A preference for reduced motion stops it from the start.
 - The deck does not announce autoplay's moves, and its live region is off
   while autoplay rotates it.

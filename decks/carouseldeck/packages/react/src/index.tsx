@@ -98,7 +98,8 @@ function useDeckContext(primitive: string): DeckContextValue {
 
 /** What `Deck.Root`'s `handleRef` exposes: moves for event handlers that
  * should not round-trip through state. Each fires `onIndexChange` when the deck
- * settles on a new snap point. */
+ * settles on a new snap point, and stops autoplay, as `useDeck()`'s moves do:
+ * every move through either API counts as the user's. */
 export interface RootHandle {
   /** Scrolls to a snap point, clamped to the snap points there are. */
   scrollTo(index: number): void;
@@ -253,6 +254,11 @@ export function Root({
   // Where autoplay last stepped from: resting there again, the step did not
   // move the deck. Any move autoplay did not start clears it.
   const stepFromRef = useRef<number | null>(null);
+  // Mirrors `autoplaying` for `userMove`, below: `useImperativeHandle`
+  // closes over `userMove` once, at mount, so `userMove` must read this
+  // instead of `autoplaying` directly to see autoplay added or removed
+  // later, as when it is set per breakpoint.
+  const autoplayingRef = useRef(false);
 
   useLayoutEffect(() => {
     onIndexChangeRef.current = onIndexChange;
@@ -357,6 +363,9 @@ export function Root({
   // re-renders an autoplay deck, an accepted exception in ADR-0003; scroll
   // never does. Without autoplay none of it is tracked, so nothing changes.
   const autoplaying = autoplay !== undefined;
+  useLayoutEffect(() => {
+    autoplayingRef.current = autoplaying;
+  });
 
   useLayoutEffect(() => {
     if (!autoplaying) return;
@@ -458,18 +467,20 @@ export function Root({
     return engineRef.current;
   };
 
-  /** The engine, for the user's move: it also stops autoplay. */
+  /** The engine, for the user's move: it also stops autoplay. Reads
+   * `autoplayingRef` rather than `autoplaying`, so a call the handle kept
+   * from mount still sees autoplay's current state. */
   const userMove = () => {
-    if (autoplaying) setPlaying(false);
+    if (autoplayingRef.current) setPlaying(false);
     return takeOver();
   };
 
   useImperativeHandle(
     handleRef,
     () => ({
-      scrollTo: (index) => takeOver()?.scrollTo(index),
-      next: () => takeOver()?.next(),
-      prev: () => takeOver()?.prev()
+      scrollTo: (index) => userMove()?.scrollTo(index),
+      next: () => userMove()?.next(),
+      prev: () => userMove()?.prev()
     }),
     []
   );

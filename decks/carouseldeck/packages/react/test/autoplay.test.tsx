@@ -96,13 +96,32 @@ describe('autoplay', () => {
   });
 
   test('counts the interval from where the deck comes to rest', async () => {
-    const handle = createRef<Deck.RootHandle>();
-    const { root } = renderDeck({ autoplay: 800, handleRef: handle });
+    // A controlled index moves the deck without stopping autoplay, unlike a
+    // handle call (#182): the first move here must not stop the second.
+    function Controlled() {
+      const [index, setIndex] = useState(0);
+      return (
+        <>
+          <button type="button" onClick={() => setIndex(1)}>
+            Move on
+          </button>
+          <TestDeck
+            autoplay={800}
+            controls={<Deck.AutoplayToggle />}
+            index={index}
+            onIndexChange={setIndex}
+          />
+        </>
+      );
+    }
+    render(<Controlled />);
+    const root = screen.getByRole('region', { name: 'Test deck' });
+    const move = screen.getByRole('button', { name: 'Move on' });
     const changedAt: number[] = [];
     const indexes = watchIndexes(root, () => changedAt.push(performance.now()));
 
     await sleep(400);
-    handle.current!.next();
+    move.click();
     await expect
       .poll(() => indexes.slice(0, 2), { timeout: 4000 })
       .toEqual(['1', '2']);
@@ -401,10 +420,28 @@ describe('a move the user makes', () => {
     await sleep(INTERVAL);
     expect(live.textContent).toBe('');
   });
-});
 
-describe('a move autoplay did not start', () => {
-  test('a handle call back to where autoplay stepped from keeps it rotating', async () => {
+  test.each([
+    ['next', (handle: Deck.RootHandle) => handle.next(), '2'],
+    ['prev', (handle: Deck.RootHandle) => handle.prev(), '0'],
+    ['scrollTo', (handle: Deck.RootHandle) => handle.scrollTo(3), '3']
+  ])(
+    "a handle's %s stops it, as useDeck()'s moves do",
+    async (_, call, index) => {
+      const handle = createRef<Deck.RootHandle>();
+      const { root } = renderDeck({ defaultIndex: 1, handleRef: handle });
+
+      call(handle.current!);
+
+      await expect.poll(indexOf(root), { timeout: 2000 }).toBe(index);
+      await expect
+        .poll(() => toggleOf().textContent)
+        .toBe('Start slide rotation');
+      await expectStill(root, index);
+    }
+  );
+
+  test('a handle call back to where autoplay stepped from still stops it', async () => {
     const handle = createRef<Deck.RootHandle>();
     const { root } = renderDeck({ handleRef: handle });
 
@@ -414,11 +451,16 @@ describe('a move autoplay did not start', () => {
     });
 
     await expect
-      .poll(() => indexes.slice(0, 4), { timeout: 6000 })
-      .toEqual(['1', '2', '1', '2']);
-    expect(toggleOf().textContent).toBe('Stop slide rotation');
+      .poll(() => indexes.slice(0, 3), { timeout: 6000 })
+      .toEqual(['1', '2', '1']);
+    await expect
+      .poll(() => toggleOf().textContent)
+      .toBe('Start slide rotation');
+    await expectStill(root, '1');
   });
+});
 
+describe('a move autoplay did not start', () => {
   test('a new controlled index back to where autoplay stepped from keeps it rotating', async () => {
     function Controlled() {
       const [index, setIndex] = useState(0);

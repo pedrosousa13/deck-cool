@@ -27,3 +27,12 @@ reports as any other. A deck at rest away from the taken `index`, as after
 the user's scroll back in the same gap, still goes to it. So an imperative
 call made inside `onIndexChange`, as `setIndex(1)` and then
 `handle.scrollTo(3)`, now goes on to 3, where before the deck returned to 1.
+
+**The handle's moves count as the user's too (amended for #182).** "For
+event handlers that should not round-trip through state" turned out to
+describe the user's own input as much as `useDeck()`'s moves do: a consumer
+who built custom controls on the handle got different autoplay behavior from
+one using the hook. The handle's three moves now stop autoplay, exactly as
+`useDeck()`'s do, so there is one rule: every move through either API counts
+as the user's. A controlled `index` change is still neither API's move, so it
+does not stop autoplay.
