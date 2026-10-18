@@ -1923,14 +1923,10 @@ main .docs-sidebar a {
 
 /* Curve: cards on an arc of 3 slides, with room for the slides that are not
    faded out at rest. */
-.example-curve [data-carouseldeck-viewport],
-.example-curve-size [data-carouseldeck-viewport] {
+.example-curve [data-carouseldeck-viewport] {
   --deck-curve-radius: 3;
   gap: 16px;
   padding-inline: calc(50% - 80px);
-}
-
-.example-curve [data-carouseldeck-viewport] {
   padding-block: 7px 150px;
 }
 
@@ -1953,9 +1949,17 @@ main .docs-sidebar a {
   background-color: var(--tile);
 }
 
-/* Size a curve: the recipe's room, for a slide about to fade out. */
+/* Size a curve: the recipe's own radius in pixels and room for the arc, on
+   --deck-viewport-step. --w and --h match the slide's and card's size
+   above. */
 .example-curve-size [data-carouseldeck-viewport] {
-  padding-block: 7px 460px;
+  --w: 160px;
+  --h: 200px;
+  --deck-curve-radius: calc(528 / var(--deck-viewport-step, 176));
+  gap: 16px;
+  padding-inline: calc(50% - var(--w) / 2);
+  padding-block: calc(var(--w) / (8 * var(--deck-curve-radius)))
+    calc(var(--deck-curve-radius) * var(--w) + (var(--w) - var(--h)) / 2);
 }
 
 /* Centre the first and last slide. */

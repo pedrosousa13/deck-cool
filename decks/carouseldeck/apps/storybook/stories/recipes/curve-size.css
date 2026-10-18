@@ -1,19 +1,22 @@
-/* An arc of radius 528px under slides 160px wide and 16px apart:
-   528 / (160 + 16) = 3 slides. */
+/* An arc of radius 528px, --deck-viewport-step the slide-to-slide step the
+   deck measures: 160px slides 16px apart, a step of 176, the fallback's own
+   number too, for the same arc before the deck has measured. */
 .showcase [data-carouseldeck-viewport] {
-  --deck-curve-radius: 3;
+  --w: 160px;
+  --h: 200px;
+  --deck-curve-radius: calc(528 / var(--deck-viewport-step, 176));
   gap: 16px;
   /* The first and last slides centred too. */
-  padding-inline: calc(50% - 80px);
-  /* Room for the arc while the deck moves. Above, the lift: at most
-     160 / (8 × 3), so 7px. Below, a slide about to fade out:
-     3 × 160 + (160 − 200) / 2 = 460px. */
-  padding-block: 7px 460px;
+  padding-inline: calc(50% - var(--w) / 2);
+  /* Room for the arc while the deck moves. Above, the lift: w / (8 × r).
+     Below, a slide about to fade out: r × w + (w − h) / 2. */
+  padding-block: calc(var(--w) / (8 * var(--deck-curve-radius)))
+    calc(var(--deck-curve-radius) * var(--w) + (var(--w) - var(--h)) / 2);
 }
 .showcase [data-carouseldeck-slide] {
-  width: 160px;
+  width: var(--w);
   scroll-snap-align: center;
 }
 .showcase .card {
-  height: 200px;
+  height: var(--h);
 }
