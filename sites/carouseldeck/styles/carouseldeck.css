@@ -1857,6 +1857,50 @@ main .docs-sidebar a {
   }
 }
 
+/* Pages from a prop: three slides to a page, aligned inline, not by
+   :nth-child. */
+.example-pages-prop [data-carouseldeck-viewport] {
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .example-pages-prop [data-carouseldeck-slide] {
+    width: calc((100% - 2 * 16px) / 3);
+  }
+}
+
+/* Pages per breakpoint: two slides to a page below 640px, three from it,
+   both marked from data (data-page-start, data-page-start-640). */
+.example-pages-breakpoints [data-carouseldeck-viewport] {
+  gap: 16px;
+}
+
+.example-pages-breakpoints [data-carouseldeck-slide] {
+  width: calc((100% - 16px) / 2);
+}
+
+.example-pages-breakpoints [data-carouseldeck-slide][data-page-start] {
+  scroll-snap-align: start;
+}
+
+.example-pages-breakpoints [data-carouseldeck-slide]:not([data-page-start]) {
+  scroll-snap-align: none;
+}
+
+@media (min-width: 640px) {
+  .example-pages-breakpoints [data-carouseldeck-slide] {
+    width: calc((100% - 2 * 16px) / 3);
+  }
+
+  .example-pages-breakpoints [data-carouseldeck-slide][data-page-start-640] {
+    scroll-snap-align: start;
+  }
+
+  .example-pages-breakpoints [data-carouseldeck-slide]:not([data-page-start-640]) {
+    scroll-snap-align: none;
+  }
+}
+
 /* Progress: smaller with distance from the focal slide. Two and a half
    slides to the deck's width, each centred, the first and last too, so the
    first slide rests at progress 0, as the server HTML starts it. */

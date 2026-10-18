@@ -279,6 +279,22 @@ describe("the docs' demos in a browser", () => {
     expect(await nextLook("/docs/guides/theme/", ".example-theme")).toEqual(["solid", "rgb(0, 0, 0)"]);
     expect(await nextLook("/docs/quickstart/", "article")).toEqual(["none", "rgba(66, 66, 69, 0.72)"]);
   });
+
+  // Pages guide, "a page size per breakpoint": two slides to a page below
+  // 640px, three from it, both marked from data (#181). 8 slides make 4
+  // pages of 2, or 3 pages of 3 (the last one short).
+  test.each([
+    [390, 4],
+    [1280, 3],
+  ])("at %ipx, the per-breakpoint pages demo's Next moves one page of %i", async (width, pages) => {
+    const { page } = await visit("/docs/guides/pages/", { width, reducedMotion: "reduce" });
+    await hydrated(page);
+    const deck = page.locator(".example-pages-breakpoints");
+    const counter = () => deck.locator("[data-carouseldeck-counter]").textContent();
+    await expect.poll(counter).toBe(`1 / ${pages}`);
+    await deck.locator("[data-carouseldeck-next]").click();
+    await expect.poll(counter).toBe(`2 / ${pages}`);
+  });
 });
 
 // At the bar's phone breakpoint the links fold into a menu button, last in

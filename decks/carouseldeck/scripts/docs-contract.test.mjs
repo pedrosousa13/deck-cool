@@ -181,6 +181,8 @@ const SITE_DEMOS = [
   'middle-by-progress',
   'middle-centred',
   'pages',
+  'pages-breakpoints',
+  'pages-prop',
   'per-breakpoint',
   'primitives',
   'progress',
