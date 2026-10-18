@@ -46,7 +46,7 @@ clips it (`overflow: hidden` across the axis, as `clip` cannot pair with
 Server HTML carries each slide's starting progress, so a curve deck draws
 its arc before hydration (amended for #125; see ADR-0011).
 
-## Amended for #179
+## Curve also orders its slides, and a consumer can fade them by visibility (amended for #179)
 
 Curve now orders its slides as well as drawing them: a zero-specificity
 `z-index` rule on `--deck-slide-progress`, highest at the focal position,

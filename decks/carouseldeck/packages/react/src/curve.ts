@@ -25,26 +25,30 @@ const RADIUS = 4;
 // progress at: there, every slide but the focal one has turned a quarter.
 const MIN_RADIUS = 0.001;
 
-// abs() spelled with max() for older browsers.
-const absP = `max(${p},-1*${p})`;
+// abs() spelled with max() for older browsers: shared by both fades.
+const abs = (v: string) => `max(${v},-1*${v})`;
+const absP = abs(p);
 // The radius-based fade, today's: 1 at the focal position, 0 a radius away.
-const radiusFade = `(1 - max(${x},-1*${x}))`;
+const radiusFade = `(1 - ${abs(x)})`;
 // Opt into a fade that follows the viewport instead of the radius with
 // `--deck-curve-fade-view: 1` (#179); a keyword switch would need style
 // queries, which Firefox lacks, so the switch is a plain number. 0, its
 // default, keeps the radius-based fade.
-const viewSwitch = 'clamp(0,var(--deck-curve-fade-view,0),1)';
+const fadeSwitch = 'clamp(0,var(--deck-curve-fade-view,0),1)';
 // 1 once `--deck-viewport-span` has been measured, 0 before: span is never
-// negative, so a sentinel of -1 reads as "unset" through sign(), with no
-// var() left unguarded to ever resolve to an invalid value.
-const viewKnown = 'clamp(0,sign(var(--deck-viewport-span,-1) + 1),1)';
-const viewOn = 'var(--carouseldeck-curve-view-on)';
+// negative, so a sentinel of -1 reads as "unset" through the same step
+// trick the stack effect uses, a clamp with a large multiplier, rather than
+// sign(): older Chromium (before 138) lacks sign(), which would make the
+// whole opacity declaration invalid at computed-value time and leave every
+// curve slide at opacity 1, switch off included.
+const spanMeasured = 'clamp(0,(var(--deck-viewport-span,-1) + 1)*1000000,1)';
+const fadeByView = 'var(--carouseldeck-curve-fade-by-view)';
 // A slide is approximated as one step wide (--deck-viewport-step), the gap
 // left out: its own half-width is then always 0.5, the same unit
 // --deck-viewport-span counts in, and the viewport's own half-width is
 // --deck-viewport-span / 2. Fully opaque while at least half the slide is in
-// view (its centre within half-view + 0.5 of the focal position), 0 once
-// it is fully out (half-view + 1 away): clamp(0, span + 1 - 2·|progress|, 1).
+// view (its centre within half-view of the focal position), 0 once it is
+// fully out (half-view + 0.5 away): clamp(0, span + 1 - 2·|progress|, 1).
 const viewFade = `clamp(0,calc(var(--deck-viewport-span,0) + 1 - 2*${absP}),1)`;
 
 const css =
@@ -55,8 +59,8 @@ const css =
   `--carouseldeck-curve-turn:asin(${x});` +
   `--carouseldeck-curve-drop:calc(${r}*(1 - sqrt(1 - ${x}*${x})));` +
   '--carouseldeck-curve-sign:1;' +
-  `--carouseldeck-curve-view-on:calc(${viewSwitch}*${viewKnown});` +
-  `opacity:calc(${viewOn}*(${viewFade}) + (1 - ${viewOn})*${radiusFade});` +
+  `--carouseldeck-curve-fade-by-view:calc(${fadeSwitch}*${spanMeasured});` +
+  `opacity:calc(${fadeByView}*(${viewFade}) + (1 - ${fadeByView})*${radiusFade});` +
   // Highest at the focal position, lower as the distance from it grows, the
   // same on both sides (#179), following the stack effect's shape
   // (ADR-0012).

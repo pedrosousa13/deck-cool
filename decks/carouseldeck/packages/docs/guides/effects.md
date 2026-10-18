@@ -71,19 +71,19 @@ CSS, so your own `z-index` overrides it.
 Set `--deck-curve-fade-view: 1` on the viewport to fade a slide by how much
 of it is in the viewport instead of its distance from the focal slide: fully
 opaque while at least half of it is in view, fading to 0 as the rest of it
-leaves. It reads `--deck-viewport-span` (its own half-width, in slides) and
-`--deck-slide-progress`. A slide is approximated as one step wide
-(`--deck-viewport-step`), the gap left out, so the fade is exact only where
-the gap is small next to the slide; with a wide gap, a slide reads as still
-half in view a little later than it truly is, by up to half the gap's share
-of the step. The switch assumes `scroll-snap-align: center`, the curve
-recipes' own alignment, where the viewport's two edges sit at
+leaves. It reads `--deck-viewport-span` (the viewport's own size along the
+axis, in slides) and `--deck-slide-progress`. A slide is approximated as one
+step wide (`--deck-viewport-step`), the gap left out, so the fade is exact
+only where the gap is small next to the slide; with a wide gap, a slide reads
+as still half in view a little later than it truly is, by up to half the
+gap's share of the step. The switch assumes `scroll-snap-align: center`, the
+curve recipes' own alignment, where the viewport's two edges sit at
 `--deck-viewport-span / 2` slides either side of the focal position; with
-`scroll-snap-align: start` or `end` the edges sit elsewhere, and the switch
-does not correct for it. Before `--deck-viewport-span` is measured, the
-switch has no effect and the radius-based fade stands. A keyword switch
-would need style queries, which Firefox lacks, so the switch is a plain
-number: 0, unset, keeps today's radius-based fade.
+`scroll-snap-align: start` or `end` the edges sit elsewhere, so a deck
+aligned that way sees slides near the far edge fade out while still fully in
+view. Before `--deck-viewport-span` is measured, the switch has no effect and
+the radius-based fade stands. The switch is a plain number: 0, its default,
+keeps today's radius-based fade.
 
 ## Stack
 

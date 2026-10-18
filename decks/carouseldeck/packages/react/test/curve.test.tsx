@@ -1,4 +1,4 @@
-import type { ComponentProps, CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 import { render, screen } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, test } from 'vitest';
@@ -19,16 +19,25 @@ import {
   sleep,
   viewportOf
 } from './fixtures';
+import {
+  AROUND_2,
+  CurveDeck,
+  FADE,
+  readDeck,
+  renderDeck,
+  round,
+  SIZE,
+  SLIDE_CSS,
+  SPAN
+} from './curve-helpers';
+import type { CurveDeckProps } from './curve-helpers';
 
 // The curve effect (#16): the slides' content fans along an arc around the
 // focal slide, rotating and fading with its progress, while the viewport
 // scrolls, snaps and drags natively over slides it leaves in place
-// (ADR-0008).
+// (ADR-0008). #179's paint-order and fade-by-visibility tests are split out
+// into curve-paint-and-fade.test.tsx, so they can also run in WebKit.
 
-/** Each slide's size, square, and so the distance between two slides. */
-const SIZE = 100;
-/** Three slides in view, the focal one in the middle. */
-const SPAN = SIZE * 3;
 /** The gap in the size-a-curve recipe's own CSS. */
 const GAP = 16;
 
@@ -38,107 +47,6 @@ const turn = (progress: number, radiusInSlides: number) =>
   (Math.asin(Math.min(Math.max(progress / radiusInSlides, -1), 1)) * 180) /
   Math.PI;
 
-type CurveDeckProps = ComponentProps<typeof Deck.Root> & {
-  slides?: number;
-  dir?: 'ltr' | 'rtl';
-  viewportStyle?: CSSProperties;
-};
-
-function CurveDeck({
-  slides = 6,
-  dir = 'ltr',
-  orientation,
-  viewportStyle,
-  ...props
-}: CurveDeckProps) {
-  const vertical = orientation === 'vertical';
-  return (
-    <div dir={dir}>
-      <Deck.Root aria-label="Test deck" orientation={orientation} {...props}>
-        <Deck.Viewport
-          effect={curve}
-          className="curved"
-          style={{
-            boxSizing: 'border-box',
-            // Room for the first and last slides to reach the middle.
-            ...(vertical
-              ? { width: SIZE, height: SPAN, paddingBlock: SIZE }
-              : { width: SPAN, paddingInline: SIZE }),
-            ...viewportStyle
-          }}
-        >
-          {Array.from({ length: slides }, (_, i) => (
-            <Deck.Slide key={i}>
-              <div className="card">
-                <button type="button">Button {i + 1}</button>
-              </div>
-            </Deck.Slide>
-          ))}
-        </Deck.Viewport>
-        <Deck.Next />
-      </Deck.Root>
-    </div>
-  );
-}
-
-// Centred, so the focal slide is in the middle of the arc: alignment is the
-// consumer's.
-const SLIDE_CSS = `.curved > [data-carouseldeck-slide] {
-  width: ${SIZE}px;
-  height: ${SIZE}px;
-  box-sizing: border-box;
-  scroll-snap-align: center;
-}
-.card { height: 100%; }`;
-
-const round = (value: number) => Math.round(value * 10) / 10 || 0;
-
-const readDeck = (root: HTMLElement) => {
-  const viewport = viewportOf(root);
-  const slides = () => [
-    ...viewport.querySelectorAll<HTMLElement>('[data-carouseldeck-slide]')
-  ];
-  // The curve draws each slide's content, the card that fills it.
-  const matrices = () =>
-    slides().map(
-      (slide) =>
-        new DOMMatrix(getComputedStyle(slide.firstElementChild!).transform)
-    );
-  return {
-    root,
-    viewport,
-    slides,
-    /** Each slide's rotation, in degrees, clockwise. */
-    angles: () =>
-      matrices().map((m) => round((Math.atan2(m.b, m.a) * 180) / Math.PI)),
-    /** How far each slide's centre has moved, in px: across the axis, and
-     * along it. Rotation is about the centre. */
-    moved: () =>
-      matrices().map((m) => [round(m.e), round(m.f)] as [number, number]),
-    opacity: () =>
-      slides().map(
-        (slide) =>
-          Math.round(Number(getComputedStyle(slide).opacity) * 100) / 100
-      ),
-    zIndex: () =>
-      slides().map((slide) => Number(getComputedStyle(slide).zIndex)),
-    progress: () => progressOf(viewport)
-  };
-};
-
-/** Renders a curve deck, with `css` as more consumer CSS for its slides. */
-const renderDeck = (props: CurveDeckProps = {}, css = '') => {
-  addStyle(SLIDE_CSS + css);
-  render(<CurveDeck {...props} />);
-  const root = screen.getByRole('region', { name: 'Test deck' });
-  return {
-    ...readDeck(root),
-    get next() {
-      return screen.getByRole('button', { name: 'Next' });
-    }
-  };
-};
-
 const TALL = '.curved > [data-carouseldeck-slide] { height: 240px; }';
 
 // With the default radius, four slides: a slide one slide from the focal
@@ -147,10 +55,8 @@ const TALL = '.curved > [data-carouseldeck-slide] { height: 240px; }';
 // by a quarter a slide, gone at four.
 const TURN = [0, 14.5, 30, 48.6, 90];
 const DROP = [0, 12.7, 53.6, 135.4, 400];
-const FADE = [1, 0.75, 0.5, 0.25, 0];
 const at = (table: number[], distances: number[], sign = 1) =>
   distances.map((p) => round(Math.sign(p) * sign * table[Math.abs(p)]));
-const AROUND_2 = [-2, -1, 0, 1, 2, 3];
 
 describe('curve', () => {
   test('fans the slides along an arc around the focal slide, fading with distance', () => {
@@ -424,124 +330,10 @@ describe('curve', () => {
     expect(opacity()).toEqual([0, 0, 1, 0, 0, 0]);
     expect(angles()).toEqual([-90, -90, 0, 90, 90, 90]);
   });
-
-  // #179: the curve paints by distance from the focal slide, highest on top,
-  // in the same zero-specificity rules as the rest of its CSS (ADR-0008,
-  // amended), following the stack effect's shape (ADR-0012).
-  test('stacks the slides by distance from the focal slide, focal on top, equal distance equal', () => {
-    const { zIndex } = renderDeck({ defaultIndex: 2 });
-
-    const z = zIndex();
-    expect(z[2]).toBeGreaterThan(z[1]!);
-    expect(z[2]).toBeGreaterThan(z[3]!);
-    expect(z[1]).toBe(z[3]);
-    expect(z[0]).toBe(z[4]);
-  });
 });
 
-// Loop's shells and a small deck's copies both carry a real slide (ADR-0013):
-// the paint order reads the same `--deck-slide-progress` either way, so the
-// focal slide stays on top under both.
-describe('curve paint order with loop', () => {
-  test('keeps the focal slide on top under shells', async () => {
-    const { viewport, zIndex, slides } = renderDeck({
-      slides: 8,
-      loop: true,
-      defaultIndex: 3
-    });
-    await expect.poll(() => viewport.dataset.carouseldeckLoop).toBe('shells');
-
-    const z = zIndex();
-    z.forEach((value) => expect(Number.isFinite(value)).toBe(true));
-    const focal = slides().findIndex((slide) =>
-      slide.hasAttribute('data-focal')
-    );
-    expect(z[focal]).toBe(Math.max(...z));
-  });
-
-  test('keeps the focal slide on top under a deck too small for shells (copies)', async () => {
-    const { viewport, zIndex, slides } = renderDeck(
-      { slides: 3, loop: true },
-      '.curved > [data-carouseldeck-slide] { width: 110px; }'
-    );
-    await expect.poll(() => viewport.dataset.carouseldeckLoop).toBe('copies');
-
-    const z = zIndex();
-    z.forEach((value) => expect(Number.isFinite(value)).toBe(true));
-    const focal = slides().findIndex((slide) =>
-      slide.hasAttribute('data-focal')
-    );
-    expect(z[focal]).toBe(Math.max(...z));
-  });
-});
-
-// #179: a consumer can switch the curve's fade from the radius to following
-// the viewport (ADR-0014's --deck-viewport-span), restoring the fade
-// keen-slider gave, fully opaque while at least half a slide is in the
-// viewport.
-//
-// A slide is approximated as one step wide (--deck-viewport-step), the gap
-// left out, so its own half-width is always 0.5 of a slide, the same unit
-// --deck-viewport-span counts in: the error is the gap's own share of the
-// step, at most half of it, and only at the fade's edge. The switch assumes
-// `scroll-snap-align: center`, the curve recipes' own alignment, where the
-// viewport's edges sit at ±(--deck-viewport-span / 2) from the focal slide;
-// `start` or `end` put them somewhere else and are not handled.
-//
-// Two slides fit the 200px viewport (SIZE 100px each, no gap): span is 2, so
-// the viewport's half-width is 1 slide and a slide one slide away has its
-// centre exactly on the viewport's edge, half of it in view.
-describe('curve fade by visibility (--deck-curve-fade-view)', () => {
-  const NO_PADDING_TWO_UP = { width: SIZE * 2, paddingInline: 0 };
-
-  test('fades by visibility instead of radius once the switch is on', () => {
-    const { opacity } = renderDeck({
-      defaultIndex: 2,
-      viewportStyle: {
-        ...NO_PADDING_TWO_UP,
-        '--deck-curve-fade-view': 1
-      } as CSSProperties
-    });
-
-    // AROUND_2 = [-2, -1, 0, 1, 2, 3]: a slide a slide away (half in view) is
-    // fully opaque, and one two slides away (fully outside) is gone.
-    expect(opacity()).toEqual([0, 1, 1, 1, 0, 0]);
-  });
-
-  test('keeps the radius-based fade when the switch is off', () => {
-    const { opacity } = renderDeck({
-      defaultIndex: 2,
-      viewportStyle: NO_PADDING_TWO_UP as CSSProperties
-    });
-
-    expect(opacity()).toEqual(AROUND_2.map((p) => FADE[Math.abs(p)]));
-  });
-
-  test('falls back to the radius fade before --deck-viewport-span is measured, even with the switch on', () => {
-    addStyle(SLIDE_CSS);
-    const container = document.createElement('div');
-    try {
-      container.innerHTML = renderToString(
-        <CurveDeck
-          defaultIndex={2}
-          viewportStyle={{ '--deck-curve-fade-view': 1 } as CSSProperties}
-        />
-      );
-      document.body.append(container);
-      const viewport = viewportOf(container);
-      const opacity = [
-        ...viewport.querySelectorAll<HTMLElement>('[data-carouseldeck-slide]')
-      ].map(
-        (slide) =>
-          Math.round(Number(getComputedStyle(slide).opacity) * 100) / 100
-      );
-
-      expect(opacity).toEqual(AROUND_2.map((p) => FADE[Math.abs(p)]));
-    } finally {
-      container.remove();
-    }
-  });
-});
+// #179's paint-order and fade-by-visibility tests live in
+// curve-paint-and-fade.test.tsx, so they can also run in WebKit.
 
 // Server HTML gives each slide its progress as the deck starts, its distance
 // in slides from the starting slide, so a server-rendered curve deck paints

@@ -85,13 +85,17 @@ export default defineConfig({
       headless: true,
       instances: [
         { browser: 'chromium' },
-        // Only the tests of what WebKit alone did (#123): the others drive
-        // input through CDP, which is Chromium's alone.
         {
           browser: 'webkit',
           include: [
+            // Tests of what WebKit alone did (#123): the others drive
+            // input through CDP, which is Chromium's alone.
             'packages/react/test/settle-without-frames.test.tsx',
-            'packages/react/test/loop-one-instance.test.tsx'
+            'packages/react/test/loop-one-instance.test.tsx',
+            // #179: paint order and the fade-by-visibility switch, named in
+            // the brief as needing to work in Chromium, Firefox and WebKit.
+            // Neither drives input through CDP, so nothing keeps it out.
+            'packages/react/test/curve-paint-and-fade.test.tsx'
           ]
         }
       ],
