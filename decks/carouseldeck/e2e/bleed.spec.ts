@@ -187,7 +187,11 @@ test('bleed--loop-shells: wraps around onto the column, not the page', async ({
 });
 
 // #177's recipe: `apps/storybook/stories/recipes/viewport-bleed.css`, quoted
-// byte for byte in `packages/docs/recipes/viewport-bleed.md`.
+// byte for byte in `packages/docs/recipes/viewport-bleed.md`. Its snapping
+// is the same mechanic `bleed--plain`'s own "snaps to the column, not the
+// page" tests already cover, on the same CSS: no second test repeats that
+// here, only what is specific to this story, that the bleed actually makes
+// a slide past the column visible.
 
 test('recipes--viewport-bleed: a slide past the column is visible beyond it', async ({
   page
@@ -198,24 +202,14 @@ test('recipes--viewport-bleed: a slide past the column is visible beyond it', as
     (el) => el.getBoundingClientRect().right
   );
   // At rest, 2.5 slides fit the column: the first two fill it and the third
-  // peeks past its edge, into the bled padding, as this story's own slide
-  // width (narrower than the column) gives it.
-  const third = page.locator('[data-carouseldeck-slide]').nth(2);
-  const thirdBox = (await third.boundingBox())!;
-  expect(thirdBox.x + thirdBox.width).toBeGreaterThan(columnRight + 1);
-  await expect(third).toBeInViewport();
-});
-
-test('recipes--viewport-bleed: snaps to the column, not the page, after Next', async ({
-  page
-}) => {
-  await openStory(page, 'recipes--viewport-bleed');
-  const col = await columnLeft(page);
-
-  for (let i = 0; i < 3; i++) {
-    await page.getByRole('button', { name: 'Next', exact: true }).click();
-    await expect
-      .poll(() => slideLeft(page, 'data-current'))
-      .toBe(Math.round(col));
-  }
+  // straddles its edge, so it is still partly inside the column, where
+  // toBeInViewport would pass on that unclipped half whether or not the
+  // bleed CSS is there. The fourth slide sits wholly past the column, in
+  // the bled padding: only the bleed keeps it from being clipped at the
+  // column's edge.
+  const fourth = page.locator('[data-carouseldeck-slide]').nth(3);
+  const fourthBox = await fourth.boundingBox();
+  if (!fourthBox) throw new Error('the fourth slide has no box');
+  expect(fourthBox.x).toBeGreaterThan(columnRight);
+  await expect(fourth).toBeInViewport();
 });

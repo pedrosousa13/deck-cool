@@ -72,19 +72,20 @@ export const MiddleByProgress: Story = {
 };
 
 /**
- * The README's recipe "let slides extend past the viewport": a page wide
+ * The docs recipe "let slides extend past the viewport": a page wide
  * enough to hold container query units, a narrower centred column, and a
- * viewport whose `--inset`, computed once from `cqi` and the column's own
- * width, bleeds it to the page while keeping snapping, the index and the
- * controls at the column.
+ * viewport whose `--bleed-inset`, computed once from `cqi` and the
+ * column's own width, bleeds it to the page while keeping snapping, the
+ * index and the controls at the column.
  */
 export const ViewportBleed: Story = {
   render: () => (
     <>
       <style>{`
         ${look}
-        /* Narrower than the column, so a neighbour peeks past it: the
-           recipe's own bleed CSS below. */
+        /* Slides narrower than the column: two and a half fit, so the
+           third already pokes past the column's edge. The recipe's own
+           bleed CSS below is what lets it keep going, to the page edge. */
         .column [data-carouseldeck-viewport] { gap: 16px; }
         .column [data-carouseldeck-slide] {
           width: calc((100% - 2 * 16px) / 2.5);

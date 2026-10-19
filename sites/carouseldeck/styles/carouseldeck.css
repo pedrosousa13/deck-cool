@@ -2016,23 +2016,24 @@ main .docs-sidebar a {
 }
 
 /* Let slides extend past the viewport: the column's own width, repeated in
-   --inset, keeps the margin, the padding and the scroll padding in step. */
+   --bleed-inset, keeps the margin, the padding and the scroll padding in
+   step. */
 .example-viewport-bleed {
   width: 100%;
   container-type: inline-size;
 }
 
 .example-viewport-bleed-column {
-  width: min(80cqi, 420px);
+  width: min(90cqi, 960px);
   margin-inline: auto;
 }
 
 .example-viewport-bleed-column [data-carouseldeck-viewport] {
-  --inset: calc((100cqi - min(80cqi, 420px)) / 2);
+  --bleed-inset: max(0px, calc((100cqi - min(90cqi, 960px)) / 2));
   gap: 16px;
-  margin-inline: calc(-1 * var(--inset));
-  padding-inline: var(--inset);
-  scroll-padding-inline: var(--inset);
+  margin-inline: calc(-1 * var(--bleed-inset));
+  padding-inline: var(--bleed-inset);
+  scroll-padding-inline: var(--bleed-inset);
 }
 
 .example-viewport-bleed-column [data-carouseldeck-slide] {

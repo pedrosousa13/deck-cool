@@ -10,8 +10,8 @@
   margin-inline: auto;
 }
 .column [data-carouseldeck-viewport] {
-  --inset: calc((100cqi - 400px) / 2);
-  margin-inline: calc(-1 * var(--inset));
-  padding-inline: var(--inset);
-  scroll-padding-inline: var(--inset);
+  --bleed-inset: max(0px, calc((100cqi - 400px) / 2));
+  margin-inline: calc(-1 * var(--bleed-inset));
+  padding-inline: var(--bleed-inset);
+  scroll-padding-inline: var(--bleed-inset);
 }
