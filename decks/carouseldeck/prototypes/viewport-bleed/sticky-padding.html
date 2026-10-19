@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        margin: 0;
+      }
+      .page {
+        width: 100%;
+        container-type: inline-size;
+      }
+      .column {
+        width: 400px;
+        margin-inline: auto;
+        outline: 2px solid green;
+      }
+      /* Mirrors packages/react/src/stacked.ts's stackedLayout exactly: a
+         grid track per slide, each slide's grid area spans every column
+         (its containing block is the whole grid, not one column), sized
+         and anchored to the start by width plus justify-self, held sticky
+         over it. */
+      .scroller {
+        overflow-x: auto;
+        display: grid;
+        grid-template-columns: repeat(3, 100%);
+        width: 100%;
+        margin-inline: calc(-1 * (100cqi - 100%) / 2);
+        padding-inline: calc((100cqi - 100%) / 2);
+        scroll-padding-inline: calc((100cqi - 100%) / 2);
+      }
+      .target {
+        grid-row: 1;
+        height: 60px;
+      }
+      .sticky0,
+      .stickyFixed {
+        grid-row: 1;
+        grid-column: 1 / -1;
+        justify-self: start;
+        width: calc(100% / 3);
+        position: sticky;
+        top: 0;
+        height: 60px;
+      }
+      .sticky0 {
+        inset-inline-start: 0;
+        background: rgba(255, 0, 0, 0.4);
+      }
+      .stickyFixed {
+        inset-inline-start: var(--inset, 0);
+        background: rgba(0, 0, 255, 0.4);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="column">
+        <p>scroller A: inset-inline-start: 0 (today's stacked layout)</p>
+        <div class="scroller" id="scrollerA">
+          <div class="target" style="grid-column: 1"></div>
+          <div class="target" style="grid-column: 2"></div>
+          <div class="target" style="grid-column: 3"></div>
+          <div class="sticky0" data-tag="sticky0-a">A</div>
+          <div
+            class="sticky0"
+            data-tag="static-a"
+            style="position: static; background: rgba(0, 255, 0, 0.4)"
+          >
+            S
+          </div>
+        </div>
+        <p>
+          scroller B: inset-inline-start: var(--inset) (#177's own proposed fix
+          for question 2; found wrong, see FINDINGS.md)
+        </p>
+        <div
+          class="scroller"
+          id="scrollerB"
+          style="--inset: calc((100cqi - 100%) / 2)"
+        >
+          <div class="target" style="grid-column: 1"></div>
+          <div class="target" style="grid-column: 2"></div>
+          <div class="target" style="grid-column: 3"></div>
+          <div class="stickyFixed" data-tag="stickyFixed-b">B</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -11,9 +11,9 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 // with no JavaScript measurement:
 //
 //   --inset: calc((100cqi - 400px) / 2)
-//   margin-inline: calc(-1 * var(--inset))   -- pull the viewport to the page
-//   padding-inline: var(--inset)             -- put the slides back
-//   scroll-padding-inline: var(--inset)      -- snap against the column
+//   margin-inline: calc(-1 * var(--inset))   (pulls the viewport to the page)
+//   padding-inline: var(--inset)             (puts the slides back)
+//   scroll-padding-inline: var(--inset)      (snaps against the column)
 //
 // `--inset` is computed once, from `cqi` and a literal length alone, and
 // read the same way by all three properties. Written instead as
@@ -23,7 +23,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 // (the column), but `scroll-padding-inline`'s resolves against the
 // viewport's own scrollport (the bled width, CSS Scroll Snap sec. 6), so the
 // two go out of sync, and the deck scrolls to hide the padding on mount
-// instead of resting on the column (`docs/research/viewport-bleed.md`,
+// instead of resting on the column (`prototypes/viewport-bleed/FINDINGS.md`,
 // question 1). `.page` needs `container-type: inline-size` for `cqi` to
 // read its own width; `.column` is a plain centred block. Every story here
 // renders the same two levels, so the deck inside sits in the column while
@@ -54,8 +54,8 @@ const css = `
   /* Curve's own recipe: one slide centred at a time, wide enough for its
      card, as \`deck.stories.tsx\`'s own Curve story sets it. The peek
      width above, several slides per view, left the focal slide's own
-     progress unsettled under the bleed padding -- centred, single-slide
-     alignment is what question 3 in the research doc answers against. */
+     progress unsettled under the bleed padding. Centred, single-slide
+     alignment is what question 3 in FINDINGS.md answers against. */
   .curve-slide {
     width: 180px;
     scroll-snap-align: center;
@@ -74,7 +74,7 @@ const slidesOf = (count: number) =>
 // child that fills the slide, styled as the slide is seen, as
 // `deck.stories.tsx`'s own Curve story does. Reusing `slidesOf`'s bare
 // `<p>` and `<button>` leaves them over the page's own background once
-// turned, not the slide's -- axe then reads the button's default low
+// turned, not the slide's. Axe then reads the button's default low
 // contrast there, nothing to do with the bleed.
 const cardsOf = (count: number) =>
   Array.from({ length: count }, (_, i) => (
@@ -135,9 +135,9 @@ export const Plain: Story = {
 /**
  * Fade under the same bleed CSS. Fade stacks the slides with
  * `position: sticky` over empty snap targets (ADR-0007); the sticky slide's
- * `inset-inline-start: 0` is resolved against the viewport's own padding
- * box, which already includes `padding-inline-start`, so the slide sticks at
- * the column's edge, not the page's.
+ * `inset-inline-start: 0` resolves against the viewport's own padding box,
+ * so the slide sticks at the padding box's content edge, which the bleed
+ * recipe has already put at the column, not at the page.
  */
 export const Fade: Story = {
   decorators: bleedPage,
@@ -192,12 +192,13 @@ export const Curve: Story = {
  * A looping deck under the same bleed CSS, with a run too short for shells
  * (ADR-0013): it falls back to full copies. This story is a known crash
  * (React's "Maximum update depth exceeded"), not a passing demo: once the
- * bled viewport -- wider than the column -- is about as wide as the
- * slides' whole run, `DeckEngine`'s own loop-or-not and shells-or-copies
- * checks read that full bled width, so they can thrash between two
- * readings on every settle. No test opens it; see
- * `docs/research/viewport-bleed.md`, question 4, and widen the column or
- * add slides to see it render.
+ * bled viewport, wider than the column, is about as wide as the slides'
+ * whole run, the engine's own shells-or-copies fallback never settles on
+ * one answer. It is specific to this combination: an identical, unbled
+ * deck at the same run length and viewport width does not crash (see
+ * `LoopPlainBoundary` below). No test opens this story; see
+ * `prototypes/viewport-bleed/FINDINGS.md`, question 4, and widen the
+ * column or add slides to see it render.
  */
 export const Loop: Story = {
   decorators: bleedPage,
@@ -224,6 +225,44 @@ export const LoopShells: Story = {
   render: (args) => (
     <Deck.Root {...args}>
       <Deck.Viewport className="viewport">{slidesOf(12)}</Deck.Viewport>
+      <Deck.Prev />
+      <Deck.Next />
+      <Deck.Dots />
+    </Deck.Root>
+  )
+};
+
+/**
+ * A control for `Loop`, above: the same run length (six 145px slides,
+ * 16px gaps, measuring about 966px) and the same range of viewport
+ * widths, but no bleed CSS at all. The viewport is simply `width: 100%`,
+ * so its own scrollport is the browser window, not a column. Used only
+ * by `prototypes/viewport-bleed/crash-boundary.mjs`
+ * (`prototypes/viewport-bleed/FINDINGS.md`, question 4): no test opens
+ * it, since it is not a demo of a recipe, only a fixed run length to
+ * sweep a viewport width across.
+ */
+export const LoopPlainBoundary: Story = {
+  args: { loop: true },
+  render: (args) => (
+    <Deck.Root {...args}>
+      <Deck.Viewport
+        className="viewport"
+        style={{ width: '100%', gap: '16px' }}
+      >
+        {Array.from({ length: 6 }, (_, i) => (
+          <Deck.Slide
+            key={i}
+            style={{
+              width: '145px',
+              scrollSnapAlign: 'start',
+              background: i % 2 ? '#fee' : '#eef'
+            }}
+          >
+            <p>Slide {i + 1}</p>
+          </Deck.Slide>
+        ))}
+      </Deck.Viewport>
       <Deck.Prev />
       <Deck.Next />
       <Deck.Dots />

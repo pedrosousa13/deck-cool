@@ -32,6 +32,15 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules
   },
   {
+    // The viewport-bleed prototype's probes (#188) are plain Node scripts
+    // that pass a callback to Playwright's `page.evaluate` or
+    // `page.waitForFunction`, which runs it in the browser it drives, not
+    // here: that callback's own globals (`document`, `window`) need
+    // declaring too.
+    files: ['prototypes/viewport-bleed/*.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } }
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     plugins: { 'react-hooks': reactHooks },
