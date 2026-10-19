@@ -307,6 +307,10 @@ export function Root({
   // instead of `autoplaying` directly to see autoplay added or removed
   // later, as when it is set per breakpoint.
   const autoplayingRef = useRef(false);
+  // Mirrors `playing` for `userMove`, the same way, so a move through the
+  // handle sees whether autoplay was actually playing right before this
+  // move stops it, not the render the handle mounted at.
+  const playingRef = useRef(false);
   // Bumped on every user move, so a wait in progress can tell a move
   // happened since it last checked, and restart from that move's settle.
   const moveGenerationRef = useRef(0);
@@ -419,6 +423,7 @@ export function Root({
   const autoplaying = autoplay !== undefined;
   useLayoutEffect(() => {
     autoplayingRef.current = autoplaying;
+    playingRef.current = playing;
   });
   // Whether a stop could resume: gates `focusInDeck`'s tracking below.
   const resumable = autoplaying && autoplayResume !== undefined;
@@ -536,6 +541,11 @@ export function Root({
     let frame: number;
     let timer: ReturnType<typeof setTimeout>;
     const resume = () => {
+      // Rechecked fresh, rather than trusted from when the wait started:
+      // reduced motion turning on then off while it runs clears
+      // `resumableRef` on the way in, but the query no longer matching on
+      // the way out must not undo that.
+      if (!resumableRef.current || toggleStoppedRef.current) return;
       if (matchMedia(REDUCED_MOTION_QUERY).matches) return;
       if (engineRef.current?.target() != null) {
         waitToSettle();
@@ -597,17 +607,21 @@ export function Root({
   };
 
   /** The engine, for the user's move: it also stops autoplay, reading
-   * `autoplayingRef` rather than `autoplaying` (see its comment above).
-   * Marks the stop resumable unless the toggle is why autoplay is stopped
-   * (`toggleStoppedRef`): that stays sticky through any later move too.
-   * Every move bumps `moveGenerationRef`, so a wait already running
-   * restarts from this move's own settle, whether or not it is the move
-   * that stops autoplay. */
+   * `autoplayingRef` and `playingRef` rather than `autoplaying` and
+   * `playing` (see their comments above). Marks the stop resumable only
+   * when this move is what takes autoplay from playing to stopped, and
+   * never where the toggle is why autoplay is stopped (`toggleStoppedRef`):
+   * that stays sticky through any later move too. A move on a deck already
+   * stopped, whether it ran out, was never playing, or was stopped by the
+   * toggle, leaves `resumableRef` as it is. Every move bumps
+   * `moveGenerationRef`, so a wait already running restarts from this
+   * move's own settle, whether or not it is the move that stops autoplay. */
   const userMove = () => {
     moveGenerationRef.current++;
     if (autoplayingRef.current) {
+      const wasPlaying = playingRef.current;
       setPlaying(false);
-      if (!toggleStoppedRef.current) resumableRef.current = true;
+      if (wasPlaying && !toggleStoppedRef.current) resumableRef.current = true;
     }
     return takeOver();
   };
@@ -667,12 +681,18 @@ export function Root({
               takeOver();
             }
             const onToggle = (event.target as Element).closest(TOGGLE_SELECTOR);
-            // Marks the stop resumable unless the toggle is why autoplay
-            // is stopped (`toggleStoppedRef`): that stays sticky through
-            // any later focus too.
+            // Marks the stop resumable only when this focus is what takes
+            // autoplay from playing to stopped, and never where the toggle
+            // is why autoplay is stopped (`toggleStoppedRef`): that stays
+            // sticky through any later focus too. Focus entering a deck
+            // already stopped, whether it ran out or was stopped by the
+            // toggle, leaves `resumableRef` as it is.
             if (autoplaying && !onToggle) {
+              const wasPlaying = playing;
               setPlaying(false);
-              if (!toggleStoppedRef.current) resumableRef.current = true;
+              if (wasPlaying && !toggleStoppedRef.current) {
+                resumableRef.current = true;
+              }
             }
             // Tracked only where a stop could resume (see `resumable`
             // above).

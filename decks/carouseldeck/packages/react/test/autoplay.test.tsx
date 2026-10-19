@@ -612,7 +612,7 @@ describe('autoplayResume', () => {
     expect(root.dataset.index).toBe('0');
   });
 
-  test('a later interaction can still resume it after it ends, rewinding as the toggle does', async () => {
+  test('autoplay running out is not resumable: a later focus in and out leaves it stopped', async () => {
     const { root } = renderDeck({ slides: 3, autoplayResume: RESUME });
 
     await expect.poll(indexOf(root), { timeout: 3000 }).toBe('2');
@@ -628,10 +628,9 @@ describe('autoplayResume', () => {
     await sleep(50);
     (document.activeElement as HTMLElement).blur();
 
-    const indexes = watchIndexes(root);
-    await expect
-      .poll(() => indexes.slice(0, 2), { timeout: RESUME * 4 + 4000 })
-      .toEqual(['0', '1']);
+    await sleep(RESUME * 4);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    expect(root.dataset.index).toBe('2');
   });
 
   test('does nothing without autoplay', async () => {
@@ -725,6 +724,24 @@ describe('autoplayResume', () => {
     await expect
       .poll(() => toggleOf().textContent, { timeout: RESUME * 4 })
       .toBe('Stop slide rotation');
+  });
+
+  test('turning reduced motion on then off mid-wait leaves it stopped', async () => {
+    const { root } = renderDeck({ autoplayResume: RESUME });
+    const button = screen.getByRole('button', { name: 'Button 1' });
+
+    button.focus();
+    await sleep(50);
+    (document.activeElement as HTMLElement).blur();
+    await sleep(RESUME / 2);
+
+    await setReducedMotion(true);
+    onTestFinished(() => setReducedMotion(false));
+    await setReducedMotion(false);
+
+    await sleep(RESUME * 4);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    expect(root.dataset.index).toBe('0');
   });
 
   test('a window blur, with nothing newly focused, does not start the wait', async () => {
