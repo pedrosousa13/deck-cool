@@ -1,5 +1,24 @@
 # @slidedeck/react
 
+## 1.4.0
+
+### Minor Changes
+
+- 4315f08: `Deck.Root` takes an opt-in `autoplayResume` (milliseconds): autoplay restarts that long after focus leaves the deck, the pointer is off it and the last move settles. A new interaction cancels the wait. It never restarts once `Deck.AutoplayToggle` has stopped autoplay, and never under reduced motion. Without `autoplayResume`, nothing changes.
+- c01b3c3: The curve effect now orders its slides as it draws them: a zero-specificity `z-index` rule puts the focal slide on top, lower the further a slide is from it, the same on both sides. Your own `z-index` still overrides it.
+
+  A new switch, `--deck-curve-fade-view: 1`, fades a slide by how much of it is in the viewport instead of its distance from the focal slide: fully opaque while at least half of it is in view, fading to 0 as the rest of it leaves. It needs `--deck-viewport-span`; before the deck has measured it, the radius-based fade stands.
+
+- 630974f: `Deck.Root`'s `handleRef` handle now stops autoplay when its `scrollTo`, `next` or `prev` moves the deck, exactly as `useDeck()`'s moves already do.
+- 656e8e9: `useDeck()` reports two more slide indexes, next to `index` and `count`: `slide`, the current slide, and `focal`, the focal slide, each a slide even where `index` and `count` count pages. Both are `null` until the viewport is measured, as `count` already is, and both are `-1` where no slide snaps, matching what `onFocalChange` reports for `focal`. A new `slideCount` reports the number of slides, as opposed to `count`'s snap points, with a loop's shells and its copies both left out; it too can be `null`, where it is not known yet.
+- 7b9fb6d: `Deck.Viewport` writes two measured custom properties, as plain numbers with no unit: `--deck-viewport-step`, the distance from one slide to the next along the axis (its size plus the gap; a loop's shells and copies are left out), and `--deck-viewport-span`, the viewport's own size along the axis, in multiples of `--deck-viewport-step`. CSS can then divide pixels by either without dividing one length by another. Written at mount, on resize, and when a slide is added or removed; never before the first measurement, or with fewer than two slides, so use `var(--deck-viewport-step, <fallback>)` for either. A vertical deck reports its vertical step; a loop's shells and copies never change the values.
+
+### Patch Changes
+
+- Updated dependencies [656e8e9]
+- Updated dependencies [7b9fb6d]
+  - @carouseldeck/core@1.4.0
+
 ## 1.3.3
 
 ### Patch Changes
