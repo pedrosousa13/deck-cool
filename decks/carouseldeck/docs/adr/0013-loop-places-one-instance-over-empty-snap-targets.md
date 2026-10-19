@@ -402,6 +402,38 @@ before `layoutShells` reads them, so no old-axis offset is ever read back
 out along the new axis, and a slide whose slot does not change writes no
 translate at all.
 
+## Settling never depends on which it currently renders (amended for #196)
+
+"`DeckState.copies`, and which way the fallback switches", above, claimed
+the threshold "never oscillates between the two ways of measuring it". That
+held only while the deck stayed mounted in shells or copies. A third state,
+rendering neither, is reachable too: once a settle finds nothing to loop at
+all (ADR-0009), the caller drops both. `snapPoints`'s own "nothing to loop"
+check read the run's length from whichever of shells, copies or neither was
+currently in the DOM, and that read disagreed with itself across the drop:
+shells measured the real slides directly, the same way `layoutShells`
+already does; copies measured a slide to its own copy; neither read the
+browser's own rests over the plain slides, which a bled viewport (the
+padding recipe, #177) can leave with real, if small, scrollable room the
+other two never saw. `count` then flipped between one snap point and
+several, forever, each flip toggling loop's own markup back and forth with
+it. `fallbackToCopies` disagreed along with it: it kept reading a shells
+`placement` left over from a settle `snapPoints` had already moved past,
+publishing `copies: true` in the very settle that found nothing to loop.
+
+**The run's length is read from the real slides alone, once a deck has ever
+shown shells or copies.** `snapPoints` keeps a sticky flag, set the first
+time the DOM shows either, and from then on measures the run the same way
+regardless of which of the three is currently mounted: shells' own
+measurement where there is one, `placement.length` (already `layoutShells`'s
+own read of the real slides, translate removed), or an equivalent read of
+the real slides directly otherwise. A stacking effect's slides sit in one
+place rather than running along the axis (ADR-0007), so neither reads its
+run; the snap targets' own boxes still do, as before. `fallbackToCopies`
+reads this same settle's own "nothing to loop" finding first, rather than
+re-measuring on its own, so `copies` reports correctly from the first settle
+a deck finds nothing to loop, never a settle behind it.
+
 ## What is open to the implementation
 
 This records the decided technique, not its code. Left to the stacked PRs

@@ -92,13 +92,10 @@ Checked in Chromium, Firefox and WebKit:
 - `loop`, where the run is long enough to stay in shells (ADR-0013). A real
   slide's shell is measured from the real slides' own boxes, which already
   sit in the column.
-
-A loop short enough to fall back to copies does not settle under the
-bleed: its own shells-or-copies check disagrees with itself once the bled
-viewport is about as wide as the slides' whole run, and keeps disagreeing,
-so React throws "Maximum update depth exceeded". This is unsupported until
-#196 is fixed: do not combine a short, looping deck with this recipe until
-then.
+- `loop`, where the run is short enough to fall back to copies. The
+  shells-or-copies check, and whether there is room to loop at all, read
+  the same way under the bleed as without it (#196), so a short, looping
+  deck settles under this recipe too.
 
 [Known limits](../guides/known-limits.md) has the rule for which mode a
 loop is in: a run shorter than the viewport plus its widest slide, within

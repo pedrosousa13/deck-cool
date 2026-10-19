@@ -289,14 +289,26 @@ question 4 first raises, and it needs its own issue to fix. **It is
 bleed-specific in every case this prototype reproduces: no unbled
 deck, at any run length or viewport width tried, failed to settle.**
 
-**Not committed as a test.** A crash this suite's own default viewport
-(1280x720) does not reach (it falls inside the settling 1010px case
-checked above, well short of the 1011px boundary found at page width, not
-viewport width), but a consumer's own page width easily could. `LoopShells`
-and `LoopPlainBoundary`'s stories stay, undemonstrated by any failing
-test: `bleed--loop`'s axe test and wrap-around test are not in
-`e2e/bleed.spec.ts`'s lists, and no test opens `LoopPlainBoundary` either,
-since it is a probe target, not a recipe demo.
+**Fixed in #196, which corrects the account above.** Instrumenting the
+engine (never committed) found the disagreement was not only
+`fallbackToCopies`'s own: `snapPoints`'s "nothing to loop" reading was not
+steady across the drop to neither shells nor copies after all. It read the
+run's length from whichever markup was currently mounted, and a plain DOM,
+under the bleed, measures real scrollable room (the padding's own
+contribution to it) that neither shells' nor copies' own reading sees, so
+`count` itself flipped between one snap point and several, forever, toggling
+loop's own markup back and forth with it; that flip, not only
+`fallbackToCopies`'s, is what never let the unbled control's own brief
+disagreement happen under the bleed. The fix reads the run from the real
+slides alone, once a deck has ever shown shells or copies, the same way
+regardless of which of the three is currently mounted (ADR-0013, "Settling
+never depends on which it currently renders"). `bleed--loop` now settles,
+and is in `e2e/bleed.spec.ts`'s axe loop.
+
+**Not committed as a test.** `LoopPlainBoundary`'s story stays,
+undemonstrated by any test of its own: no test opens it, since it is not a
+recipe demo, only a probe target for `crash-boundary.mjs` and
+`width-sweep.mjs`.
 
 ## Question 5: server HTML and layout shift
 

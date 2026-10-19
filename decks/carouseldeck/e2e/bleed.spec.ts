@@ -26,17 +26,12 @@ function slideLeft(page: Page, attribute: 'data-current' | 'data-focal') {
     .evaluate((el) => Math.round(el.getBoundingClientRect().left));
 }
 
-// `bleed--loop` is not in this axe loop: question 4 found it crashes
-// (React's "Maximum update depth exceeded") once the bled viewport, which
-// is wider than the column, is about as wide as the slides' whole run,
-// true at this suite's own viewport size. `Loop`'s own doc comment in
-// bleed.stories.tsx, and `prototypes/viewport-bleed/FINDINGS.md`, question
-// 4, have the finding: no test opens that story.
 for (const id of [
   'bleed--plain',
   'bleed--fade',
   'bleed--stack',
   'bleed--curve',
+  'bleed--loop',
   'bleed--loop-shells',
   'recipes--viewport-bleed'
 ]) {
@@ -172,8 +167,13 @@ test('bleed--curve: keeps its scroll range under the bleed padding', async ({
   expect(await scrollWidth()).toBe(before);
 });
 
-// Shells mode only: see the comment above the axe loop, and `Loop`'s own
-// doc comment in bleed.stories.tsx.
+// #196: at this suite's own viewport, `bleed--loop`'s run comfortably fits
+// the bled viewport, so the deck settles with nothing to loop at all
+// (ADR-0009). The axe loop above, opening the story and reading it back,
+// proves it settles there, with no "Maximum update depth exceeded", in
+// every engine the suite runs; there is no Prev or Next to wrap with at
+// this width (see `width-sweep.mjs` for the narrower page widths this
+// settles, or never used to, at).
 test('bleed--loop-shells: wraps around onto the column, not the page', async ({
   page
 }) => {

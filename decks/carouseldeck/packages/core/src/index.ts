@@ -521,6 +521,21 @@ export function createDeck(
     };
   };
 
+  // Sticky once ever seen (ADR-0009, amended for #196): once this
+  // viewport's DOM has shown loop's shells or copies at least once, a
+  // settle that finds it rendering neither, because `snapPoints` itself
+  // just found nothing to loop a moment before and dropped them, is still
+  // this same deck's own rest, not a deck that never meant to loop at
+  // all. `snapPoints` keeps reading the real slides' own run length then
+  // too, so the decision reads the same way regardless of which of the
+  // three is currently mounted. A deck that never loops never sets this,
+  // so its own snap points are read exactly as before.
+  let hasLooped = false;
+  const snapPoints = (along: Axis): Geometry => {
+    if (slidesOf(viewport).sets > 0) hasLooped = true;
+    return measureSnapPoints(viewport, along, placement, hasLooped);
+  };
+
   const settle = () => {
     refreshOwed = false;
     shifted = null;
@@ -562,7 +577,7 @@ export function createDeck(
     try {
       alignCopies(viewport);
       if (previous && placement) compensateShift(previous, along);
-      const geometry = snapPoints(viewport, along);
+      const geometry = snapPoints(along);
       known = geometry;
       knownKind = kind;
       jumpOffCopies(along, geometry);
@@ -667,7 +682,7 @@ export function createDeck(
     if (kindOf(viewport) === knownKind) {
       const idx = state.index;
       if (idx >= 0 && idx < known.points.length) {
-        const now = snapPoints(viewport, along);
+        const now = snapPoints(along);
         const to = now.points[idx];
         if (to !== undefined && to !== known.points[idx]) {
           moveBy(to - known.points[idx], along);
@@ -861,7 +876,7 @@ export function createDeck(
   // The move has arrived: the viewport is at its target, its end not seen.
   const arrived = ({ target }: { target: number }) => {
     const along = axis();
-    const geometry = snapPoints(viewport, along);
+    const geometry = snapPoints(along);
     return Math.abs(along.position - restAt(along, geometry, target)) < 1;
   };
 
@@ -1270,7 +1285,7 @@ export function createDeck(
     // as the browser may still be scrolling there (`resnap`).
     if (target === null && move && !arrived(move)) {
       const along = axis();
-      const to = positionOf(snapPoints(viewport, along), move.target);
+      const to = positionOf(snapPoints(along), move.target);
       taken = { at: along.position, way: Math.sign(to - along.position) };
     }
     endMove();
@@ -1391,7 +1406,7 @@ export function createDeck(
     const index = own.indexOf(slide);
     if (index === -1) return;
     const along = axis();
-    const geometry = snapPoints(viewport, along);
+    const geometry = snapPoints(along);
     const owner = pageOwner(viewport, along, geometry.slides, index);
     // Shells mode (ADR-0013): the shell at the slide's own currently
     // placed slot, not always its mid one, so this reads where the slide
@@ -1477,7 +1492,7 @@ export function createDeck(
       return;
     }
     const along = axis();
-    const geometry = snapPoints(viewport, along);
+    const geometry = snapPoints(along);
     const count = geometry.points.length;
     // Nowhere to scroll to: a move started now would never arrive either.
     if (!Number.isFinite(index) || count === 0) return;
@@ -1529,7 +1544,7 @@ export function createDeck(
   // settles.
   const restOn = (index: number) => {
     const along = axis();
-    const { points } = snapPoints(viewport, along);
+    const { points } = snapPoints(along);
     const to = points[clamp(index, points.length)] ?? 0;
     if (Math.abs(along.position - to) >= 1) along.scrollTo(to, 'instant');
     settle();
@@ -1578,7 +1593,7 @@ export function createDeck(
         startFrame = 0;
         const along = axis();
         if (along.position !== beforeStart) return;
-        const { points } = snapPoints(viewport, along);
+        const { points } = snapPoints(along);
         const to = points[clamp(state.index, points.length)] ?? 0;
         if (Math.abs(along.position - to) >= 1) restOn(state.index);
       })
@@ -1755,7 +1770,7 @@ export function createDeck(
     if (drag !== 'dragging') return;
     suppressClick();
     // With loop, the copies' snap points too, a set of slides either way.
-    const geometry = snapPoints(viewport, dragAxis);
+    const geometry = snapPoints(dragAxis);
     const reach =
       geometry.length > 0 ? geometry.sets * geometry.points.length : 0;
     const points = Array.from(
@@ -1854,7 +1869,7 @@ export function createDeck(
     // is the slide's own. A copy's, or a shell's, is a set of slides on
     // from its slide's, the way it is from the slides, so the deck moves
     // to it across the seam.
-    const { points, slides } = snapPoints(viewport, along);
+    const { points, slides } = snapPoints(along);
     const owner = pageOwner(viewport, along, slides, index);
     if (owner !== -1) scrollTo(slides[owner] + set * points.length, true);
   };
@@ -1883,7 +1898,7 @@ export function createDeck(
       return;
     }
     const along = axis();
-    const geometry = snapPoints(viewport, along);
+    const geometry = snapPoints(along);
     const count = geometry.points.length;
     if (geometry.length === 0 || count === 0) {
       scrollTo(state.index + delta, true);
@@ -1901,7 +1916,7 @@ export function createDeck(
   return {
     scrollTo(index, way = 'direct') {
       const along = axis();
-      const geometry = snapPoints(viewport, along);
+      const geometry = snapPoints(along);
       const count = geometry.points.length;
       if (way === 'direct' || geometry.length === 0) {
         scrollTo(index);
@@ -2489,6 +2504,37 @@ function layoutShells(
   };
 }
 
+/** The real slides' own run length, L (ADR-0013, amended for #196): the
+ * distance from the first slide's own start to the last slide's end,
+ * plus its trailing margin, the viewport's gap and the first slide's own
+ * leading margin, the same formula `layoutShells` measures it by, but
+ * reading only the real slides, never a shell's or a copy's own box.
+ * Outside shells mode a real slide never carries an engine-written
+ * translate (`clearShells` strips it on the way out, and copies and a
+ * plain deck never write one), so, unlike `layoutShells`, this never has
+ * one of its own to remove: it is `snapPoints`'s own measurement wherever
+ * `placement`, shells mode's own, already measured this way, is null.
+ * 0 with no slides. */
+function runLength(viewport: HTMLElement, along: Axis): number {
+  const { slides } = slidesOf(viewport);
+  const n = slides.length;
+  if (n === 0) return 0;
+  const gap = along.gap(getComputedStyle(viewport));
+  const styles = slides.map((slide) => getComputedStyle(slide));
+  const sizes = styles.map((style) =>
+    borderBoxSize(style, along.vertical ? 'height' : 'width')
+  );
+  const starts = slides.map((slide, i) => {
+    const [start, end] = along.span(slide.getBoundingClientRect());
+    return (start + end) / 2 - sizes[i] / 2;
+  });
+  const [marginStart0] = along.insets(styles[0], 'margin', 0);
+  const [, marginEndN] = along.insets(styles[n - 1], 'margin', 0);
+  return (
+    starts[n - 1] + sizes[n - 1] + marginEndN + gap + marginStart0 - starts[0]
+  );
+}
+
 /** Shells mode's own small-deck fallback (ADR-0013): the run's length L --
  * `layoutShells`' own measurement where there is one, or `snapPoints`'s
  * otherwise, the same quantity either way -- against the viewport plus
@@ -2496,13 +2542,19 @@ function layoutShells(
  * full-width slides, no gap) keeps shells. False where the deck does not
  * loop at all, or where an effect stacks the slides: a stacked shell is
  * never translated, so a short run needs no room beside it, and this
- * fallback never applies there. */
+ * fallback never applies there. False too, first of all (amended for
+ * #196), wherever this same settle's own `snapPoints` already found
+ * nothing to loop: `DeckState.copies` is always false then, by its own
+ * contract, read from `geometry` itself rather than re-measured here,
+ * so it never disagrees with a `placement` left over from a moment this
+ * settle has already moved past. */
 function fallbackToCopies(
   viewport: HTMLElement,
   along: Axis,
   placement: Placement | null,
   geometry: Geometry
 ): boolean {
+  if (geometry.sets === 0) return false;
   const { slides, sets, stacked } = slidesOf(viewport);
   if (sets === 0 || slides.length === 0 || stacked) return false;
   const length = placement ? placement.length : geometry.length;
@@ -2685,21 +2737,50 @@ function snapRest(viewport: HTMLElement, axis: Axis, clamped = true) {
  * alignment and position are its measured box's (see `slidesOf`).
  * Slides that clamp to the same scroll position share one snap point. With
  * loop, only the slides' points, not the copies' (see `Geometry`).
+ *
+ * `placement` and `hasLooped` (ADR-0013, amended for #196): outside an
+ * effect that stacks the slides, once `hasLooped`, `length` is read from
+ * the real slides' own run, never from a copy's own box, so "is there room
+ * to loop" reads the same way whichever of the three, shells, copies or
+ * neither, currently renders: shells mode's own measurement,
+ * `placement.length`, where there is one (the same quantity `layoutShells`
+ * already measured, translate and all), or `runLength` otherwise. Without
+ * `hasLooped`, `length` is always 0, so a deck that has never looped is
+ * never touched: `snapPoints` is called through `snapPoints` itself (the
+ * closure in `createDeck`, not this function), which sets `hasLooped` once
+ * the DOM has shown shells or copies at least once, and keeps it set from
+ * then on. A stacking effect's own slides sit in one place (ADR-0007,
+ * ADR-0013) whether or not the deck loops, and `slidesOf`'s own `stacked`
+ * answers for loop's shells alone, so this reads the snap target marker
+ * directly instead: neither `placement` (`layoutShells` always returns
+ * null for a stacked shells deck) nor `runLength` (a real slide's own box,
+ * there) ever measures its run; only its snap targets' boxes do, as before
+ * #196.
  */
-function snapPoints(viewport: HTMLElement, axis: Axis): Geometry {
+function measureSnapPoints(
+  viewport: HTMLElement,
+  axis: Axis,
+  placement: Placement | null,
+  hasLooped: boolean
+): Geometry {
   const view = axis.view();
   const restOf = snapRest(viewport, axis);
   const { slides, boxes, first, sets } = slidesOf(viewport);
+  const stacking = viewport.querySelector(`:scope > [${SNAP_TARGET}]`) !== null;
   const own = boxes.slice(first, first + slides.length);
   const positions = own.map(restOf);
   const points = [
     ...new Set(positions.filter((p): p is number => p !== null))
   ].sort((a, b) => a - b);
-  // From slide 0 to its copy after the slides.
-  const length =
-    first > 0 && boxes.length > first + slides.length
+  const length = stacking
+    ? first > 0 && boxes.length > first + slides.length
       ? axis.span(boxes[first + slides.length].getBoundingClientRect())[0] -
         axis.span(boxes[first].getBoundingClientRect())[0]
+      : 0
+    : hasLooped
+      ? placement
+        ? placement.length
+        : runLength(viewport, axis)
       : 0;
   // A set no longer than the viewport would bring a copy into view beside
   // its own slide: nothing to loop, as with any deck whose slides all fit.

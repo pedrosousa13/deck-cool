@@ -190,15 +190,12 @@ export const Curve: Story = {
 
 /**
  * A looping deck under the same bleed CSS, with a run too short for shells
- * (ADR-0013): it falls back to full copies. This story is a known crash
- * (React's "Maximum update depth exceeded"), not a passing demo: once the
- * bled viewport, wider than the column, is about as wide as the slides'
- * whole run, the engine's own shells-or-copies fallback never settles on
- * one answer. It is specific to this combination: an identical, unbled
- * deck at the same run length and viewport width does not crash (see
- * `LoopPlainBoundary` below). No test opens this story; see
- * `prototypes/viewport-bleed/FINDINGS.md`, question 4, and widen the
- * column or add slides to see it render.
+ * (ADR-0013): it falls back to full copies. Once the bled viewport, wider
+ * than the column, is about as wide as the slides' whole run, the engine
+ * used to never settle on one answer (#196, fixed): `snapPoints`'s own
+ * "nothing to loop" reading now holds regardless of what is currently
+ * mounted, so the engine finds it and stays there. `e2e/bleed.spec.ts`
+ * opens this story, in every engine the suite runs.
  */
 export const Loop: Story = {
   decorators: bleedPage,
