@@ -270,6 +270,10 @@ export function Root({
   // render after it.
   const reportedRef = useRef<number | null>(null);
   const orientationRef = useRef(orientation);
+  // Mirrors `orientationRef`'s own pattern, for `loop` (ADR-0013, amended
+  // for #196): the engine learns whether it loops from this, kept current
+  // by `setLoop` below, never from what it currently renders.
+  const loopRef = useRef(loop);
   // What the live region says: the current slide, after the deck moves.
   const [announcement, setAnnouncement] = useState('');
   // Autoplay is on until the user, focus or reduced motion stops it; a
@@ -330,6 +334,7 @@ export function Root({
     const engine = createDeck(viewport, {
       index: initialIndex,
       orientation: orientationRef.current,
+      loop: loopRef.current,
       onChange(next) {
         setState(next);
         // A change is a settle on a new snap point; a report of a new count
@@ -381,6 +386,16 @@ export function Root({
     orientationRef.current = orientation;
     engineRef.current?.setOrientation(orientation);
   }, [orientation]);
+
+  // `loop` can change with no change to what `Viewport` currently mounts
+  // -- it already did, at the "nothing to loop" boundary, where `count`
+  // alone decides `looping` (`everySlideFits`) regardless of `loop`'s own
+  // value -- so this cannot rely on `Viewport`'s own `refresh()` effect,
+  // keyed on the mounted shells, copies and snap targets, to run (#196).
+  useLayoutEffect(() => {
+    loopRef.current = loop;
+    engineRef.current?.setLoop(loop);
+  }, [loop]);
 
   // Controlled, the deck rests at `index`: it follows a new one, and returns
   // to it after a scroll the parent did not take, as a controlled input

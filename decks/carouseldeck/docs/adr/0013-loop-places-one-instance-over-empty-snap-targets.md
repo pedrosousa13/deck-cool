@@ -402,8 +402,7 @@ before `layoutShells` reads them, so no old-axis offset is ever read back
 out along the new axis, and a slide whose slot does not change writes no
 translate at all.
 
-## Settling never depends on which it currently renders (amended for #196)
-
+**Settling never depends on which it currently renders (amended for #196).**
 "`DeckState.copies`, and which way the fallback switches", above, claimed
 the threshold "never oscillates between the two ways of measuring it". That
 held only while the deck stayed mounted in shells or copies. A third state,
@@ -421,18 +420,38 @@ it. `fallbackToCopies` disagreed along with it: it kept reading a shells
 `placement` left over from a settle `snapPoints` had already moved past,
 publishing `copies: true` in the very settle that found nothing to loop.
 
-**The run's length is read from the real slides alone, once a deck has ever
-shown shells or copies.** `snapPoints` keeps a sticky flag, set the first
-time the DOM shows either, and from then on measures the run the same way
-regardless of which of the three is currently mounted: shells' own
-measurement where there is one, `placement.length` (already `layoutShells`'s
-own read of the real slides, translate removed), or an equivalent read of
-the real slides directly otherwise. A stacking effect's slides sit in one
+The run's length is now read from the real slides alone, whichever of the
+three the deck currently renders: shells' own measurement where there is
+one, `placement.length` (already `layoutShells`'s own read of the real
+slides, translate removed), or an equivalent read of the real slides
+directly otherwise (`runLength`). A stacking effect's slides sit in one
 place rather than running along the axis (ADR-0007), so neither reads its
 run; the snap targets' own boxes still do, as before. `fallbackToCopies`
 reads this same settle's own "nothing to loop" finding first, rather than
 re-measuring on its own, so `copies` reports correctly from the first settle
-a deck finds nothing to loop, never a settle behind it.
+a deck finds nothing to loop, never a settle behind it. A deliberate
+consequence, not a silent one: copies mode's own cut-over now reads the
+same real-slide length, never a copy's own rendered box, so a consumer's
+own progress-driven `scale` (the curve recipe) no longer nudges the
+shells-or-copies boundary the few pixels its own, transformed box used to
+add or remove -- `DeckState.copies`'s own doc already says the threshold is
+"measured the same way whichever is rendered", the real slides' own layout
+rather than anything drawn on screen.
+
+**Whether the deck loops is the engine's own option, not a flag latched
+from the DOM (amended for #196).** A first version of the fix above kept a
+sticky flag instead, set once a settle found the DOM showing shells or
+copies, and never cleared. That is correct for a deck whose `loop` prop
+never changes, but React keeps the same engine across a `loop` change
+(`Deck.Root`'s own `createDeck` effect depends only on `defaultIndex`), so
+a deck that looped once and then turned `loop` off kept measuring with the
+real slides' own run regardless of the prop: under a bled viewport's own
+small, genuine extra scroll room, this wrongly kept it collapsed to one
+snap point, where a deck that had never looped reported several.
+`DeckOptions.loop` and `setLoop` replace the flag, the same pattern
+`orientation` and `setOrientation` already have: "is there room to loop"
+depends on `loop`'s own current value alone, from whichever caller passes
+it, never on what happens to be mounted.
 
 ## What is open to the implementation
 

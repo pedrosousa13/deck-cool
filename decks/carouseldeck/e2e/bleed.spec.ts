@@ -186,6 +186,36 @@ test('bleed--loop-shells: wraps around onto the column, not the page', async ({
     .toBe(Math.round(col));
 });
 
+// #196: `width-sweep.mjs` found `bleed--loop` crashing, with "Maximum
+// update depth exceeded", from a 1011px page through 1400px, in Chromium,
+// Firefox and WebKit alike; `crash-boundary.mjs` rechecks the same width
+// directly. The axe loop above opens this story at the suite's own,
+// wider default viewport, comfortably past where this settles with
+// nothing to loop at all (the comment above it): this test is the one
+// that actually sits at the narrow boundary where the crash was found.
+// `openStory`'s own wait for `data-in-view` never resolves while the
+// engine is stuck restarting forever, so a regression here fails by
+// timing the test out, the same "never settled" `width-sweep.mjs` reports,
+// whether or not this engine also logs the React message.
+test('bleed--loop settles at the 1011px width the crash was found at, with no page error', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1011, height: 720 });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+
+  await openStory(page, 'bleed--loop');
+
+  expect(
+    errors.some((text) => /maximum update depth exceeded/i.test(text))
+  ).toBe(false);
+  const deck = page.getByRole('region', { name: 'Featured slides' });
+  await expect(deck).toHaveAttribute('data-index', '0');
+});
+
 // #177's recipe: `apps/storybook/stories/recipes/viewport-bleed.css`, quoted
 // byte for byte in `packages/docs/recipes/viewport-bleed.md`. Its snapping
 // is the same mechanic `bleed--plain`'s own "snaps to the column, not the
