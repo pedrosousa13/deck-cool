@@ -1,7 +1,6 @@
 import type { CSSProperties } from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, test } from 'vitest';
-import { curve } from '@carouseldeck/react/curve';
 import { addStyle } from './fixtures';
 import {
   AROUND_2,
@@ -89,15 +88,9 @@ describe('curve fade by visibility (--deck-curve-fade-view)', () => {
   // Blocker: Chromium before 138 has no sign(). The switch used it to tell
   // a measured --deck-viewport-span from an unmeasured one, which made the
   // whole opacity declaration invalid at computed-value time there, and
-  // every curve slide painted at opacity 1 regardless of the switch. This
-  // is a cheap, deterministic proxy for "works in an older engine": the
-  // emitted CSS must stick to the functions curve already relied on
-  // (clamp(), max(), asin(), sqrt()) and never reach for a newer one.
-  test('never emits a CSS math function older Chromium lacks', () => {
-    for (const fn of ['sign(', 'abs(', 'round(', 'mod(', 'rem(']) {
-      expect(curve.css).not.toContain(fn);
-    }
-  });
+  // every curve slide painted at opacity 1 regardless of the switch. The
+  // check that this never regresses now covers every effect's CSS, not
+  // only curve's: css-math-floor.test.tsx (#201).
 
   test('fades by visibility instead of radius once the switch is on', () => {
     const { opacity } = renderDeck({
