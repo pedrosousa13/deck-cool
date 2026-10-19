@@ -1,4 +1,4 @@
-import { createRef, useState } from 'react';
+import { createRef, Profiler, useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, onTestFinished, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
@@ -17,6 +17,13 @@ import {
 /** The autoplay interval most tests use, in milliseconds: short enough to
  * step several times within a poll's timeout. */
 const INTERVAL = 300;
+
+/** Reads `useDeck()` and renders nothing: wrapped in a `Profiler`, counts
+ * how many times Root re-renders it. */
+function RenderProbe() {
+  Deck.useDeck();
+  return null;
+}
 
 beforeEach(parkMouse);
 
@@ -635,6 +642,149 @@ describe('autoplayResume', () => {
 
     expect(toggleOf()).toBeNull();
     await expectStill(root, '0');
+  });
+
+  test.each([
+    ['Next', () => screen.getByRole('button', { name: 'Next' }).click()],
+    [
+      'a handle move',
+      (handle: Deck.RootHandle) => {
+        handle.next();
+      }
+    ]
+  ])(
+    'an explicit stop by the toggle is sticky: %s and the pointer leaving does not resume it',
+    async (_, move) => {
+      const handle = createRef<Deck.RootHandle>();
+      const { root, viewport } = renderDeck({
+        autoplayResume: RESUME,
+        defaultIndex: 1,
+        handleRef: handle
+      });
+      await userEvent.hover(viewport);
+      await pressToggle();
+
+      move(handle.current!);
+      await expect.poll(indexOf(root), { timeout: 2000 }).toBe('2');
+
+      await userEvent.unhover(viewport);
+      await sleep(RESUME * 4);
+      expect(toggleOf().textContent).toBe('Start slide rotation');
+      expect(root.dataset.index).toBe('2');
+    }
+  );
+
+  test('an explicit stop by the toggle is sticky: focus into the deck and out does not resume it', async () => {
+    const { root } = renderDeck({ autoplayResume: RESUME });
+
+    await pressToggle();
+    screen.getByRole('button', { name: 'Button 1' }).focus();
+    // Lets React commit the focus before the blur, as two updates with no
+    // render between them would otherwise net to none.
+    await sleep(50);
+    (document.activeElement as HTMLElement).blur();
+
+    await sleep(RESUME * 4);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    expect(root.dataset.index).toBe('0');
+  });
+
+  test('never resumes under reduced motion, even once focus enters and leaves the deck', async () => {
+    await setReducedMotion(true);
+    onTestFinished(() => setReducedMotion(false));
+    const { root } = renderDeck({ autoplayResume: RESUME });
+
+    screen.getByRole('button', { name: 'Button 1' }).focus();
+    // Lets React commit the focus before the blur, as two updates with no
+    // render between them would otherwise net to none.
+    await sleep(50);
+    (document.activeElement as HTMLElement).blur();
+
+    await sleep(RESUME * 4);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    expect(root.dataset.index).toBe('0');
+  });
+
+  test('a move midway through the wait restarts it, counted from when the move settles', async () => {
+    const handle = createRef<Deck.RootHandle>();
+    const { root } = renderDeck({ autoplayResume: RESUME, handleRef: handle });
+
+    screen.getByRole('button', { name: 'Button 1' }).focus();
+    await sleep(50);
+    (document.activeElement as HTMLElement).blur();
+    await sleep(RESUME / 2);
+
+    handle.current!.next();
+    await expect.poll(indexOf(root), { timeout: 2000 }).toBe('1');
+
+    // The blur's own wait would have ended by now: the move midway through
+    // it pushed the wait out instead, counted from this move's own settle.
+    await sleep(RESUME / 2 + 100);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+
+    await expect
+      .poll(() => toggleOf().textContent, { timeout: RESUME * 4 })
+      .toBe('Stop slide rotation');
+  });
+
+  test('a window blur, with nothing newly focused, does not start the wait', async () => {
+    const { root } = renderDeck({ autoplayResume: RESUME });
+
+    screen.getByRole('button', { name: 'Button 1' }).focus();
+    await expectStill(root, '0');
+
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    onTestFinished(() => hasFocus.mockRestore());
+    (document.activeElement as HTMLElement).blur();
+
+    await sleep(RESUME * 4);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    expect(root.dataset.index).toBe('0');
+  });
+
+  test('moving focus within the deck is not leaving it: the wait never starts', async () => {
+    const { root } = renderDeck({ autoplayResume: RESUME });
+
+    screen.getByRole('button', { name: 'Button 1' }).focus();
+    await expectStill(root, '0');
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+
+    // The Tab destination: a control outside the viewport, but still inside
+    // the region, so this moves no slide into view.
+    screen.getByRole('button', { name: 'Next' }).focus();
+
+    await sleep(RESUME * 4);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    expect(root.dataset.index).toBe('0');
+  });
+});
+
+describe('autoplay without autoplayResume', () => {
+  test('tracks no focus state, so focus entering and leaving it does not re-render it', async () => {
+    let renders = 0;
+    render(
+      <TestDeck
+        autoplay={INTERVAL}
+        controls={
+          <>
+            <Deck.AutoplayToggle />
+            <Profiler id="probe" onRender={() => renders++}>
+              <RenderProbe />
+            </Profiler>
+          </>
+        }
+      />
+    );
+    await pressToggle();
+    renders = 0;
+
+    screen.getByRole('button', { name: 'Button 1' }).focus();
+    await sleep(50);
+    expect(renders).toBe(0);
+
+    (document.activeElement as HTMLElement).blur();
+    await sleep(50);
+    expect(renders).toBe(0);
   });
 });
 

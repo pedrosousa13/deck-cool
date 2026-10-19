@@ -44,7 +44,10 @@ An accepted exception for autoplay: a deck with `autoplay` also re-renders
 when autoplay's user-driven state changes: whether it is playing, a pointer is
 over the deck, the document is hidden. Those are discrete user-driven
 events, never scroll frames, so scrolling still never re-renders. A deck
-without `autoplay` tracks none of that state and is unaffected.
+without `autoplay` tracks none of that state and is unaffected. (Amended for
+#189: a deck with `autoplayResume` also tracks whether focus is in the deck,
+since restarting autoplay needs to know when that ends too; a deck with
+`autoplay` alone still tracks none of it.)
 
 Server HTML rests at slide `defaultIndex` where `scroll-initial-target` is
 supported; elsewhere a layout effect moves there before the browser paints. No
