@@ -72,6 +72,18 @@ interface DeckContextValue {
 const clampSlide = (index: number, count: number) =>
   Math.min(Math.max(index, 0), count - 1);
 
+/** `scrollTo`, `next` and `prev`, over a move that stops autoplay: builds
+ * `useDeck()`'s result and the handle from the one rule. */
+function moveMethods(
+  userMove: () => DeckEngine | null
+): Pick<RootHandle, 'scrollTo' | 'next' | 'prev'> {
+  return {
+    scrollTo: (index) => userMove()?.scrollTo(index),
+    next: () => userMove()?.next(),
+    prev: () => userMove()?.prev()
+  };
+}
+
 /** A stacked, looping slide's progress with shells (ADR-0013; the
  * maintainer's ruling on the fork, 2026-10-13): wrapped into `(b, b + n]`,
  * `b = -0.9985` -- a slide thrown to within the engine's precision returns
@@ -149,9 +161,11 @@ interface RootBaseProps extends ComponentProps<'div'> {
    * loops, or where a step leaves the deck where it was, as when a
    * controlled parent refuses it. A pointer over the deck or a hidden
    * document pauses it; focus entering the deck, other than on
-   * `Deck.AutoplayToggle`, or the user moving it stops it until the toggle
-   * starts it again, and so does a preference for reduced motion, from the
-   * start. Pair it with `Deck.AutoplayToggle` (WCAG 2.2.2). Off by default. */
+   * `Deck.AutoplayToggle`, or a move through `useDeck()` or the `handleRef`
+   * handle (every move through either counts as the user's, as a built-in
+   * control's does) stops it until the toggle starts it again, and so does
+   * a preference for reduced motion, from the start. Pair it with
+   * `Deck.AutoplayToggle` (WCAG 2.2.2). Off by default. */
   autoplay?: number;
 }
 
@@ -467,23 +481,14 @@ export function Root({
     return engineRef.current;
   };
 
-  /** The engine, for the user's move: it also stops autoplay. Reads
-   * `autoplayingRef` rather than `autoplaying`, so a call the handle kept
-   * from mount still sees autoplay's current state. */
+  /** The engine, for the user's move: it also stops autoplay, reading
+   * `autoplayingRef` rather than `autoplaying` (see its comment above). */
   const userMove = () => {
     if (autoplayingRef.current) setPlaying(false);
     return takeOver();
   };
 
-  useImperativeHandle(
-    handleRef,
-    () => ({
-      scrollTo: (index) => userMove()?.scrollTo(index),
-      next: () => userMove()?.next(),
-      prev: () => userMove()?.prev()
-    }),
-    []
-  );
+  useImperativeHandle(handleRef, () => moveMethods(userMove), []);
 
   // Only the first render is unmeasured, so the walk runs once, and on the
   // server. Rendered from a server component, Root cannot recognise the
@@ -1201,9 +1206,7 @@ function useDeckState(primitive: string): UseDeckResult {
     fits,
     canPrev: !fits && (loop || index !== 0),
     canNext: !fits && (loop || count === null || index < count - 1),
-    scrollTo: (to) => userMove()?.scrollTo(to),
-    next: () => userMove()?.next(),
-    prev: () => userMove()?.prev()
+    ...moveMethods(userMove)
   };
 }
 

@@ -430,6 +430,7 @@ describe('a move the user makes', () => {
     async (_, call, index) => {
       const handle = createRef<Deck.RootHandle>();
       const { root } = renderDeck({ defaultIndex: 1, handleRef: handle });
+      expect(toggleOf().textContent).toBe('Stop slide rotation');
 
       call(handle.current!);
 
