@@ -1,5 +1,13 @@
 # @carouseldeck/react-18
 
+## 1.5.0
+
+### Patch Changes
+
+- 8fc797c: A short looping deck whose viewport has inline padding, such as under the viewport bleed recipe, now settles instead of throwing "Maximum update depth exceeded". A deck that turns `loop` off now measures like one that never looped, rather than keeping whatever it last happened to render. `createDeck` takes a `loop` option, and the engine a `setLoop()` method, for whether the deck loops.
+- Updated dependencies [8fc797c]
+  - @carouseldeck/core@1.5.0
+
 ## 1.4.0
 
 ### Minor Changes
