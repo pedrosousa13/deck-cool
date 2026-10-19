@@ -10,6 +10,7 @@ the CSS, `.products`, `.showcase` and `.cards` are classes on `Deck.Root`.
 
 - [Centre the first and last slide](./centred-ends.md)
 - [Highlight the middle slide in view](./middle-slide.md)
+- [Let slides extend past the viewport](./viewport-bleed.md)
 - [Size a curve](./size-a-curve.md)
 - [A card stack](./card-stack.md)
 - [Custom controls and a counter](./custom-controls.md)

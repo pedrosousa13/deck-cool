@@ -189,7 +189,8 @@ const SITE_DEMOS = [
   'quickstart',
   'right-to-left',
   'theme',
-  'vertical'
+  'vertical',
+  'viewport-bleed'
 ];
 
 test('@carouseldeck/docs follows the contract, with the demos the site registers', () => {

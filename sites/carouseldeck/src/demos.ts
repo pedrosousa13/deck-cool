@@ -30,6 +30,7 @@ const NAMES = [
   "right-to-left",
   "theme",
   "vertical",
+  "viewport-bleed",
 ] as const;
 
 /** For defineDocs' `demos`: each name a page may mark, and its island, from the site's root. */

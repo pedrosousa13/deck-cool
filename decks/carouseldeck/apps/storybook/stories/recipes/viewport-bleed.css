@@ -1,0 +1,17 @@
+/* The page's own cqi and the column's literal width, in one custom
+   property: the viewport reads it for the negated margin, the padding and
+   the scroll padding alike. */
+.page {
+  width: 100%;
+  container-type: inline-size;
+}
+.column {
+  width: 400px;
+  margin-inline: auto;
+}
+.column [data-carouseldeck-viewport] {
+  --inset: calc((100cqi - 400px) / 2);
+  margin-inline: calc(-1 * var(--inset));
+  padding-inline: var(--inset);
+  scroll-padding-inline: var(--inset);
+}

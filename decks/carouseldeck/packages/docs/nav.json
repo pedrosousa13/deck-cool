@@ -32,6 +32,7 @@
       "recipes/index.md",
       "recipes/centred-ends.md",
       "recipes/middle-slide.md",
+      "recipes/viewport-bleed.md",
       "recipes/size-a-curve.md",
       "recipes/card-stack.md",
       "recipes/custom-controls.md",

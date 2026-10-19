@@ -37,7 +37,8 @@ for (const id of [
   'bleed--fade',
   'bleed--stack',
   'bleed--curve',
-  'bleed--loop-shells'
+  'bleed--loop-shells',
+  'recipes--viewport-bleed'
 ]) {
   test(`${id}: passes axe`, async ({ page }) => {
     await openStory(page, id);
@@ -183,4 +184,38 @@ test('bleed--loop-shells: wraps around onto the column, not the page', async ({
   await expect
     .poll(() => slideLeft(page, 'data-current'))
     .toBe(Math.round(col));
+});
+
+// #177's recipe: `apps/storybook/stories/recipes/viewport-bleed.css`, quoted
+// byte for byte in `packages/docs/recipes/viewport-bleed.md`.
+
+test('recipes--viewport-bleed: a slide past the column is visible beyond it', async ({
+  page
+}) => {
+  await openStory(page, 'recipes--viewport-bleed');
+  const column = page.locator('.column');
+  const columnRight = await column.evaluate(
+    (el) => el.getBoundingClientRect().right
+  );
+  // At rest, 2.5 slides fit the column: the first two fill it and the third
+  // peeks past its edge, into the bled padding, as this story's own slide
+  // width (narrower than the column) gives it.
+  const third = page.locator('[data-carouseldeck-slide]').nth(2);
+  const thirdBox = (await third.boundingBox())!;
+  expect(thirdBox.x + thirdBox.width).toBeGreaterThan(columnRight + 1);
+  await expect(third).toBeInViewport();
+});
+
+test('recipes--viewport-bleed: snaps to the column, not the page, after Next', async ({
+  page
+}) => {
+  await openStory(page, 'recipes--viewport-bleed');
+  const col = await columnLeft(page);
+
+  for (let i = 0; i < 3; i++) {
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect
+      .poll(() => slideLeft(page, 'data-current'))
+      .toBe(Math.round(col));
+  }
 });
