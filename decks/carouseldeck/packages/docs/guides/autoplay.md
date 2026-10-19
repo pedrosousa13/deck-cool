@@ -35,7 +35,14 @@ export function Hero() {
   `useDeck()` or the `handleRef` handle counts as the user's, as a built-in
   control's does. A controlled `index` change does not: it moves the deck
   without stopping autoplay.
-- A preference for reduced motion stops it from the start.
+- `autoplayResume={2000}` restarts autoplay 2 seconds after focus has left
+  the deck, the pointer is off it and the move has settled, all at once; a
+  new interaction before then starts the wait over. It never restarts once
+  `Deck.AutoplayToggle` has stopped it: an explicit stop stays a stop until
+  the toggle starts it again, which is what keeps WCAG 2.2.2. Off by
+  default.
+- A preference for reduced motion stops it from the start, and
+  `autoplayResume` never restarts it either.
 - The deck does not announce autoplay's moves, and its live region is off
   while autoplay rotates it.
 

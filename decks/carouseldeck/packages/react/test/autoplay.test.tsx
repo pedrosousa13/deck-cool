@@ -525,6 +525,119 @@ describe('a control the user activates', () => {
   });
 });
 
+describe('autoplayResume', () => {
+  const RESUME = 300;
+
+  test('a move stops it, and it plays again once it settles and the pointer leaves', async () => {
+    const { root } = await renderHovered({
+      autoplayResume: RESUME,
+      defaultIndex: 1
+    });
+    const next = screen.getByRole('button', { name: 'Next' });
+
+    next.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    next.click();
+
+    await expect.poll(indexOf(root), { timeout: 2000 }).toBe('2');
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    // The pointer is still over the deck: it stays stopped past the delay.
+    await sleep(RESUME * 2);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+
+    await parkMouse();
+    await expect
+      .poll(() => toggleOf().textContent, { timeout: RESUME * 4 })
+      .toBe('Stop slide rotation');
+  });
+
+  test('focus entering then leaving restarts it after the delay', async () => {
+    const { root } = renderDeck({ autoplayResume: RESUME });
+    const button = screen.getByRole('button', { name: 'Button 1' });
+
+    button.focus();
+    await expectStill(root, '0');
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+
+    (document.activeElement as HTMLElement).blur();
+    await expect
+      .poll(() => toggleOf().textContent, { timeout: RESUME * 4 })
+      .toBe('Stop slide rotation');
+  });
+
+  test('focus returning within the delay cancels the restart', async () => {
+    const { root } = renderDeck({ autoplayResume: RESUME });
+    const button = screen.getByRole('button', { name: 'Button 1' });
+
+    button.focus();
+    (document.activeElement as HTMLElement).blur();
+    await sleep(RESUME / 2);
+    button.focus();
+
+    await sleep(RESUME);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    await expectStill(root, '0');
+
+    (document.activeElement as HTMLElement).blur();
+    await expect
+      .poll(() => toggleOf().textContent, { timeout: RESUME * 4 })
+      .toBe('Stop slide rotation');
+  });
+
+  test('after the toggle stops it, it stays stopped past the delay', async () => {
+    const { root } = renderDeck({ autoplayResume: RESUME });
+
+    await pressToggle();
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+
+    await sleep(RESUME * 4);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    expect(root.dataset.index).toBe('0');
+  });
+
+  test('never plays under reduced motion, however long the delay', async () => {
+    await setReducedMotion(true);
+    onTestFinished(() => setReducedMotion(false));
+    const { root } = renderDeck({ autoplayResume: RESUME });
+
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    await sleep(RESUME * 4);
+    expect(toggleOf().textContent).toBe('Start slide rotation');
+    expect(root.dataset.index).toBe('0');
+  });
+
+  test('a later interaction can still resume it after it ends, rewinding as the toggle does', async () => {
+    const { root } = renderDeck({ slides: 3, autoplayResume: RESUME });
+
+    await expect.poll(indexOf(root), { timeout: 3000 }).toBe('2');
+    await expect
+      .poll(() => toggleOf().textContent)
+      .toBe('Start slide rotation');
+
+    // Button 3 is already in view, at the last snap point: focusing it moves
+    // nothing, so this isolates the delay from a move's own settle. The
+    // wait lets React commit the focus before the blur, as two React
+    // updates with no render between them would otherwise net to none.
+    screen.getByRole('button', { name: 'Button 3' }).focus();
+    await sleep(50);
+    (document.activeElement as HTMLElement).blur();
+
+    const indexes = watchIndexes(root);
+    await expect
+      .poll(() => indexes.slice(0, 2), { timeout: RESUME * 4 + 4000 })
+      .toEqual(['0', '1']);
+  });
+
+  test('does nothing without autoplay', async () => {
+    const { root } = renderDeck({
+      autoplay: undefined,
+      autoplayResume: RESUME
+    });
+
+    expect(toggleOf()).toBeNull();
+    await expectStill(root, '0');
+  });
+});
+
 describe('Deck.AutoplayToggle', () => {
   test('is a button named for the action it takes, marked while playing', async () => {
     const { root } = renderDeck();

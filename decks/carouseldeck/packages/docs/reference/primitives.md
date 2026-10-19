@@ -31,18 +31,19 @@ Prev, Next or AutoplayToggle runs first and can cancel the move with
 
 `Deck.Root` props, besides those of a `<div>`:
 
-| Prop            | Type                         | Default        | What it does                                                                                       |
-| --------------- | ---------------------------- | -------------- | -------------------------------------------------------------------------------------------------- |
-| `defaultIndex`  | `number`                     | `0`            | The snap point to start at. Read once, on mount.                                                   |
-| `index`         | `number`                     |                | The snap point to rest at, controlled. Not with `defaultIndex`.                                    |
-| `onIndexChange` | `(index: number) => void`    |                | Called once each time the deck settles on a new snap point.                                        |
-| `handleRef`     | `Ref<RootHandle>`            |                | Receives `scrollTo(index)`, `next()` and `prev()`; each stops autoplay, as `useDeck()`'s moves do. |
-| `onFocalChange` | `(slide: number) => void`    |                | Called once each time the focal slide changes, with its index, or -1 when no slide snaps.          |
-| `clickToFocus`  | `boolean`                    | `false`        | Clicking a slide brings it to the focal position.                                                  |
-| `loop`          | `boolean`                    | `false`        | Past the last snap point is the first, and back.                                                   |
-| `drag`          | `boolean`                    | `true`         | A mouse can drag the deck.                                                                         |
-| `autoplay`      | `number`                     |                | Moves one snap point on every this many milliseconds. Off when unset.                              |
-| `orientation`   | `'horizontal' \| 'vertical'` | `'horizontal'` | The axis the deck scrolls along.                                                                   |
+| Prop             | Type                         | Default        | What it does                                                                                                                                                           |
+| ---------------- | ---------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defaultIndex`   | `number`                     | `0`            | The snap point to start at. Read once, on mount.                                                                                                                       |
+| `index`          | `number`                     |                | The snap point to rest at, controlled. Not with `defaultIndex`.                                                                                                        |
+| `onIndexChange`  | `(index: number) => void`    |                | Called once each time the deck settles on a new snap point.                                                                                                            |
+| `handleRef`      | `Ref<RootHandle>`            |                | Receives `scrollTo(index)`, `next()` and `prev()`; each stops autoplay, as `useDeck()`'s moves do.                                                                     |
+| `onFocalChange`  | `(slide: number) => void`    |                | Called once each time the focal slide changes, with its index, or -1 when no slide snaps.                                                                              |
+| `clickToFocus`   | `boolean`                    | `false`        | Clicking a slide brings it to the focal position.                                                                                                                      |
+| `loop`           | `boolean`                    | `false`        | Past the last snap point is the first, and back.                                                                                                                       |
+| `drag`           | `boolean`                    | `true`         | A mouse can drag the deck.                                                                                                                                             |
+| `autoplay`       | `number`                     |                | Moves one snap point on every this many milliseconds. Off when unset.                                                                                                  |
+| `autoplayResume` | `number`                     |                | Restarts autoplay this many milliseconds after the interaction that stopped it ends, unless the toggle stopped it or reduced motion is on. Ignored without `autoplay`. |
+| `orientation`    | `'horizontal' \| 'vertical'` | `'horizontal'` | The axis the deck scrolls along.                                                                                                                                       |
 
 The package also exports the types `RootProps`, `RootHandle`,
 `ViewportProps`, `UseDeckResult` (what `useDeck` returns), `UseSlideResult`

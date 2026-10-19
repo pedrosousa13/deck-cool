@@ -167,6 +167,16 @@ interface RootBaseProps extends ComponentProps<'div'> {
    * a preference for reduced motion, from the start. Pair it with
    * `Deck.AutoplayToggle` (WCAG 2.2.2). Off by default. */
   autoplay?: number;
+  /** Restarts autoplay this many milliseconds after the interaction that
+   * stopped it ends: focus has left the deck, the pointer is no longer over
+   * it, and the move has settled. A new interaction before then cancels the
+   * wait, and it starts over once that one ends too. Never after
+   * `Deck.AutoplayToggle` stopped it: an explicit stop stays a stop, until
+   * the toggle starts it again (that is what keeps WCAG 2.2.2), and never
+   * under reduced motion. Restarting rewinds from the last snap point, as
+   * the toggle's does, and announces nothing. Zero or a negative number
+   * restarts at once. Ignored without `autoplay`. Off by default. */
+  autoplayResume?: number;
 }
 
 /** Controlled like a React input's `value`: the deck scrolls to `index` when
@@ -206,8 +216,10 @@ export function Root({
   orientation = 'horizontal',
   loop = false,
   autoplay,
+  autoplayResume,
   children,
   onFocus,
+  onBlur,
   onPointerEnter,
   onPointerLeave,
   onPointerDown,
@@ -257,6 +269,9 @@ export function Root({
   const [playing, setPlaying] = useState(true);
   const [hovered, setHovered] = useState(false);
   const [hidden, setHidden] = useState(false);
+  // Focus is in the deck, other than on the toggle: for `autoplayResume`,
+  // one of the three things that must end before it counts down.
+  const [focused, setFocused] = useState(false);
   // Whether a pointer is over the deck, as soon as it enters or leaves: the
   // render that pauses autoplay comes later.
   const hoveredRef = useRef(false);
@@ -268,6 +283,10 @@ export function Root({
   // Where autoplay last stepped from: resting there again, the step did not
   // move the deck. Any move autoplay did not start clears it.
   const stepFromRef = useRef<number | null>(null);
+  // Whether the current stop is eligible for `autoplayResume`: set where
+  // focus or a move stops autoplay, cleared where the toggle stops or starts
+  // it, so an explicit stop never resumes.
+  const resumableRef = useRef(false);
   // Mirrors `autoplaying` for `userMove`, below: `useImperativeHandle`
   // closes over `userMove` once, at mount, so `userMove` must read this
   // instead of `autoplaying` directly to see autoplay added or removed
@@ -448,7 +467,60 @@ export function Root({
     return () => clearTimeout(timer);
   }, [rotating, autoplay, state.index]);
 
+  // `autoplayResume`: restarts autoplay once focus has left the deck, the
+  // pointer is off it, and the move that stopped it has settled, all at
+  // once. Any of the first two becoming false again cancels the wait,
+  // through `hovered` or `focused` below; the third is polled here, as
+  // `target()` settling is not itself a dependency and can settle with no
+  // render, as after a focus that moves nothing. Reduced motion is read
+  // fresh when the wait ends too, since it can start after it begins.
+  useEffect(() => {
+    if (
+      autoplayResume === undefined ||
+      !autoplaying ||
+      playing ||
+      !resumableRef.current ||
+      hovered ||
+      focused
+    ) {
+      return;
+    }
+    let frame: number;
+    let timer: ReturnType<typeof setTimeout>;
+    const resume = () => {
+      if (
+        matchMedia('(prefers-reduced-motion: reduce)').matches ||
+        engineRef.current?.target() != null
+      ) {
+        return;
+      }
+      stepFromRef.current = null;
+      if (endedRef.current) {
+        endedRef.current = false;
+        autoplayMovedRef.current = true;
+        engineRef.current?.scrollTo(0);
+      }
+      resumableRef.current = false;
+      setPlaying(true);
+    };
+    const waitToSettle = () => {
+      if (engineRef.current?.target() != null) {
+        frame = requestAnimationFrame(waitToSettle);
+        return;
+      }
+      timer = setTimeout(resume, autoplayResume);
+    };
+    waitToSettle();
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, [autoplayResume, autoplaying, playing, hovered, focused]);
+
   const togglePlaying = () => {
+    // An explicit stop stays a stop, until this starts it again: never
+    // `autoplayResume`'s to restart.
+    resumableRef.current = false;
     if (playing) {
       setPlaying(false);
       return;
@@ -484,7 +556,10 @@ export function Root({
   /** The engine, for the user's move: it also stops autoplay, reading
    * `autoplayingRef` rather than `autoplaying` (see its comment above). */
   const userMove = () => {
-    if (autoplayingRef.current) setPlaying(false);
+    if (autoplayingRef.current) {
+      setPlaying(false);
+      resumableRef.current = true;
+    }
     return takeOver();
   };
 
@@ -542,14 +617,26 @@ export function Root({
             ) {
               takeOver();
             }
-            if (
-              autoplaying &&
-              !(event.target as Element).closest(
-                '[data-carouseldeck-autoplay-toggle]'
-              )
-            ) {
-              setPlaying(false);
+            const onToggle = (event.target as Element).closest(
+              '[data-carouseldeck-autoplay-toggle]'
+            );
+            if (autoplaying) {
+              setFocused(!onToggle);
+              if (!onToggle) {
+                setPlaying(false);
+                resumableRef.current = true;
+              }
             }
+          }}
+          onBlur={(event) => {
+            onBlur?.(event);
+            if (!autoplaying) return;
+            const next = event.relatedTarget as Element | null;
+            const stillIn = next ? event.currentTarget.contains(next) : false;
+            const onToggle = next?.closest(
+              '[data-carouseldeck-autoplay-toggle]'
+            );
+            setFocused(stillIn && !onToggle);
           }}
           onPointerEnter={(event) => {
             onPointerEnter?.(event);
