@@ -18,7 +18,9 @@ It runs every gate in order and stops at the first failure: `format:check`,
 `lint`, `typecheck`, `test` (vitest in browser mode), `test:react-18` (the
 same tests on React 18, against `@carouseldeck/react-18`'s build),
 `test:react-19` (the same, on React 19), `test:scripts`
-(the scripts' own tests), `build`, `docs:check` (the code blocks in
+(the scripts' own tests), `changeset:check` (a package changed since the
+diff's base is named in a changeset, AGENTS.md "Releasing"), `build`,
+`docs:check` (the code blocks in
 the package README and the docs type-check), `compare:check` (the
 README's and the docs' comparison table is fresh), `test:packages` (publint and attw on the
 packed tarballs, and the React entries' `'use client'`), `test:next` (a Next.js

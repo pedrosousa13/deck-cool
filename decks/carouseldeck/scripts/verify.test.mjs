@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL, URL } from 'node:url';
-import { CI_JOBS, ciJobs, gatesFor, plan, STEPS } from './verify.mjs';
+import {
+  changedSince,
+  CI_JOBS,
+  ciJobs,
+  gatesFor,
+  plan,
+  STEPS
+} from './verify.mjs';
 
 const steps = (/** @type {string[]} */ argv) =>
   plan(argv).map(({ step }) => step);
@@ -13,7 +20,21 @@ const read = (/** @type {string} */ path) =>
 test('with no arguments, every step runs, in order, with no arguments', () => {
   assert.deepEqual(
     plan([]),
-    STEPS.map((step) => ({ step, args: [] }))
+    // changeset:check always gets the base it diffs against, 'main' by
+    // default; every other step takes none.
+    STEPS.map((step) => ({
+      step,
+      args: step === 'changeset:check' ? ['--changed=main'] : []
+    }))
+  );
+});
+
+test('changeset:check gets the ref --changed resolved to, not literal main', () => {
+  assert.deepEqual(
+    plan(['--changed=HEAD^1', '--only', 'changeset:check'], () => [
+      '.changeset/quick-fox.md'
+    ]),
+    [{ step: 'changeset:check', args: ['--changed=HEAD^1'] }]
   );
 });
 
@@ -75,6 +96,18 @@ test('--shard goes to the vitest steps alone', () => {
   );
 });
 
+test('changedSince sees an untracked file outside the deck too', () => {
+  const file = fileURLToPath(
+    new URL('../../../.changeset/__verify-test__.md', import.meta.url)
+  );
+  writeFileSync(file, 'test\n');
+  try {
+    assert.ok(changedSince('HEAD').includes('.changeset/__verify-test__.md'));
+  } finally {
+    rmSync(file);
+  }
+});
+
 test('an unknown argument is refused', () => {
   assert.throws(() => plan(['--onyl', 'lint']), /unknown argument `--onyl`/);
 });
@@ -126,11 +159,14 @@ test('a change only under sites/ or packages/ needs no deck gate', () => {
   for (const path of [
     'sites/deck-cool/src/index.ts',
     'packages/brand/styles/brand.css',
-    '.changeset/quick-fox.md',
     'README.md'
   ]) {
     assert.deepEqual(gatesFor([path]), [], path);
   }
+});
+
+test('a changeset needs changeset:check alone', () => {
+  assert.deepEqual(gateNames(['.changeset/quick-fox.md']), ['changeset:check']);
 });
 
 test('a path inside the deck no rule matches needs every gate', () => {
@@ -179,7 +215,8 @@ test('a change to a deck script needs the checks and the scripts’ tests', () =
 test('a change to a script a gate runs needs every gate', () => {
   for (const path of [
     'decks/carouseldeck/scripts/verify-packaging.mjs',
-    'decks/carouseldeck/scripts/workspace-packages.mjs'
+    'decks/carouseldeck/scripts/workspace-packages.mjs',
+    'decks/carouseldeck/scripts/changeset-check.mjs'
   ]) {
     assert.deepEqual(gateNames([path]), STEPS, path);
   }

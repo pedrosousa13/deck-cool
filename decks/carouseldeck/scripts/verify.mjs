@@ -39,6 +39,9 @@ export const STEPS = [
   // The same, on React 19.
   'test:react-19',
   'test:scripts',
+  // A consumer-visible change to a released package is named in a
+  // changeset added since the diff's base (AGENTS.md, "Releasing").
+  'changeset:check',
   'build',
   // The README's and the docs package's code blocks against the built
   // packages.
@@ -71,6 +74,7 @@ export const CI_JOBS = {
     'lint',
     'typecheck',
     'test:scripts',
+    'changeset:check',
     'build',
     'docs:check',
     'compare:check',
@@ -104,6 +108,9 @@ const RULES = [
       /^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.github\/workflows\/ci\.yml)$/,
     steps: STEPS
   },
+  // A changeset needs checking whether it names every package it covers
+  // (changeset:check), wherever else it lives outside the deck.
+  { match: /^\.changeset\//, steps: ['changeset:check'] },
   { match: /^(?!decks\/carouseldeck\/)/, steps: [] },
   { match: /^decks\/carouseldeck\/packages\//, steps: STEPS },
   {
@@ -116,7 +123,7 @@ const RULES = [
   // for a step is here.
   {
     match:
-      /^decks\/carouseldeck\/scripts\/(bundle-size|compare-libraries|docs-examples|next-rsc|verify-packaging|workspace-packages)\.mjs$/,
+      /^decks\/carouseldeck\/scripts\/(bundle-size|changeset-check|compare-libraries|docs-examples|next-rsc|verify-packaging|workspace-packages)\.mjs$/,
     steps: STEPS
   },
   {
@@ -169,7 +176,7 @@ export function ciJobs(steps) {
  * @param {string} ref
  * @returns {string[]}
  */
-function changedSince(ref) {
+export function changedSince(ref) {
   const git = (/** @type {string[]} */ args) =>
     execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' })
       .split('\n')
@@ -182,7 +189,17 @@ function changedSince(ref) {
       '--no-renames',
       /** @type {string} */ (base)
     ]),
-    ...git(['ls-files', '--others', '--exclude-standard', '--full-name'])
+    // ls-files, unlike diff, scopes an untracked-file scan to the given
+    // pathspec, defaulting to cwd: ':/' asks for the whole repo, not only
+    // decks/carouseldeck/ below it.
+    ...git([
+      'ls-files',
+      '--others',
+      '--exclude-standard',
+      '--full-name',
+      '--',
+      ':/'
+    ])
   ];
 }
 
@@ -260,7 +277,11 @@ export function plan(argv, changed = changedSince) {
         ? [...args, `--project=${project}`]
         : SHARDED.includes(step) && shard
           ? [...args, `--shard=${shard}`]
-          : args
+          : // changeset:check always needs the base it diffs against, not
+            // only when --changed picked which steps to run.
+            step === 'changeset:check'
+            ? [...args, `--changed=${since ?? 'main'}`]
+            : args
   }));
 }
 
