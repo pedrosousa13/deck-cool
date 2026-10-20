@@ -184,11 +184,11 @@ slides' own, briefly stale position before the spacer's new size lands, and
 again after, to read their true settled one. The current index's own shell,
 compared between this settled reading and `known` (the last settle's own
 reading, tagged with the kind it was read under, `kindOf`), gives the whole
-shift to undo by `moveBy` -- the spacer's own share plus whatever a slide
+shift to undo by `moveBy`: the spacer's own share plus whatever a slide
 before the current one adds. `known` must be read under the _same_ kind:
 a slide added or removed moves it within shells' own kind, which this
-compensates; a kind change itself -- stacked to shells, or shells to copies
--- is `keepPlace`'s shift to make, never this one's.
+compensates; a kind change itself (stacked to shells, or shells to copies)
+is `keepPlace`'s shift to make, never this one's.
 
 **Snapping, off while shells are relaid out.** Writing a shell's or a
 spacer's new geometry under mandatory snapping can leave the viewport
@@ -199,7 +199,7 @@ to the settle it leads to, not for a refresh where nothing changed, since
 toggling it with nothing to show for it risks a phantom `scrollend`.
 
 **`overflow-anchor: none`.** Resizing the before-spacer can leave content
-above the viewport's own rest point larger or smaller than it was -- exactly
+above the viewport's own rest point larger or smaller than it was: exactly
 what the browser's own scroll anchoring reacts to, adjusting the scroll
 position on its own before the engine's next read of it. Measured in
 WebKit, its adjustment and the engine's own compensation then both move the
@@ -308,8 +308,8 @@ mismatch, which an orientation change reaches through the engine's own
 signature `syncPlacers` builds already reads `along.sign`, so the next
 settle or refresh picks it up. `forgetPlaced` cancels every placer, the
 shared unpin frame and any pinned inline `translate`, at `clearShells`'s
-own two call sites -- `refresh`, on leaving shells mode, and `destroy`, on
-unmount -- so neither outlives shells mode; `syncPlacers` already forgets a
+own two call sites (`refresh`, on leaving shells mode, and `destroy`, on
+unmount), so neither outlives shells mode; `syncPlacers` already forgets a
 placer on its own, as a side effect of `measureShells`, wherever
 `placement` itself goes null.
 
@@ -374,15 +374,15 @@ assuming it still runs along `along`, the axis current right now.
 `setOrientation` flips `vertical` and calls `refresh`, which does not
 touch `placedAt`; its next `layoutShells` call then subtracts a slide's
 still-physically-old-axis translate as if it ran along the new one. With a
-square viewport and `defaultIndex: 0` -- two of five slides at slot -1 at
-mount -- this read L as 3000, twice its true 1500.
+square viewport and `defaultIndex: 0` (two of five slides at slot -1 at
+mount), this read L as 3000, twice its true 1500.
 
 **`compensateShift` always recovers the true L by the next settle, so
 nothing paints the corrupted one.** It already re-measures whenever a
 settle's `layoutShells` reads a different L than the one before it, the
 same check a genuine resize needs; an axis-corrupted L reads as exactly
 such a change, so the existing resize path reads it again, and whatever it
-writes next -- however corrupted the slot it computes -- is self-consistent
+writes next (however corrupted the slot it computes) is self-consistent
 (an already-applied translate, read back out, always nets to the same
 untranslated home), so a further read recovers the true L regardless. CSS
 placement (`syncPlacers`'s own `placersVertical` check) never corrupts in
@@ -390,7 +390,7 @@ the first place.
 
 **What does reach the screen: each real slide's own `translate` written
 twice, not once.** The wrong read still computes a wrong slot and writes
-it, inline, before the corrected read overwrites it with the true one --
+it, inline, before the corrected read overwrites it with the true one,
 both within the same task, so neither ever paints, but the JavaScript
 path's whole point (`placedAt`'s "no further box read, mid-scroll") is
 writing a slide's own translate exactly once a settle, matching the CSS
@@ -434,7 +434,7 @@ consequence, not a silent one: copies mode's own cut-over now reads the
 same real-slide length, never a copy's own rendered box, so a consumer's
 own progress-driven `scale` (the curve recipe) no longer nudges the
 shells-or-copies boundary the few pixels its own, transformed box used to
-add or remove -- `DeckState.copies`'s own doc already says the threshold is
+add or remove: `DeckState.copies`'s own doc already says the threshold is
 "measured the same way whichever is rendered", the real slides' own layout
 rather than anything drawn on screen.
 
@@ -463,7 +463,7 @@ half-done):
 - **The CSS path and the JavaScript fallback share one
   measurement-and-positioning pass**, settled in #145: both read
   `layoutShells`, over translate neutralised the same way, and place by the
-  same `nearestSlot` -- the CSS path encoding it in each slide's keyframes,
+  same `nearestSlot`: the CSS path encoding it in each slide's keyframes,
   read fresh by `slotOf`; the JavaScript path calling `place`, which calls
   `nearestSlot` directly. Neither path owns its own geometry.
 

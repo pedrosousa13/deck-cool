@@ -6,8 +6,8 @@ needs a permissive license and release cadence of its own, so slidedeck lives
 in its own repo under MIT, published as `@slidedeck/core` and
 `@slidedeck/react` (the bare `slidedeck` npm name is taken).
 
-Tooling is copied from playdeck — turbo, changesets, storybook, a docs site,
-bundle and library-comparison scripts, one `pnpm verify` — rather than shared
+Tooling is copied from playdeck (turbo, changesets, storybook, a docs site,
+bundle and library-comparison scripts, one `pnpm verify`) rather than shared
 through a monorepo with it. The two share no code; a merged repo would tangle
 their CI and releases for nothing. Revisit if real code becomes shared.
 

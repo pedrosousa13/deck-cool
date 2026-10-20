@@ -37,9 +37,9 @@ wherever the deck's slides are placed right now.
 **A box's start is independent of a consumer's own transform on it.** Its
 centre, from `getBoundingClientRect()`, less half its true, untransformed
 size (`borderBoxSize`, the same subpixel measure `layoutShells` already
-reads a real slide's size by). A centred `scale` -- a common progress
+reads a real slide's size by). A centred `scale` (a common progress
 recipe, reading `--deck-slide-progress`, scales a slide by a different
-factor from its neighbours -- leaves a box's centre where it is; measuring
+factor from its neighbours) leaves a box's centre where it is; measuring
 from either edge instead does not, and skews the step by however much the
 scale differs from one settle's focal slide to the next's. Curve transforms
 only a slide's content, never its own box (ADR-0008), so it was never

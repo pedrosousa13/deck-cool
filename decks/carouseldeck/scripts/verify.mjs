@@ -130,6 +130,12 @@ const RULES = [
     match: /^decks\/carouseldeck\/scripts\//,
     steps: ['format:check', 'lint', 'typecheck', 'test:scripts']
   },
+  // em-dash.test.mjs (test:scripts) reads these too (pedrosousa13/deck-cool#202).
+  {
+    match:
+      /^decks\/carouseldeck\/docs\/adr\/|^decks\/carouseldeck\/prototypes\/[^/]+\/FINDINGS\.md$/,
+    steps: ['format:check', 'test:scripts']
+  },
   {
     match: /^decks\/carouseldeck\/docs\/|^decks\/carouseldeck\/.*\.md$/,
     steps: ['format:check']

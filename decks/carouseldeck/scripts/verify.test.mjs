@@ -240,10 +240,18 @@ test('every script a gate runs is one that needs every gate', () => {
 test('markdown and docs in the deck need format:check alone', () => {
   for (const path of [
     'decks/carouseldeck/README.md',
-    'decks/carouseldeck/AGENTS.md',
-    'decks/carouseldeck/docs/adr/0001-native-scroll-snap-is-the-engine.md'
+    'decks/carouseldeck/AGENTS.md'
   ]) {
     assert.deepEqual(gateNames([path]), ['format:check'], path);
+  }
+});
+
+test('an ADR or a prototype’s findings need format:check and the scripts’ tests, since em-dash.test.mjs reads them', () => {
+  for (const path of [
+    'decks/carouseldeck/docs/adr/0001-native-scroll-snap-is-the-engine.md',
+    'decks/carouseldeck/prototypes/scroll-snap/FINDINGS.md'
+  ]) {
+    assert.deepEqual(gateNames([path]), ['format:check', 'test:scripts'], path);
   }
 });
 
