@@ -173,17 +173,24 @@ test('a path inside the deck no rule matches needs every gate', () => {
   for (const path of [
     'decks/carouseldeck/tests/compare/features.mjs',
     'decks/carouseldeck/prototypes/x/y.ts',
-    'decks/carouseldeck/tsconfig.base.json',
-    'decks/carouseldeck/playwright.config.ts'
+    'decks/carouseldeck/tsconfig.base.json'
   ]) {
     assert.deepEqual(gateNames([path]), STEPS, path);
   }
 });
 
-test('a change to storybook or its spec needs the build and the deck spec', () => {
+test('a change to storybook, any file under e2e/, or the playwright config needs the build and the e2e suite', () => {
   for (const path of [
     'decks/carouseldeck/apps/storybook/stories/deck.stories.tsx',
-    'decks/carouseldeck/e2e/deck.spec.ts'
+    'decks/carouseldeck/e2e/deck.spec.ts',
+    // The e2e rule covers the whole directory (pedrosousa13/deck-cool#204),
+    // not one spec by name: a helper or a new spec falls through to it too.
+    'decks/carouseldeck/e2e/bleed.spec.ts',
+    'decks/carouseldeck/e2e/open-story.ts',
+    'decks/carouseldeck/e2e/tsconfig.json',
+    // Outside e2e/, but its own tsconfig.json includes it, so typecheck
+    // reads it too.
+    'decks/carouseldeck/playwright.config.ts'
   ]) {
     assert.deepEqual(
       gatesFor([path]),
@@ -246,10 +253,14 @@ test('markdown and docs in the deck need format:check alone', () => {
   }
 });
 
-test('an ADR or a prototype’s findings need format:check and the scripts’ tests, since em-dash.test.mjs reads them', () => {
+test('an ADR or any markdown in a prototype’s directory needs format:check and the scripts’ tests, since em-dash.test.mjs reads them', () => {
   for (const path of [
     'decks/carouseldeck/docs/adr/0001-native-scroll-snap-is-the-engine.md',
-    'decks/carouseldeck/prototypes/scroll-snap/FINDINGS.md'
+    'decks/carouseldeck/prototypes/scroll-snap/FINDINGS.md',
+    // em-dash.test.mjs reads every markdown file under a prototype's
+    // directory (docs-contract.mjs's pageFiles), not FINDINGS.md alone.
+    'decks/carouseldeck/prototypes/scroll-snap/README.md',
+    'decks/carouseldeck/prototypes/viewport-bleed/README.md'
   ]) {
     assert.deepEqual(gateNames([path]), ['format:check', 'test:scripts'], path);
   }

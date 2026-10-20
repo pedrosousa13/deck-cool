@@ -113,9 +113,15 @@ const RULES = [
   { match: /^\.changeset\//, steps: ['changeset:check'] },
   { match: /^(?!decks\/carouseldeck\/)/, steps: [] },
   { match: /^decks\/carouseldeck\/packages\//, steps: STEPS },
+  // Every file under e2e/ (specs, helpers, its tsconfig.json), and the
+  // playwright config it includes, needs the e2e suite, plus the checks and
+  // the build that reach it too: typecheck (the deck's tsconfig.json
+  // references ./e2e), lint and format:check (both read the whole repo).
+  // Narrow this to ['test:e2e'] alone once typecheck, lint and format:check
+  // stop reading e2e/ (pedrosousa13/deck-cool#204).
   {
     match:
-      /^decks\/carouseldeck\/apps\/storybook\/|^decks\/carouseldeck\/e2e\/deck\.spec\.ts$/,
+      /^decks\/carouseldeck\/apps\/storybook\/|^decks\/carouseldeck\/e2e\/|^decks\/carouseldeck\/playwright\.config\.ts$/,
     steps: ['format:check', 'lint', 'typecheck', 'build', 'test:e2e']
   },
   // What a gate runs, and what those scripts import, is that gate: a change to
@@ -130,10 +136,12 @@ const RULES = [
     match: /^decks\/carouseldeck\/scripts\//,
     steps: ['format:check', 'lint', 'typecheck', 'test:scripts']
   },
-  // em-dash.test.mjs (test:scripts) reads these too (pedrosousa13/deck-cool#202).
+  // em-dash.test.mjs (test:scripts) reads these too (pedrosousa13/deck-cool#202):
+  // every markdown file under a prototype's directory, not FINDINGS.md alone
+  // (docs-contract.mjs's pageFiles walks the whole directory).
   {
     match:
-      /^decks\/carouseldeck\/docs\/adr\/|^decks\/carouseldeck\/prototypes\/[^/]+\/FINDINGS\.md$/,
+      /^decks\/carouseldeck\/docs\/adr\/|^decks\/carouseldeck\/prototypes\/[^/]+\/.*\.md$/,
     steps: ['format:check', 'test:scripts']
   },
   {
