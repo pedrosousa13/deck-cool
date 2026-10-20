@@ -490,6 +490,63 @@ describe('a new layout and a scroll whose end event never comes', () => {
     expect(onIndexChange.mock.calls).toEqual([[2]]);
   });
 
+  test.each([
+    [
+      'a wheel',
+      (viewport: HTMLElement) =>
+        viewport.dispatchEvent(new WheelEvent('wheel', { deltaX: 100 }))
+    ],
+    [
+      'a pointer the browser takes over to pan itself',
+      (viewport: HTMLElement) =>
+        // A touch or pen the browser starts panning natively sends this
+        // deck no more events until it lifts (#48); `takeOver` still runs,
+        // the same way it does for the wheel above, with `drag` never
+        // `'dragging'` -- that is the deck's own mouse drag alone, and it
+        // already has its own guard against settling mid-drag, so it is
+        // not a case of this one.
+        viewport.dispatchEvent(
+          new PointerEvent('pointercancel', {
+            pointerId: 1,
+            pointerType: 'touch',
+            isPrimary: true
+          })
+        )
+    ]
+  ])(
+    '%s right after it takes the deck over, before its scroll arrives, still waits for the scroll’s end (#208)',
+    async (_, takeOver) => {
+      const { viewport, onIndexChange, relayout } = renderDeck(5);
+      const release = withholdEnds(viewport);
+
+      // The layout lands in the same task as the input, before the scroll
+      // it causes has reached the engine at all -- deterministic, not
+      // reliant on a frame or a timer running late, so this never depends
+      // on the machine's speed. A refresh (this one, or a resize's own)
+      // that catches input still waiting on its first scroll event must
+      // not read the viewport as settled and forget it (#208): once in CI,
+      // a slow frame let a relayout's refresh land in that same gap, and
+      // the deck settled before the scroll's end came.
+      takeOver(viewport);
+      relayout(6);
+      viewport.scrollLeft = 2 * WIDTH;
+      await nextFrame();
+      await nextFrame();
+      await sleep(400);
+
+      expect(onIndexChange).not.toHaveBeenCalled();
+      release();
+      viewport.dispatchEvent(new Event('scrollend'));
+      expect(onIndexChange.mock.calls).toEqual([[2]]);
+    }
+  );
+
+  // Neither a key press nor a mouse drag belongs in that table: a key
+  // scroll resting on a snap point settles at quiet with no scroll end of
+  // its own (#163), and a mouse drag's own guard (`drag === 'dragging'`)
+  // already stops a refresh from settling mid-drag. Neither shape can show
+  // this bug, so a test of either passes with or without the fix.
+
   test('a new layout during a scroll of the page’s settles at quiet, though input that scrolls nothing comes', async () => {
     const { viewport, onIndexChange, relayout } = renderDeck(5);
     withholdEnds(viewport);

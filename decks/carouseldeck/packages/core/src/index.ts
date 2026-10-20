@@ -987,7 +987,7 @@ export function createDeck(
   const onQuiet = () => {
     const short = move !== null && !arrived(move);
     if (
-      (!short && confirm !== 'waiting') ||
+      (!short && !inputPending() && confirm !== 'waiting') ||
       viewport.ownerDocument.visibilityState === 'hidden'
     ) {
       quieted(false);
@@ -1094,6 +1094,13 @@ export function createDeck(
   // at quiet, and makes no later scroll the user's.
   let userInput = false;
   let userScroll = false;
+  // Input taken for the user's, with no scroll from it yet (#208): a wheel,
+  // key or pointer just taken over, whose own scroll a slow frame still has
+  // not delivered. Settling here, or deciding at quiet, would read the
+  // viewport at rest and forget the input (`settle` clears both), so either
+  // must wait, the same way each already waits for a scroll already going,
+  // rather than settle, or decide, out from under it.
+  const inputPending = () => userInput && !userScroll;
   // Whether the user's current input is a keyboard key, not a wheel or
   // pointer gesture (#163): a key has no finger left resting on it once it
   // stops, unlike those, so once a key scroll is quiet and already on a
@@ -1476,7 +1483,7 @@ export function createDeck(
         shape = next;
         if (keepPlace()) return;
       }
-      if (!scrolling && !move && drag !== 'dragging') {
+      if (!scrolling && !move && drag !== 'dragging' && !inputPending()) {
         settle();
         relaidAt = axis().position;
         awaitQuiet();
