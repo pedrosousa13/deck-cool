@@ -58,24 +58,44 @@ const settled = (page: Page) =>
   );
 
 interface Frame {
-  /** performance.now() when the frame was recorded, in ms. */
-  at: number;
   sheet: { top: number; left: number; width: number; height: number };
   shade: { top: number; left: number; width: number; height: number };
 }
 
+interface Close {
+  /** The sheet's and the shade's boxes, sampled on every frame until the panel is hidden. */
+  frames: Frame[];
+  /** performance.now() from the keydown or click that started the close to the panel going hidden. */
+  ms: number;
+}
+
 declare global {
   interface Window {
-    /** The time and the sheet's and the shade's boxes on each frame of a close, set by recordClose(). */
-    closeFrames?: Promise<Frame[]>;
+    /** What a close did, set by recordClose(). */
+    closeFrames?: Promise<Close>;
   }
 }
 
-/** Records the time and the switcher's sheet's and shade's boxes on every frame, from now until its panel is hidden. */
+/**
+ * Records the switcher's sheet's and shade's boxes on every frame, from now
+ * until its panel is hidden, and how long that close took: from the keydown
+ * or click that starts it to the panel going hidden, not the gap between the
+ * first and last sampled frame. A loaded runner samples rAF sparsely, which
+ * shrinks that gap well under the exit's real length even though the close
+ * runs at its usual speed (#207).
+ */
 const recordClose = (page: Page) =>
   page.evaluate(() => {
     window.closeFrames = new Promise((resolve) => {
       const frames: Frame[] = [];
+      let startedAt: number | null = null;
+      const start = (event: Event) => {
+        if (startedAt === null && (event.type === "click" || (event as KeyboardEvent).key === "Escape")) {
+          startedAt = performance.now();
+        }
+      };
+      document.addEventListener("keydown", start, { capture: true });
+      document.addEventListener("click", start, { capture: true });
       const rect = (selector: string) => {
         const element = document.querySelector(selector);
         if (element === null) throw new Error(`${selector} is missing`);
@@ -84,9 +104,12 @@ const recordClose = (page: Page) =>
       };
       const panel = document.querySelector("#family-bar-decks");
       const look = () => {
-        if (panel === null || getComputedStyle(panel).display === "none") return resolve(frames);
+        if (panel === null || getComputedStyle(panel).display === "none") {
+          document.removeEventListener("keydown", start, { capture: true });
+          document.removeEventListener("click", start, { capture: true });
+          return resolve({ frames, ms: startedAt === null ? 0 : performance.now() - startedAt });
+        }
         frames.push({
-          at: performance.now(),
           sheet: rect("#family-bar-decks .family-bar__sheet"),
           shade: rect("#family-bar-decks .family-bar__shade"),
         });
@@ -284,13 +307,15 @@ describe("the Family bar's switcher in a browser", () => {
     await recordClose(page);
     if (how === "Escape") await page.keyboard.press("Escape");
     else await page.mouse.click(width / 2, shade.y + shade.height / 2);
-    const frames = await page.evaluate(() => window.closeFrames ?? Promise.reject(new Error("not recording")));
+    const { frames, ms } = await page.evaluate(() => window.closeFrames ?? Promise.reject(new Error("not recording")));
 
-    // The exit runs for .45s. A loaded runner renders fewer frames, so count
-    // time, not frames: the frames seen must span most of the exit, 300ms,
-    // which leaves 150ms for a late first frame and an early last one.
+    // The exit runs for .45s. A loaded runner samples it on fewer frames, and
+    // sparsely, so measure the close itself, from the keydown or click to
+    // the panel going hidden, not the gap between the first and last sampled
+    // frame: that gap shrinks well under the exit's real length once frames
+    // land unevenly, even though the close still runs at its usual speed.
     expect(frames.length).toBeGreaterThanOrEqual(2);
-    expect((frames.at(-1)?.at ?? 0) - (frames[0]?.at ?? 0)).toBeGreaterThanOrEqual(300);
+    expect(ms).toBeGreaterThanOrEqual(300);
     for (const frame of frames) {
       expect(frame.sheet).toEqual({ top: sheet.y, left: sheet.x, width: sheet.width, height: sheet.height });
       expect(frame.shade).toEqual({ top: shade.y, left: shade.x, width: shade.width, height: shade.height });
