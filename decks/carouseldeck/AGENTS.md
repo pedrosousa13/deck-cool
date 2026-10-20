@@ -150,18 +150,27 @@ is published.
 
 **Publishing by hand**, when the `publish` job fails on OIDC:
 
-1. Download the tarballs the run's `verify` job packed and checked: `gh run
+1. Check the npm login first: `npm whoami` prints the maintainer's npm
+   account. If it errors or prints another account, the maintainer runs
+   `npm login`, in a real terminal, the way publishing itself needs
+   for 2FA.
+2. Download the tarballs the run's `verify` job packed and checked: `gh run
 download <run-id> -R pedrosousa13/deck-cool -D <dir>` (the artifact holds
    `publish-plan.json` and `packages/*.tgz`).
-2. From `<dir>/<artifact>/packages`, publish in the plan's order, core and
+3. From `<dir>/<artifact>/packages`, publish in the plan's order, core and
    docs first, then react and react-18, each with `npm publish ./<file>.tgz
 --access public --tag latest --provenance=false`, run in a real terminal
    so npm can wait for its browser 2FA approval (from a non-interactive
    shell npm prints the approval link and exits).
-3. npm's registry can take a few minutes to show every version: check with
-   `npm view @carouseldeck/<pkg>@<version> version` for all four before
-   going on.
-4. Re-run the failed jobs of that Release run: `gh run rerun <run-id> -R
+4. npm's registry can take a few minutes to show every version. Wait until
+   `npm view @carouseldeck/<pkg>@<version> version` prints the version for
+   all four (core, docs, react and react-18) before going on: re-running
+   earlier fails at `publish` the way the first attempt did, because npm
+   has not served the new versions yet.
+   ```sh
+   for pkg in core docs react react-18; do npm view "@carouseldeck/$pkg@<version>" version; done
+   ```
+5. Re-run the failed jobs of that Release run: `gh run rerun <run-id> -R
 pedrosousa13/deck-cool --failed`. It tags the release and deploys
    carousel.deck.cool.
 
