@@ -85,6 +85,9 @@ stale one is. A release does not stale it: carouseldeck's row has no version.
 Formatting is checked, never written by the gate. Run
 `pnpm exec prettier --write <files>` on the files you changed.
 
+Green is not enough on its own: `CODING_STANDARDS.md` holds the judgement
+rules a reviewer checks the diff against too, past what these gates enforce.
+
 ## React 18
 
 `packages/react-18` builds `packages/react/src`, unchanged, for React 18 and
