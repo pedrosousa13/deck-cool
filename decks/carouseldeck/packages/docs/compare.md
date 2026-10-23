@@ -5,8 +5,28 @@ description: 'How carouseldeck compares with Embla and Keen Slider: native scrol
 ---
 
 Embla and Keen move slides with transforms and their own physics. Carouseldeck
-lets the browser scroll. `pnpm compare` measures the size column from pinned
-installs, and CI fails if this table is stale.
+lets the browser scroll.
+
+## Why carouseldeck is bigger
+
+Carouseldeck is about 5 KB bigger than Embla and 6 KB bigger than Keen. Embla
+and Keen give you an engine, and the markup, controls and accessibility are
+yours to write. Carouseldeck ships them:
+
+- Accessibility: a labelled carousel, slides labelled "n of m", a live region
+  that announces your moves but not autoplay's, and focus kept safe while the
+  deck moves.
+- Controls: Previous and Next, dots, a counter and an autoplay toggle.
+- Server HTML that is correct before hydration.
+
+In return, the browser does the scrolling. The deck stays smooth while the
+page is busy, scrolls before its JavaScript loads, and takes touch, trackpad,
+wheel and keyboard input the way any page does.
+
+## The numbers
+
+`pnpm compare` measures the size column from pinned installs, and CI fails if
+this table is stale.
 
 | Library                | Version   | Min+gzip | Native scroll                                    | Accessibility out of the box                                                                                                                      | API shape                                                                                          |
 | ---------------------- | --------- | -------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
