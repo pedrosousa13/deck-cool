@@ -1,5 +1,13 @@
 # @slidedeck/react
 
+## 1.5.2
+
+### Patch Changes
+
+- a4d9608: The deck removes the listeners it adds for its whole life with one `AbortController` when it is destroyed, in place of a `removeEventListener` call for each. The bundle is smaller, and a listener can no longer outlive the deck because its removal did not match how it was added.
+- Updated dependencies [a4d9608]
+  - @carouseldeck/core@1.5.2
+
 ## 1.5.1
 
 ### Patch Changes

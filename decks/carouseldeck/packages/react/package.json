@@ -1,6 +1,6 @@
 {
   "name": "@carouseldeck/react",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Headless, composable React 19 carousel primitives built on native scroll snap.",
   "license": "MIT",
   "homepage": "https://carousel.deck.cool",
