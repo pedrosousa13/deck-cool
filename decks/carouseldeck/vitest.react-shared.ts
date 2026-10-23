@@ -47,6 +47,9 @@ export function reactConfig(reactRoot: string, excluded: string[]) {
     },
     test: {
       ...base.test,
+      // Chromium alone: these runs check the React version, and the WebKit
+      // tests check the engine, which `pnpm test` already runs in WebKit.
+      browser: { ...base.test?.browser, instances: [{ browser: 'chromium' }] },
       include: [
         'packages/react/test/**/*.test.{ts,tsx}',
         'packages/react-18/test/**/*.test.{ts,tsx}'

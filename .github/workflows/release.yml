@@ -8,8 +8,8 @@ name: Release
 #   by hand, and the merge is the release.
 # - "publish": no changeset is pending, and npm lacks a version in the tree.
 #   That is the push of a merged version PR, but also a re-run after a
-#   version reached npm some other way, such as a hand publish. `verify` runs
-#   the deck's whole `pnpm verify` and packs the tarballs it checked,
+#   version reached npm some other way, such as a hand publish. `verify`
+#   waits for CI to pass on this commit, then builds and packs the tarballs,
 #   `publish` publishes what it can, `tag` tags every version npm has but
 #   GitHub does not yet, however it got there, and `deploy` starts a run of
 #   `deploy-carouseldeck.yml` that publishes carousel.deck.cool whenever
@@ -26,7 +26,7 @@ on:
 # credential (`id-token: write`, `NPM_TOKEN`) is only in `publish`, which
 # cannot write to the repo and runs none of it but `publish-packed.mjs`:
 # Node's built-ins, no install, nothing from a lockfile. The tarballs it
-# publishes are the ones `verify`'s whole `pnpm verify` already checked.
+# publishes are the ones `verify` built from the commit CI passed.
 permissions:
   contents: read
 
@@ -115,12 +115,29 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+      actions: read # CI's run on this commit
     outputs:
       pack-dir-artifact-id: ${{ steps.pack.outputs.pack-dir-artifact-id }}
     steps:
-      # One runner and one `pnpm verify`, every gate. The tarballs `pack`
-      # ships are the build this job checked. No pnpm store cache and no
-      # browser cache: a restored cache is code from another run.
+      # CI, started by the same push, runs every gate this commit needs, so
+      # this job runs none again: it waits for that run and stops unless it
+      # passed. No pnpm store cache: a restored cache is code from another
+      # run.
+      - name: Wait for CI to pass on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          while :; do
+            run=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$SHA&event=push" \
+              --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")][0] | "\(.status) \(.conclusion) \(.html_url)"')
+            case "$run" in
+              "completed success "*) echo "CI passed: ${run##* }"; break ;;
+              completed*) echo "::error::CI did not pass on this commit: $run"; exit 1 ;;
+              *) echo "Waiting for CI: ${run:-not started}"; sleep 30 ;;
+            esac
+          done
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -131,11 +148,9 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --dir decks/carouseldeck exec playwright install --with-deps chromium firefox webkit
-        timeout-minutes: 15
-      - run: pnpm --dir decks/carouseldeck verify
-      # Packs the build `pnpm verify` just checked, so `publish` builds
-      # nothing itself.
+      # The build `pack` ships, and a check of the tarballs a consumer gets.
+      - run: pnpm --dir decks/carouseldeck verify --only build,test:packages
+      # Packs that build, so `publish` builds nothing itself.
       - id: pack
         uses: changesets/action/pack@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:

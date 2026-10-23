@@ -94,6 +94,26 @@ export const CI_JOBS = {
   e2e: ['test:e2e']
 };
 
+/** What changedSince appends to a package.json whose diff changes only its
+ * `version`: no path ends in it. */
+export const VERSION_ONLY = '#version-only';
+
+/**
+ * Whether a unified diff of a package.json changes its `version` line and
+ * nothing else.
+ *
+ * @param {string} diff
+ */
+export const versionOnly = (diff) => {
+  const changed = diff
+    .split('\n')
+    .filter((line) => /^[-+](?![-+]{2} )/.test(line));
+  return (
+    changed.length > 0 &&
+    changed.every((line) => /^[-+]\s*"version": "[^"]*",?$/.test(line))
+  );
+};
+
 /**
  * The gates a change needs, by path, first match wins. A path outside the
  * deck needs every gate if it is the root's package.json, pnpm-lock.yaml,
@@ -112,6 +132,18 @@ const RULES = [
   // (changeset:check), wherever else it lives outside the deck.
   { match: /^\.changeset\//, steps: ['changeset:check'] },
   { match: /^(?!decks\/carouseldeck\/)/, steps: [] },
+  // What the Version packages PR changes: a package's version alone (marked
+  // by changedSince) and its changelog. No code changed, so no test runs.
+  {
+    match: new RegExp(
+      `^decks/carouseldeck/packages/[^/]+/package\\.json${VERSION_ONLY}$`
+    ),
+    steps: ['format:check', 'changeset:check', 'test:packages']
+  },
+  {
+    match: /^decks\/carouseldeck\/packages\/[^/]+\/CHANGELOG\.md$/,
+    steps: ['format:check']
+  },
   { match: /^decks\/carouseldeck\/packages\//, steps: STEPS },
   // Every file under e2e/ (specs, helpers, its tsconfig.json), and the
   // playwright config it includes, needs the e2e suite, plus the checks and
@@ -202,7 +234,18 @@ export function changedSince(ref) {
       '--name-only',
       '--no-renames',
       /** @type {string} */ (base)
-    ]),
+    ]).map((path) =>
+      /^decks\/carouseldeck\/packages\/[^/]+\/package\.json$/.test(path) &&
+      versionOnly(
+        execFileSync(
+          'git',
+          ['diff', /** @type {string} */ (base), '--', `:/${path}`],
+          { cwd: repoRoot, encoding: 'utf8' }
+        )
+      )
+        ? `${path}${VERSION_ONLY}`
+        : path
+    ),
     // ls-files, unlike diff, scopes an untracked-file scan to the given
     // pathspec, defaulting to cwd: ':/' asks for the whole repo, not only
     // decks/carouseldeck/ below it.

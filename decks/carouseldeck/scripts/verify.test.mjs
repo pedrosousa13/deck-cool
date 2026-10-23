@@ -8,7 +8,9 @@ import {
   ciJobs,
   gatesFor,
   plan,
-  STEPS
+  STEPS,
+  VERSION_ONLY,
+  versionOnly
 } from './verify.mjs';
 
 const steps = (/** @type {string[]} */ argv) =>
@@ -167,6 +169,62 @@ test('a change only under sites/ or packages/ needs no deck gate', () => {
 
 test('a changeset needs changeset:check alone', () => {
   assert.deepEqual(gateNames(['.changeset/quick-fox.md']), ['changeset:check']);
+});
+
+test('versionOnly is true for a diff that changes only the version line', () => {
+  const bump = [
+    'diff --git a/package.json b/package.json',
+    '--- a/package.json',
+    '+++ b/package.json',
+    '@@ -1,6 +1,6 @@',
+    ' {',
+    '-  "version": "1.5.1",',
+    '+  "version": "1.5.2",'
+  ].join('\n');
+  assert.equal(versionOnly(bump), true);
+  assert.equal(versionOnly(`${bump}\n+  "private": true,`), false);
+  assert.equal(versionOnly(''), false);
+});
+
+test('a version bump and its changelog need no test, only the checks a release needs', () => {
+  assert.deepEqual(
+    gateNames([
+      `decks/carouseldeck/packages/react/package.json${VERSION_ONLY}`,
+      'decks/carouseldeck/packages/react/CHANGELOG.md',
+      '.changeset/quick-fox.md'
+    ]),
+    ['format:check', 'changeset:check', 'test:packages']
+  );
+  assert.deepEqual(
+    gateNames(['decks/carouseldeck/packages/react/package.json']),
+    STEPS
+  );
+});
+
+test('changedSince marks a package.json whose diff changes only its version', () => {
+  const path = fileURLToPath(
+    new URL('../packages/core/package.json', import.meta.url)
+  );
+  const before = readFileSync(path, 'utf8');
+  try {
+    writeFileSync(
+      path,
+      before.replace(/"version": "[^"]*"/, '"version": "0.0.0-verify-test"')
+    );
+    assert.ok(
+      changedSince('HEAD').includes(
+        `decks/carouseldeck/packages/core/package.json${VERSION_ONLY}`
+      )
+    );
+    writeFileSync(path, before.replace('{', '{\n  "private": false,'));
+    assert.ok(
+      changedSince('HEAD').includes(
+        'decks/carouseldeck/packages/core/package.json'
+      )
+    );
+  } finally {
+    writeFileSync(path, before);
+  }
 });
 
 test('a path inside the deck no rule matches needs every gate', () => {

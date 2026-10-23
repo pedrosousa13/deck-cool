@@ -1,12 +1,21 @@
 name: CI
 
-on: push
+# Not on the branch the Changesets action pushes while it builds the Version
+# packages PR: its commit is pushed again as changeset-release/main, which CI
+# checks.
+on:
+  push:
+    branches-ignore:
+      - 'changesets-ghcommit-temp/**'
 
 permissions:
   contents: read
 
 jobs:
   sites:
+    needs: changes
+    # Skipped on a push to main whose tree a PR's CI already passed.
+    if: needs.changes.outputs.verified != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -48,10 +57,20 @@ jobs:
   # push; the commit before the push on a push to main, which lands squashed
   # PRs, so that is one PR's change. No install: the script uses Node's
   # built-ins only. Prints `<job>=true|false` for each job below.
+  #
+  # A push to main runs no gate when CI already passed on the head of a PR
+  # that the commit merged, and that head has the same tree: the squash
+  # changed no file, so CI would check the same files again. A tree that
+  # differs, as when main moved before the merge, runs the gates as usual.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # the PR head's CI runs
+      pull-requests: read # the PR the commit merged
     outputs:
+      verified: ${{ steps.plan.outputs.verified }}
       base: ${{ steps.plan.outputs.base }}
       checks: ${{ steps.plan.outputs.checks }}
       unit: ${{ steps.plan.outputs.unit }}
@@ -70,12 +89,30 @@ jobs:
         env:
           REF: ${{ github.ref }}
           BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
+          verified=false
           if [ "$REF" = "refs/heads/main" ]; then
             base="$BEFORE"
+            tree=$(git rev-parse "HEAD^{tree}")
+            for head in $(gh api "repos/$GH_REPO/commits/$SHA/pulls" --jq '.[].head.sha'); do
+              [ "$(gh api "repos/$GH_REPO/git/commits/$head" --jq .tree.sha)" = "$tree" ] || continue
+              passed=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$head&status=success" \
+                --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")] | length')
+              if [ "$passed" -gt 0 ]; then
+                verified=true
+                echo "CI passed on $head, the head of a PR this commit merged, with the same tree. No gate runs."
+                # Nothing changed since HEAD, so every job prints false.
+                base="$SHA"
+                break
+              fi
+            done
           else
             base=$(git merge-base origin/main HEAD)
           fi
+          echo "verified=$verified" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
           node decks/carouseldeck/scripts/verify.mjs "--changed=$base" --dry-run
           node decks/carouseldeck/scripts/verify.mjs "--changed=$base" --ci-jobs | tee -a "$GITHUB_OUTPUT"

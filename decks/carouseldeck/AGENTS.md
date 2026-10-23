@@ -61,8 +61,13 @@ replace running `pnpm verify` locally; it catches the time you forgot.
 
 `verify` is the one check main requires: it fails if a
 gate job failed or was cancelled, and passes if each passed or was skipped as
-the change did not need it. `release.yml` still runs the whole `pnpm verify`
-in one job before it publishes.
+the change did not need it. A push to `main` runs no gate when CI already
+passed on the head of the PR it merged and that head has the same tree, and
+`release.yml` runs no gate again: it waits for CI to pass on the commit, then
+builds and packs. A diff that only bumps package versions and writes
+changelogs, as the Version packages PR does, runs `format:check`,
+`changeset:check` and `test:packages` alone. The React 18 and React 19 runs
+use Chromium alone: the WebKit tests check the engine, which `unit` runs.
 
 Both browser suites drive Playwright's Chromium, and the e2e suite also
 drives its Firefox and WebKit, and vitest its WebKit for the tests of what
@@ -119,9 +124,9 @@ nothing, then:
   which bumps the versions and writes the changelogs. Nothing is published.
   It opens the PR with a token from the `deck-cool-releases` App, so CI runs
   on it.
-- after that PR merges, it runs the whole `pnpm verify`, publishes the
+- after that PR merges, it waits for CI to pass on the merge, publishes the
   versions npm does not have yet, with provenance, from the tarballs the
-  verify job packed, then tags every version npm has but GitHub does not yet,
+  verify job built and packed, then tags every version npm has but GitHub does not yet,
   however it reached npm, and creates its GitHub release. Once that succeeds,
   it dispatches a run of `deploy-carouseldeck.yml` with `apply`, which
   deploys carousel.deck.cool at the latest `@carouseldeck/react` release.
@@ -154,7 +159,7 @@ is published.
    account. If it errors or prints another account, the maintainer runs
    `npm login`, in a real terminal, the way publishing itself needs
    for 2FA.
-2. Download the tarballs the run's `verify` job packed and checked: `gh run
+2. Download the tarballs the run's `verify` job packed: `gh run
 download <run-id> -R pedrosousa13/deck-cool -D <dir>` (the artifact holds
    `publish-plan.json` and `packages/*.tgz`).
 3. From `<dir>/<artifact>/packages`, publish in the plan's order, core and
