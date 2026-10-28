@@ -220,18 +220,48 @@ importers:
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.11.0(supports-color@10.2.2))
+      '@playwright/test':
+        specifier: 1.63.0
+        version: 1.63.0
+      '@testing-library/react':
+        specifier: 16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@types/node':
         specifier: 26.6.3
         version: 26.6.3
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitest/browser':
+        specifier: 4.1.11
+        version: 4.1.11(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)
+      '@vitest/browser-playwright':
+        specifier: 4.1.11
+        version: 4.1.11(playwright@1.63.0)(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)
       eslint:
         specifier: 10.11.0
         version: 10.11.0(supports-color@10.2.2)
+      eslint-plugin-react-hooks:
+        specifier: 7.1.1
+        version: 7.1.1(eslint@10.11.0(supports-color@10.2.2))(supports-color@10.2.2)
       globals:
         specifier: 17.12.0
         version: 17.12.0
+      playwright:
+        specifier: 1.63.0
+        version: 1.63.0
       prettier:
         specifier: 3.9.9
         version: 3.9.9
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -250,6 +280,9 @@ importers:
 
   decks/drawerdeck/packages/react:
     dependencies:
+      '@drawerdeck/core':
+        specifier: workspace:*
+        version: link:../core
       react:
         specifier: '>=19 <20'
         version: 19.3.0
@@ -257,6 +290,12 @@ importers:
         specifier: '>=19 <20'
         version: 19.3.0(react@19.3.0)
     devDependencies:
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 19.3.0
+        version: 19.3.0(@types/react@19.3.0)
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -5308,7 +5347,6 @@ snapshots:
       - msw
       - utf-8-validate
       - vite
-    optional: true
 
   '@vitest/browser@4.1.11(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)':
     dependencies:
@@ -5361,7 +5399,6 @@ snapshots:
       - msw
       - utf-8-validate
       - vite
-    optional: true
 
   '@vitest/expect@3.2.4':
     dependencies:

@@ -8,5 +8,6 @@
     "rootDir": "src",
     "tsBuildInfoFile": ".tsbuildinfo"
   },
+  "references": [{ "path": "../core" }],
   "include": ["src"]
 }
