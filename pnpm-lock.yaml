@@ -217,6 +217,9 @@ importers:
 
   decks/drawerdeck:
     devDependencies:
+      '@arethetypeswrong/cli':
+        specifier: 0.18.5
+        version: 0.18.5
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.11.0(supports-color@10.2.2))
@@ -256,6 +259,9 @@ importers:
       prettier:
         specifier: 3.9.9
         version: 3.9.9
+      publint:
+        specifier: 0.3.24
+        version: 0.3.24
       react:
         specifier: 19.3.0
         version: 19.3.0

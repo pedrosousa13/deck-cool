@@ -9,9 +9,11 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "build": "pnpm --filter \"./**\" --filter \"!drawerdeck\" build",
+    "test:packages": "node scripts/verify-packaging.mjs",
     "verify": "node scripts/verify.mjs"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.63.0",
     "@testing-library/react": "16.3.3",
@@ -25,6 +27,7 @@
     "globals": "17.12.0",
     "playwright": "1.63.0",
     "prettier": "3.9.9",
+    "publint": "0.3.24",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "typescript": "6.0.3",
