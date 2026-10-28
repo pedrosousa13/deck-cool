@@ -1,6 +1,6 @@
 // The home page at /: a trimmed version of GLOSSARY.md's "The landing pages'
-// message", since the beta API is not built yet (#240). A server component:
-// it ships no JavaScript of its own but the demo, which is an island.
+// message". A server component: it ships no JavaScript of its own but the
+// demo, which is an island.
 import { umbrella } from "@deck-cool/brand/decks";
 import { drawerdeck } from "./drawerdeck.ts";
 import Quickstart from "./demos/example-quickstart.tsx";
@@ -34,9 +34,8 @@ export default function Landing() {
         <div className="home-band__text">
           <h2 id="demo">See the shape of it</h2>
           <p>
-            {"@drawerdeck/core"} and {"@drawerdeck/react"} are still placeholders while the beta is built (#240), so
-            the drawer below is a static mock, not a live one. It will be replaced with a live {"<Drawer.*>"} demo
-            once the engine and the primitives land.
+            This is {"@drawerdeck/react"}'s own {"<Drawer.*>"} parts, live. Press Open, then drag or scroll
+            between half and full. Close it with Escape, an outside press or Done.
           </p>
         </div>
         <Quickstart />

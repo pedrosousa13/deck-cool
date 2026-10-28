@@ -1,5 +1,6 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { fileURLToPath } from "node:url";
+import type { Page } from "playwright";
 import { describe, expect, test, vi } from "vitest";
 import { browserHarness, islandsHydrated } from "@deck-cool/site-kit/browser-test";
 import { REPOSITORY } from "../components/links.ts";
@@ -49,25 +50,96 @@ describe.each(PAGES)("%s in a browser", (path) => {
   });
 });
 
-describe("the home page's demo mock in a browser", () => {
+describe("the home page's install command in a browser", () => {
   // The page's script is its islands', so a click selects the command for copying instead.
   test("one click on the install command selects all of it, and nothing else", async () => {
     const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     await page.locator(".home-install code").click();
     expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("pnpm add @drawerdeck/react");
   });
+});
 
-  test("Open shows the mock panel, and Done hides it, under the CSP", async () => {
-    const { page, violations } = await visit("/", { width: 1280, reducedMotion: "reduce" });
+// The live drawer (components/demos/example-quickstart.tsx) on the home page
+// and the Quickstart docs page: the same island, so a thorough pass on one
+// plus a lighter check on the other covers both.
+describe("the live drawer in a browser", () => {
+  const LIVE_DRAWER_PAGES = ["/", "/docs/quickstart/"] as const;
+
+  // A close or an open settles on the engine's own scrollend (or, lacking
+  // native support, its 120ms debounce): longer than expect.poll's default
+  // 1s, so a slow frame under load does not flake this.
+  const SETTLE = { timeout: 5000 };
+
+  // Escape and a drag both no-op outside the engine's 'open' phase (not
+  // 'opening'): wait for that, not just the <dialog>'s own open attribute,
+  // which the engine sets as soon as the opening scroll starts.
+  const openDrawer = async (page: Page) => {
+    const drawer = page.locator(".drawer-demo");
+    const panel = drawer.locator("[data-drawerdeck-panel]");
+    await drawer.getByRole("button", { name: "Open" }).click();
+    await expect.poll(() => panel.getAttribute("data-phase"), SETTLE).toBe("open");
+    return drawer;
+  };
+
+  test.each(LIVE_DRAWER_PAGES)("%s: Open shows the drawer, open at its first snap point, under the CSP", async (path) => {
+    const { page, violations } = await visit(path, { width: 1280, reducedMotion: "reduce" });
     await islandsHydrated(page);
-    const mock = page.locator(".drawer-mock");
-    const popup = mock.locator(".drawer-mock__popup");
-    expect(await popup.isVisible()).toBe(false);
-    await mock.getByRole("button", { name: "Open" }).click();
-    await expect.poll(() => popup.isVisible()).toBe(true);
-    await mock.getByRole("button", { name: "Done" }).click();
-    await expect.poll(() => popup.isVisible()).toBe(false);
+    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    expect(await popup.getAttribute("open")).toBeNull();
+    const drawer = await openDrawer(page);
+    expect(await popup.getAttribute("open")).not.toBeNull();
+    expect(await drawer.locator("[data-drawerdeck-panel]").getAttribute("data-snap-index")).toBe("0");
     expect(await violations()).toEqual([]);
+  });
+
+  test.each(LIVE_DRAWER_PAGES)("%s: Escape closes the drawer", async (path) => {
+    const { page } = await visit(path, { width: 1280, reducedMotion: "reduce" });
+    await islandsHydrated(page);
+    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    await openDrawer(page);
+    await page.keyboard.press("Escape");
+    await expect.poll(() => popup.getAttribute("open"), SETTLE).toBeNull();
+  });
+
+  test("Done closes the drawer", async () => {
+    const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });
+    await islandsHydrated(page);
+    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    const drawer = await openDrawer(page);
+    await drawer.getByRole("button", { name: "Done" }).click();
+    await expect.poll(() => popup.getAttribute("open"), SETTLE).toBeNull();
+  });
+
+  test("dragging the handle up snaps the drawer from half to full", async () => {
+    const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });
+    await islandsHydrated(page);
+    const drawer = await openDrawer(page);
+    const panel = drawer.locator("[data-drawerdeck-panel]");
+    const handle = await drawer.locator("[data-drawerdeck-handle]").boundingBox();
+    if (!handle) throw new Error("the handle has no box");
+    const x = handle.x + handle.width / 2;
+    const y = handle.y + handle.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y - 500, { steps: 10 });
+    await page.mouse.up();
+    await expect.poll(() => panel.getAttribute("data-snap-index"), SETTLE).toBe("1");
+  });
+
+  test("dragging the handle down past the lowest snap point closes the drawer", async () => {
+    const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });
+    await islandsHydrated(page);
+    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    const drawer = await openDrawer(page);
+    const handle = await drawer.locator("[data-drawerdeck-handle]").boundingBox();
+    if (!handle) throw new Error("the handle has no box");
+    const x = handle.x + handle.width / 2;
+    const y = handle.y + handle.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + 500, { steps: 10 });
+    await page.mouse.up();
+    await expect.poll(() => popup.getAttribute("open"), SETTLE).toBeNull();
   });
 });
 

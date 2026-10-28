@@ -163,11 +163,11 @@ describe("the home page", () => {
     expect(links(hero)).toEqual([["Read the docs", "/docs/"]]);
   });
 
-  test("the demo: a static mock, marked as a TODO for #240, not a performance or completeness claim", () => {
+  test("the demo: a live drawer, not a performance or completeness claim", () => {
     const section = sections()[1];
     expect(text(section?.querySelector("h2"))).toBe("See the shape of it");
-    expect(section?.textContent).toMatch(/placeholder/i);
-    expect(section?.querySelector(".drawer-mock")).not.toBeNull();
+    expect(section?.textContent).not.toMatch(/placeholder|static mock/i);
+    expect(section?.querySelector(".drawer-demo")).not.toBeNull();
   });
 
   test("why native scrolling: links the guide, and claims nothing about performance", () => {
@@ -291,7 +291,7 @@ describe("the docs, from @drawerdeck/docs", () => {
     const doc = parse(`${href.slice(1)}index.html`);
     expect(demosOn(doc)).toEqual(demos);
     for (const island of doc.querySelectorAll("article fw-island")) {
-      expect(island.querySelector(".drawer-mock"), island.outerHTML.slice(0, 120)).not.toBeNull();
+      expect(island.querySelector(".drawer-demo"), island.outerHTML.slice(0, 120)).not.toBeNull();
     }
   });
 

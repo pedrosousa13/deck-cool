@@ -254,17 +254,19 @@ main .home-family .home-more {
   }
 }
 
-/* The static drawer mock (components/demos/example-quickstart.tsx), a TODO
-   for #240 to replace with a live `<Drawer.*>` deck. */
+/* The live drawer demo (components/demos/example-quickstart.tsx), on the home
+   page and the Quickstart docs page. The engine (@drawerdeck/core) sets the
+   popup's, the viewport's and the backdrop's structural styles inline; this
+   is only the look of the panel and its parts. */
 
-.drawer-mock {
+.drawer-demo {
   position: relative;
   display: flex;
   justify-content: center;
   min-height: 160px;
 }
 
-.drawer-mock__trigger {
+.drawer-demo__trigger {
   min-height: 44px;
   padding: 0 22px;
   border: 0;
@@ -275,53 +277,55 @@ main .home-family .home-more {
   cursor: pointer;
 }
 
-.drawer-mock__popup {
-  display: none;
+.drawer-demo__backdrop {
+  background: rgb(0 0 0 / calc(var(--drawer-progress, 0) * 0.5));
 }
 
-.drawer-mock__popup[data-open] {
-  display: block;
-  position: absolute;
-  inset: 0;
-}
-
-.drawer-mock__backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgb(0 0 0 / 0.5);
-}
-
-.drawer-mock__panel {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
+.drawer-demo__panel {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   padding: 12px 20px 24px;
   border-radius: 16px 16px 0 0;
   background-color: var(--ground-raised);
   text-align: center;
 }
 
-.drawer-mock__handle {
+.drawer-demo__handle {
   width: 36px;
   height: 4px;
   margin: 0 auto 16px;
   border-radius: var(--radius-pill);
   background-color: var(--rule);
+  flex-shrink: 0;
 }
 
-.drawer-mock__title {
+.drawer-demo__title {
   margin: 0 0 8px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
-.drawer-mock__content {
+.drawer-demo__content {
+  flex: 1;
+  min-height: 0;
+}
+
+.drawer-demo__list {
   margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.drawer-demo__list li {
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--rule);
   color: var(--text-secondary);
 }
 
-.drawer-mock__close {
+.drawer-demo__close {
   min-height: 44px;
   padding: 0 22px;
   border: 0;
@@ -330,6 +334,7 @@ main .home-family .home-more {
   color: var(--text);
   font: inherit;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* The docs layout (components/docs-page.tsx): a sidebar, then the article. */

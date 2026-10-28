@@ -18,8 +18,8 @@ test("allows scripts and images from the site only", () => {
   }
 });
 
-test("allows stylesheets from the site only", () => {
-  expect(directives.get("style-src")).toEqual(["'self'"]);
+test("allows stylesheets from the site, and one exact hash for the drawer engine's injected reset", () => {
+  expect(directives.get("style-src")).toEqual(["'self'", "'sha256-jkOL0hGHI4K51cPMz60FCppWKNrlHNV2XDWJmueIR0s='"]);
 });
 
 test("allows inline style attributes, and no other inline source", () => {

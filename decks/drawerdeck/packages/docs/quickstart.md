@@ -33,6 +33,6 @@ content height, capped by its own CSS `max-height`. `Drawer.Popup` renders
 the `<dialog>` on the top layer, so it needs no portal.
 
 This is the beta API proposed in #234. `@drawerdeck/core` and
-`@drawerdeck/react` are still placeholders (#240), so this example does not
-run yet; the demo above is a static mock, marked for #240 to replace with a
-live one.
+`@drawerdeck/react` left the placeholder stage in #240, so the demo above is
+live. Drag or scroll it between half and full, and close it with Escape, an
+outside press or Done.
