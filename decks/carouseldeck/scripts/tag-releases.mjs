@@ -15,12 +15,14 @@
 // and holds no npm credential.
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
-import { publishablePackages } from './workspace-packages.mjs';
+import { publishablePackagesInDecks } from './workspace-packages.mjs';
 
-const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+// This script releases every in-repo deck, not carouseldeck alone, so it
+// reads the monorepo root, two levels above this file's own deck.
+const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
 
 /**
  * @typedef {{ name: string; version: string }} Version
@@ -180,11 +182,21 @@ const main = async () => {
   if (!sha) throw new Error('GITHUB_SHA is not set.');
   /** @type {Version[]} */
   const published = JSON.parse(process.env.PUBLISHED_PACKAGES || '[]');
-  const releases = publishablePackages(repoRoot).map(({ path, manifest }) => ({
-    name: manifest.name,
-    version: manifest.version,
-    changelog: readFileSync(join(path, 'CHANGELOG.md'), 'utf8')
-  }));
+  // A package Changesets has never versioned yet, such as a deck's first
+  // hand-set beta, has no CHANGELOG.md: its release notes are empty, not a
+  // crash.
+  const releases = publishablePackagesInDecks(repoRoot).map(
+    ({ path, manifest }) => {
+      const changelogPath = join(path, 'CHANGELOG.md');
+      return {
+        name: manifest.name,
+        version: manifest.version,
+        changelog: existsSync(changelogPath)
+          ? readFileSync(changelogPath, 'utf8')
+          : ''
+      };
+    }
+  );
 
   await tagReleases({
     releases,
