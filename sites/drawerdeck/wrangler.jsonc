@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Workers Static Assets, no Worker code. Runbook: docs/deploy.md.
+  "name": "drawerdeck",
+  // Not a secret: an account ID grants nothing without a token.
+  "account_id": "c0bf36f52ec4652dabdacd6538b54983",
+  "compatibility_date": "2026-10-01",
+  // One address: drawer.deck.cool, and no workers.dev one.
+  "workers_dev": false,
+  "routes": [{ "pattern": "drawer.deck.cool", "custom_domain": true }],
+  "assets": {
+    "directory": "./site",
+    "html_handling": "auto-trailing-slash",
+    // No 404 page: .assetsignore keeps the adapter's fallback out of the upload.
+    "not_found_handling": "none"
+  }
+}
