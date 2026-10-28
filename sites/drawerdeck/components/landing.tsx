@@ -51,6 +51,9 @@ export default function Landing() {
           <a className="home-more" href="/docs/guides/why-native-scrolling/">
             Read why ›
           </a>
+          <a className="home-more" href="/docs/compare/">
+            See the comparison ›
+          </a>
         </div>
       </section>
 

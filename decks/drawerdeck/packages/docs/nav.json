@@ -1,5 +1,6 @@
 [
   { "label": "Getting started", "pages": ["index.md", "install.md", "quickstart.md"] },
   { "label": "Reference", "pages": ["reference/parts.md"] },
-  { "label": "Guides", "pages": ["guides/why-native-scrolling.md"] }
+  { "label": "Guides", "pages": ["guides/why-native-scrolling.md"] },
+  { "label": "Compare", "pages": ["compare.md"] }
 ]

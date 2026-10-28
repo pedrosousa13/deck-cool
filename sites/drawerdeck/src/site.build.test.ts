@@ -173,7 +173,10 @@ describe("the home page", () => {
   test("why native scrolling: links the guide, and claims nothing about performance", () => {
     const section = sections()[2];
     expect(text(section?.querySelector("h2"))).toBe("Why native scrolling");
-    expect(links(section)).toEqual([["Read why ›", "/docs/guides/why-native-scrolling/"]]);
+    expect(links(section)).toEqual([
+      ["Read why ›", "/docs/guides/why-native-scrolling/"],
+      ["See the comparison ›", "/docs/compare/"],
+    ]);
     expect(section?.textContent).not.toMatch(/faster|smoother|lighter|benchmark/i);
   });
 
@@ -210,12 +213,22 @@ describe("every page", () => {
     }
   });
 
+  // The compare page cites primary sources: deck-cool's own issues and ADRs (still its own
+  // repo, not the maintainer's profile), and vaul's and Base UI's own repos, so a reader can
+  // check each claim against where it comes from.
+  const COMPARE_PAGE = "docs/compare/index.html";
+  const OWN_REPO = "https://github.com/pedrosousa13/deck-cool/";
+  const RIVAL_REPOS = ["https://github.com/emilkowalski/vaul/", "https://github.com/mui/base-ui/"];
+
   // GLOSSARY.md: each package site links its own deck's repo, never the maintainer's profile.
   test.each(readdirSync(OUT, { recursive: true, encoding: "utf8" }).filter((file) => file.endsWith(".html")))(
     "%s links nothing on github.com but drawerdeck's repo",
     (file) => {
       const html = readFileSync(`${OUT}/${file}`, "utf8");
       for (const [, href] of html.matchAll(/href="(https?:\/\/(?:[^/"]+\.)?github\.com[^"]*)"/gi)) {
+        if (file === COMPARE_PAGE && (href.startsWith(OWN_REPO) || RIVAL_REPOS.some((repo) => href.startsWith(repo)))) {
+          continue;
+        }
         expect(href).toBe(REPOSITORY);
       }
     },
