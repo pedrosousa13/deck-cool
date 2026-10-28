@@ -1,0 +1,13 @@
+{
+  "name": "@drawerdeck/docs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The drawerdeck docs as markdown, at the version of the code they document, for deck.cool to build the docs site from.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pedrosousa13/deck-cool.git",
+    "directory": "decks/drawerdeck/packages/docs"
+  },
+  "files": ["**/*.md", "nav.json", "assets"]
+}
