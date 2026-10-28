@@ -4,8 +4,8 @@ deck.cool is the umbrella for a family of small, unstyled React packages, each n
 
 ## Vocabulary
 
-- **Deck**: one package in the family (carouseldeck, playdeck, pagedeck). Its site lives here, and its source lives either here or in its own repo.
-- **In-repo deck**: a deck whose source lives in this repo, under `decks/<deck>/`. slidedeck is the first, renamed carouseldeck as it moves in. See ADR 0002.
+- **Deck**: one package in the family (carouseldeck, playdeck, pagedeck, drawerdeck). Its site lives here, and its source lives either here or in its own repo.
+- **In-repo deck**: a deck whose source lives in this repo, under `decks/<deck>/`. slidedeck is the first, renamed carouseldeck as it moves in; drawerdeck is the second, set up directly here (#231). See ADR 0002.
   _Avoid_: internal deck, monorepo deck
 - **Outside deck**: a deck whose source still lives in its own repo. Its site follows its releases through a bump PR (ADR 0001).
   _Avoid_: external deck, remote deck

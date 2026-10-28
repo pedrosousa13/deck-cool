@@ -45,6 +45,16 @@ root with `pnpm --dir decks/carouseldeck <script>`, and
 0002). Its own ADRs are at `decks/carouseldeck/docs/adr/`, numbered on their
 own. `decks/carouseldeck/AGENTS.md` covers what's specific to working in it.
 
+## drawerdeck
+
+Its source lives in `decks/drawerdeck/`. Run its commands from the repo
+root with `pnpm --dir decks/drawerdeck <script>`, and
+`pnpm --dir decks/drawerdeck verify` before landing a change to it. Its own
+ADRs are at `decks/drawerdeck/docs/adr/`, numbered on their own.
+`decks/drawerdeck/AGENTS.md` covers what's specific to working in it. Both
+its packages are placeholders (#231): the engine and the primitives wait on
+#230's map.
+
 ## Releasing a deck
 
 This section is for the decks that live in their own repos. carouseldeck lives in this repo, and its sites use it from the workspace, so it sends no dispatch and gets no bump PR (ADR 0002). It releases with Changesets, from `.changeset/` at the root, and `.github/workflows/release.yml`: a consumer-visible change to its packages needs a changeset (`pnpm changeset`), and the release runbook is `decks/carouseldeck/AGENTS.md`, "Releasing".
