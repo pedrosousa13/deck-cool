@@ -4,11 +4,12 @@ import { decks, umbrella } from "./decks.ts";
 
 const PUBLIC = new URL("../public/", import.meta.url);
 
-test("the decks are exactly carouseldeck, playdeck and pagedeck", () => {
+test("the decks are exactly carouseldeck, playdeck, pagedeck and drawerdeck", () => {
   expect(decks.map((deck) => deck.name)).toEqual([
     "carouseldeck",
     "playdeck",
     "pagedeck",
+    "drawerdeck",
   ]);
 });
 
@@ -17,6 +18,7 @@ test("each deck links to its site", () => {
     "https://carousel.deck.cool",
     "https://play.deck.cool",
     "https://page.deck.cool",
+    "https://drawer.deck.cool",
   ]);
 });
 
@@ -100,5 +102,6 @@ test("each deck has one figure", () => {
     carouseldeck: { source: "carouseldeck-readme", label: "for a carousel with Prev and Next", note: "min+gzip, React external" },
     playdeck: { value: "0", label: "requests to YouTube or Vimeo before play" },
     pagedeck: { value: "0 B", label: "of JavaScript on a page with nothing interactive" },
+    drawerdeck: { value: "0", label: "third-party libraries driving the drag" },
   });
 });
