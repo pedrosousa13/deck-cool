@@ -1,0 +1,26 @@
+{
+  "name": "@drawerdeck/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Framework-neutral engine for drawerdeck, a headless drawer built on native scrolling.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.d.ts.map",
+    "!dist/.tsbuildinfo*"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

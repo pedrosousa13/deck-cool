@@ -11,6 +11,10 @@ packages:
   - decks/carouseldeck/apps/*
   - decks/carouseldeck/tests/compare
   - decks/carouseldeck/prototypes/scroll-snap
+  # drawerdeck, an in-repo deck (#231): its root package, for its scripts and
+  # dev dependencies, and its two placeholder packages.
+  - decks/drawerdeck
+  - decks/drawerdeck/packages/*
 # wrangler deploy runs without esbuild's and workerd's install scripts: the
 # Worker has no code to bundle or run, only static assets.
 allowBuilds:
