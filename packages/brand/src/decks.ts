@@ -122,7 +122,7 @@ export const drawerdeck: Deck<LiteralFigure> = {
   install: "pnpm add @drawerdeck/react",
   figure: { value: "0", label: "third-party libraries driving the drag" },
   url: "https://drawer.deck.cool",
-  accent: { fill: "#7c3aed", text: "#bf5af2" },
+  accent: { fill: "#0e7490", text: "#40c8e0" },
   icons: icons("drawerdeck"),
 };
 

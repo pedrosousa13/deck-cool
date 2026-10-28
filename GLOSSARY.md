@@ -238,14 +238,15 @@ Made by the maintainer on 2026-10-08.
 - **The packages ship no CSS, and the sites say so.** No site shows off shared tokens or a type scale.
 - **Favicons are round 2**: one card shape, arranged a different way per deck, on a dark `#1c1c1e` tile. Files in `design/favicons/`.
 
-  | Deck         | Arrangement                                             | Accent                  |
-  | ------------ | ------------------------------------------------------- | ----------------------- |
-  | deck.cool    | three cards, fanned                                     | the three accents below |
-  | carouseldeck | three cards in a row, the middle one in front           | `#2997ff`               |
-  | playdeck     | three cards stepping down: the outline reads as play    | `#ff5c86`               |
-  | pagedeck     | three stacked sections, the middle one lit (the island) | `#3ddc97`               |
+  | Deck         | Arrangement                                                                    | Accent                  |
+  | ------------ | ------------------------------------------------------------------------------ | ----------------------- |
+  | deck.cool    | three cards, fanned                                                            | the three accents below |
+  | carouseldeck | three cards in a row, the middle one in front                                  | `#2997ff`               |
+  | playdeck     | three cards stepping down: the outline reads as play                           | `#ff5c86`               |
+  | pagedeck     | three stacked sections, the middle one lit (the island)                        | `#3ddc97`               |
+  | drawerdeck   | three sheets stacked from the back, the front one lit, rising: a nested drawer | `#40c8e0`               |
 
-  Accepted risks: at 16px pagedeck's bars can read as a hamburger menu, and carouseldeck's arrangement is close to the stock "view carousel" icon.
+  Accepted risks: at 16px pagedeck's bars can read as a hamburger menu, carouseldeck's arrangement is close to the stock "view carousel" icon, and drawerdeck's teal sits near carouseldeck's blue.
 
 - **Motion.** One easing curve, `cubic-bezier(.32,.72,0,1)`. Every animation holds still under `prefers-reduced-motion`. Only Firefox animates an SVG favicon, so sites ship the still icon as the favicon and animate the icon only inside a page (the Family bar, the umbrella site's cards). pagedeck never animates its favicon by script, because that would cost JavaScript on pages that otherwise ship none.
 - **formdeck is parked.** It is not ready, and stays out of every site and design until the maintainer says it is. Its design is kept in `design/favicons/parked/` and on the canvas: two cards meeting in a check mark, amber `#ffb020` with dark text on amber fills. When it is ready it gets `form.deck.cool`.
