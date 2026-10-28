@@ -1,9 +1,14 @@
 {
   "name": "@drawerdeck/core",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-beta.0",
   "description": "Framework-neutral engine for drawerdeck, a headless drawer built on native scrolling.",
   "license": "MIT",
+  "homepage": "https://drawer.deck.cool",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pedrosousa13/deck-cool.git",
+    "directory": "decks/drawerdeck/packages/core"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -17,6 +22,11 @@
     "!dist/**/*.d.ts.map",
     "!dist/.tsbuildinfo*"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "tag": "beta"
+  },
   "scripts": {
     "build": "tsc -b"
   },
