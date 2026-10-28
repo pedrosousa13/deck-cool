@@ -51,9 +51,10 @@ Its source lives in `decks/drawerdeck/`. Run its commands from the repo
 root with `pnpm --dir decks/drawerdeck <script>`, and
 `pnpm --dir decks/drawerdeck verify` before landing a change to it. Its own
 ADRs are at `decks/drawerdeck/docs/adr/`, numbered on their own.
-`decks/drawerdeck/AGENTS.md` covers what's specific to working in it. Both
-its packages are placeholders (#231): the engine and the primitives wait on
-#230's map.
+`decks/drawerdeck/AGENTS.md` covers what's specific to working in it. The
+engine (`@drawerdeck/core`) and the React 19 primitives (`@drawerdeck/react`)
+are the beta (#240): bottom, modal only. Both packages stay `private` at
+`0.0.0`; the release is #242.
 
 ## Releasing a deck
 

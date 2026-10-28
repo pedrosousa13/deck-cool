@@ -9,8 +9,8 @@ the top layer, focus and Escape.
 | [`@drawerdeck/react`](packages/react) | The React primitives. Not published yet.        |
 | [`@drawerdeck/core`](packages/core)   | The framework-neutral engine `react` builds on. |
 
-Neither package has engine or primitive code yet: each exports a
-placeholder, and `pnpm verify` runs a smoke test against it. The map is
+The beta (#240): bottom, modal only, React 19 only. Not released yet
+(#242), and both packages stay `private` at `0.0.0` until then. The map is
 pedrosousa13/deck-cool#230.
 
 Contributing: run `pnpm verify` before landing anything (see

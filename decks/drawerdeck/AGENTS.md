@@ -15,13 +15,14 @@ pnpm verify
 ```
 
 It runs every gate in order and stops at the first failure: `lint`,
-`typecheck`, `test` (vitest) and `build`. The list lives in
-`scripts/verify.mjs`.
+`typecheck`, `test` (vitest, in Chromium and WebKit via Playwright: install
+them once with `pnpm exec playwright install chromium webkit`) and `build`.
+The list lives in `scripts/verify.mjs`.
 
-Both packages are placeholders (#231): `@drawerdeck/core` and
-`@drawerdeck/react` export nothing but a `version` constant, each with one
-smoke test. There is no engine or primitive code yet; it waits on #230's
-map.
+`@drawerdeck/core` is the framework-neutral drawer engine, and
+`@drawerdeck/react` the React 19 primitives built on it (#240): the beta,
+bottom and modal only. Both packages stay `private` at `0.0.0`; the release
+is #242.
 
 Formatting is checked, never written by the gate. Run
 `pnpm exec prettier --write <files>` on the files you changed.
