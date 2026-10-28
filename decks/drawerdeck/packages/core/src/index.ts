@@ -89,14 +89,31 @@ const OPEN_SAFETY_MS = 1000;
  * neutralise its native `::backdrop` (`Drawer.Backdrop` is the real dim
  * layer): inline styles cannot target a pseudo-element. */
 const RESET_CLASS = 'drawerdeck-reset';
-const RESET_STYLE_ID = 'drawerdeck-reset-style';
+
+/** The reset rule's sheet, once constructed, kept alive while any drawer is
+ * mounted (ref-counted by `mountedDrawers`, below) and dropped from
+ * `document.adoptedStyleSheets` when the last one is destroyed. A
+ * constructed sheet, not a `<style>` element: `style-src` governs an
+ * injected tag, but not `CSSStyleSheet.replaceSync` (#252). */
+let resetSheet: CSSStyleSheet | undefined;
+let mountedDrawers = 0;
 
 function ensureBackdropReset() {
-  if (document.getElementById(RESET_STYLE_ID)) return;
-  const style = document.createElement('style');
-  style.id = RESET_STYLE_ID;
-  style.textContent = `.${RESET_CLASS}::backdrop{background:transparent}`;
-  document.head.append(style);
+  mountedDrawers += 1;
+  if (resetSheet) return;
+  resetSheet = new CSSStyleSheet();
+  resetSheet.replaceSync(`.${RESET_CLASS}::backdrop{background:transparent}`);
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, resetSheet];
+}
+
+function releaseBackdropReset() {
+  mountedDrawers -= 1;
+  if (mountedDrawers > 0 || !resetSheet) return;
+  const sheet = resetSheet;
+  resetSheet = undefined;
+  document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+    (s) => s !== sheet
+  );
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -578,6 +595,7 @@ export function createDrawer(
   function destroy() {
     if (destroyed) return;
     destroyed = true;
+    releaseBackdropReset();
     clearTimeout(openSafetyTimer);
     clearTimeout(scrollEndDebounce);
     cancelAnimationFrame(throwFrame);
