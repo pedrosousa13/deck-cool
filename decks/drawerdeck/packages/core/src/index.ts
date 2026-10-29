@@ -75,7 +75,10 @@ export interface Drawer {
 }
 
 const DRAG_HISTORY_MS = 100;
-const THROW_DURATION_MS = 240;
+/** Shared by every eased, programmatic `scrollTop` move: the mouse throw's
+ * release, `open`, `close`/Escape/the outside press/`Drawer.Close`, and
+ * `snapTo` (#268). */
+const EASE_DURATION_MS = 240;
 const THROW_VELOCITY_SCALE = 200;
 /** How close a scroll position must land to a snap point's to count as
  * resting there. */
@@ -131,8 +134,57 @@ function reducedMotion() {
   return matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-function motionBehavior(): ScrollBehavior {
-  return reducedMotion() ? 'instant' : 'smooth';
+// ---------- the family curve (GLOSSARY, Motion; #268) ----------
+// `cubic-bezier(.32,.72,0,1)` drives every eased, programmatic scrollTop
+// move (open, close, snapTo and the mouse throw): the same curve
+// `packages/brand/styles/brand.css`'s `--ease` ships, resolved the way CSS
+// itself does, since a `<dialog>`'s scroll position has no CSS transition
+// to drive it natively.
+const EASE_X1 = 0.32;
+const EASE_Y1 = 0.72;
+const EASE_X2 = 0;
+const EASE_Y2 = 1;
+
+/** The polynomial coefficients for a cubic bezier's X or Y component, given
+ * its two control points (the curve's start and end are fixed at (0,0) and
+ * (1,1)): `f(t) = ((a*t + b)*t + c)*t`. */
+function bezierCoefficients(p1: number, p2: number) {
+  const c = 3 * p1;
+  const b = 3 * (p2 - p1) - c;
+  const a = 1 - c - b;
+  return { a, b, c };
+}
+
+const EASE_X = bezierCoefficients(EASE_X1, EASE_X2);
+const EASE_Y = bezierCoefficients(EASE_Y1, EASE_Y2);
+
+function sampleCurve(
+  t: number,
+  { a, b, c }: { a: number; b: number; c: number }
+) {
+  return ((a * t + b) * t + c) * t;
+}
+
+function sampleCurveDerivative(t: number, { a, b }: { a: number; b: number }) {
+  return (3 * a * t + 2 * b) * t + EASE_X.c;
+}
+
+/** Solves `cubic-bezier(.32,.72,0,1)` for the output at elapsed-time
+ * fraction `x` (0 to 1): Newton-Raphson for the parameter `t` whose curve
+ * X matches `x`, then reads curve Y at that `t`, the way a browser resolves
+ * the same curve for a CSS transition. */
+function familyEase(x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  let t = x;
+  for (let i = 0; i < 8; i++) {
+    const dx = sampleCurve(t, EASE_X) - x;
+    if (Math.abs(dx) < 1e-5) break;
+    const derivative = sampleCurveDerivative(t, EASE_X);
+    if (Math.abs(derivative) < 1e-6) break;
+    t -= dx / derivative;
+  }
+  return sampleCurve(t, EASE_Y);
 }
 
 interface SnapCandidate {
@@ -155,7 +207,6 @@ export function createDrawer(
   /** The configured snap points' pixel offsets, nearest first; excludes
    * closed (always 0). */
   let snapPx: number[] = [];
-  let pendingOpenIndex = 0;
   let pendingCloseReason: OpenChangeReason | null = null;
   let openSafetyTimer: ReturnType<typeof setTimeout> | undefined;
   let scrollEndDebounce: ReturnType<typeof setTimeout> | undefined;
@@ -330,7 +381,7 @@ export function createDrawer(
     // `dismissible` for the reasons that need it), so snapping stays off
     // for its whole scroll, however it ends.
     viewport.style.scrollSnapType = 'none';
-    viewport.scrollTo({ top: 0, behavior: motionBehavior() });
+    animateScrollTo(0, () => finishClose(reason));
   }
 
   function onScrollEnd() {
@@ -339,36 +390,16 @@ export function createDrawer(
     // off): the browser still eventually fires a `scrollend` for that, but
     // the drag is not over, and `settleOpenAt`/`finishClose` turning
     // snapping back on now, while it rests off every snap point, would
-    // fight the drag that owns it until release. The eased throw back to a
-    // snap point (`throwTo`) drives `scrollTop` the same way, off every
-    // snap point until its last frame: a `scrollend` the browser fires
-    // mid-ease (it does, well before the ease is done) would turn snapping
-    // back on at that in-between position too, and the resulting re-snap
-    // can land on a different point than the one the throw was easing
-    // toward -- the flash (#279).
-    if (dragging || throwing) return;
+    // fight the drag that owns it until release. The eased, programmatic
+    // move (`animateScrollTo`: the mouse throw's release, `open`, `close`
+    // and `snapTo`, #268) drives `scrollTop` the same way, off every snap
+    // point until its last frame: a `scrollend` the browser fires mid-ease
+    // (it does, well before the ease is done) would turn snapping back on
+    // at that in-between position too, and the resulting re-snap can land
+    // on a different point than the one the move was easing toward -- the
+    // flash (#279).
+    if (dragging || animating) return;
     const st = viewport.scrollTop;
-
-    if (phase === 'opening') {
-      const target = snapPx[pendingOpenIndex] ?? 0;
-      if (Math.abs(st - target) <= SETTLE_TOLERANCE) {
-        // A resize during the opening scroll was ignored (ADR 0001);
-        // reconcile it now.
-        measure();
-        positionMarkers();
-        const reconciled = snapPx[pendingOpenIndex] ?? 0;
-        if (Math.abs(viewport.scrollTop - reconciled) > SETTLE_TOLERANCE) {
-          viewport.scrollTop = reconciled;
-        }
-        clearTimeout(openSafetyTimer);
-        snapIndex = pendingOpenIndex;
-        setPhase('open');
-        updateContentLock();
-      } else {
-        viewport.scrollTo({ top: target, behavior: motionBehavior() });
-      }
-      return;
-    }
 
     if (
       st <= SETTLE_TOLERANCE &&
@@ -467,10 +498,11 @@ export function createDrawer(
   let dragStartTop = 0;
   let dragMaxTop = 0;
   let dragHistory: { t: number; st: number }[] = [];
-  let throwFrame = 0;
-  /** Set for `throwTo`'s whole run, including its final, synchronous
-   * frame: guards `onScrollEnd` the way `dragging` does, below. */
-  let throwing = false;
+  let animFrame = 0;
+  /** Set for `animateScrollTo`'s whole run, including its final,
+   * synchronous frame: guards `onScrollEnd` the way `dragging` does,
+   * below. */
+  let animating = false;
 
   function onPointerDown(event: PointerEvent) {
     if (
@@ -489,8 +521,8 @@ export function createDrawer(
     dragStartTop = viewport.scrollTop;
     dragMaxTop = viewport.scrollHeight - viewport.clientHeight;
     dragHistory = [{ t: event.timeStamp, st: dragStartTop }];
-    cancelAnimationFrame(throwFrame);
-    throwing = false;
+    cancelAnimationFrame(animFrame);
+    animating = false;
     try {
       panel.setPointerCapture(event.pointerId);
     } catch {
@@ -514,11 +546,14 @@ export function createDrawer(
     }
   }
 
-  function throwTo(target: number, onDone: () => void) {
-    cancelAnimationFrame(throwFrame);
-    throwing = true;
+  /** Animates `scrollTop` to `target` on the family curve (#268): every
+   * programmatic move shares this, not just the mouse throw's release.
+   * Instant, in one synchronous frame, under `prefers-reduced-motion`. */
+  function animateScrollTo(target: number, onDone: () => void) {
+    cancelAnimationFrame(animFrame);
+    animating = true;
     const finish = () => {
-      throwing = false;
+      animating = false;
       onDone();
     };
     const start = viewport.scrollTop;
@@ -530,17 +565,16 @@ export function createDrawer(
     }
     const startTime = performance.now();
     const tick = (now: number) => {
-      const t = Math.min(1, Math.max(0, (now - startTime) / THROW_DURATION_MS));
-      const eased = 1 - Math.pow(1 - t, 3);
-      viewport.scrollTop = start + delta * eased;
+      const t = Math.min(1, Math.max(0, (now - startTime) / EASE_DURATION_MS));
+      viewport.scrollTop = start + delta * familyEase(t);
       if (t < 1) {
-        throwFrame = requestAnimationFrame(tick);
+        animFrame = requestAnimationFrame(tick);
       } else {
         viewport.scrollTop = target;
         finish();
       }
     };
-    throwFrame = requestAnimationFrame(tick);
+    animFrame = requestAnimationFrame(tick);
   }
 
   function onPointerUp(event: PointerEvent) {
@@ -565,7 +599,7 @@ export function createDrawer(
       setPhase('closing');
     }
 
-    throwTo(target.px, () => {
+    animateScrollTo(target.px, () => {
       // Snapping (back on, or off toward closed) is `finishClose`'s or
       // `settleOpenAt`'s own job now.
       if (closing) finishClose('drag');
@@ -587,29 +621,45 @@ export function createDrawer(
       snapTo(index);
       return;
     }
-    pendingOpenIndex = index;
     dialog.showModal();
     dialog.focus({ preventScroll: true });
     measure();
     positionMarkers();
     setPhase('opening');
     viewport.scrollTop = 0;
+    // Native smooth scrolling and mandatory snap both want to drive this
+    // same scroll together, which is where the rest of the native open's
+    // time went (#244): the engine's own ease owns it alone instead, the
+    // way it already does a mouse throw's release (#268).
+    viewport.style.scrollSnapType = 'none';
     requestAnimationFrame(() => {
-      viewport.scrollTo({
-        top: snapPx[index] ?? 0,
-        behavior: motionBehavior()
-      });
+      animateScrollTo(snapPx[index] ?? 0, () => finishOpen(index));
     });
     clearTimeout(openSafetyTimer);
     openSafetyTimer = setTimeout(() => {
       if (phase !== 'opening') return;
-      measure();
-      positionMarkers();
-      viewport.scrollTop = snapPx[index] ?? 0;
-      snapIndex = index;
-      setPhase('open');
-      updateContentLock();
+      cancelAnimationFrame(animFrame);
+      animating = false;
+      finishOpen(index);
     }, OPEN_SAFETY_MS);
+  }
+
+  /** Settles `open`'s eased move: reconciles a resize that landed mid-open
+   * (ignored until now, ADR 0001), restores mandatory snapping, and moves
+   * the phase to `'open'`. Shared by the eased move's own completion and
+   * `OPEN_SAFETY_MS`'s fallback. */
+  function finishOpen(index: number) {
+    clearTimeout(openSafetyTimer);
+    measure();
+    positionMarkers();
+    const target = snapPx[index] ?? 0;
+    if (Math.abs(viewport.scrollTop - target) > SETTLE_TOLERANCE) {
+      viewport.scrollTop = target;
+    }
+    viewport.style.scrollSnapType = 'y mandatory';
+    snapIndex = index;
+    setPhase('open');
+    updateContentLock();
   }
 
   /** `open`'s own index needs `snapPx` measured first, since it is read
@@ -639,10 +689,8 @@ export function createDrawer(
   function snapTo(index: number) {
     if (phase !== 'open') return;
     const clamped = clampIndex(index);
-    viewport.scrollTo({
-      top: snapPx[clamped] ?? 0,
-      behavior: motionBehavior()
-    });
+    viewport.style.scrollSnapType = 'none';
+    animateScrollTo(snapPx[clamped] ?? 0, () => settleOpenAt(clamped));
   }
 
   function setOptions(next: Partial<DrawerOptions>) {
@@ -658,7 +706,7 @@ export function createDrawer(
     releaseBackdropReset();
     clearTimeout(openSafetyTimer);
     clearTimeout(scrollEndDebounce);
-    cancelAnimationFrame(throwFrame);
+    cancelAnimationFrame(animFrame);
     cancelAnimationFrame(progressFrame);
     viewport.removeEventListener('scrollend', onScrollEnd);
     viewport.removeEventListener('scroll', onScrollEndDebounce);

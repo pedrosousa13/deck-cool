@@ -127,6 +127,42 @@ describe('open, snap and close', () => {
   });
 });
 
+describe('the engine’s own ease, not native smooth scrolling (#268)', () => {
+  // No mockReducedMotion in this block: native `scrollTo({ behavior: 'smooth' })`
+  // and the engine's own eased `scrollTop` animation both move the viewport,
+  // the thing under test here is which one it is, and reduced motion skips
+  // both the same way.
+
+  it('opens with scroll-snap off until it settles, not on for the whole native scroll', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { viewport, drawer } = fixture;
+
+    drawer.open();
+    await sleep(40);
+    expect(drawer.phase).toBe('opening');
+    expect(viewport.style.scrollSnapType).toBe('none');
+
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(viewport.style.scrollSnapType).toBe('y mandatory');
+  });
+
+  it('snapTo turns scroll-snap off while it animates, and restores it once snapped', async () => {
+    mockReducedMotion();
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    vi.restoreAllMocks();
+
+    drawer.snapTo(1);
+    await sleep(40);
+    expect(viewport.style.scrollSnapType).toBe('none');
+
+    await expectSettledTo(() => drawer.snapIndex, 1);
+    expect(viewport.style.scrollSnapType).toBe('y mandatory');
+  });
+});
+
 describe('the inner content', () => {
   beforeEach(() => mockReducedMotion());
 
