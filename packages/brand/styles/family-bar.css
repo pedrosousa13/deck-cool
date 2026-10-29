@@ -25,6 +25,7 @@
 .family-bar[data-deck="carouseldeck"] { --bar-fill: var(--carouseldeck-fill); }
 .family-bar[data-deck="playdeck"] { --bar-fill: var(--playdeck-fill); }
 .family-bar[data-deck="pagedeck"] { --bar-fill: var(--pagedeck-fill); }
+.family-bar[data-deck="drawerdeck"] { --bar-fill: var(--drawerdeck-fill); }
 
 /* The bar's ground is a layer of its own. */
 .family-bar::before {

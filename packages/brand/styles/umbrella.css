@@ -98,6 +98,7 @@ main h3 {
 [data-deck="carouseldeck"] { --tint: var(--carouseldeck-text); }
 [data-deck="playdeck"] { --tint: var(--playdeck-text); }
 [data-deck="pagedeck"] { --tint: var(--pagedeck-text); }
+[data-deck="drawerdeck"] { --tint: var(--drawerdeck-text); }
 .card__text {
   flex: 1 1 380px;
   min-width: 0;
