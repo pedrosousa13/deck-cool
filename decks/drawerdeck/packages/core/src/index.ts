@@ -177,7 +177,8 @@ export function createDrawer(
     overflowY: 'auto',
     scrollSnapType: 'y mandatory',
     overscrollBehavior: 'contain',
-    scrollbarWidth: 'none'
+    scrollbarWidth: 'none',
+    willChange: 'scroll-position'
   });
   if (parts.backdrop) {
     Object.assign(parts.backdrop.style, {
@@ -229,10 +230,18 @@ export function createDrawer(
     });
   }
 
+  let lastProgress: string | undefined;
   function updateProgress() {
     const first = snapPx[0] || 1;
-    const progress = clamp(viewport.scrollTop / first, 0, 1);
-    dialog.style.setProperty('--drawer-progress', progress.toFixed(4));
+    const progress = clamp(viewport.scrollTop / first, 0, 1).toFixed(4);
+    // `setProperty` on a custom property, unlike a standard one, does not
+    // itself skip the write (and the style/commit work it schedules on the
+    // main thread) when the value is unchanged (#267): clamped at 0 or 1,
+    // most of a drag's scroll frames recompute the same value (every frame
+    // beyond the first snap point, every frame at rest).
+    if (progress === lastProgress) return;
+    lastProgress = progress;
+    dialog.style.setProperty('--drawer-progress', progress);
   }
 
   /** Locks the content below the top (last configured) snap point: vaul's
