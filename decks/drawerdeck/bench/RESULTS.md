@@ -20,6 +20,89 @@ uploads both as the `drawer-bench-report` artifact (`RESULTS.md`, generated
 by `aggregate.py`, and the pooled `aggregate.jsonl`) -- read that artifact
 from the workflow's run page for real numbers, not this file.
 
+## Fairness (#266)
+
+Every number this bench reports is checked against the maintainer's nine
+fairness rules (#266's own "Fairness rules" comment) before it goes on the
+comparison page:
+
+1. **Same runner, interleaved.** One Playwright worker, in the foreground
+   (`playwright.config.ts`: `workers: 1`, `fullyParallel: false`); within
+   that, every rep shuffles all four decks' run order fresh -- see
+   "Interleaving" below.
+2. **Production builds for everyone.** `vite build` (never dev mode) for
+   every deck's bench entry, from one `vite.config.ts` with one set of
+   `rolldownOptions`; one pinned React/react-dom version shared by all four
+   (`package.json`); no `<StrictMode>` anywhere in `src/main-*.tsx`.
+3. **Each rival configured the way its own docs recommend.** Every rival
+   adapter (`src/vaul-app.tsx`, `src/baseui-app.tsx`, `src/reactaria-app.tsx`)
+   links the doc page it follows at its own top, and lists every option it
+   sets that isn't that library's own default, with why. "Method notes" and
+   "React Aria's Sheet" below cover the positioning CSS each one's own
+   quickstart requires.
+4. **The same task.** `src/content.ts`'s 50 rows and `[0.5, 0.92]` snap
+   fractions, passed to every deck in the convention its own `snapPoints`
+   expects (see each adapter); React Aria's Sheet is the one exception
+   recorded in full under "React Aria's Sheet" below (percentage strings,
+   not bare fractions). One viewport (`playwright.config.ts`'s 390x760) and
+   one device scale factor (Playwright's `Desktop Chrome` device preset,
+   unset by any project here) for every rep, and one shared stylesheet
+   convention (`.panel`, `.handle`, `.inner-list`, `.bench-row`) styled
+   per-deck only where a library's own docs require positioning CSS.
+5. **Latest stable versions, pinned, with release dates.** See "Versions"
+   below.
+6. **A warm-up rep, discarded.** See "Warm-up rep, discarded" below.
+7. **Ties are ties.** `aggregate.py`'s `cell_winner` only names a winner
+   when every shard's own pooled winner agrees _and_ the gap between the
+   best and second-best pooled medians beats the winning deck's own spread
+   across shards; otherwise the cell reports `tie`.
+8. **Reproducible and reviewable.** Every adapter here is checked into the
+   repo; raw results, the pooled `aggregate.jsonl` and every rep's gzipped
+   trace are the artifacts `.github/workflows/drawer-bench.yml` uploads.
+   "Re-running the full bench" and "Local smoke check" below say how. The
+   comparison page this feeds is expected to invite each rival's own
+   maintainers to flag a misconfiguration.
+9. **Losses stay visible.** `aggregate.py`'s `render_tables` prints every
+   metric in `METRICS` for every deck, win or lose; `render_summary`'s
+   at-a-glance table is an index into those full tables, never a
+   replacement for them.
+
+## Versions, with release dates (#266 rule 5)
+
+| Deck                                       | Version                                 | Released   |
+| ------------------------------------------ | --------------------------------------- | ---------- |
+| `@drawerdeck/react`                        | this commit (`workspace:*`, unreleased) | -          |
+| vaul                                       | 1.1.2                                   | 2024-12-14 |
+| `@base-ui/react` (Base UI's Drawer)        | 1.9.0                                   | 2026-10-09 |
+| react-aria-components (React Aria's Sheet) | 1.22.1                                  | 2026-10-09 |
+
+The release dates come from `npm view <pkg> time --json`, read once by hand
+and checked into `versions.json` -- so neither this file nor a CI run has to
+hit npm for them. `aggregate.py`'s generated report reads the same file for
+its own header. Re-run the `npm view` command and update `versions.json`
+whenever a pinned version bumps.
+
+## Warm-up rep, discarded (#266 rule 6)
+
+Every rep here already gets its own fresh page (Playwright's test-level
+context isolation, not a context or page shared across reps), so there is
+no later, already-warm rep on the _same_ page load to serve as the
+unscored baseline the rule describes. Instead, `bench.spec.ts`'s
+`runPass` runs the whole scenario once, right after the fresh `page.goto`,
+discarded (recorded in the jsonl with `warmup: true`, but excluded from
+every median, spread and winner `aggregate.py`/`report.py` compute); the
+page then reloads before the real, scored pass runs the same scenario
+again.
+
+The reload -- rather than reusing the warmed-up DOM in place for the scored
+pass -- is deliberate: drawerdeck's own dismiss is drag-past-the-lowest-
+snap-point only (`src/drawerdeck-app.tsx`'s own comment: "not a close
+button or Escape"), so there is no deck-agnostic way to put all four
+drawers back at a scenario's starting snap point in between without a
+fresh load. The reload still reuses Chromium's own HTTP and V8 code caches
+for this origin, the way a real second visit to the page would, so the
+scored rep isn't the one paying for a cold parse/compile.
+
 ## What's here
 
 - `decks.ts` -- the four drawers: `drawerdeck`, `vaul`, `baseui`,
@@ -44,6 +127,9 @@ from the workflow's run page for real numbers, not this file.
   same shape as the original prototype's. `aggregate.py` is the multi-shard
   version the GitHub Actions `report` job runs; see its own header.
 - `smoke.spec.ts` -- the local smoke check: every deck opens to ~half.
+- `versions.json` -- each rival's pinned version and npm release date
+  (#266 rule 5; see "Versions" below), checked in so `aggregate.py` never
+  has to call npm.
 
 ## Interleaving (#266)
 

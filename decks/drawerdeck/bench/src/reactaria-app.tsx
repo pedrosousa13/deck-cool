@@ -1,8 +1,17 @@
-// React Aria's Sheet, `react-aria-components@1.22.1`, pinned (#283).
-// `SheetTrigger` > `SheetOverlay` > `Sheet` > `SheetContent`, driven only
-// through its own public API, imported from the package's own `Sheet`
-// subpath export (react-aria.adobe.com/Sheet; confirmed against the
-// package's shipped `dist/exports/Sheet.*`, not just the docs' prose).
+// React Aria's Sheet, `react-aria-components@1.22.1`, pinned (#283; see
+// versions.json for the npm release date).
+//
+// Doc followed: https://react-aria.adobe.com/Sheet. `SheetTrigger` >
+// `SheetOverlay` > `Sheet` > `SheetContent`, driven only through its own
+// public API, imported from the package's own `Sheet` subpath export
+// (confirmed against the package's shipped `dist/exports/Sheet.*`, not
+// just the docs' prose).
+//
+// Options set, non-default:
+// - `snapPoints` on `SheetOverlay`: to match the shared half/full snap
+//   points every deck gets (content.ts) -- without it, the doc says the
+//   sheet opens straight to full height. `preventDismissal` and every
+//   other `SheetOverlay`/`Sheet` prop are left at their defaults.
 //
 // `snapPoints` is a `SheetOverlay` prop here, not a `Sheet` one (its own
 // `.d.ts`: `SheetOverlayProps` has `snapPoints`, `SheetProps` doesn't).

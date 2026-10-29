@@ -16,9 +16,12 @@ LOADS = [0, 100, 200]
 def load(path):
     try:
         with open(path) as f:
-            return [json.loads(l) for l in f if l.strip()]
+            rows = [json.loads(l) for l in f if l.strip()]
     except FileNotFoundError:
         return []
+    # Rule 6's warm-up rep, discarded: scored and recorded, but never part
+    # of a reported median (see bench.spec.ts and aggregate.py).
+    return [r for r in rows if not r.get('warmup')]
 
 
 def fmt(values, digits=0):
