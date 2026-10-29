@@ -653,8 +653,7 @@ export function createDrawer(
     setPhase('opening');
     viewport.scrollTop = 0;
     // Native smooth scrolling and mandatory snap both want to drive this
-    // same scroll together, which is where the rest of the native open's
-    // time went (#244): the engine's own ease owns it alone instead, the
+    // same scroll at once; the engine's own ease owns it alone instead, the
     // way it already does a mouse throw's release (#268).
     viewport.style.scrollSnapType = 'none';
     // Stored in `animFrame`, the same id `animateScrollTo`, `destroy()` and
