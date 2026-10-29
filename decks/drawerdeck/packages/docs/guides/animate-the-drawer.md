@@ -91,12 +91,6 @@ exit ran its course. The gesture that interrupted the transition then
 continues natively from there. The drawer is already at its snap point
 either way, since neither the entrance nor the exit ever moves `scrollTop`.
 
-This is a deliberate simplification over an earlier design, where an
-interruption mid-exit cancelled the close instead: that reopened the drawer,
-and a controlled `Root` watching its own `open` prop could re-send the close
-and have the Panel replay its exit from the top. Finishing the close instead
-removes that whole failure mode.
-
 ## Why not the engine’s own ease
 
 An earlier version of this animated `scrollTop` itself, in JavaScript, on
