@@ -81,11 +81,17 @@ undeclared transition: the exit closes the dialog at once, with no wait.
 ## Interrupted
 
 A touch, a wheel or a pointer down while the entrance or the exit is still
-running ends it immediately. The engine drops the attribute and ends the
-running transition at once, so the Panel and the Backdrop jump to their
-resting look and the gesture that interrupted them continues natively from
-there. The drawer is already at its snap point either way, since neither
-the entrance nor the exit ever moves `scrollTop`.
+running ends that transition immediately, but does not close the drawer.
+During the entrance, it finishes the open: the Panel and the Backdrop jump
+to their resting look and the drawer stays open. During the exit, it
+cancels the close: an explicit `close()`, Escape, an outside press or
+`Drawer.Close` is undone, the Panel and the Backdrop jump back to their
+resting, open look, the dialog stays open at its snap point, and
+`onOpenChange` never fires. A tap with no scroll cancels the close the same
+way a touch or a wheel does, even for Escape. The gesture that interrupted
+the transition then continues natively from there. The drawer is already at
+its snap point either way, since neither the entrance nor the exit ever
+moves `scrollTop`.
 
 ## Why not the engine’s own ease
 

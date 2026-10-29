@@ -335,28 +335,45 @@ describe('interrupting the entrance or the exit', () => {
     expect(drawer.phase).toBe('open');
   });
 
-  it('a wheel during the entrance ends it at once', () => {
+  it('a wheel during the entrance ends it at once', async () => {
     fixture = mount({ snapPoints: [0.5] });
     const { viewport, panel, drawer } = fixture;
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+
     drawer.open();
+    await sleep(120);
+    // Still mid-flight.
+    expect(translateY(getComputedStyle(panel).transform)).not.toBe(0);
 
     viewport.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
 
     expect(panel.hasAttribute('data-starting-style')).toBe(false);
+    expect(translateY(getComputedStyle(panel).transform)).toBe(0);
     expect(drawer.phase).toBe('open');
+    removeTransition();
   });
 
-  it('a tap (pointer down) with no scroll during the entrance ends it at once', () => {
+  it('a tap (pointer down) with no scroll during the entrance ends it at once', async () => {
     fixture = mount({ snapPoints: [0.5] });
     const { viewport, panel, drawer } = fixture;
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+
     drawer.open();
+    await sleep(120);
+    expect(translateY(getComputedStyle(panel).transform)).not.toBe(0);
 
     viewport.dispatchEvent(
       new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' })
     );
 
     expect(panel.hasAttribute('data-starting-style')).toBe(false);
+    expect(translateY(getComputedStyle(panel).transform)).toBe(0);
     expect(drawer.phase).toBe('open');
+    removeTransition();
   });
 
   it('a touch during the exit ends it at once, settled back open -- not closed', async () => {
@@ -385,13 +402,20 @@ describe('interrupting the entrance or the exit', () => {
   it('a wheel during the exit ends it at once', async () => {
     fixture = mount({ snapPoints: [0.5] });
     const { viewport, panel, dialog, drawer } = fixture;
-    const removeTransition = withTransition(panel, { durationMs: 1000 });
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
 
     drawer.close('close-button');
+    await sleep(120);
+    // Still mid-flight, easing back down toward translateY(100%).
+    expect(translateY(getComputedStyle(panel).transform)).not.toBe(0);
+
     viewport.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
 
+    expect(translateY(getComputedStyle(panel).transform)).toBe(0);
     expect(drawer.phase).toBe('open');
     expect(dialog.open).toBe(true);
     expect(panel.hasAttribute('data-ending-style')).toBe(false);
@@ -401,15 +425,21 @@ describe('interrupting the entrance or the exit', () => {
   it('a tap (pointer down) with no scroll during the exit ends it at once', async () => {
     fixture = mount({ snapPoints: [0.5] });
     const { viewport, panel, dialog, drawer } = fixture;
-    const removeTransition = withTransition(panel, { durationMs: 1000 });
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
 
     drawer.close('close-button');
+    await sleep(120);
+    expect(translateY(getComputedStyle(panel).transform)).not.toBe(0);
+
     viewport.dispatchEvent(
       new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' })
     );
 
+    expect(translateY(getComputedStyle(panel).transform)).toBe(0);
     expect(drawer.phase).toBe('open');
     expect(dialog.open).toBe(true);
     expect(panel.hasAttribute('data-ending-style')).toBe(false);
