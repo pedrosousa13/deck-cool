@@ -75,6 +75,31 @@ describe('open, snap and close', () => {
     expect(fixture.dialog.open).toBe(true);
   });
 
+  it('reopening after Escape reports a later native settle at closed as a drag, not the stale Escape', async () => {
+    // Regression coverage for the review on #292: `finishClose` used to
+    // leave `pendingCloseReason` set to whatever reason called it, so the
+    // next native settle at closed (no call site of its own to set that
+    // reason) picked up the stale one instead of falling back to 'drag'.
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { dialog, viewport, drawer } = fixture;
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'escape');
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    viewport.scrollTo({ top: 0, behavior: 'instant' });
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'drag');
+  });
+
   it('closes on Escape when dismissible, not when it is not', async () => {
     fixture = mount({ snapPoints: [0.5, 1], dismissible: false });
     const { dialog, drawer } = fixture;

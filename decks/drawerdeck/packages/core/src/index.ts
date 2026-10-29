@@ -361,6 +361,11 @@ export function createDrawer(
 
   function finishClose(reason: OpenChangeReason) {
     clearTimeout(openSafetyTimer);
+    // The eased close calls this directly now, so this reason never reaches
+    // `onScrollEnd`'s own read of `pendingCloseReason` -- clear it here
+    // instead, or a later native settle at closed (no call site of its own
+    // to set that reason) picks up this one, stale.
+    pendingCloseReason = null;
     viewport.style.scrollSnapType = 'y mandatory';
     // `close()` itself restores focus to whatever had it before `open()`
     // called `showModal()` -- closed first, so a consumer's own focus
