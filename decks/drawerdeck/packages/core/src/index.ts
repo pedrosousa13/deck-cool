@@ -90,6 +90,13 @@ const OPEN_SAFETY_MS = 1000;
  * layer): inline styles cannot target a pseudo-element. */
 const RESET_CLASS = 'drawerdeck-reset';
 
+/** The named scroll timeline the Viewport exposes, scoped up to the dialog
+ * so a sibling (`Drawer.Backdrop`, or any other descendant of the dialog)
+ * can read it (#249). Reused across every drawer instance: `timeline-scope`
+ * roots a fresh, independent named-timeline scope at each dialog, so two
+ * drawers on the same page never see each other's `--drawer`. */
+const SCROLL_TIMELINE_NAME = '--drawer';
+
 /** The reset rule's sheet, once constructed, kept alive while any drawer is
  * mounted (ref-counted by `mountedDrawers`, below) and dropped from
  * `document.adoptedStyleSheets` when the last one is destroyed. A
@@ -156,6 +163,13 @@ export function createDrawer(
 
   const gap = viewport.querySelector<HTMLElement>('[data-drawer-gap]');
 
+  // Chromium and Safari ship `animation-timeline`, `scroll-timeline` and
+  // `timeline-scope` together; Firefox stable does not yet (#236). Where
+  // they resolve, the dim runs as a native scroll-driven animation with no
+  // JS per scroll frame at all; `updateProgress`, below, becomes the
+  // Firefox fallback only.
+  const supportsScrollTimeline = CSS.supports('animation-timeline: scroll()');
+
   dialog.classList.add(RESET_CLASS);
   ensureBackdropReset();
   Object.assign(dialog.style, {
@@ -189,6 +203,15 @@ export function createDrawer(
   }
   if (gap) gap.style.height = '100%';
 
+  // The timeline plumbing only: a consumer's own `@keyframes` and
+  // `animation-timeline: --drawer` on `Drawer.Backdrop` (or any other
+  // descendant of the dialog) is what actually dims it (#249). `y`: the
+  // viewport only ever scrolls vertically.
+  if (supportsScrollTimeline) {
+    viewport.style.setProperty('scroll-timeline', `${SCROLL_TIMELINE_NAME} y`);
+    dialog.style.setProperty('timeline-scope', SCROLL_TIMELINE_NAME);
+  }
+
   function setPhase(next: Phase) {
     if (next === phase) return;
     phase = next;
@@ -207,6 +230,9 @@ export function createDrawer(
           return Number.isFinite(px) ? px : 0;
         })
       : [Math.min(panel.getBoundingClientRect().height, viewportHeight)];
+    // The scroll range a native dim's `animation-range` covers (closed to
+    // the first snap point), once per layout -- never per frame (#249).
+    dialog.style.setProperty('--drawer-first-snap', `${snapPx[0] ?? 0}px`);
   }
 
   /** Positions every `[data-drawer-snap]` marker at its snap point's
@@ -386,7 +412,17 @@ export function createDrawer(
       if (phase !== 'opening') updateContentLock();
     });
   }
-  viewport.addEventListener('scroll', onScroll);
+  // The native dim needs no scroll listener at all: nothing here runs per
+  // scroll frame (#249). The content lock still only needs to be right at
+  // a settle point (`settleOpenAt`, the `opening` branch of `onScrollEnd`,
+  // `onResize`, `setOptions`), all of which call `updateContentLock`
+  // directly, so dropping its live update here costs it nothing -- a drag
+  // or fling already has the viewport's whole gesture captured natively,
+  // so content's own `overflow-y` cannot take effect until the gesture
+  // (and so a settle) ends anyway.
+  if (!supportsScrollTimeline) {
+    viewport.addEventListener('scroll', onScroll);
+  }
 
   function onCancel(event: Event) {
     // Always handled ourselves, so the native instant close never runs

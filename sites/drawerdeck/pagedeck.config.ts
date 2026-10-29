@@ -12,11 +12,17 @@ import { stagePublic } from "./src/public.ts";
 import { headOf, pageMetaOf, SITE_ORIGIN } from "./src/seo.ts";
 
 const brandSheet = (name: string) =>
-  realpathSync(new URL(`./node_modules/@deck-cool/brand/styles/${name}`, import.meta.url));
+  realpathSync(
+    new URL(`./node_modules/@deck-cool/brand/styles/${name}`, import.meta.url),
+  );
 
 const pages = defineCollection({
   name: "pages",
-  loader: defineMarkdownLoader({ root: "./content", locale: "en", languages: [] }),
+  loader: defineMarkdownLoader({
+    root: "./content",
+    locale: "en",
+    languages: [],
+  }),
   schema: false,
 });
 
@@ -27,7 +33,7 @@ const docs = defineDocs({
   base: "/docs",
   layout: "docsPage",
   demos: DEMOS,
-  languages: ["sh", "tsx"],
+  languages: ["sh", "tsx", "css"],
   theme: CODE_THEME,
 });
 
@@ -57,18 +63,28 @@ export default defineConfig({
       after: [{ component: "footer" }],
     }),
     // One hashed sheet under /assets/, linked from every page's <head>.
-    css: [brandSheet("brand.css"), brandSheet("family-bar.css"), "./styles/drawerdeck.css"],
+    css: [
+      brandSheet("brand.css"),
+      brandSheet("family-bar.css"),
+      "./styles/drawerdeck.css",
+    ],
     // Each page's title and description: src/seo.ts.
     head: (page, store) => headOf(page, store, pages, docs.collection),
     origin: SITE_ORIGIN,
     sitemap: { pattern: "suffix" },
     robots: { allow: ["/"] },
     // The brand's icons and .assetsignore; and the docs' images.
-    passthrough: { root: stagePublic(import.meta.url), contentRoot: docs.contentRoot },
+    passthrough: {
+      root: stagePublic(import.meta.url),
+      contentRoot: docs.contentRoot,
+    },
     routing: {
       headers: [
         { prefix: "/", set: [...RESPONSE_HEADERS] },
-        { prefix: "/assets/", set: [...RESPONSE_HEADERS, ...HASHED_FILE_HEADERS] },
+        {
+          prefix: "/assets/",
+          set: [...RESPONSE_HEADERS, ...HASHED_FILE_HEADERS],
+        },
       ],
     },
     adapter: cloudflarePages(),
