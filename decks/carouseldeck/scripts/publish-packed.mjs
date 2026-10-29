@@ -96,6 +96,24 @@ export const releasesFromTarballs = (tarballs) => {
 };
 
 /**
+ * `releases` with each one's `tag` read from its own tarball's
+ * `package.json#publishConfig.tag`, defaulting to `latest`. A Changesets
+ * publish plan has no notion of `publishConfig.tag` and writes `"tag":
+ * "latest"` for every entry, so its `tag` cannot be trusted; the tarball is
+ * what npm actually publishes, so its own manifest decides the dist-tag.
+ * @param {{
+ *   releases: PublishRelease[];
+ *   readManifest: (release: PublishRelease) => { publishConfig?: { tag?: string } };
+ * }} options
+ * @returns {PublishRelease[]}
+ */
+export const releasesWithPublishConfigTags = ({ releases, readManifest }) =>
+  releases.map((release) => ({
+    ...release,
+    tag: readManifest(release).publishConfig?.tag ?? 'latest'
+  }));
+
+/**
  * Publishes `releases` in order, skipping any already on npm, and stops at
  * the first failure.
  * @param {{
@@ -187,6 +205,18 @@ const npmPublish = async (packDir, release) => {
 };
 
 /**
+ * A tarball's own `package.json`, extracted straight from it -- the
+ * manifest that actually gets published, not the one in the working tree.
+ * @param {string} tarballPath
+ */
+const readManifestFromTarball = (tarballPath) =>
+  JSON.parse(
+    execFileSync('tar', ['-xOf', tarballPath, 'package/package.json'], {
+      encoding: 'utf8'
+    })
+  );
+
+/**
  * The tarballs in `<packDir>/packages/`, for `releasesFromTarballs`.
  * @param {string} packDir
  */
@@ -196,14 +226,7 @@ const tarballsIn = (packDir) => {
     .filter((name) => name.endsWith('.tgz'))
     .map((name) => ({
       path: join('packages', name),
-      readManifest: () =>
-        JSON.parse(
-          execFileSync(
-            'tar',
-            ['-xOf', join(packagesDir, name), 'package/package.json'],
-            { encoding: 'utf8' }
-          )
-        )
+      readManifest: () => readManifestFromTarball(join(packagesDir, name))
     }));
 };
 
@@ -212,9 +235,13 @@ const main = async () => {
   if (!packDir) throw new Error('PACK_DIR is not set.');
 
   const planPath = join(packDir, 'publish-plan.json');
-  const releases = existsSync(planPath)
-    ? releasesFromPlan(JSON.parse(readFileSync(planPath, 'utf8')))
-    : releasesFromTarballs(tarballsIn(packDir));
+  const releases = releasesWithPublishConfigTags({
+    releases: existsSync(planPath)
+      ? releasesFromPlan(JSON.parse(readFileSync(planPath, 'utf8')))
+      : releasesFromTarballs(tarballsIn(packDir)),
+    readManifest: (release) =>
+      readManifestFromTarball(join(packDir, release.tarball.path))
+  });
 
   const result = await publishReleases({
     releases,
