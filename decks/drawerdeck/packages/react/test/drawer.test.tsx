@@ -6,6 +6,7 @@ import {
   contentOf,
   expectSettledTo,
   mockReducedMotion,
+  panelOf,
   popupOf,
   sleep,
   TestDrawer,
@@ -13,6 +14,24 @@ import {
 } from './fixtures';
 
 afterEach(() => vi.restoreAllMocks());
+
+/** Gives `el` a real CSS transition tied to `data-ending-style`, the way a
+ * consumer's own recipe does: a `<style>` scoped to a unique marker
+ * attribute, removed again once the test is done with it. */
+function withTransition(el: HTMLElement, durationMs: number): () => void {
+  const marker = `data-test-${Math.random().toString(36).slice(2)}`;
+  el.setAttribute(marker, '');
+  const style = document.createElement('style');
+  style.textContent = `
+    [${marker}] { opacity: 1; transition: opacity ${durationMs}ms linear; }
+    [${marker}][data-ending-style] { opacity: 0; }
+  `;
+  document.head.append(style);
+  return () => {
+    style.remove();
+    el.removeAttribute(marker);
+  };
+}
 
 describe('rendering', () => {
   it('renders every part, labelled and described', () => {
@@ -101,6 +120,32 @@ describe('opening and closing', () => {
     popup.dispatchEvent(new Event('cancel', { cancelable: true }));
     await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
     expect(onOpenChange).toHaveBeenCalledWith(false, { reason: 'escape' });
+  });
+
+  it('waits for the Panel’s own CSS exit before closing, then returns focus to the trigger', async () => {
+    mockReducedMotion();
+    render(<TestDrawer />);
+    const trigger = screen.getByText('Open');
+    act(() => trigger.click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    const removeTransition = withTransition(panelOf(document.body), 50);
+
+    act(() => screen.getByText('Close').click());
+
+    // Mid-exit: still open, still focus-trapped, not yet back on the
+    // trigger.
+    expect(popup.getAttribute('data-phase')).toBe('closing');
+    expect(popup.open).toBe(true);
+    expect(document.activeElement).not.toBe(trigger);
+
+    await expectSettledTo(
+      () => popupOf(document.body).getAttribute('data-phase'),
+      'closed'
+    );
+    expect(popup.open).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+    removeTransition();
   });
 
   it('closes on an outside press', async () => {

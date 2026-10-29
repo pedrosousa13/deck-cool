@@ -81,9 +81,15 @@ const THROW_VELOCITY_SCALE = 200;
  * resting there. */
 const SETTLE_TOLERANCE = 4;
 const SCROLLEND_DEBOUNCE_MS = 120;
-/** A scroll into the opening position that never ends (e.g. `scrollend`
- * never fires) still reaches `open` after this long. */
-const OPEN_SAFETY_MS = 1000;
+/** The Panel's CSS entrance/exit (#268): `data-starting-style` and
+ * `data-ending-style`, Base UI's own attribute names, carried over so
+ * migrating from it is easy. */
+const STARTING_STYLE_ATTR = 'data-starting-style';
+const ENDING_STYLE_ATTR = 'data-ending-style';
+/** Added to the Panel's own computed transition duration for the close
+ * timeout fallback, so a `transitionend` that lands a frame or two late
+ * (it does) still arrives before the timeout closes the dialog itself. */
+const EXIT_TIMEOUT_MARGIN_MS = 50;
 
 /** Marks the dialog this engine resets, so one shared stylesheet rule can
  * neutralise its native `::backdrop` (`Drawer.Backdrop` is the real dim
@@ -135,6 +141,24 @@ function motionBehavior(): ScrollBehavior {
   return reducedMotion() ? 'instant' : 'smooth';
 }
 
+/** The longest `transition-duration` a consumer declared on `el`, in
+ * milliseconds; 0 when none is declared (so the caller waits for
+ * `transitionend` where there is a transition to end, and not at all where
+ * there is none -- e.g. `prefers-reduced-motion` zeroed it in the
+ * documented recipe). Comma-separated values (one per transitioned
+ * property) resolve to the longest, the way the longest-running one decides
+ * when a real `transitionend` for the element last fires. */
+function transitionDurationMs(el: Element): number {
+  const value = getComputedStyle(el).transitionDuration;
+  if (!value) return 0;
+  return value.split(',').reduce((longest, part) => {
+    const n = Number.parseFloat(part);
+    if (!Number.isFinite(n)) return longest;
+    const ms = part.trim().endsWith('ms') ? n : n * 1000;
+    return Math.max(longest, ms);
+  }, 0);
+}
+
 interface SnapCandidate {
   /** -1 for closed; otherwise the index into the configured snap points. */
   index: number;
@@ -155,11 +179,25 @@ export function createDrawer(
   /** The configured snap points' pixel offsets, nearest first; excludes
    * closed (always 0). */
   let snapPx: number[] = [];
-  let pendingOpenIndex = 0;
   let pendingCloseReason: OpenChangeReason | null = null;
-  let openSafetyTimer: ReturnType<typeof setTimeout> | undefined;
   let scrollEndDebounce: ReturnType<typeof setTimeout> | undefined;
   let destroyed = false;
+
+  // ---------- the CSS entrance and exit (#268) ----------
+  // `data-starting-style` and `data-ending-style` are the only moving parts:
+  // a consumer's own CSS transition on the Panel (and the Backdrop, for the
+  // exit) does the sliding, on the compositor, with nothing here running
+  // per frame. See the "Animate the drawer" guide for the recipe.
+  let enterRaf = 0;
+  let exitTimer: ReturnType<typeof setTimeout> | undefined;
+  let exitTransitionCleanup: (() => void) | undefined;
+  let interruptListenersAttached = false;
+  /** True for a CSS exit's whole run (`beginExit` to `settleExit` or
+   * `cancelExit`): guards `onScrollEnd` below the way `dragging` and
+   * `throwing` do, since this exit never moves `scrollTop` and a stale
+   * `scrollend` left over from whatever scroll opened the drawer must not
+   * read it as a native settle back to `open` or to closed. */
+  let cssExiting = false;
 
   const gap = viewport.querySelector<HTMLElement>('[data-drawer-gap]');
 
@@ -309,7 +347,6 @@ export function createDrawer(
   }
 
   function finishClose(reason: OpenChangeReason) {
-    clearTimeout(openSafetyTimer);
     viewport.style.scrollSnapType = 'y mandatory';
     // `close()` itself restores focus to whatever had it before `open()`
     // called `showModal()` -- closed first, so a consumer's own focus
@@ -320,17 +357,113 @@ export function createDrawer(
     opts.onOpenChange?.(false, reason);
   }
 
-  function beginClosingScroll(reason: OpenChangeReason) {
+  /** Any touch, wheel or pointer down while the Panel's CSS entrance or
+   * exit is still in flight ends it at once: the drawer already sits at
+   * its snap point (`open` never moved `scrollTop` to get here, and
+   * `beginExit` never moves it either), so there is nothing left to do but
+   * drop the attribute and let the gesture that interrupted it continue
+   * natively. */
+  function onInterrupt() {
+    if (phase === 'opening') {
+      cancelEnter();
+      setPhase('open');
+      updateContentLock();
+    } else if (phase === 'closing') {
+      cancelExit();
+      setPhase('open');
+    }
+  }
+
+  function attachInterruptListeners() {
+    if (interruptListenersAttached) return;
+    interruptListenersAttached = true;
+    viewport.addEventListener('touchstart', onInterrupt, { passive: true });
+    viewport.addEventListener('wheel', onInterrupt, { passive: true });
+    viewport.addEventListener('pointerdown', onInterrupt);
+  }
+
+  function detachInterruptListeners() {
+    if (!interruptListenersAttached) return;
+    interruptListenersAttached = false;
+    viewport.removeEventListener('touchstart', onInterrupt);
+    viewport.removeEventListener('wheel', onInterrupt);
+    viewport.removeEventListener('pointerdown', onInterrupt);
+  }
+
+  /** Cancels a Panel entrance still in flight: the one-frame
+   * `data-starting-style` window (`open`, below). Safe to call whether or
+   * not one is under way. */
+  function cancelEnter() {
+    if (enterRaf) {
+      cancelAnimationFrame(enterRaf);
+      enterRaf = 0;
+    }
+    panel.removeAttribute(STARTING_STYLE_ATTR);
+    detachInterruptListeners();
+  }
+
+  /** Cancels a Panel exit still in flight -- its `data-ending-style`
+   * attribute, its `transitionend` listener and its timeout fallback --
+   * without closing the dialog. Safe to call whether or not one is under
+   * way: `open()` calls it to resume an exit it interrupted, and repeated
+   * fast open/close cycles rely on it to never leave a stale timer or
+   * listener running past the exit it belonged to. */
+  function cancelExit() {
+    cssExiting = false;
+    clearTimeout(exitTimer);
+    exitTimer = undefined;
+    exitTransitionCleanup?.();
+    exitTransitionCleanup = undefined;
+    pendingCloseReason = null;
+    panel.removeAttribute(ENDING_STYLE_ATTR);
+    parts.backdrop?.removeAttribute(ENDING_STYLE_ATTR);
+    detachInterruptListeners();
+  }
+
+  /** The Panel's (and the Backdrop's) CSS exit, for every programmatic
+   * close -- `close()`, Escape, an outside press, `Drawer.Close` -- never
+   * a drag or a flick dismissal, which stay native and unchanged. Sets
+   * `data-ending-style`, waits for the Panel's own `transitionend` (or a
+   * timeout at its computed transition duration plus a margin, or not at
+   * all where no transition is defined), then closes the dialog. */
+  function beginExit(reason: OpenChangeReason) {
+    cancelEnter();
+    cancelExit();
+    cssExiting = true;
     pendingCloseReason = reason;
     setPhase('closing');
-    // Not dismissible, the closed marker is not a snap target (see
-    // `positionMarkers`): mandatory snapping would otherwise fight this
-    // scroll, pulling it straight back to the nearest open point. This is
-    // always a deliberate close (every call site already checked
-    // `dismissible` for the reasons that need it), so snapping stays off
-    // for its whole scroll, however it ends.
-    viewport.style.scrollSnapType = 'none';
-    viewport.scrollTo({ top: 0, behavior: motionBehavior() });
+    panel.setAttribute(ENDING_STYLE_ATTR, '');
+    parts.backdrop?.setAttribute(ENDING_STYLE_ATTR, '');
+    attachInterruptListeners();
+    const duration = transitionDurationMs(panel);
+    if (duration <= 0) {
+      settleExit(reason);
+      return;
+    }
+    const onEnd = (event: Event) => {
+      if ((event as TransitionEvent).target !== panel) return;
+      settleExit(reason);
+    };
+    panel.addEventListener('transitionend', onEnd);
+    exitTransitionCleanup = () =>
+      panel.removeEventListener('transitionend', onEnd);
+    exitTimer = setTimeout(
+      () => settleExit(reason),
+      duration + EXIT_TIMEOUT_MARGIN_MS
+    );
+  }
+
+  function settleExit(reason: OpenChangeReason) {
+    cssExiting = false;
+    clearTimeout(exitTimer);
+    exitTimer = undefined;
+    exitTransitionCleanup?.();
+    exitTransitionCleanup = undefined;
+    detachInterruptListeners();
+    panel.removeAttribute(ENDING_STYLE_ATTR);
+    parts.backdrop?.removeAttribute(ENDING_STYLE_ATTR);
+    pendingCloseReason = null;
+    finishClose(reason);
   }
 
   function onScrollEnd() {
@@ -346,29 +479,8 @@ export function createDrawer(
     // back on at that in-between position too, and the resulting re-snap
     // can land on a different point than the one the throw was easing
     // toward -- the flash (#279).
-    if (dragging || throwing) return;
+    if (dragging || throwing || cssExiting) return;
     const st = viewport.scrollTop;
-
-    if (phase === 'opening') {
-      const target = snapPx[pendingOpenIndex] ?? 0;
-      if (Math.abs(st - target) <= SETTLE_TOLERANCE) {
-        // A resize during the opening scroll was ignored (ADR 0001);
-        // reconcile it now.
-        measure();
-        positionMarkers();
-        const reconciled = snapPx[pendingOpenIndex] ?? 0;
-        if (Math.abs(viewport.scrollTop - reconciled) > SETTLE_TOLERANCE) {
-          viewport.scrollTop = reconciled;
-        }
-        clearTimeout(openSafetyTimer);
-        snapIndex = pendingOpenIndex;
-        setPhase('open');
-        updateContentLock();
-      } else {
-        viewport.scrollTo({ top: target, behavior: motionBehavior() });
-      }
-      return;
-    }
 
     if (
       st <= SETTLE_TOLERANCE &&
@@ -414,8 +526,8 @@ export function createDrawer(
   }
   // The native dim needs no scroll listener at all: nothing here runs per
   // scroll frame (#249). The content lock still only needs to be right at
-  // a settle point (`settleOpenAt`, the `opening` branch of `onScrollEnd`,
-  // `onResize`, `setOptions`), all of which call `updateContentLock`
+  // a settle point (`settleOpenAt`, `open`'s own call once `scrollTop` is
+  // set, `onResize`, `setOptions`), all of which call `updateContentLock`
   // directly, so dropping its live update here costs it nothing -- a drag
   // or fling already has the viewport's whole gesture captured natively,
   // so content's own `overflow-y` cannot take effect until the gesture
@@ -426,16 +538,16 @@ export function createDrawer(
 
   function onCancel(event: Event) {
     // Always handled ourselves, so the native instant close never runs
-    // ahead of the closing scroll.
+    // ahead of the Panel's own CSS exit.
     event.preventDefault();
     if (!opts.dismissible || phase !== 'open') return;
-    beginClosingScroll('escape');
+    beginExit('escape');
   }
   dialog.addEventListener('cancel', onCancel);
 
   function onGapClick() {
     if (!opts.dismissible || phase !== 'open') return;
-    beginClosingScroll('outside-press');
+    beginExit('outside-press');
   }
   gap?.addEventListener('click', onGapClick);
 
@@ -587,29 +699,42 @@ export function createDrawer(
       snapTo(index);
       return;
     }
-    pendingOpenIndex = index;
+    if (phase === 'closing') {
+      // The exit this interrupts never moved `scrollTop` to begin with, so
+      // the drawer is still physically resting at its snap point: resume
+      // there instead of calling `showModal()` on a dialog that is already
+      // open (it would throw).
+      cancelExit();
+      setPhase('open');
+      updateContentLock();
+      if (index !== snapIndex) snapTo(index);
+      return;
+    }
     dialog.showModal();
     dialog.focus({ preventScroll: true });
     measure();
     positionMarkers();
+    // Straight to the snap point, before this task yields to a paint: no
+    // scroll animation, so nothing here can race a resize or a drag the
+    // way the old scrollTo-driven open did.
+    viewport.scrollTop = snapPx[index] ?? 0;
+    snapIndex = index;
+    updateContentLock();
     setPhase('opening');
-    viewport.scrollTop = 0;
-    requestAnimationFrame(() => {
-      viewport.scrollTo({
-        top: snapPx[index] ?? 0,
-        behavior: motionBehavior()
-      });
-    });
-    clearTimeout(openSafetyTimer);
-    openSafetyTimer = setTimeout(() => {
-      if (phase !== 'opening') return;
-      measure();
-      positionMarkers();
-      viewport.scrollTop = snapPx[index] ?? 0;
-      snapIndex = index;
+    // `data-starting-style` paints on this same, still-unpainted frame (no
+    // prior frame exists for a dialog `showModal()` just revealed, so nothing
+    // transitions yet); removing it next frame is what starts a consumer's
+    // CSS `transition: transform` sliding the Panel in -- one write now, one
+    // on the next frame, nothing per frame after that.
+    panel.setAttribute(STARTING_STYLE_ATTR, '');
+    attachInterruptListeners();
+    enterRaf = requestAnimationFrame(() => {
+      enterRaf = 0;
+      panel.removeAttribute(STARTING_STYLE_ATTR);
+      detachInterruptListeners();
       setPhase('open');
       updateContentLock();
-    }, OPEN_SAFETY_MS);
+    });
   }
 
   /** `open`'s own index needs `snapPx` measured first, since it is read
@@ -632,8 +757,7 @@ export function createDrawer(
     ) {
       return;
     }
-    clearTimeout(openSafetyTimer);
-    beginClosingScroll(reason);
+    beginExit(reason);
   }
 
   function snapTo(index: number) {
@@ -656,7 +780,8 @@ export function createDrawer(
     if (destroyed) return;
     destroyed = true;
     releaseBackdropReset();
-    clearTimeout(openSafetyTimer);
+    cancelEnter();
+    cancelExit();
     clearTimeout(scrollEndDebounce);
     cancelAnimationFrame(throwFrame);
     cancelAnimationFrame(progressFrame);

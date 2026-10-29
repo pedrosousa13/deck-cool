@@ -317,6 +317,22 @@ main .home-family .home-more {
   border-radius: 16px 16px 0 0;
   background-color: var(--ground-raised);
   text-align: center;
+  transform: translateY(0);
+}
+
+/* The entrance and the exit: data-starting-style and data-ending-style,
+   the engine's own attributes, same recipe as the "Animate the drawer"
+   guide. No scroll animation drives this: the panel's transform is purely
+   visual, on the compositor. */
+@media (prefers-reduced-motion: no-preference) {
+  .drawer-demo__panel {
+    transition: transform 300ms var(--ease);
+  }
+
+  .drawer-demo__panel[data-starting-style],
+  .drawer-demo__panel[data-ending-style] {
+    transform: translateY(100%);
+  }
 }
 
 .drawer-demo__handle {

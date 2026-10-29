@@ -1,14 +1,35 @@
 /* `@drawerdeck/core` sets the dialog's, the viewport's and the backdrop's
    structural styles inline (ADR 0001 in decks/drawerdeck): this is only
    `Drawer.Panel`'s own box, from drawerdeck's own site demo
-   (sites/drawerdeck/styles/drawerdeck.css's `.drawer-demo__panel`) -- height
+   (sites/drawerdeck/styles/drawerdeck.css's `.drawer-demo__panel`), height
    100% of the viewport's own height (the engine's snap-point math assumes
    the panel fills it) and a flex column so the handle and the scrollable
-   content lay out top to bottom. */
+   content lay out top to bottom.
+
+   The entrance and the exit (#268) are the documented recipe
+   (`packages/docs/guides/animate-the-drawer.md`), the same as the demo
+   site's: fairness rule 3 (#266) sets up every deck's bench entry the way
+   its own docs recommend, and this is now drawerdeck's. The harness's
+   `openness()` reads `panel.getBoundingClientRect().top` every frame, the
+   same number for a library that moves the panel with a per-frame
+   transform (vaul, Base UI) as for one that scrolls it, so this measures
+   the same way they do. */
 
 .panel {
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel {
+    transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .panel[data-starting-style],
+  .panel[data-ending-style] {
+    transform: translateY(100%);
+  }
 }
