@@ -380,7 +380,11 @@ export function createDrawer(
    * first, mid-entrance, that its `cancel` event's own `preventDefault()`
    * does not actually prevent it (#268's second bug). Reconciles the
    * phase to `closed` whenever that happens, so a later `open()` is not
-   * reading `dialog.open` already false as still `opening` or `open`. */
+   * reading `dialog.open` already false as still `opening` or `open`.
+   * Landing mid-exit, the same way, keeps the reason that exit already
+   * carries (`pendingCloseReason`, read before `teardownExit` clears it)
+   * instead of reporting 'escape': a close finished this way still keeps
+   * the reason it already had (#268's design ruling). */
   function onNativeClose() {
     if (pendingEngineCloses > 0) {
       pendingEngineCloses -= 1;
@@ -388,8 +392,9 @@ export function createDrawer(
     }
     if (phase === 'closed') return;
     cancelEnter();
+    const reason = pendingCloseReason ?? 'escape';
     if (cssExiting) teardownExit();
-    finishClose('escape');
+    finishClose(reason);
   }
   dialog.addEventListener('close', onNativeClose);
 

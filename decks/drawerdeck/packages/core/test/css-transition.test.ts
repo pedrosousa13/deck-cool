@@ -534,6 +534,81 @@ describe('interrupting the entrance or the exit', () => {
   });
 });
 
+describe('a native close mid-exit keeps the close’s own reason (#268)', () => {
+  it('a second Escape that closes the dialog natively, bypassing its own preventDefault(), still reports the original reason once', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { panel, backdrop, dialog, drawer } = fixture;
+    // Long enough that the exit is still running when the native close
+    // lands.
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+
+    drawer.close('close-button');
+    expect(drawer.phase).toBe('closing');
+
+    await sleep(100);
+    // Genuinely mid-flight: well under the 300ms exit.
+    const midY = translateY(getComputedStyle(panel).transform);
+    expect(midY).toBeGreaterThan(0);
+    expect(midY).toBeLessThan(1900);
+
+    // A second Escape here fires `cancel` (handled: 'closing' starts
+    // nothing new) and, in both Chromium and WebKit, can still close the
+    // dialog natively despite that `cancel`'s own `preventDefault()`
+    // (#268's second bug) -- the dialog's own `close` firing with no
+    // `cancel` of its own, which calling the real `close()` reproduces.
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    dialog.close();
+    // `close()` removes the `open` attribute synchronously, but fires its
+    // own `close` event -- `onNativeClose`'s own listener -- on a queued
+    // task.
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(dialog.open).toBe(false);
+    expect(panel.hasAttribute('data-ending-style')).toBe(false);
+    expect(backdrop.hasAttribute('data-ending-style')).toBe(false);
+    // The exit's own reason, not 'escape': a close finished mid-exit keeps
+    // the reason it already carries.
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'close-button');
+    expect(
+      onOpenChange.mock.calls.filter(([open]) => open === false)
+    ).toHaveLength(1);
+    removeTransition();
+  });
+
+  it('a close() started programmatically, finished the same way, reports "programmatic" too', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { panel, dialog, drawer } = fixture;
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+
+    drawer.close('programmatic');
+    expect(drawer.phase).toBe('closing');
+
+    await sleep(100);
+    expect(translateY(getComputedStyle(panel).transform)).toBeGreaterThan(0);
+
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    dialog.close();
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'programmatic');
+    expect(
+      onOpenChange.mock.calls.filter(([open]) => open === false)
+    ).toHaveLength(1);
+    removeTransition();
+  });
+});
+
 describe('interrupting the entrance and the exit with the scroll-timeline dim applied', () => {
   it('leaves the Backdrop’s dim tracking scrollTop on a later drag, not stuck wherever the interrupt finished it', async () => {
     fixture = mount({ snapPoints: [0.5, 1] });
