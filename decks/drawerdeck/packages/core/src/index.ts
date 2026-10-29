@@ -445,8 +445,8 @@ export function createDrawer(
   }
   // The native dim needs no scroll listener at all: nothing here runs per
   // scroll frame (#249). The content lock still only needs to be right at
-  // a settle point (`settleOpenAt`, the `opening` branch of `onScrollEnd`,
-  // `onResize`, `setOptions`), all of which call `updateContentLock`
+  // a settle point (`settleOpenAt`, `finishOpen`, `onResize`, `setOptions`),
+  // all of which call `updateContentLock`
   // directly, so dropping its live update here costs it nothing -- a drag
   // or fling already has the viewport's whole gesture captured natively,
   // so content's own `overflow-y` cannot take effect until the gesture
