@@ -53,4 +53,4 @@ viewport scrolls.
 ## Not in the beta
 
 Sides other than the bottom, non-modal drawers and nested drawers (#237),
-a background indent, and React 18.
+and a background indent.
