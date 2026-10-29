@@ -1,0 +1,133 @@
+name: Drawer bench
+
+# Runs the interleaved drawer bench (#266, #233/#245) on six parallel,
+# dedicated ubuntu-latest shards, never on a shared machine: each shard runs
+# every scenario, load and deck itself, in a freshly shuffled order per
+# (scenario, load, rep) (decks/drawerdeck/bench/bench.spec.ts), so no
+# library's reps land disproportionately on a busier or quieter stretch of
+# a shard's own run. `report` pools every shard's rows into medians, spread
+# and n per cell, plus a per-shard winner table, and uploads both as an
+# artifact -- never to this repo's working tree, since this workflow has no
+# write permission and no secret.
+on:
+  workflow_dispatch:
+    inputs:
+      reps_per_shard:
+        description: "Reps per (scenario, load, deck) cell, per shard."
+        required: false
+        default: "5"
+        type: string
+  schedule:
+    - cron: "17 6 * * 1" # weekly, Monday
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Puts the pnpm named in package.json's packageManager on the path.
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # @drawerdeck/react is a workspace:* dependency of the bench (#266):
+      # building it here, from this run's own checkout, is what makes the
+      # bench always measure the commit under test, not a packed tarball
+      # from some other checkout.
+      - run: pnpm --dir decks/drawerdeck build
+      - run: pnpm exec playwright install --with-deps --only-shell chromium
+      - run: pnpm --dir decks/drawerdeck/bench build
+
+      - name: Record the runner, before
+        run: |
+          mkdir -p decks/drawerdeck/bench/results
+          {
+            echo "shard: ${{ matrix.shard }}"
+            echo "runner image: ${ImageOS:-unknown} ${ImageVersion:-unknown}"
+            echo "nproc: $(nproc)"
+            echo
+            echo "lscpu:"
+            lscpu
+            echo
+            echo "uptime, before:"
+            uptime
+          } > decks/drawerdeck/bench/results/machine.txt
+
+      - name: Run the interleaved bench
+        working-directory: decks/drawerdeck/bench
+        env:
+          SHARD_ID: shard-${{ matrix.shard }}
+          BENCH_SEED: run-${{ github.run_id }}-shard-${{ matrix.shard }}
+          BENCH_REPS: ${{ inputs.reps_per_shard || 5 }}
+        run: pnpm exec playwright test -c playwright.config.ts bench.spec.ts
+
+      - name: Record the runner, after
+        run: |
+          {
+            echo
+            echo "uptime, after:"
+            uptime
+          } >> decks/drawerdeck/bench/results/machine.txt
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: drawer-bench-shard-${{ matrix.shard }}
+          path: decks/drawerdeck/bench/results/
+          if-no-files-found: error
+
+  report:
+    needs: bench
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Built once, for bundle-size.mjs: it is a Vite build, not a browser
+      # run, and the figure is the same on every shard, so it is measured
+      # here instead of six times over.
+      - run: pnpm --dir decks/drawerdeck build
+      - name: Measure bundle size
+        working-directory: decks/drawerdeck/bench
+        run: |
+          node bundle-size.mjs | tee bundle-size.txt
+          grep '^JSON:' bundle-size.txt | sed 's/^JSON: //' > bundle-size.json
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: drawer-bench-shard-*
+          path: shards
+
+      - name: Aggregate every shard
+        run: |
+          mkdir -p report-out
+          python3 decks/drawerdeck/bench/aggregate.py shards \
+            --bundle decks/drawerdeck/bench/bundle-size.json \
+            --out-md report-out/RESULTS.md \
+            --out-jsonl report-out/aggregate.jsonl \
+            --out-summary report-out/summary.md
+          cat report-out/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: drawer-bench-report
+          path: report-out/
+          if-no-files-found: error

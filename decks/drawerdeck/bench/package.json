@@ -1,0 +1,27 @@
+{
+  "name": "@drawerdeck/bench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Interleaved motion and cost bench for @drawerdeck/react against vaul, Base UI's Drawer and React Aria's Sheet (#266, #283).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "bench": "playwright test -c playwright.config.ts bench.spec.ts",
+    "smoke": "playwright test -c playwright.config.ts smoke.spec.ts"
+  },
+  "dependencies": {
+    "@drawerdeck/react": "workspace:*"
+  },
+  "devDependencies": {
+    "@base-ui/react": "1.9.0",
+    "@playwright/test": "1.63.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "react": "19.3.0",
+    "react-aria-components": "1.22.1",
+    "react-dom": "19.3.0",
+    "vaul": "1.1.2",
+    "vite": "8.3.1"
+  }
+}

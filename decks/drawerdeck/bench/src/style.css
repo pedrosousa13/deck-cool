@@ -1,0 +1,59 @@
+/* Minimal, shared styling across the four bench pages (#266, originally
+   #233), so a visual difference is the mechanics, not the CSS: dark
+   background, one trigger button, one handle bar, one row style. */
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: #0b0b0d;
+  color: #e8e8ea;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+#trigger {
+  display: block;
+  margin: 20px;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  background: #2c2c2e;
+  color: #fff;
+}
+
+.handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: #4a4a4e;
+  margin: 10px auto 8px;
+  flex: 0 0 auto;
+}
+
+.panel {
+  background: #1c1c1e;
+  border-radius: 16px 16px 0 0;
+  box-sizing: border-box;
+}
+
+.inner-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.bench-row {
+  padding: 13px 16px;
+  border-bottom: 1px solid #2a2a2c;
+  font-size: 14px;
+}

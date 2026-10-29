@@ -21,6 +21,20 @@ them once with `pnpm exec playwright install chromium webkit`), `build` and
 `@drawerdeck/react`'s built module starts with `'use client'`). The list
 lives in `scripts/verify.mjs`.
 
+## The bench
+
+`bench/` is the interleaved motion and cost bench against vaul, Base UI's
+Drawer and React Aria's Sheet (#266, #283): its own private workspace
+package, depending on `@drawerdeck/react` via `workspace:*` so it always
+measures the commit under test. Not part of `pnpm verify` or `ci.yml` --
+`eslint .` still lints it for free, since it's nested under this directory,
+but nothing here typechecks, tests or builds it (the deck's own `build`
+script filters it out by name). `.github/workflows/drawer-bench.yml` runs
+it on six parallel `ubuntu-latest` shards, on `workflow_dispatch` and
+weekly; `bench/RESULTS.md` explains the method and points at that
+workflow's own report artifact for actual numbers, which this repo does not
+check in.
+
 `@drawerdeck/core` is the framework-neutral drawer engine, and
 `@drawerdeck/react` the React 19 primitives built on it (#240): the beta,
 bottom and modal only.

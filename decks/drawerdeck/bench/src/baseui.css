@@ -1,0 +1,31 @@
+/* Base UI's Drawer is fully unstyled: this is the positioning CSS its own
+   quickstart (base-ui.com/react/components/drawer) gives for the popup --
+   height and transform driven by the CSS custom properties the component
+   sets (`--drawer-height`, `--drawer-snap-point-offset`,
+   `--drawer-swipe-movement-y`). */
+
+.viewport {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.viewport .panel {
+  pointer-events: auto;
+}
+
+.panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: var(--drawer-height, auto);
+  transform: translateY(
+    calc(
+      var(--drawer-snap-point-offset, 0px) + var(--drawer-swipe-movement-y, 0px)
+    )
+  );
+  display: flex;
+  flex-direction: column;
+}
