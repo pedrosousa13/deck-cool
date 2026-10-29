@@ -1,0 +1,16 @@
+// A consumer's code against the built package's declarations, with React
+// 18's own types: run by `pnpm test:react-18`, after the build. Library
+// files are checked too, so a declaration React 18's types reject fails
+// here.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": [],
+    "paths": {
+      "@drawerdeck/react": ["./dist/index.d.ts"]
+    }
+  },
+  "include": ["test/consumer.tsx"]
+}

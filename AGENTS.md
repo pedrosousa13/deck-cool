@@ -53,10 +53,12 @@ root with `pnpm --dir decks/drawerdeck <script>`, and
 ADRs are at `decks/drawerdeck/docs/adr/`, numbered on their own.
 `decks/drawerdeck/AGENTS.md` covers what's specific to working in it. The
 engine (`@drawerdeck/core`) and the React 19 primitives (`@drawerdeck/react`)
-are the beta (#240): bottom, modal only. Both packages, and `@drawerdeck/docs`,
-are publishable at `0.1.0-beta.0`, under the npm dist-tag `beta` (#242); the
-maintainer still has to create the `@drawerdeck` npm scope before the release
-workflow can publish them (`decks/drawerdeck/AGENTS.md`, "Releasing").
+are the beta (#240): bottom, modal only. `@drawerdeck/react-18` builds the
+same source for React 18 too (#275). All three packages, and
+`@drawerdeck/docs`, are publishable at `0.1.0-beta.0`, under the npm dist-tag
+`beta` (#242); the maintainer still has to create the `@drawerdeck` npm scope
+before the release workflow can publish them (`decks/drawerdeck/AGENTS.md`,
+"Releasing").
 
 ## Releasing a deck
 

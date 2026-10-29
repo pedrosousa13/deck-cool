@@ -8,6 +8,8 @@
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "test:react-18": "pnpm --filter @drawerdeck/react-18... build && tsc -p packages/react-18/tsconfig.test.json && vitest run -c vitest.react-18.config.ts",
+    "test:react-19": "pnpm --filter @drawerdeck/react-18... build && tsc -p packages/react-18/tsconfig.test-react-19.json && vitest run -c vitest.react-19.config.ts",
     "build": "pnpm --filter \"./**\" --filter \"!drawerdeck\" --filter \"!@drawerdeck/bench\" build",
     "test:packages": "node scripts/verify-packaging.mjs",
     "verify": "node scripts/verify.mjs"
@@ -32,6 +34,7 @@
     "react-dom": "19.3.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",
+    "vite": "8.3.1",
     "vitest": "4.1.11"
   }
 }

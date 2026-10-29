@@ -18,7 +18,7 @@ import { publishablePackages } from './workspace-packages.mjs';
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 // Every package whose every built module must start with the directive.
-const CLIENT_PACKAGES = new Set(['@drawerdeck/react']);
+const CLIENT_PACKAGES = new Set(['@drawerdeck/react', '@drawerdeck/react-18']);
 const USE_CLIENT = /^(['"])use client\1;?\n/;
 // Every file a docs package may ship, by its path in the tarball.
 const DOCS_FILE = /^package\/(?:.+\.md|nav\.json|package\.json|assets\/.+)$/;

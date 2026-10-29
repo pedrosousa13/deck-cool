@@ -16,9 +16,11 @@ pnpm verify
 
 It runs every gate in order and stops at the first failure: `lint`,
 `typecheck`, `test` (vitest, in Chromium and WebKit via Playwright: install
-them once with `pnpm exec playwright install chromium webkit`), `build` and
-`test:packages` (publint and attw on the packed tarballs, and that
-`@drawerdeck/react`'s built module starts with `'use client'`). The list
+them once with `pnpm exec playwright install chromium webkit`),
+`test:react-18` (the same tests on React 18, against `@drawerdeck/react-18`'s
+build), `test:react-19` (the same, on React 19), `build` and `test:packages`
+(publint and attw on the packed tarballs, and that `@drawerdeck/react`'s and
+`@drawerdeck/react-18`'s built modules start with `'use client'`). The list
 lives in `scripts/verify.mjs`.
 
 ## The bench
@@ -37,15 +39,17 @@ check in.
 
 `@drawerdeck/core` is the framework-neutral drawer engine, and
 `@drawerdeck/react` the React 19 primitives built on it (#240): the beta,
-bottom and modal only.
+bottom and modal only. `@drawerdeck/react-18` builds the same source for
+React 18 too (#275), the way `decks/carouseldeck/packages/react-18` does for
+carouseldeck.
 
 Formatting is checked, never written by the gate. Run
 `pnpm exec prettier --write <files>` on the files you changed.
 
 ## Releasing
 
-`@drawerdeck/core`, `@drawerdeck/react` and `@drawerdeck/docs` are
-publishable, each at `0.1.0-beta.0` (#242). They do not go through
+`@drawerdeck/core`, `@drawerdeck/react`, `@drawerdeck/react-18` and
+`@drawerdeck/docs` are publishable, each at `0.1.0-beta.0` (#242). They do not go through
 Changesets' `fixed` group or pre mode, the way carouseldeck's packages do
 (`decks/carouseldeck/AGENTS.md`, "Releasing"): entering pre mode is repo-wide
 in Changesets, so it would turn carouseldeck's own next release into a

@@ -116,8 +116,9 @@ jobs:
           BASE: ${{ needs.changes.outputs.base }}
         run: pnpm --dir decks/carouseldeck verify --job checks "--changed=$BASE"
 
-  # drawerdeck's whole verify (#231): two packages, so one job covers lint,
-  # typecheck, test, build and test:packages, with no shards.
+  # drawerdeck's whole verify (#231): three packages, so one job covers
+  # lint, typecheck, test, test:react-18, test:react-19, build and
+  # test:packages, with no shards.
   # Its `test` is vitest's browser mode, Chromium and WebKit (#240): the
   # Playwright image carouseldeck-unit uses, so their browsers and system
   # libraries are already there.
