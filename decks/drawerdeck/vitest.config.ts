@@ -29,6 +29,8 @@ export default defineConfig({
   },
   test: {
     include: ['packages/*/test/**/*.test.{ts,tsx}'],
+    // React 18 and 19's tests run in `pnpm test:react-18`/`test:react-19`.
+    exclude: ['packages/react-18/**'],
     setupFiles: ['packages/react/test/setup.ts'],
     // A real browser, not a DOM emulation: the drawer is a <dialog>,
     // native scroll-snap and `scrollend`, none of which happy-dom or jsdom

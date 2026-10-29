@@ -240,10 +240,10 @@ importers:
         version: 19.3.0(@types/react@19.3.0)
       '@vitest/browser':
         specifier: 4.1.11
-        version: 4.1.11(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)
+        version: 4.1.11(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)
       '@vitest/browser-playwright':
         specifier: 4.1.11
-        version: 4.1.11(playwright@1.63.0)(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)
+        version: 4.1.11(playwright@1.63.0)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)
       eslint:
         specifier: 10.11.0
         version: 10.11.0(supports-color@10.2.2)
@@ -274,9 +274,12 @@ importers:
       typescript-eslint:
         specifier: 8.70.1
         version: 8.70.1(eslint@10.11.0(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3)
+      vite:
+        specifier: 8.3.1
+        version: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1)
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@26.6.3)(@vitest/browser-playwright@4.1.11)(happy-dom@20.14.5)(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))
+        version: 4.1.11(@types/node@26.6.3)(@vitest/browser-playwright@4.1.11)(happy-dom@20.14.5)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))
 
   decks/drawerdeck/bench:
     dependencies:
@@ -338,6 +341,31 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+
+  decks/drawerdeck/packages/react-18:
+    dependencies:
+      '@drawerdeck/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@drawerdeck/react':
+        specifier: workspace:*
+        version: link:../react
+      '@types/react':
+        specifier: 18.3.31
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: 18.3.7
+        version: 18.3.7(@types/react@18.3.31)
+      react:
+        specifier: 18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: 18.3.1
+        version: 18.3.1(react@18.3.1)
+      vite:
+        specifier: 8.3.1
+        version: 8.3.1(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1)
 
   packages/brand:
     devDependencies:
@@ -5955,19 +5983,6 @@ snapshots:
       - vite
     optional: true
 
-  '@vitest/browser-playwright@4.1.11(playwright@1.63.0)(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)':
-    dependencies:
-      '@vitest/browser': 4.1.11(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)
-      '@vitest/mocker': 4.1.11(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))
-      playwright: 1.63.0
-      tinyrainbow: 3.2.0
-      vitest: 4.1.11(@types/node@26.6.3)(@vitest/browser-playwright@4.1.11)(happy-dom@20.14.5)(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))
-    transitivePeerDependencies:
-      - bufferutil
-      - msw
-      - utf-8-validate
-      - vite
-
   '@vitest/browser@4.1.11(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)':
     dependencies:
       '@blazediff/core': 1.9.1
@@ -6003,23 +6018,6 @@ snapshots:
       - vite
     optional: true
 
-  '@vitest/browser@4.1.11(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)':
-    dependencies:
-      '@blazediff/core': 1.9.1
-      '@vitest/mocker': 4.1.11(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))
-      '@vitest/utils': 4.1.11
-      magic-string: 0.30.21
-      pngjs: 7.0.0
-      sirv: 3.0.2
-      tinyrainbow: 3.2.0
-      vitest: 4.1.11(@types/node@26.6.3)(@vitest/browser-playwright@4.1.11)(happy-dom@20.14.5)(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))
-      ws: 8.22.0
-    transitivePeerDependencies:
-      - bufferutil
-      - msw
-      - utf-8-validate
-      - vite
-
   '@vitest/expect@3.2.4':
     dependencies:
       '@types/chai': 5.2.3
@@ -6052,14 +6050,6 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       vite: 8.3.3(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1)
-
-  '@vitest/mocker@4.1.11(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))':
-    dependencies:
-      '@vitest/spy': 4.1.11
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1)
 
   '@vitest/pretty-format@3.2.4':
     dependencies:
@@ -7601,19 +7591,6 @@ snapshots:
       fsevents: 2.3.3
       yaml: 2.9.1
 
-  vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1):
-    dependencies:
-      lightningcss: 1.33.0
-      picomatch: 4.0.7
-      postcss: 8.5.29
-      rolldown: 1.2.13
-      tinyglobby: 0.2.17
-    optionalDependencies:
-      '@types/node': 26.6.3
-      esbuild: 0.28.2
-      fsevents: 2.3.3
-      yaml: 2.9.1
-
   vitest@4.1.11(@types/node@24.19.1)(@vitest/browser-playwright@4.1.11)(happy-dom@20.14.5)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1)):
     dependencies:
       '@vitest/expect': 4.1.11
@@ -7668,35 +7645,6 @@ snapshots:
     optionalDependencies:
       '@types/node': 26.6.3
       '@vitest/browser-playwright': 4.1.11(playwright@1.63.0)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)
-      happy-dom: 20.14.5
-    transitivePeerDependencies:
-      - msw
-
-  vitest@4.1.11(@types/node@26.6.3)(@vitest/browser-playwright@4.1.11)(happy-dom@20.14.5)(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1)):
-    dependencies:
-      '@vitest/expect': 4.1.11
-      '@vitest/mocker': 4.1.11(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))
-      '@vitest/pretty-format': 4.1.11
-      '@vitest/runner': 4.1.11
-      '@vitest/snapshot': 4.1.11
-      '@vitest/spy': 4.1.11
-      '@vitest/utils': 4.1.11
-      es-module-lexer: 2.3.2
-      expect-type: 1.4.0
-      magic-string: 0.30.21
-      obug: 2.2.1
-      pathe: 2.0.3
-      picomatch: 4.0.7
-      std-env: 4.3.0
-      tinybench: 2.9.0
-      tinyexec: 1.3.1
-      tinyglobby: 0.2.17
-      tinyrainbow: 3.2.0
-      vite: 8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 26.6.3
-      '@vitest/browser-playwright': 4.1.11(playwright@1.63.0)(vite@8.3.3(@types/node@26.6.3)(esbuild@0.28.2)(yaml@2.9.1))(vitest@4.1.11)
       happy-dom: 20.14.5
     transitivePeerDependencies:
       - msw
