@@ -81,17 +81,21 @@ undeclared transition: the exit closes the dialog at once, with no wait.
 ## Interrupted
 
 A touch, a wheel or a pointer down while the entrance or the exit is still
-running ends that transition immediately, but does not close the drawer.
-During the entrance, it finishes the open: the Panel and the Backdrop jump
-to their resting look and the drawer stays open. During the exit, it
-cancels the close: an explicit `close()`, Escape, an outside press or
-`Drawer.Close` is undone, the Panel and the Backdrop jump back to their
-resting, open look, the dialog stays open at its snap point, and
-`onOpenChange` never fires. A tap with no scroll cancels the close the same
-way a touch or a wheel does, even for Escape. The gesture that interrupted
-the transition then continues natively from there. The drawer is already at
-its snap point either way, since neither the entrance nor the exit ever
-moves `scrollTop`.
+running finishes that transition immediately, landing the drawer wherever it
+was headed: an interruption never cancels it. During the entrance, that is
+open: the Panel and the Backdrop jump to their resting look and the drawer
+stays open. During the exit, that is closed: the dialog closes at once, with
+whatever reason started that close (`close()`, Escape, an outside press or
+`Drawer.Close`), and `onOpenChange` fires the same way it would have once the
+exit ran its course. The gesture that interrupted the transition then
+continues natively from there. The drawer is already at its snap point
+either way, since neither the entrance nor the exit ever moves `scrollTop`.
+
+This is a deliberate simplification over an earlier design, where an
+interruption mid-exit cancelled the close instead: that reopened the drawer,
+and a controlled `Root` watching its own `open` prop could re-send the close
+and have the Panel replay its exit from the top. Finishing the close instead
+removes that whole failure mode.
 
 ## Why not the engine’s own ease
 
