@@ -40,6 +40,11 @@ as carouseldeck's primitives do, besides the props below.
 `data-open`, `data-phase` (`opening | open | closing | closed`), `data-snap-index`
 and `data-dragging` are set on the parts the beta's state applies to.
 
+`Drawer.Panel` and `Drawer.Backdrop` both carry `data-starting-style` on
+open, and `data-ending-style` for the whole of a programmatic close (never
+a drag or a flick): the attributes a consumer's own CSS transition drives
+the entrance and the exit from. See "Animate the drawer".
+
 `Drawer.Backdrop`'s dim is yours to style; see "Style the backdrop". Where
 `animation-timeline: scroll()` resolves (Chromium, Safari), `Drawer.Viewport`
 exposes a named scroll timeline, `--drawer`, that `Drawer.Backdrop` (or any

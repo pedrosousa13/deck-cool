@@ -281,20 +281,22 @@ main .home-family .home-more {
 /* The dim: the engine only exposes the scroll timeline and its range
    (--drawer-first-snap); this is the look, same recipe as the "Style the
    backdrop" guide. Chromium and Safari drive it natively, with no JS per
-   scroll frame; Firefox falls back to --drawer-progress. */
+   scroll frame; Firefox falls back to --drawer-progress. The scroll
+   timeline animates background-color's alpha, not opacity: the entrance
+   and the exit, below, animate opacity instead, so the two compose by
+   multiplying rather than one replacing the other. */
 @supports (animation-timeline: scroll()) {
   @keyframes drawer-demo-dim {
     from {
-      opacity: 0;
+      background-color: rgb(0 0 0 / 0);
     }
     to {
-      opacity: 1;
+      background-color: rgb(0 0 0 / 0.5);
     }
   }
 
   .drawer-demo__backdrop {
-    background: rgb(0 0 0 / 0.5);
-    opacity: 0;
+    background-color: rgb(0 0 0 / 0);
     animation: drawer-demo-dim 1s linear;
     animation-timeline: --drawer;
     animation-range: 0 var(--drawer-first-snap);
@@ -317,6 +319,32 @@ main .home-family .home-more {
   border-radius: 16px 16px 0 0;
   background-color: var(--ground-raised);
   text-align: center;
+  transform: translateY(0);
+}
+
+/* The entrance and the exit: data-starting-style and data-ending-style,
+   the engine's own attributes, same recipe as the "Animate the drawer"
+   guide, on the Panel and the Backdrop both. No scroll animation drives
+   this: the panel's transform and the backdrop's opacity are purely
+   visual, on the compositor. */
+@media (prefers-reduced-motion: no-preference) {
+  .drawer-demo__panel {
+    transition: transform 300ms var(--ease);
+  }
+
+  .drawer-demo__panel[data-starting-style],
+  .drawer-demo__panel[data-ending-style] {
+    transform: translateY(100%);
+  }
+
+  .drawer-demo__backdrop {
+    transition: opacity 300ms var(--ease);
+  }
+
+  .drawer-demo__backdrop[data-starting-style],
+  .drawer-demo__backdrop[data-ending-style] {
+    opacity: 0;
+  }
 }
 
 .drawer-demo__handle {

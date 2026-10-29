@@ -6,6 +6,7 @@ import {
   contentOf,
   expectSettledTo,
   mockReducedMotion,
+  panelOf,
   popupOf,
   sleep,
   TestDrawer,
@@ -13,6 +14,53 @@ import {
 } from './fixtures';
 
 afterEach(() => vi.restoreAllMocks());
+
+/** Gives `el` a real CSS transition tied to `data-ending-style`, the way a
+ * consumer's own recipe does: a `<style>` scoped to a unique marker
+ * attribute, removed again once the test is done with it. */
+function withTransition(el: HTMLElement, durationMs: number): () => void {
+  const marker = `data-test-${Math.random().toString(36).slice(2)}`;
+  el.setAttribute(marker, '');
+  const style = document.createElement('style');
+  style.textContent = `
+    [${marker}] { opacity: 1; transition: opacity ${durationMs}ms linear; }
+    [${marker}][data-ending-style] { opacity: 0; }
+  `;
+  document.head.append(style);
+  return () => {
+    style.remove();
+    el.removeAttribute(marker);
+  };
+}
+
+/** The same recipe, on `transform`: real motion a test can sample, the way
+ * the documented recipe actually ships. */
+function withTransformTransition(
+  el: HTMLElement,
+  durationMs: number
+): () => void {
+  const marker = `data-test-${Math.random().toString(36).slice(2)}`;
+  el.setAttribute(marker, '');
+  const style = document.createElement('style');
+  style.textContent = `
+    [${marker}] { transform: translateY(0); transition: transform ${durationMs}ms linear; }
+    [${marker}][data-starting-style], [${marker}][data-ending-style] { transform: translateY(100%); }
+  `;
+  document.head.append(style);
+  return () => {
+    style.remove();
+    el.removeAttribute(marker);
+  };
+}
+
+/** The `f` component (vertical translation) of a computed `transform`'s 2D
+ * matrix, or 0 for `'none'`. */
+function translateY(transform: string): number {
+  if (transform === 'none') return 0;
+  const match = /matrix\(([^)]+)\)/.exec(transform);
+  if (!match) return NaN;
+  return match[1].split(',').map(Number)[5];
+}
 
 describe('rendering', () => {
   it('renders every part, labelled and described', () => {
@@ -103,6 +151,32 @@ describe('opening and closing', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false, { reason: 'escape' });
   });
 
+  it('waits for the Panel’s own CSS exit before closing, then returns focus to the trigger', async () => {
+    mockReducedMotion();
+    render(<TestDrawer />);
+    const trigger = screen.getByText('Open');
+    act(() => trigger.click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    const removeTransition = withTransition(panelOf(document.body), 50);
+
+    act(() => screen.getByText('Close').click());
+
+    // Mid-exit: still open, still focus-trapped, not yet back on the
+    // trigger.
+    expect(popup.getAttribute('data-phase')).toBe('closing');
+    expect(popup.open).toBe(true);
+    expect(document.activeElement).not.toBe(trigger);
+
+    await expectSettledTo(
+      () => popupOf(document.body).getAttribute('data-phase'),
+      'closed'
+    );
+    expect(popup.open).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+    removeTransition();
+  });
+
   it('closes on an outside press', async () => {
     mockReducedMotion();
     render(<TestDrawer />);
@@ -114,6 +188,122 @@ describe('opening and closing', () => {
     act(() => gap.dispatchEvent(new MouseEvent('click', { bubbles: true })));
 
     await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
+  });
+});
+
+describe('interrupted mid-exit, an interruption never cancels a close (#268)', () => {
+  it('an uncontrolled drawer closes now with the original reason, not a replayed exit', async () => {
+    mockReducedMotion();
+    const onOpenChange = vi.fn();
+    render(<TestDrawer onOpenChange={onOpenChange} />);
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    const panel = panelOf(document.body);
+    // Long enough that it cannot settle on its own before the interrupt.
+    const removeTransition = withTransformTransition(panel, 1000);
+    const setAttributeSpy = vi.spyOn(panel, 'setAttribute');
+
+    act(() => screen.getByText('Close').click());
+    expect(popup.getAttribute('data-phase')).toBe('closing');
+    await sleep(100);
+    // Genuinely under way: the sampled transform is mid-flight, not
+    // already at either end.
+    const midY = translateY(getComputedStyle(panel).transform);
+    expect(midY).toBeGreaterThan(0);
+
+    const viewport = viewportOf(document.body);
+    act(() =>
+      viewport.dispatchEvent(new Event('touchstart', { bubbles: true }))
+    );
+
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
+    expect(popup.open).toBe(false);
+    expect(onOpenChange).toHaveBeenCalledWith(false, {
+      reason: 'close-button'
+    });
+    // No replay: `data-ending-style` was written once, by the exit the
+    // interrupt finished, never a second time by one it restarted.
+    const endingStyleWrites = setAttributeSpy.mock.calls.filter(
+      ([name]) => name === 'data-ending-style'
+    );
+    expect(endingStyleWrites).toHaveLength(1);
+    expect(
+      onOpenChange.mock.calls.filter(([open]) => open === false)
+    ).toHaveLength(1);
+    removeTransition();
+  });
+
+  it('a controlled drawer closes now instead of looping: Root never re-sends close() for an exit the interrupt already finished', async () => {
+    mockReducedMotion();
+    const onOpenChange = vi.fn();
+    function Controlled({ open }: { open: boolean }) {
+      return <TestDrawer open={open} onOpenChange={onOpenChange} />;
+    }
+    const { rerender } = render(<Controlled open={true} />);
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    const panel = panelOf(document.body);
+    const removeTransition = withTransformTransition(panel, 1000);
+    const setAttributeSpy = vi.spyOn(panel, 'setAttribute');
+
+    // The parent itself flips `open` false (the controlled path at
+    // `react/src/index.tsx` that calls `drawer.close('programmatic')`),
+    // not the Close button.
+    rerender(<Controlled open={false} />);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'closing');
+    const midY = translateY(getComputedStyle(panel).transform);
+    expect(midY).toBeGreaterThan(0);
+
+    const viewport = viewportOf(document.body);
+    act(() =>
+      viewport.dispatchEvent(new Event('touchstart', { bubbles: true }))
+    );
+
+    // Before #268's fix, an interruption here cancelled the exit, putting
+    // `state.phase` back to `open`; the controlled-`open` effect (still
+    // seeing `open: false`) re-sent `close('programmatic')`, and the Panel
+    // replayed its exit from the top -- a second `data-ending-style`
+    // write this asserts never happens.
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
+    expect(popup.open).toBe(false);
+    const endingStyleWrites = setAttributeSpy.mock.calls.filter(
+      ([name]) => name === 'data-ending-style'
+    );
+    expect(endingStyleWrites).toHaveLength(1);
+    removeTransition();
+  });
+});
+
+describe('escape mid-entrance (#268)', () => {
+  it('two Escapes close to each other mid-entrance still let the Trigger reopen it, onOpenChange(false, escape) firing exactly once', async () => {
+    mockReducedMotion();
+    const onOpenChange = vi.fn();
+    render(<TestDrawer onOpenChange={onOpenChange} />);
+    const trigger = screen.getByText('Open');
+    act(() => trigger.click());
+    const popup = popupOf(document.body);
+    expect(popup.getAttribute('data-phase')).toBe('opening');
+
+    // Two Escapes landing close enough behind each other, both still
+    // mid-entrance: the first used to be silently ignored outside phase
+    // 'open' (#268's second bug), leaving the entrance (and, in both
+    // Chromium and WebKit, sometimes the dialog itself, natively) with
+    // nowhere for a second Escape to go.
+    act(() => popup.dispatchEvent(new Event('cancel', { cancelable: true })));
+    act(() => popup.dispatchEvent(new Event('cancel', { cancelable: true })));
+
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
+    expect(popup.open).toBe(false);
+    expect(onOpenChange).toHaveBeenCalledWith(false, { reason: 'escape' });
+    expect(
+      onOpenChange.mock.calls.filter(([open]) => open === false)
+    ).toHaveLength(1);
+
+    // The Trigger can reopen it: `dialog.open` was never left false while
+    // the engine still thought it was 'open' or 'opening'.
+    act(() => trigger.click());
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
   });
 });
 

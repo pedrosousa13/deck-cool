@@ -19,16 +19,15 @@ from it:
 @supports (animation-timeline: scroll()) {
   @keyframes dim {
     from {
-      opacity: 0;
+      background-color: rgb(0 0 0 / 0);
     }
     to {
-      opacity: 1;
+      background-color: rgb(0 0 0 / 0.5);
     }
   }
 
   .backdrop {
-    background: rgb(0 0 0 / 0.5);
-    opacity: 0;
+    background-color: rgb(0 0 0 / 0);
     animation: dim 1s linear;
     animation-timeline: --drawer;
     animation-range: 0 var(--drawer-first-snap);
@@ -36,6 +35,12 @@ from it:
   }
 }
 ```
+
+The keyframes animate `background-color`'s alpha, not `opacity`: "Animate
+the drawer" gives the Backdrop its own `opacity` transition, for the
+entrance and the exit, and the two compose by multiplying instead of one
+replacing the other. The dim fades in with the entrance, fades out with
+the exit, and follows the drag in between.
 
 `--drawer-first-snap` is the pixel offset of the first (nearest closed)
 snap point, set on `Drawer.Popup` once per layout -- never per frame.
