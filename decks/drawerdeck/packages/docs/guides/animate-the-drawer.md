@@ -81,11 +81,11 @@ undeclared transition: the exit closes the dialog at once, with no wait.
 ## Interrupted
 
 A touch, a wheel or a pointer down while the entrance or the exit is still
-running ends it immediately. The engine drops the attribute itself, so the
-Panel (and, for an exit, the Backdrop) jump to their resting look and the
-gesture that interrupted them continues natively from there. The drawer is
-already at its snap point either way, since neither the entrance nor the
-exit ever moves `scrollTop`.
+running ends it immediately. The engine drops the attribute and ends the
+running transition at once, so the Panel (and, for an exit, the Backdrop)
+jump to their resting look and the gesture that interrupted them continues
+natively from there. The drawer is already at its snap point either way,
+since neither the entrance nor the exit ever moves `scrollTop`.
 
 ## Why not the engine’s own ease
 

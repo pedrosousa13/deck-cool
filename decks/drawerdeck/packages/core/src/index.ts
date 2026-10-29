@@ -86,10 +86,11 @@ const SCROLLEND_DEBOUNCE_MS = 120;
  * migrating from it is easy. */
 const STARTING_STYLE_ATTR = 'data-starting-style';
 const ENDING_STYLE_ATTR = 'data-ending-style';
-/** Added to the Panel's own computed transition duration for the close
- * timeout fallback, so a `transitionend` that lands a frame or two late
- * (it does) still arrives before the timeout closes the dialog itself. */
-const EXIT_TIMEOUT_MARGIN_MS = 50;
+/** Added to the Panel's own computed transition duration for the enter and
+ * exit timeout fallbacks, so a `transitionend` that lands a frame or two
+ * late (it does) still arrives before the timeout settles the phase
+ * itself. */
+const TRANSITION_TIMEOUT_MARGIN_MS = 50;
 
 /** Marks the dialog this engine resets, so one shared stylesheet rule can
  * neutralise its native `::backdrop` (`Drawer.Backdrop` is the real dim
@@ -189,6 +190,8 @@ export function createDrawer(
   // sliding and the fading, on the compositor, with nothing here running
   // per frame. See the "Animate the drawer" guide for the recipe.
   let enterRaf = 0;
+  let enterTimer: ReturnType<typeof setTimeout> | undefined;
+  let enterTransitionCleanup: (() => void) | undefined;
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
   let exitTransitionCleanup: (() => void) | undefined;
   let interruptListenersAttached = false;
@@ -357,19 +360,36 @@ export function createDrawer(
     opts.onOpenChange?.(false, reason);
   }
 
+  /** Forces the style flush that starts the transition `el`'s attribute
+   * change (just above the call site) triggers -- the same flush `open()`
+   * forces for the entrance's own starting value -- then finishes every
+   * resulting animation at once, jumping `el` straight to its resting
+   * value instead of letting it ease there. */
+  function finishTransition(el: Element) {
+    const style = getComputedStyle(el);
+    void style.transform;
+    void style.opacity;
+    el.getAnimations().forEach((animation) => animation.finish());
+  }
+
   /** Any touch, wheel or pointer down while the Panel's CSS entrance or
    * exit is still in flight ends it at once: the drawer already sits at
    * its snap point (`open` never moved `scrollTop` to get here, and
    * `beginExit` never moves it either), so there is nothing left to do but
-   * drop the attribute and let the gesture that interrupted it continue
-   * natively. */
+   * drop the attribute, finish whatever transition that drop (or the
+   * entrance's own removal, already past by now) started, and let the
+   * gesture that interrupted it continue natively. */
   function onInterrupt() {
     if (phase === 'opening') {
       cancelEnter();
+      finishTransition(panel);
+      if (parts.backdrop) finishTransition(parts.backdrop);
       setPhase('open');
       updateContentLock();
     } else if (phase === 'closing') {
       cancelExit();
+      finishTransition(panel);
+      if (parts.backdrop) finishTransition(parts.backdrop);
       setPhase('open');
     }
   }
@@ -391,16 +411,35 @@ export function createDrawer(
   }
 
   /** Cancels a Panel (and Backdrop) entrance still in flight: the
-   * `data-starting-style` window (`open`, below). Safe to call whether or
-   * not one is under way. */
+   * `data-starting-style` window and the `transitionend`/timeout wait that
+   * follows it (`open`, `settleEnter`, below). Safe to call whether or not
+   * one is under way. */
   function cancelEnter() {
     if (enterRaf) {
       cancelAnimationFrame(enterRaf);
       enterRaf = 0;
     }
+    clearTimeout(enterTimer);
+    enterTimer = undefined;
+    enterTransitionCleanup?.();
+    enterTransitionCleanup = undefined;
     panel.removeAttribute(STARTING_STYLE_ATTR);
     parts.backdrop?.removeAttribute(STARTING_STYLE_ATTR);
     detachInterruptListeners();
+  }
+
+  /** Ends the entrance once the Panel's own `transitionend` fires, or, at
+   * the latest, once its computed transition duration plus a margin has
+   * passed: only then does the entrance stop being interruptible and the
+   * phase become `open`, mirroring `settleExit` below. */
+  function settleEnter() {
+    clearTimeout(enterTimer);
+    enterTimer = undefined;
+    enterTransitionCleanup?.();
+    enterTransitionCleanup = undefined;
+    detachInterruptListeners();
+    setPhase('open');
+    updateContentLock();
   }
 
   /** Cancels a Panel exit still in flight -- its `data-ending-style`
@@ -450,7 +489,7 @@ export function createDrawer(
       panel.removeEventListener('transitionend', onEnd);
     exitTimer = setTimeout(
       () => settleExit(reason),
-      duration + EXIT_TIMEOUT_MARGIN_MS
+      duration + TRANSITION_TIMEOUT_MARGIN_MS
     );
   }
 
@@ -737,15 +776,32 @@ export function createDrawer(
     // One frame lets the browser actually paint the starting style; only
     // the frame after that removes it, which is what starts a consumer's
     // CSS transition sliding the Panel (and fading the Backdrop) in --
-    // nothing here runs per frame after that.
+    // nothing here runs per frame after that. The phase stays `opening`,
+    // and the interrupt listeners stay attached, until that transition
+    // actually ends (`settleEnter`): ending it early, right here, is the
+    // bug #268 found -- the Panel still mid-flight, and a gesture arriving
+    // in between reading as a no-op instead of an interrupt.
     enterRaf = requestAnimationFrame(() => {
       enterRaf = requestAnimationFrame(() => {
         enterRaf = 0;
         panel.removeAttribute(STARTING_STYLE_ATTR);
         parts.backdrop?.removeAttribute(STARTING_STYLE_ATTR);
-        detachInterruptListeners();
-        setPhase('open');
-        updateContentLock();
+        const duration = transitionDurationMs(panel);
+        if (duration <= 0) {
+          settleEnter();
+          return;
+        }
+        const onEnd = (event: Event) => {
+          if ((event as TransitionEvent).target !== panel) return;
+          settleEnter();
+        };
+        panel.addEventListener('transitionend', onEnd);
+        enterTransitionCleanup = () =>
+          panel.removeEventListener('transitionend', onEnd);
+        enterTimer = setTimeout(
+          () => settleEnter(),
+          duration + TRANSITION_TIMEOUT_MARGIN_MS
+        );
       });
     });
   }

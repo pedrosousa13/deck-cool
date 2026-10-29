@@ -90,6 +90,22 @@ function translateY(transform: string): number {
   return parts[5];
 }
 
+/** The alpha channel of a computed `rgb(a)` color, or 1 for one with none. */
+function alphaOf(color: string): number {
+  const match = /rgba?\(([^)]+)\)/.exec(color);
+  if (!match) return 1;
+  const parts = match[1].split(',').map((part) => Number.parseFloat(part));
+  return parts.length > 3 ? parts[3] : 1;
+}
+
+/** The Backdrop's actual dim: its own `opacity` (the entrance/exit fade)
+ * times its `background-color`'s alpha (the scroll-driven dim, "Style the
+ * backdrop"), the way the two compose (#268). */
+function dimOf(el: Element): number {
+  const style = getComputedStyle(el);
+  return Number.parseFloat(style.opacity) * alphaOf(style.backgroundColor);
+}
+
 /** Declares a transition-duration on `el` for a property nothing ever
  * actually changes: `getComputedStyle` reports it (so the engine waits),
  * but no transition ever starts, so `transitionend` never fires -- the
@@ -138,19 +154,36 @@ describe('the CSS entrance', () => {
     expect(drawer.phase).toBe('open');
   });
 
-  it('really moves: the Panel’s computed transform has a non-zero translateY about 100ms into a real 300ms entrance', async () => {
+  it('really moves: the Panel slides from translateY(100%) to 0 over a real 300ms entrance, and the Backdrop’s dim rises with it', async () => {
     fixture = mount({ snapPoints: [0.5] });
-    const { panel, drawer } = fixture;
-    const removeTransition = withTransformTransition(panel, {
+    const { panel, backdrop, drawer } = fixture;
+    const removePanelTransition = withTransformTransition(panel, {
       durationMs: 300
     });
+    const removeBackdropTransition = withTransition(backdrop, {
+      durationMs: 300
+    });
+    // A fixed alpha, never 1, so the dim's product can only have risen
+    // because `opacity` did -- proving the two actually compose, the way
+    // "Style the backdrop" promises, rather than the alpha alone reading as
+    // the whole dim.
+    backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
 
     drawer.open();
-    await sleep(100);
+    await sleep(10);
+    // Early into the entrance: still close to its starting style.
+    const startY = translateY(getComputedStyle(panel).transform);
+    const startDim = dimOf(backdrop);
 
-    const y = translateY(getComputedStyle(panel).transform);
-    expect(y).not.toBe(0);
-    removeTransition();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const endY = translateY(getComputedStyle(panel).transform);
+    const endDim = dimOf(backdrop);
+
+    expect(startY).toBeGreaterThan(1000);
+    expect(endY).toBe(0);
+    expect(endDim).toBeGreaterThan(startDim);
+    removePanelTransition();
+    removeBackdropTransition();
   });
 
   it('writes the Panel’s attribute once to start the entrance and once to end it, nothing more', async () => {
@@ -215,23 +248,32 @@ describe('the CSS exit', () => {
     removeTransition();
   });
 
-  it('really moves: the Panel’s computed transform has a non-zero translateY about 100ms into a real 300ms exit', async () => {
+  it('really moves: the Panel slides from 0 toward translateY(100%) over a real 300ms exit, and the Backdrop’s dim falls with it', async () => {
     fixture = mount({ snapPoints: [0.5] });
-    const { panel, drawer } = fixture;
-    const removeTransition = withTransformTransition(panel, {
+    const { panel, backdrop, drawer } = fixture;
+    const removePanelTransition = withTransformTransition(panel, {
       durationMs: 300
     });
+    const removeBackdropTransition = withTransition(backdrop, {
+      durationMs: 300
+    });
+    backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
+    const openDim = dimOf(backdrop);
 
     drawer.close('close-button');
-    await sleep(100);
+    await sleep(200);
 
-    const y = translateY(getComputedStyle(panel).transform);
-    expect(y).not.toBe(0);
+    // Well into the exit: most of the way toward fully below the viewport.
+    const midY = translateY(getComputedStyle(panel).transform);
+    const midDim = dimOf(backdrop);
+    expect(midY).toBeGreaterThan(1000);
+    expect(midDim).toBeLessThan(openDim);
 
     await expectSettledTo(() => drawer.phase, 'closed');
-    removeTransition();
+    removePanelTransition();
+    removeBackdropTransition();
   });
 
   it('closes immediately, synchronously, when no transition is defined', async () => {
@@ -371,6 +413,47 @@ describe('interrupting the entrance or the exit', () => {
     expect(drawer.phase).toBe('open');
     expect(dialog.open).toBe(true);
     expect(panel.hasAttribute('data-ending-style')).toBe(false);
+    removeTransition();
+  });
+
+  it('a touch about 120ms into a real 300ms entrance ends it at once: the Panel is at translateY(0) right away', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { viewport, panel, drawer } = fixture;
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+
+    drawer.open();
+    await sleep(120);
+    // Still mid-flight -- the bug #268 found: by here, the old code had
+    // already detached the listeners and called this a no-op.
+    expect(translateY(getComputedStyle(panel).transform)).not.toBe(0);
+
+    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+
+    expect(translateY(getComputedStyle(panel).transform)).toBe(0);
+    expect(drawer.phase).toBe('open');
+    removeTransition();
+  });
+
+  it('a touch about 120ms into a real 300ms exit ends it at once: the Panel is at translateY(0) right away', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { viewport, panel, drawer } = fixture;
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    drawer.close('close-button');
+    await sleep(120);
+    // Still mid-flight, easing back down toward translateY(100%).
+    expect(translateY(getComputedStyle(panel).transform)).not.toBe(0);
+
+    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+
+    expect(translateY(getComputedStyle(panel).transform)).toBe(0);
+    expect(drawer.phase).toBe('open');
     removeTransition();
   });
 
