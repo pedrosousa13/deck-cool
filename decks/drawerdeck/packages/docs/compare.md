@@ -17,12 +17,12 @@ description: 'How drawerdeck compares with vaul and Base UI''s Drawer today: nat
 | Dropped frames while dragging, no load | 9% | 0% | 4% | **vaul** |
 | Longest stall while dragging, no load | 500 ms | 167 ms | 450 ms | **vaul** |
 | Flick down closes it, under heavy load | Always | 4 of 5 | Failed 5 of 5 | **drawerdeck** |
-| Open to half | 959 ms | 1066 ms | 576 ms | **Base UI** |
+| Open to half | 816.5 ms | 1042.5 ms | 537.5 ms | **Base UI** |
 | Mouse throw to settled | 672 ms | 997 ms | 629 ms | **Base UI** |
 | Built on native `<dialog>` and native scrolling | Yes | No | No | **drawerdeck** |
 | React versions | 19 | 16.8 to 19 | 17 to 19 | **vaul** |
 
-Numbers from the quiet re-run against the real `@drawerdeck/react` package ([#245](https://github.com/pedrosousa13/deck-cool/issues/245)): every run held a 1-minute load average at or under 1.0 (max 0.96), against the first run's 2.2 to 6.1. Medians of 5 runs in Chromium; the details and every caveat are below.
+Numbers from the quiet re-run against the real `@drawerdeck/react` package ([#245](https://github.com/pedrosousa13/deck-cool/issues/245)): every run held a 1-minute load average at or under 1.0 (max 0.96), against the first run's 2.2 to 6.1. Medians of 5 runs in Chromium; the details and every caveat are below. Open to half is from [CI bench run 40858604306](https://github.com/pedrosousa13/deck-cool/actions/runs/40858604306) instead (load=0, median of 30 reps): [#292](https://github.com/pedrosousa13/deck-cool/pull/292) replaced the native smooth-scroll open that figure used to measure with the engine's own ease.
 
 ## Feature table
 
@@ -182,9 +182,12 @@ three libraries.
   UI is still faster at both, at every load tested, though the margin on
   the mouse throw narrowed a great deal (629ms against drawerdeck's
   672ms at load=0, down from 690ms against 1053ms in the first run).
-  Opening to half stayed a clear Base UI win (576ms against drawerdeck's
-  959ms at load=0). vaul is slower than drawerdeck at both, so this is a
-  Base UI difference, not a two-rivals-beat-drawerdeck pattern.
+  Opening to half is now measured on [#292](https://github.com/pedrosousa13/deck-cool/pull/292)'s
+  engine-eased open, from [CI bench run 40858604306](https://github.com/pedrosousa13/deck-cool/actions/runs/40858604306):
+  Base UI still wins, by a narrower margin than the native-smooth-scroll
+  open it replaced (537.5ms against drawerdeck's 816.5ms at load=0, down
+  from 576ms against 959ms). vaul is slower than drawerdeck at both, so
+  this is a Base UI difference, not a two-rivals-beat-drawerdeck pattern.
 
 ### Where drawerdeck wins
 
