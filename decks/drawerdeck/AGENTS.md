@@ -47,6 +47,16 @@ release, under the `beta` npm dist-tag instead of `latest`. Its `verify` job
 runs `pnpm --dir decks/drawerdeck verify` too, so a beta package is built and
 checked (`test:packages` among it) before it is packed and published.
 
+A version already on npm with the wrong dist-tag, or one that just needs a
+second tag, gets one from `.github/workflows/npm-dist-tag.yml` (#285): a
+manual run with `packages`, `version` and `tag` inputs, from `main`, using
+the `NPM_TOKEN` secret to run `npm dist-tag add` -- never `dist-tag rm`,
+never `publish`. Its first use added `beta` to `@drawerdeck/core`,
+`@drawerdeck/react` and `@drawerdeck/docs` at `0.1.0-beta.0`, published under
+`latest` only (#281, before `publish-packed.mjs` read `publishConfig.tag`).
+The same workflow promotes a later version to `latest` at 1.0: run it with
+`tag: latest` once the 1.0 tarballs are on npm under `beta`.
+
 A later drawerdeck version, beta or not, is published by bumping each
 package's `version` by hand and landing it on `main`: nothing here runs
 `changeset version` for drawerdeck yet. Moving it onto Changesets, with its
