@@ -12,9 +12,14 @@ packages:
   - decks/carouseldeck/tests/compare
   - decks/carouseldeck/prototypes/scroll-snap
   # drawerdeck, an in-repo deck (#231): its root package, for its scripts and
-  # dev dependencies, and its two placeholder packages.
+  # dev dependencies, and its two placeholder packages. bench is the
+  # interleaved GitHub Actions bench (#266, #283): a private package so it
+  # always measures @drawerdeck/react via workspace:*, kept out of the
+  # deck's own build (decks/drawerdeck/package.json's build script excludes
+  # it by name).
   - decks/drawerdeck
   - decks/drawerdeck/packages/*
+  - decks/drawerdeck/bench
 # wrangler deploy runs without esbuild's and workerd's install scripts: the
 # Worker has no code to bundle or run, only static assets.
 allowBuilds:
