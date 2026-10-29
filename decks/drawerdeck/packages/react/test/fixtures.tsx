@@ -1,6 +1,6 @@
 import { type ComponentProps, type ReactNode } from 'react';
 import { expect, vi } from 'vitest';
-import * as Drawer from '../src/index';
+import * as Drawer from '@drawerdeck/react';
 
 /** A drawer with no stylesheet, following #234's beta API sketch exactly:
  * every part, in order. */

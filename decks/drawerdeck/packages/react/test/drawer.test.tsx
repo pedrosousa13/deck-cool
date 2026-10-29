@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as Drawer from '../src/index';
+import * as Drawer from '@drawerdeck/react';
 import {
   contentOf,
   expectSettledTo,
