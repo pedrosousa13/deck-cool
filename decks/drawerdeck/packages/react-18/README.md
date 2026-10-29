@@ -23,18 +23,15 @@ run on React 18, and on React 19:
   or 19.
 - Every part in the source is wrapped in `forwardRef` (`src/with-ref.ts`), so
   a `ref` reaches its element the way `forwardRef` passes it, on both
-  versions.
+  versions. The same wrapper also fixes a `render` element's own `ref`
+  (Base UI's and vaul's convention): the source reads it off the given
+  element's `props`, which is where React 19 keeps it, but React 18 keeps a
+  `ref` out of `props`, on the element's own `ref` field instead, so
+  `with-ref.ts` copies it onto a shallow copy of the element's `props`
+  before the source ever sees it.
 
 The source renders no host element React 18 and 19 treat differently, so the
 build needs no `react/jsx-runtime` shim.
-
-**A known gap:** a `render` element's own `ref` (Base UI's and vaul's
-convention) composes with a part's own ref by reading it off the given
-element's `props`, which is where React 19 keeps it. React 18 keeps a
-`ref` out of `props`, on the element's own `ref` field instead, so on React
-18 a `render` element's own `ref` is not composed; the part's own ref still
-reaches its node. The same read, unaffected by this package's build,
-is in the source.
 
 ## Tests
 
