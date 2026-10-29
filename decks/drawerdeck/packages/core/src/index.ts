@@ -484,8 +484,10 @@ export function createDrawer(
   /** Finishes the Panel's (and the Backdrop's) CSS entrance immediately,
    * landing the drawer open at its snap point without waiting for the
    * transition removing `data-starting-style` started: what a touch, a
-   * wheel, a pointer down or an Escape arriving mid-entrance does to it
-   * (#268). */
+   * wheel or a pointer down arriving mid-entrance does to it (#268).
+   * Escape mid-entrance does not: it starts the exit directly
+   * (`beginExit`, below), reversing the entrance's own transition instead
+   * of jumping it open first. */
   function finishEnter() {
     cancelEnter();
     finishTransition(panel);
@@ -665,13 +667,13 @@ export function createDrawer(
     event.preventDefault();
     if (!opts.dismissible) return;
     if (phase === 'opening') {
-      // Escape mid-entrance interrupts it -- landing the drawer open,
-      // same as any other interruption -- then starts the exit, rather
-      // than being ignored outside 'open' the way it used to be (#268's
-      // second bug): a second Escape hard behind the first needs the exit
-      // already running, not the entrance still open to its own native
-      // instant close slipping past this handler's `preventDefault()`.
-      finishEnter();
+      // Escape mid-entrance starts the exit directly, the way `close()`
+      // already does mid-entrance: `beginExit` calls `cancelEnter` itself,
+      // so the CSS transition reverses smoothly from wherever the
+      // entrance was, never jumping the Panel open first. A second
+      // Escape hard behind the first still finds the exit already
+      // running, not the entrance still open to its own native instant
+      // close slipping past this handler's `preventDefault()`.
       beginExit('escape');
     } else if (phase === 'open') {
       beginExit('escape');

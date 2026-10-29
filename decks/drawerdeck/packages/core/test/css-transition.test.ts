@@ -532,6 +532,48 @@ describe('interrupting the entrance or the exit', () => {
     await expectSettledTo(() => drawer.phase, 'closed');
     removeTransition();
   });
+
+  it('Escape about 100ms into a real 300ms entrance reverses the Panel smoothly -- never jumping toward 0 before easing back out (#268)', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { dialog, panel, drawer } = fixture;
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+
+    drawer.open();
+    await sleep(100);
+    const pressY = translateY(getComputedStyle(panel).transform);
+    // Genuinely mid-flight: still easing down from translateY(100%).
+    expect(pressY).toBeGreaterThan(0);
+
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+
+    // Sample every frame right after the keypress: a reversed CSS
+    // transition eases back up from here, never dipping back toward 0
+    // first -- the bug landing `finishEnter()` (jumping the Panel to
+    // translateY(0)) before `beginExit()` started the exit's own
+    // transition back out. A CSS transition reversed mid-flight shortens
+    // itself (the reversing-adjusted duration the spec gives it), so the
+    // exit can settle well under the nominal 300ms: stop sampling once it
+    // has -- a closed dialog's panel reads `transform: none` (0), which is
+    // the settle, not a jump.
+    for (let i = 0; i < 12; i++) {
+      await nextFrame();
+      if (drawer.phase !== 'closing') break;
+      const sample = translateY(getComputedStyle(panel).transform);
+      expect(sample).toBeGreaterThanOrEqual(pressY - 0.5);
+    }
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(dialog.open).toBe(false);
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'escape');
+    expect(
+      onOpenChange.mock.calls.filter(([open]) => open === false)
+    ).toHaveLength(1);
+    removeTransition();
+  });
 });
 
 describe('a native close mid-exit keeps the close’s own reason (#268)', () => {
