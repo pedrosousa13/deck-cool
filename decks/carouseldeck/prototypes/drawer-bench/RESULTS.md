@@ -18,9 +18,9 @@ run, logged below each one. It ranged from 2.2 to 6.1 across the run --
 **this machine was not quiet**: other work shared it throughout, the same
 condition #138 and #219 flag for carouseldeck's bench. Absolute ms figures
 are this run's; the within-row (same scenario, same load) comparison
-across the three drawers is more trustworthy than any single number. A
-quiet re-run, per #219's own standing ask, has not been done for this
-bench.
+across the three drawers is more trustworthy than any single number. See
+"Quiet re-run, against the real package (#245)" below for the re-run
+#219's own standing ask called for.
 
 Per-run loads (1-minute average, `uptime`, immediately before that
 scenario's 15 reps):
@@ -39,6 +39,44 @@ scenario's 15 reps):
 | baseui touch-flick-dismiss           | 3.21 |
 | baseui mouse-drag-throw              | 3.34 |
 | baseui open-to-half                  | 3.71 |
+
+## Quiet re-run, against the real package (#245)
+
+Re-run per #245's own ask: the first run's `drawerdeck` rows ran at a load
+of 5 to 6 against the rivals' 3 to 4, and used ported mechanics
+(`src/drawerdeck.ts`, now deleted), not the shipped package. This run
+swaps in the real, packed `@drawerdeck/react` plus `@drawerdeck/core`
+(packed from `origin/main`, installed as `file:` dependencies -- see
+`src/drawerdeck-app.tsx`, `src/main-drawerdeck.tsx`), driven only through
+`Drawer.*`'s public API, same shape as vaul's and Base UI's own entries,
+and checks the load before starting each scenario instead of only
+recording it after the fact.
+
+Per-scenario 1-minute load average (`uptime`), checked immediately before
+that scenario's 15 reps. Every run started at or under a load of 1.0 (max
+0.96):
+
+| Run                                  | Load |
+| ------------------------------------- | ---- |
+| drawerdeck touch-drag-half-full-back  | 0.87 |
+| drawerdeck touch-flick-dismiss        | 0.96 |
+| drawerdeck mouse-drag-throw           | 0.82 |
+| drawerdeck open-to-half               | 0.85 |
+| vaul touch-drag-half-full-back        | 0.86 |
+| vaul touch-flick-dismiss              | 0.78 |
+| vaul mouse-drag-throw                 | 0.82 |
+| vaul open-to-half                     | 0.94 |
+| baseui touch-drag-half-full-back      | 0.70 |
+| baseui touch-flick-dismiss            | 0.73 |
+| baseui mouse-drag-throw               | 0.86 |
+| baseui open-to-half                   | 0.62 |
+
+Everything under "Results: quiet run (#245)" below comes from this run,
+same method and same 5-reps-per-cell convention as the first run. Raw
+rows: `bench/results/chromium.jsonl` (gitignored by this app's own
+`.gitignore`; force-added to the commit that carries this file, so the
+quiet run's numbers are reproducible straight from the branch -- `git add
+-f`).
 
 ## What was built
 
@@ -132,9 +170,12 @@ it reports medians only, not the spread this ticket asks for, so
 `../scroll-snap/bench/bundle-size.mjs` does (an in-memory Vite build,
 minified, gzipped, every JS chunk plus any stylesheet the entry imports),
 with `react`, `react-dom`, `react-dom/client` and `react/jsx-runtime`
-external for vaul and Base UI (#233's brief). drawerdeck has no React
-wrapper in this bench -- its mechanics are measured as plain JS/TS, and
-labelled that way below, not as a "0 React cost" library.
+external for vaul and Base UI (#233's brief). In the first run,
+drawerdeck had no React wrapper in this bench -- its ported mechanics
+were measured as plain JS/TS, and labelled that way, not as a "0 React
+cost" library. #245's quiet run (below) measures the real
+`@drawerdeck/react` plus `@drawerdeck/core` with the same externals
+instead, so that distinction no longer applies there.
 
 "Script time per frame during scenario 1" is read from the same
 `long-animation-frame` entries (`window.__bench.loaf()`) every scenario 1
@@ -214,11 +255,11 @@ false` flag on that one scenario, skipping the call entirely. Caught
   machine is available, the same standing caveat #219 raised for
   carouseldeck's bench and has not yet re-run here either.
 
-## Results
+## Results: first run, busy machine (#233)
 
-5 reps per cell; cells are `median (min-max, n=5)`. Raw data:
-`bench/results/chromium.jsonl` (gitignored by this app's own
-`.gitignore`; regenerate with the commands below).
+5 reps per cell; cells are `median (min-max, n=5)`. Raw data for this run
+was not kept (gitignored, and overwritten by the quiet run below);
+regenerate it with the commands at the end of this file.
 
 ### 1. Touch drag half -> full -> back: longest stall (ms)
 
@@ -289,6 +330,172 @@ past LoAF's 50ms threshold during ordinary use. The loaded columns are
 near-identical across decks -- the injected busy loop's own cost, not a
 library difference (see "Method notes").
 
+## Results: quiet run, against the real package (#245)
+
+Same method, same 5-reps-per-cell convention, median (min-max, n=5). Loads
+checked before starting, not just recorded (see "Quiet re-run" above: every
+run started at or under 1.0). drawerdeck's rows are now the real
+`@drawerdeck/react` + `@drawerdeck/core`, not ported mechanics.
+
+### 1. Touch drag half -> full -> back: longest stall (ms)
+
+| Deck       | load=0        | load=100      | load=200      |
+| ---------- | ------------- | ------------- | ------------- |
+| drawerdeck | 500 (500-517) | 567 (567-600) | 583 (567-767) |
+| vaul       | 167 (167-167) | 167 (167-167) | 217 (217-417) |
+| baseui     | 450 (450-450) | 483 (450-500) | 517 (483-517) |
+
+### 1. Touch drag half -> full -> back: dropped frames (%)
+
+| Deck       | load=0  | load=100  | load=200   |
+| ---------- | ------- | --------- | ---------- |
+| drawerdeck | 9 (6-11) | 20 (14-26) | 49 (42-54) |
+| vaul       | 0 (0-3)  | 29 (12-38) | 23 (10-45) |
+| baseui     | 4 (2-4)  | 20 (17-24) | 57 (54-58) |
+
+At load=200, vaul is now the least-dropped of the three (23%), not
+drawerdeck: the first run's "drawerdeck degrades least steeply" reading
+does not hold up quiet (see "Where drawerdeck loses" and #243, below).
+
+### 2. Touch flick down from half: settle time (ms)
+
+| Deck       | load=0         | load=100         | load=200         |
+| ---------- | -------------- | ---------------- | ---------------- |
+| drawerdeck | 766 (757-1444) | 1134 (1123-1741)  | 1579 (1108-1607) |
+| vaul       | 1186 (1154-1219) | 1405 (1352-1432) | 1745 (1736-2006) |
+| baseui     | 865 (844-899)  | 918 (912-1053)    | 1408 (1183-1435) |
+
+### 2. Touch flick down from half: ended closed? (px still open, 0 = closed)
+
+| Deck       | load=0  | load=100  | load=200      |
+| ---------- | ------- | --------- | ------------- |
+| drawerdeck | 0 (0-0) | 0 (0-0)   | 0 (0-0)       |
+| vaul       | 0 (0-0) | 0 (0-0)   | 0 (0-380)     |
+| baseui     | 0 (0-0) | 380 (0-380) | 380 (380-380) |
+
+Exact fail counts (reps that did not end at 0px, of 5): drawerdeck 0/0/0
+(load=0/100/200); vaul 0/0/1; baseui 0/3/5. drawerdeck is now the only
+deck that closed on every rep at every load; vaul lost one rep at
+load=200 that it did not lose in the first run.
+
+### 3. Mouse drag and release, upward throw: settle time (ms)
+
+| Deck       | load=0        | load=100      | load=200         |
+| ---------- | ------------- | ------------- | ---------------- |
+| drawerdeck | 672 (657-692) | 827 (743-878) | 859 (848-1096)    |
+| vaul       | 997 (992-1004) | 1393 (1290-1406) | 1746 (1744-1762) |
+| baseui     | 629 (628-647) | 642 (630-662) | 925 (899-935)     |
+
+### 4. Open to settled half: settle time (ms)
+
+| Deck       | load=0        | load=100      | load=200         |
+| ---------- | ------------- | ------------- | ---------------- |
+| drawerdeck | 959 (953-990) | 938 (926-957) | 1169 (1158-1171)  |
+| vaul       | 1066 (1049-1075) | 1193 (1185-1203) | 1418 (1412-1419) |
+| baseui     | 576 (567-596) | 632 (630-638) | 918 (915-919)     |
+
+### 5. Cost: bundle size (min+gzip)
+
+| Deck                  | Size     | Notes                                                                |
+| --------------------- | -------- | --------------------------------------------------------------------- |
+| drawerdeck            | 5.05 KB  | `@drawerdeck/react` + `@drawerdeck/core`, same externals as the rivals |
+| vaul 1.1.2            | 22.48 KB | `react`/`react-dom`/`react-dom/client`/`react/jsx-runtime` external    |
+| Base UI Drawer 1.9.0  | 30.47 KB | same externals                                                         |
+
+Measured by `bench/bundle-size.mjs` against the real packed packages (the
+same tarballs installed into this bench, built from `origin/main`), not
+drawerdeck's old ported mechanics. This replaces the first run's "no React
+wrapper" figure outright: it is now the same kind of number as vaul's and
+Base UI's.
+
+### 5. Cost: script time per frame during scenario 1 (LoAF total blocking, ms / count of 5-rep median)
+
+| Deck       | load=0   | load=100    | load=200     |
+| ---------- | -------- | ----------- | ------------ |
+| drawerdeck | 0 ms / 0 | 654 ms / 13 | 3167 ms / 21 |
+| vaul       | 0 ms / 0 | 567 ms / 11 | 2705 ms / 18 |
+| baseui     | 0 ms / 0 | 557 ms / 11 | 3005 ms / 20 |
+
+Same reading as the first run: all three show 0 at load=0, and the loaded
+columns track the injected load, not a library difference.
+
+### Quiet run: what moved against the first run
+
+- **The real package settles touch-flick-dismiss and the mouse-drag throw
+  noticeably faster than the first run's ported mechanics did** (flick
+  dismiss at load=0: 766ms here against 1151ms in the first run; mouse
+  throw: 672ms against 1053ms). drawerdeck's real settle logic is not the
+  same code the first run benched -- #245 existed because the port was a
+  stand-in, and the real package turns out to differ, not just to be
+  measured more fairly.
+- **drawerdeck now wins touch-flick-dismiss's settle time outright at
+  load=0** (766ms, against baseui's 865ms and vaul's 1186ms), where the
+  first run had it slowest of the three in that scenario's longer
+  (half<->full) drag variant.
+- **drawerdeck is now the only deck with perfect dismiss reliability at
+  every load**: vaul dropped one of five reps at load=200 that it did not
+  drop in the first run; baseui's failure pattern is essentially
+  unchanged.
+- **The dropped-frames story at load=200 reverses.** The first run read
+  "drawerdeck degrades least steeply and ends up least-dropped at
+  load=200" (49% against vaul's 68% and baseui's 58%). Quiet, vaul drops
+  to 23% at load=200 -- now the lowest of the three -- while drawerdeck
+  (49%) and baseui (57%) stay close to their first-run figures. That
+  reading was an artifact of the busy machine specifically hurting vaul's
+  numbers, not a property of drawerdeck's own frame scheduling under
+  load; see #243 for the related stall question.
+- **The longest-stall figure for the half<->full drag barely moved**
+  (517ms to 500ms at load=0): the quiet machine does not explain
+  drawerdeck's stall there. See #243, below.
+- **Bundle size is now a fair, like-for-like comparison.** drawerdeck's
+  React wrapper plus core (5.05 KB) is still the smallest of the three by
+  a wide margin, not a different kind of number any more.
+
+## #243: is the touch-drag stall real, or the scenario's own pause?
+
+**No traces were kept from this run, so this cannot be answered with
+frame timestamps against input timestamps -- the evidence #243 asked
+for.** `bench/bench.spec.ts` captures each run's CDP trace in memory
+(`captureTrace`), reduces it immediately with `analyzeMotion` into the
+summary fields that land in `chromium.jsonl`, and never writes the raw
+`TraceEvent[]` to disk. `bench/results/artifacts/` holds only
+`.last-run.json`, Playwright's own pass/fail summary, not trace data.
+That was already true of the first run, and still true of this one: no
+run of this bench has ever kept a trace file.
+
+What this run does settle, from the recorded numbers rather than a
+trace: **it is not the busy machine.** Hypothesis 1 in #243's own
+comment -- "the run wasn't fair" -- is answered no. drawerdeck's
+longest-stall figure for the half<->full drag barely moved between the
+busy run and this quiet one (517ms to 500ms at load=0, where the machine's
+own load went from 5-6 down to under 1.0). Whatever is producing that gap
+is not contention from other work on the machine.
+
+Between hypotheses 2 (non-composited scrolling) and 3 (the scenario's
+own idle pause), this run cannot distinguish them either, for the same
+reason: both would need frame-level trace data this run didn't keep.
+What can be said from reading the bench's own code, not a trace: scenario
+1's `run()` (`bench/scenarios.ts`) calls `settle(page)` *between* the two
+drags -- a `waitForTimeout(100)` plus a wait for `idleFor() > 400`ms --
+and that call sits inside the same `captureTrace` window as both drags
+(`bench.spec.ts`: `await scenario.run(page, g); await settle(page);`,
+and `run()` itself calls `settle` again mid-way through). That structural
+pause is identical for every deck, which is why the first run's own
+"Method notes" already flagged it as a reason `longestStallMs` is not a
+pure stall figure. It does not, on its own, explain why the three decks'
+stalls differ by deck and load the way they do (a shared, fixed-length
+pause would show up roughly the same for all three; it doesn't): there is
+a real, per-deck difference here, underneath whatever the shared pause
+contributes, that this run has no way to isolate.
+
+**This stays open.** A future run should keep the trace: either write
+`captureTrace`'s raw `events` array to `results/artifacts/<name>.json`
+per rep, or switch to Playwright's own `--trace on` and keep the
+`.zip`s, then read `PipelineReporter`/`EventLatency` entries against the
+CDP touch input timestamps directly. Hypothesis 2 (DevTools' "Scrolling
+performance issues" / `main_thread_scrolling_reasons`) has not been
+checked at all in either run.
+
 ## Where drawerdeck wins
 
 - **Dismiss reliability under load.** `touch-flick-dismiss` closed on
@@ -334,13 +541,17 @@ library difference (see "Method notes").
 
 ## Numbers that cannot be trusted, and why
 
-- **This machine was not quiet** (see "Machine"): load averaged 2.2-6.1
-  across the run. Absolute ms figures are this run's; within-row
-  comparisons (same scenario, same load, across decks) are more
-  trustworthy than any single number, and the loaded cells have not had
-  the quiet re-run #219 asked for.
+- **This machine was not quiet for the first run** (see "Machine"): load
+  averaged 2.2-6.1 across it. Absolute ms figures are that run's own;
+  within-row comparisons (same scenario, same load, across decks) are
+  more trustworthy than any single number. #219's and #245's own standing
+  ask for a quiet re-run is done -- see "Quiet re-run, against the real
+  package (#245)" and "Results: quiet run" above -- but no run of this
+  bench has ever kept a trace file, so #243's stall question is still
+  open (see that section).
 - **`longestStallMs` for scenario 1 includes a mid-gesture settle wait**,
-  so it is not a pure "stall during motion" figure (see "Method notes").
+  so it is not a pure "stall during motion" figure (see "Method notes"
+  and #243, above).
 - **Input-to-first-moved-frame is not reported.** This bench never arms a
   `bench-input` performance mark (not needed for any of #233's asked-for
   metrics), so `trace.ts`'s `inputToFirstMovedMs` is always `null` here --
@@ -362,8 +573,17 @@ library difference (see "Method notes").
 ## Exact commands to re-run
 
 ```sh
+# Pack the real drawerdeck packages first (#245; .pack/ is gitignored,
+# regenerate it before installing). From a worktree of origin/main:
+pnpm install --frozen-lockfile
+pnpm --dir decks/drawerdeck build
+pnpm --dir decks/drawerdeck/packages/core pack --pack-destination <this bench>/.pack
+pnpm --dir decks/drawerdeck/packages/react pack --pack-destination <this bench>/.pack
+# then rename the two tarballs to drawerdeck-core-0.0.0.tgz and
+# drawerdeck-react-0.0.0.tgz (package.json's file: deps name them exactly)
+
 # From decks/carouseldeck/prototypes/drawer-bench/
-pnpm install   # once, from the repo root: installs vaul and @base-ui/react here
+pnpm install   # once, from the repo root: installs vaul, @base-ui/react and the two packed tarballs here
 pnpm build
 pnpm exec playwright install chromium   # once
 

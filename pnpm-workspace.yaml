@@ -26,5 +26,11 @@ minimumReleaseAgeExclude:
   - '@pagedeck/docs@0.2.3'
 # satori pins fflate 0.7.3, which GHSA-px8p-9vwx-vf98 covers. Remove this
 # override once satori stops pinning 0.7.3.
+# @drawerdeck/react's packed tarball (#245) declares a plain "0.0.0"
+# dependency on @drawerdeck/core, which npm does not have (drawerdeck is
+# unreleased): without this, pnpm 404s trying to fetch it. This branch has
+# no decks/drawerdeck workspace member to conflict with, so the override
+# is safe here; remove it if that ever changes.
 overrides:
   fflate: 0.7.5
+  '@drawerdeck/core': 'file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-core-0.0.0.tgz'

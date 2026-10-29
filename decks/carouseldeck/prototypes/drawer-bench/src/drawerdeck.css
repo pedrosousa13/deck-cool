@@ -1,0 +1,15 @@
+/* THROWAWAY (#245). `@drawerdeck/core` sets the dialog's, the viewport's
+   and the backdrop's structural styles inline (ADR 0001 in
+   decks/drawerdeck): this is only `Drawer.Panel`'s own box, from
+   drawerdeck's own site demo (sites/drawerdeck/styles/drawerdeck.css's
+   `.drawer-demo__panel`) -- height 100% of the viewport's own height
+   (the engine's snap-point math assumes the panel fills it; see
+   RESULTS.md's "Method notes") and a flex column so the handle and the
+   scrollable content lay out top to bottom. */
+
+.panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

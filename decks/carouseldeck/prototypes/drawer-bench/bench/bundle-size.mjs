@@ -3,30 +3,34 @@
 // ../../scroll-snap/bench/bundle-size.mjs uses (a Vite build in memory,
 // minified, gzipped, every JS chunk plus any stylesheet the entry
 // imports): applied to each deck's own bench entry, so the figure is
-// what that deck's page actually ships. drawerdeck has no React: it is
-// measured as plain JS, with no React wrapper, labelled as such. vaul and
-// Base UI are measured with `react`, `react-dom` and
-// `react/jsx-runtime` external (#233's brief), the way the package
-// README's own comparison table measures every React library -- without
-// that, the number is React's size, not the drawer's.
+// what that deck's page actually ships. All three are now React entries:
+// the real `@drawerdeck/react` plus `@drawerdeck/core` underneath it
+// (#245, replacing the old "no React wrapper" caveat), vaul and Base UI,
+// each measured with `react`, `react-dom` and `react/jsx-runtime` external
+// (#233's brief), the way the package README's own comparison table
+// measures every React library -- without that, the number is React's
+// size, not the drawer's.
 
 import { fileURLToPath, URL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
+const reactExternal = [
+  'react',
+  'react-dom',
+  'react-dom/client',
+  'react/jsx-runtime'
+];
+
 const entries = [
-  { deck: 'drawerdeck', entry: 'src/drawerdeck.ts', external: [] },
   {
-    deck: 'vaul',
-    entry: 'src/main-vaul.tsx',
-    external: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime']
+    deck: 'drawerdeck',
+    entry: 'src/main-drawerdeck.tsx',
+    external: reactExternal
   },
-  {
-    deck: 'baseui',
-    entry: 'src/main-baseui.tsx',
-    external: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime']
-  }
+  { deck: 'vaul', entry: 'src/main-vaul.tsx', external: reactExternal },
+  { deck: 'baseui', entry: 'src/main-baseui.tsx', external: reactExternal }
 ];
 
 /** @param {string} entry @param {string[]} external */

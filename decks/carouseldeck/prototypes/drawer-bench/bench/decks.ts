@@ -12,7 +12,7 @@ export interface DeckDef {
 export const DECKS: DeckDef[] = [
   {
     key: 'drawerdeck',
-    label: 'drawerdeck (prototype mechanics)',
+    label: 'drawerdeck (real @drawerdeck/react, #245)',
     url: 'bench-drawerdeck.html'
   },
   { key: 'vaul', label: 'vaul 1.1.2', url: 'bench-vaul.html' },

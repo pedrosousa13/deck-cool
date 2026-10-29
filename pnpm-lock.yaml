@@ -6,6 +6,7 @@ settings:
 
 overrides:
   fflate: 0.7.5
+  '@drawerdeck/core': file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-core-0.0.0.tgz
 
 importers:
 
@@ -193,6 +194,12 @@ importers:
       '@base-ui/react':
         specifier: 1.9.0
         version: 1.9.0(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@drawerdeck/core':
+        specifier: file:.pack/drawerdeck-core-0.0.0.tgz
+        version: file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-core-0.0.0.tgz
+      '@drawerdeck/react':
+        specifier: file:./.pack/drawerdeck-react-0.0.0.tgz
+        version: file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-react-0.0.0.tgz(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@playwright/test':
         specifier: 1.63.0
         version: 1.63.0
@@ -836,6 +843,17 @@ packages:
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
     engines: {node: '>=12'}
+
+  '@drawerdeck/core@file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-core-0.0.0.tgz':
+    resolution: {integrity: sha512-SyMYP48/hRwD6DMTVmMg9+s7WYG5NFfJODXOZWYgPdxm585Rd5Joa2wFg+KCBYVhYQ3Se18e/VgvLaGRqSXqgA==, tarball: file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-core-0.0.0.tgz}
+    version: 0.0.0
+
+  '@drawerdeck/react@file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-react-0.0.0.tgz':
+    resolution: {integrity: sha512-gSf2Yqdi0Vtd8olWbK6+vbn92Mf2m0p8Ve0/jbDqbzbrd5HSj78aSRIS/swS9mgJdJMrrpScsDJZbXlE7bIkXg==, tarball: file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-react-0.0.0.tgz}
+    version: 0.0.0
+    peerDependencies:
+      react: '>=19 <20'
+      react-dom: '>=19 <20'
 
   '@egjs/agent@2.4.4':
     resolution: {integrity: sha512-cvAPSlUILhBBOakn2krdPnOGv5hAZq92f1YHxYcfu0p7uarix2C6Ia3AVizpS1SGRZGiEkIS5E+IVTLg1I2Iog==}
@@ -4443,6 +4461,14 @@ snapshots:
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
+
+  '@drawerdeck/core@file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-core-0.0.0.tgz': {}
+
+  '@drawerdeck/react@file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-react-0.0.0.tgz(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      '@drawerdeck/core': file:decks/carouseldeck/prototypes/drawer-bench/.pack/drawerdeck-core-0.0.0.tgz
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
 
   '@egjs/agent@2.4.4': {}
 
