@@ -193,14 +193,25 @@ export function createDrawer(
   let enterTimer: ReturnType<typeof setTimeout> | undefined;
   let enterTransitionCleanup: (() => void) | undefined;
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
-  let exitTransitionCleanup: (() => void) | undefined;
   let interruptListenersAttached = false;
-  /** True for a CSS exit's whole run (`beginExit` to `settleExit` or
-   * `cancelExit`): guards `onScrollEnd` below the way `dragging` and
-   * `throwing` do, since this exit never moves `scrollTop` and a stale
-   * `scrollend` left over from whatever scroll opened the drawer must not
-   * read it as a native settle back to `open` or to closed. */
+  /** True for a CSS exit's whole run (`beginExit` to `settleExit`): guards
+   * `onScrollEnd` below the way `dragging` and `throwing` do, since this
+   * exit never moves `scrollTop` and a stale `scrollend` left over from
+   * whatever scroll opened the drawer must not read it as a native settle
+   * back to `open` or to closed. An interruption never cancels a close
+   * (#268), so this only ever clears through `settleExit`, whether the
+   * exit gets there on its own or something -- a gesture, or `open()`
+   * asking to resume -- finishes it early. */
   let cssExiting = false;
+  /** How many native `close` events `finishClose`, just below, still owes
+   * -- one per `dialog.close()` call it has made that the dialog's own
+   * `close` listener has not yet seen. A count, not a flag: `close()`
+   * fires that event as a queued task, not synchronously, so a flag reset
+   * right after the call would already be too late once a `close`/`open`
+   * cycle lands in between and the stale event finally arrives. Lets the
+   * listener tell a close this engine asked for apart from one it never
+   * did -- the double-Escape quirk mid-entrance (#268's second bug). */
+  let pendingEngineCloses = 0;
 
   const gap = viewport.querySelector<HTMLElement>('[data-drawer-gap]');
 
@@ -355,10 +366,32 @@ export function createDrawer(
     // called `showModal()` -- closed first, so a consumer's own focus
     // handling (`onPhaseChange`, below) has the last word, not the
     // dialog's own restoration.
-    if (dialog.open) dialog.close();
+    if (dialog.open) {
+      pendingEngineCloses += 1;
+      dialog.close();
+    }
     setPhase('closed');
     opts.onOpenChange?.(false, reason);
   }
+
+  /** The dialog's own native `close` -- fired by `dialog.close()` just
+   * above, and, in both Chromium and WebKit, also by a close this engine
+   * never asked for: a second Escape landing close enough behind the
+   * first, mid-entrance, that its `cancel` event's own `preventDefault()`
+   * does not actually prevent it (#268's second bug). Reconciles the
+   * phase to `closed` whenever that happens, so a later `open()` is not
+   * reading `dialog.open` already false as still `opening` or `open`. */
+  function onNativeClose() {
+    if (pendingEngineCloses > 0) {
+      pendingEngineCloses -= 1;
+      return;
+    }
+    if (phase === 'closed') return;
+    cancelEnter();
+    if (cssExiting) teardownExit();
+    finishClose('escape');
+  }
+  dialog.addEventListener('close', onNativeClose);
 
   /** Forces the style flush that starts the transition `el`'s attribute
    * change (just above the call site) triggers -- the same flush `open()`
@@ -379,24 +412,18 @@ export function createDrawer(
   }
 
   /** Any touch, wheel or pointer down while the Panel's CSS entrance or
-   * exit is still in flight ends it at once: the drawer already sits at
-   * its snap point (`open` never moved `scrollTop` to get here, and
-   * `beginExit` never moves it either), so there is nothing left to do but
-   * drop the attribute, finish whatever transition that drop (or the
-   * entrance's own removal, already past by now) started, and let the
-   * gesture that interrupted it continue natively. */
+   * exit is still in flight ends it at once, landing the drawer wherever
+   * that transition was headed -- never canceling it (#268's design
+   * ruling). Mid-entrance, that is open (`finishEnter`). Mid-exit, that is
+   * closed, now, with the reason the exit already carries
+   * (`finishExit`): an interruption never reopens a drawer that was on its
+   * way out. The gesture that interrupted it then continues natively from
+   * there, same as always. */
   function onInterrupt() {
     if (phase === 'opening') {
-      cancelEnter();
-      finishTransition(panel);
-      if (parts.backdrop) finishTransition(parts.backdrop);
-      setPhase('open');
-      updateContentLock();
+      finishEnter();
     } else if (phase === 'closing') {
-      cancelExit();
-      finishTransition(panel);
-      if (parts.backdrop) finishTransition(parts.backdrop);
-      setPhase('open');
+      finishExit();
     }
   }
 
@@ -419,7 +446,8 @@ export function createDrawer(
   /** Cancels a Panel (and Backdrop) entrance still in flight: the
    * `data-starting-style` window and the `transitionend`/timeout wait that
    * follows it (`open`, `settleEnter`, below). Safe to call whether or not
-   * one is under way. */
+   * one is under way. Only ever stops an entrance -- never an exit, which
+   * an interruption finishes instead of cancels (`finishExit`, below). */
   function cancelEnter() {
     if (enterRaf) {
       cancelAnimationFrame(enterRaf);
@@ -448,18 +476,28 @@ export function createDrawer(
     updateContentLock();
   }
 
-  /** Cancels a Panel exit still in flight -- its `data-ending-style`
-   * attribute, its `transitionend` listener and its timeout fallback --
-   * without closing the dialog. Safe to call whether or not one is under
-   * way: `open()` calls it to resume an exit it interrupted, and repeated
-   * fast open/close cycles rely on it to never leave a stale timer or
-   * listener running past the exit it belonged to. */
-  function cancelExit() {
+  /** Finishes the Panel's (and the Backdrop's) CSS entrance immediately,
+   * landing the drawer open at its snap point without waiting for the
+   * transition removing `data-starting-style` started: what a touch, a
+   * wheel, a pointer down or an Escape arriving mid-entrance does to it
+   * (#268). */
+  function finishEnter() {
+    cancelEnter();
+    finishTransition(panel);
+    if (parts.backdrop) finishTransition(parts.backdrop);
+    setPhase('open');
+    updateContentLock();
+  }
+
+  /** Clears a Panel exit's own timer, listeners and reason without
+   * settling it -- `destroy()`'s own job only: an exit in flight never
+   * gets this far any other way, since an interruption finishes it
+   * (`finishExit`) rather than cancels it (#268's design ruling: an
+   * interruption never cancels a close). */
+  function teardownExit() {
     cssExiting = false;
     clearTimeout(exitTimer);
     exitTimer = undefined;
-    exitTransitionCleanup?.();
-    exitTransitionCleanup = undefined;
     pendingCloseReason = null;
     panel.removeAttribute(ENDING_STYLE_ATTR);
     parts.backdrop?.removeAttribute(ENDING_STYLE_ATTR);
@@ -469,30 +507,54 @@ export function createDrawer(
   /** The Panel's (and the Backdrop's) CSS exit, for every programmatic
    * close -- `close()`, Escape, an outside press, `Drawer.Close` -- never
    * a drag or a flick dismissal, which stay native and unchanged. Sets
-   * `data-ending-style`, waits for the Panel's own `transitionend` (or a
-   * timeout at its computed transition duration plus a margin, or not at
-   * all where no transition is defined), then closes the dialog. */
+   * `data-ending-style`, waits for the Panel's own CSS transition to
+   * finish (or a timeout at its computed transition duration plus a
+   * margin, or not at all where no transition is defined), then closes
+   * the dialog. */
   function beginExit(reason: OpenChangeReason) {
     cancelEnter();
-    cancelExit();
     cssExiting = true;
     pendingCloseReason = reason;
     setPhase('closing');
     panel.setAttribute(ENDING_STYLE_ATTR, '');
     parts.backdrop?.setAttribute(ENDING_STYLE_ATTR, '');
     attachInterruptListeners();
+    // Forces the flush that starts this exit's own transition -- the same
+    // flush `open()` forces for the entrance's -- so `getAnimations()`
+    // just below can only return this exit's own CSSTransition, never one
+    // still finishing from whatever `onInterrupt` just ended (#268's
+    // second bug: WebKit measured that stale `transitionend` landing right
+    // after this exit's own `transitionrun`, close enough that the old
+    // listener-based wait read it as this exit's own end).
+    void getComputedStyle(panel).transform;
     const duration = transitionDurationMs(panel);
     if (duration <= 0) {
       settleExit(reason);
       return;
     }
-    const onEnd = (event: Event) => {
-      if ((event as TransitionEvent).target !== panel) return;
-      settleExit(reason);
-    };
-    panel.addEventListener('transitionend', onEnd);
-    exitTransitionCleanup = () =>
-      panel.removeEventListener('transitionend', onEnd);
+    // Only a transition this attribute change itself just started:
+    // `playState` tells a freshly running one apart from a stale,
+    // already-`finished` CSSTransition for the same property that
+    // `getAnimations()` can still be listing (a just-interrupted entrance's
+    // `finishTransition` calls `Animation.finish()` on exactly that kind).
+    const exitTransitions = panel
+      .getAnimations()
+      .filter(
+        (animation): animation is CSSTransition =>
+          animation instanceof CSSTransition &&
+          animation.playState === 'running'
+      );
+    exitTransitions.forEach((transition) => {
+      transition.finished.then(
+        () => {
+          if (cssExiting && pendingCloseReason === reason) settleExit(reason);
+        },
+        () => {
+          // Rejects when something else finished or canceled it first --
+          // already settled, or about to be, through that path.
+        }
+      );
+    });
     exitTimer = setTimeout(
       () => settleExit(reason),
       duration + TRANSITION_TIMEOUT_MARGIN_MS
@@ -503,13 +565,23 @@ export function createDrawer(
     cssExiting = false;
     clearTimeout(exitTimer);
     exitTimer = undefined;
-    exitTransitionCleanup?.();
-    exitTransitionCleanup = undefined;
     detachInterruptListeners();
     panel.removeAttribute(ENDING_STYLE_ATTR);
     parts.backdrop?.removeAttribute(ENDING_STYLE_ATTR);
     pendingCloseReason = null;
     finishClose(reason);
+  }
+
+  /** Finishes a Panel exit still in flight immediately, closing the
+   * dialog now with the reason that exit already carries, instead of
+   * waiting for its transition or its timeout: what a touch, a wheel, a
+   * pointer down or a fresh `open()` call does when it arrives mid-exit
+   * (#268's design ruling -- an interruption never cancels a close). */
+  function finishExit() {
+    const reason = pendingCloseReason ?? 'programmatic';
+    finishTransition(panel);
+    if (parts.backdrop) finishTransition(parts.backdrop);
+    settleExit(reason);
   }
 
   function onScrollEnd() {
@@ -586,8 +658,23 @@ export function createDrawer(
     // Always handled ourselves, so the native instant close never runs
     // ahead of the Panel's own CSS exit.
     event.preventDefault();
-    if (!opts.dismissible || phase !== 'open') return;
-    beginExit('escape');
+    if (!opts.dismissible) return;
+    if (phase === 'opening') {
+      // Escape mid-entrance interrupts it -- landing the drawer open,
+      // same as any other interruption -- then starts the exit, rather
+      // than being ignored outside 'open' the way it used to be (#268's
+      // second bug): a second Escape hard behind the first needs the exit
+      // already running, not the entrance still open to its own native
+      // instant close slipping past this handler's `preventDefault()`.
+      finishEnter();
+      beginExit('escape');
+    } else if (phase === 'open') {
+      beginExit('escape');
+    }
+    // 'closing': already on its way out, with the dialog's native `close`
+    // listener (`onNativeClose`, above) catching it even if a second
+    // Escape's own `preventDefault()` does not hold. 'closed': nothing to
+    // do.
   }
   dialog.addEventListener('cancel', onCancel);
 
@@ -750,15 +837,13 @@ export function createDrawer(
       return;
     }
     if (phase === 'closing') {
-      // The exit this interrupts never moved `scrollTop` to begin with, so
-      // the drawer is still physically resting at its snap point: resume
-      // there instead of calling `showModal()` on a dialog that is already
-      // open (it would throw).
-      cancelExit();
-      setPhase('open');
-      updateContentLock();
-      if (index !== snapIndex) snapTo(index);
-      return;
+      // An interruption never cancels a close (#268's design ruling): a
+      // fresh `open()` call arriving mid-exit finishes it right now, with
+      // the reason that exit already carries, the same way a touch, a
+      // wheel or a pointer down would, then falls through to open fresh
+      // below -- `finishExit` has already closed the dialog by then, so
+      // `showModal()` does not throw on one that is still open.
+      finishExit();
     }
     // Before `showModal()`, and before the layout reads below (`measure`,
     // the `scrollTop` write): a style recalc that sees this attribute only
@@ -860,7 +945,7 @@ export function createDrawer(
     destroyed = true;
     releaseBackdropReset();
     cancelEnter();
-    cancelExit();
+    teardownExit();
     clearTimeout(scrollEndDebounce);
     cancelAnimationFrame(throwFrame);
     cancelAnimationFrame(progressFrame);
@@ -868,6 +953,7 @@ export function createDrawer(
     viewport.removeEventListener('scroll', onScrollEndDebounce);
     viewport.removeEventListener('scroll', onScroll);
     dialog.removeEventListener('cancel', onCancel);
+    dialog.removeEventListener('close', onNativeClose);
     gap?.removeEventListener('click', onGapClick);
     panel.removeEventListener('pointerdown', onPointerDown);
     panel.removeEventListener('pointermove', onPointerMove);

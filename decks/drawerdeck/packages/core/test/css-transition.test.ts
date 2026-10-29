@@ -376,7 +376,7 @@ describe('interrupting the entrance or the exit', () => {
     removeTransition();
   });
 
-  it('a touch during the exit ends it at once, settled back open -- not closed', async () => {
+  it('a touch during the exit ends it at once, closing now with the original reason', async () => {
     fixture = mount({ snapPoints: [0.5] });
     const { viewport, panel, backdrop, dialog, drawer } = fixture;
     // Long enough that it cannot settle on its own before the interrupt.
@@ -391,15 +391,17 @@ describe('interrupting the entrance or the exit', () => {
 
     viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
 
-    expect(drawer.phase).toBe('open');
-    expect(dialog.open).toBe(true);
+    // An interruption never cancels a close (#268's design ruling): the
+    // dialog is closed now, not reopened.
+    expect(drawer.phase).toBe('closed');
+    expect(dialog.open).toBe(false);
     expect(panel.hasAttribute('data-ending-style')).toBe(false);
     expect(backdrop.hasAttribute('data-ending-style')).toBe(false);
-    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'close-button');
     removeTransition();
   });
 
-  it('a wheel during the exit ends it at once', async () => {
+  it('a wheel during the exit ends it at once, closing -- the dialog itself, not just the attribute, so the Panel’s own transform is moot once it is hidden', async () => {
     fixture = mount({ snapPoints: [0.5] });
     const { viewport, panel, dialog, drawer } = fixture;
     const removeTransition = withTransformTransition(panel, {
@@ -415,14 +417,15 @@ describe('interrupting the entrance or the exit', () => {
 
     viewport.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
 
-    expect(translateY(getComputedStyle(panel).transform)).toBe(0);
-    expect(drawer.phase).toBe('open');
-    expect(dialog.open).toBe(true);
+    // Closes now, with the close already under way -- not reopened: an
+    // interruption never cancels a close (#268's design ruling).
+    expect(drawer.phase).toBe('closed');
+    expect(dialog.open).toBe(false);
     expect(panel.hasAttribute('data-ending-style')).toBe(false);
     removeTransition();
   });
 
-  it('a tap (pointer down) with no scroll during the exit ends it at once', async () => {
+  it('a tap (pointer down) with no scroll during the exit ends it at once, closing', async () => {
     fixture = mount({ snapPoints: [0.5] });
     const { viewport, panel, dialog, drawer } = fixture;
     const removeTransition = withTransformTransition(panel, {
@@ -439,9 +442,8 @@ describe('interrupting the entrance or the exit', () => {
       new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' })
     );
 
-    expect(translateY(getComputedStyle(panel).transform)).toBe(0);
-    expect(drawer.phase).toBe('open');
-    expect(dialog.open).toBe(true);
+    expect(drawer.phase).toBe('closed');
+    expect(dialog.open).toBe(false);
     expect(panel.hasAttribute('data-ending-style')).toBe(false);
     removeTransition();
   });
@@ -466,9 +468,9 @@ describe('interrupting the entrance or the exit', () => {
     removeTransition();
   });
 
-  it('a touch about 120ms into a real 300ms exit ends it at once: the Panel is at translateY(0) right away', async () => {
+  it('a touch about 120ms into a real 300ms exit ends it at once: the dialog is closed right away', async () => {
     fixture = mount({ snapPoints: [0.5] });
-    const { viewport, panel, drawer } = fixture;
+    const { viewport, panel, dialog, drawer } = fixture;
     const removeTransition = withTransformTransition(panel, {
       durationMs: 300
     });
@@ -482,8 +484,8 @@ describe('interrupting the entrance or the exit', () => {
 
     viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
 
-    expect(translateY(getComputedStyle(panel).transform)).toBe(0);
-    expect(drawer.phase).toBe('open');
+    expect(drawer.phase).toBe('closed');
+    expect(dialog.open).toBe(false);
     removeTransition();
   });
 
@@ -498,6 +500,37 @@ describe('interrupting the entrance or the exit', () => {
       viewport.dispatchEvent(new Event('touchstart', { bubbles: true }))
     ).not.toThrow();
     expect(drawer.phase).toBe('open');
+  });
+
+  it('a touch mid-entrance, then an immediate close, still animates the exit -- not a stale transitionend from the entrance’s own finish (#268)', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { viewport, panel, drawer } = fixture;
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+
+    drawer.open();
+    await sleep(60);
+    // Mid-entrance: the interrupt calls `Animation.finish()` on the
+    // entrance's own CSSTransition, which queues a `transitionend` a
+    // listener reading only `event.target` could mistake for the exit's
+    // own, started right after it in the same tick.
+    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    expect(drawer.phase).toBe('open');
+
+    drawer.close('close-button');
+    expect(drawer.phase).toBe('closing');
+
+    await sleep(100);
+    // Genuinely animating, not already settled by that stale event: still
+    // well short of its ending value.
+    const midY = translateY(getComputedStyle(panel).transform);
+    expect(midY).toBeGreaterThan(0);
+    expect(midY).toBeLessThan(1900);
+    expect(drawer.phase).toBe('closing');
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    removeTransition();
   });
 });
 
@@ -561,13 +594,22 @@ describe('interrupting the entrance and the exit with the scroll-timeline dim ap
     drawer.close('close-button');
     await sleep(60);
 
-    // Mid-exit, the same way -- a second chance for the bug to stick.
+    // Mid-exit, the same way -- a second chance for the bug to stick. An
+    // interrupted exit now closes the dialog instead of cancelling it
+    // (#268's design ruling), tearing this CSSAnimation down along with
+    // everything else the dialog owns, so the spy itself cannot keep
+    // proving anything past this point.
     viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
-    expect(drawer.phase).toBe('open');
+    expect(drawer.phase).toBe('closed');
     expect(dimFinish).not.toHaveBeenCalled();
 
-    // Behaviour, not just the spy: the dim still follows a later drag,
-    // the way it would have if it had never been touched.
+    // Reopens: a fresh scroll-driven `CSSAnimation`, the same recipe,
+    // tracks `scrollTop` from scratch.
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    // Behaviour, not just the spy: the dim follows a later drag, the way
+    // it would have if nothing had ever interrupted it.
     const firstSnapPx = Number.parseFloat(
       dialog.style.getPropertyValue('--drawer-first-snap')
     );
@@ -699,11 +741,13 @@ describe('repeated open and close', () => {
     expect(panel.hasAttribute('data-ending-style')).toBe(false);
   });
 
-  it('ten fast cycles with a real transition never let an earlier, cancelled exit fire late', async () => {
+  it('ten fast cycles with a real transition never let an earlier, finished exit’s timer fire late', async () => {
     fixture = mount({ snapPoints: [0.5] });
     const { dialog, panel, drawer } = fixture;
-    // Long enough that none of the nine cancelled exits could complete on
-    // their own before this test's own assertions run.
+    // Long enough that none of the nine exits this loop finishes early
+    // (each one's own `open()`, immediately after, is what finishes it --
+    // #268's design ruling: an interruption never cancels a close) could
+    // complete on its own before this test's own assertions run.
     const removeTransition = withTransition(panel, { durationMs: 1000 });
 
     for (let i = 0; i < 9; i++) {
@@ -714,16 +758,16 @@ describe('repeated open and close', () => {
 
     await expectSettledTo(() => drawer.phase, 'open', 6000);
     expect(dialog.open).toBe(true);
-    // None of the nine cancelled exits' long transitionend/timeout waits
-    // leaked past their own cancellation and closed the dialog out from
-    // under this final, settled open.
+    // None of the nine earlier exits' long timeout fallbacks leaked past
+    // the `open()` call that finished each of them early, to close the
+    // dialog out from under this final, settled open.
     await sleep(1200);
     expect(drawer.phase).toBe('open');
     expect(dialog.open).toBe(true);
     removeTransition();
   });
 
-  it('ten fast cycles with a real transition ending on close settle closed, once', async () => {
+  it('ten fast cycles with a real transition each finish the one before, settling closed once at the end', async () => {
     fixture = mount({ snapPoints: [0.5] });
     const { dialog, panel, drawer } = fixture;
     const onOpenChange = vi.fn();
@@ -739,7 +783,16 @@ describe('repeated open and close', () => {
 
     await expectSettledTo(() => drawer.phase, 'closed');
     expect(dialog.open).toBe(false);
-    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    // Each of the ten closes actually closed the dialog, even the nine
+    // that a later `open()` finished early rather than cancelled (#268's
+    // design ruling): `onOpenChange` fires once per close, not once for
+    // the whole loop.
+    expect(onOpenChange).toHaveBeenCalledTimes(10);
+    expect(
+      onOpenChange.mock.calls.every(
+        ([open, reason]) => open === false && reason === 'close-button'
+      )
+    ).toBe(true);
     removeTransition();
   });
 });
