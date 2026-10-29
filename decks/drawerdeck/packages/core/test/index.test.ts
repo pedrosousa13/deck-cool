@@ -163,6 +163,45 @@ describe('the engine’s own ease, not native smooth scrolling (#268)', () => {
   });
 });
 
+describe("close() or destroy() racing open()'s first eased frame", () => {
+  // `open()` queues its first eased frame with a bare `requestAnimationFrame`,
+  // not yet run when these fire in the same task right after it. Regression
+  // coverage for the review on #292: that queued frame used to run anyway,
+  // after `close()` or `destroy()` had already finished.
+
+  it('close() right after open() leaves a closed state, not a reopened one', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { dialog, viewport, drawer } = fixture;
+
+    drawer.open();
+    drawer.close();
+
+    // Both calls land on scrollTop 0, so close()'s own ease has nothing to
+    // animate and finishes in this same task: no waiting needed to see the
+    // bug (open()'s first eased frame firing a whole animation frame later
+    // and re-opening the drawer underneath this already-closed state).
+    expect(drawer.phase).toBe('closed');
+    expect(dialog.open).toBe(false);
+
+    await sleep(300);
+    expect(drawer.phase).toBe('closed');
+    expect(dialog.open).toBe(false);
+    expect(viewport.scrollTop).toBeLessThan(4);
+  });
+
+  it('destroy() right after open() never starts the ease', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { viewport, drawer } = fixture;
+
+    drawer.open();
+    drawer.destroy();
+
+    expect(viewport.scrollTop).toBe(0);
+    await sleep(300);
+    expect(viewport.scrollTop).toBe(0);
+  });
+});
+
 describe('the inner content', () => {
   beforeEach(() => mockReducedMotion());
 

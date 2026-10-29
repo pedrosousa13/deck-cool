@@ -632,7 +632,12 @@ export function createDrawer(
     // time went (#244): the engine's own ease owns it alone instead, the
     // way it already does a mouse throw's release (#268).
     viewport.style.scrollSnapType = 'none';
-    requestAnimationFrame(() => {
+    // Stored in `animFrame`, the same id `animateScrollTo`, `destroy()` and
+    // a mouse `pointerdown` already cancel: unguarded, this queued frame
+    // used to fire after a `close()` or `destroy()` that happened before it
+    // ran, restarting the opening ease underneath them.
+    animFrame = requestAnimationFrame(() => {
+      if (destroyed || phase !== 'opening') return;
       animateScrollTo(snapPx[index] ?? 0, () => finishOpen(index));
     });
     clearTimeout(openSafetyTimer);
