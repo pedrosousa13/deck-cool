@@ -1,246 +1,234 @@
 ---
-title: Comparison with vaul and Base UI's Drawer
+title: Comparison with vaul, Base UI's Drawer and React Aria's Sheet
 label: Compare
-description: 'How drawerdeck compares with vaul and Base UI''s Drawer today: native scrolling against pointer-driven JavaScript, a feature table sourced from each project''s own docs, and bench numbers with their caveats.'
+description: 'How drawerdeck compares with vaul, Base UI''s Drawer and React Aria''s Sheet today: native scrolling against pointer-driven JavaScript, a feature table sourced from each project''s own docs, and the first fair, CI-run bench numbers with their caveats.'
 ---
 
-**Verdict today:** Base UI's Drawer is still the most complete and settles fastest, but its flick dismiss stops closing under heavy load. vaul has the shortest stall and the fewest dropped frames, both unloaded and under heavy load, but it is unmaintained and dropped one dismiss of fifteen under heavy load. drawerdeck is the smallest, with its React wrapper counted this time, and the only one of the three that closes a flick dismiss on every rep at every load, but it has the longest stall of the three and drops the most frames unloaded; it remains a beta with fewer features.
+**Verdict today:** the first CI run has drawerdeck winning bundle size and dropped frames under heavy load, tying longest stall and flick-dismiss settle time at every load (and mouse-throw and open-to-half under heavy load too), and losing mouse-throw and open-to-half to Base UI at no and medium load. [#268](https://github.com/pedrosousa13/deck-cool/issues/268) tracks closing the open gap, [#269](https://github.com/pedrosousa13/deck-cool/issues/269) the mouse-throw gap, and [#296](https://github.com/pedrosousa13/deck-cool/issues/296) drawerdeck's flick-dismiss settle time, numerically the slowest of the four at no load even though the run calls it a tie.
 
 ## At a glance
 
-| Question | drawerdeck | vaul | Base UI Drawer | Winner |
-| --- | --- | --- | --- | --- |
-| Maintained? | Beta | No, last release Dec 2024 | Yes | **Base UI** |
-| Features: all sides, non-modal, nesting, background indent, keyboard | Bottom, modal only | All | All | **Base UI**, **vaul** |
-| Bundle size (min+gzip, React wrapper included) | 5.1 KB | 22.5 KB | 30.5 KB | **drawerdeck** |
-| Dropped frames while dragging, heavy load | 49% | 23% | 57% | **vaul** |
-| Dropped frames while dragging, no load | 9% | 0% | 4% | **vaul** |
-| Longest stall while dragging, no load | 500 ms | 167 ms | 450 ms | **vaul** |
-| Flick down closes it, under heavy load | Always | 4 of 5 | Failed 5 of 5 | **drawerdeck** |
-| Open to half | 959 ms | 1066 ms | 576 ms | **Base UI** |
-| Mouse throw to settled | 672 ms | 997 ms | 629 ms | **Base UI** |
-| Built on native `<dialog>` and native scrolling | Yes | No | No | **drawerdeck** |
-| React versions | 19 | 16.8 to 19 | 17 to 19 | **vaul** |
+| Question | drawerdeck | vaul | Base UI Drawer | React Aria Sheet | Winner |
+| --- | --- | --- | --- | --- | --- |
+| Bundle size (min+gzip, React external) | 5.21 KB | 22.51 KB | 30.51 KB | 30.59 KB | **drawerdeck** |
+| Dropped frames while dragging, no load | 0.0% | 0.0% | 0.0% | 3.4% | Tie |
+| Dropped frames while dragging, medium load (100ms busy tick) | 0.0% | 0.0% | 17.1% | 20.5% | Tie |
+| Dropped frames while dragging, heavy load (200ms busy tick) | 0.0% | 22.4% | 58.3% | 47.9% | **drawerdeck** |
+| Longest stall while dragging, no load | 33.3 ms | 166.7 ms | 33.3 ms | 33.3 ms | Tie |
+| Flick down closes it: settle time, no load | 1010.5 ms | 1154.0 ms | 840.0 ms | 730.5 ms | Tie |
+| Mouse throw: settle time, no load | 876.5 ms | 957.5 ms | 606.0 ms | not supported | **Base UI** |
+| Open to half: settle time, no load | 904.0 ms | 1020.0 ms | 535.5 ms | 927.5 ms | **Base UI** |
+| Maintained? | Beta | No, last release Dec 2024 | Yes | Yes (Adobe) | **Base UI**, **React Aria** |
+| Features: all sides, non-modal, nesting, background indent, keyboard | Bottom, modal only | All | All | Most (no non-modal option; only a nested sheet's own backdrop and parent scale back, not the page behind a single sheet) | **Base UI**, **vaul** |
+| Built on native `<dialog>` and native scrolling | Yes | No | No | No (a scrollable overlay driven by CSS scroll-snap, not `<dialog>`) | **drawerdeck** |
+| React versions | 19 only | 16.8 to 19 | 17 to 19 | 16.8 to 19 | **vaul**, **React Aria** |
 
-Numbers from the quiet re-run against the real `@drawerdeck/react` package ([#245](https://github.com/pedrosousa13/deck-cool/issues/245)): every run held a 1-minute load average at or under 1.0 (max 0.96), against the first run's 2.2 to 6.1. Medians of 5 runs in Chromium; the details and every caveat are below.
+The Winner column is copied from the "Overall" column of the bench's own per-shard winners table (below): a "tie" there means the six shards disagreed on a winner, or the gap between the best and second-best pooled medians didn't clear the winning deck's own spread across shards. A tie is never shown as a win here, whichever deck's number happens to read lowest.
 
 ## Feature table
 
 Every drawerdeck cell comes from its own source
-(`@drawerdeck/core`, `@drawerdeck/react`) or its docs package. Every vaul
-and Base UI cell comes from that project's own docs or source, linked
-below.
+(`@drawerdeck/core`, `@drawerdeck/react`) or its docs package. Every vaul,
+Base UI and React Aria cell comes from that project's own docs or source,
+linked below.
 
-| Feature | drawerdeck | vaul | Base UI Drawer |
-| --- | --- | --- | --- |
-| Maintained (last release) | Beta, unreleased (`0.0.0`, private). The engine landed in [#240](https://github.com/pedrosousa13/deck-cool/issues/240); the release is tracked in [#242](https://github.com/pedrosousa13/deck-cool/issues/242). | [1.1.2](https://github.com/emilkowalski/vaul/releases/tag/v1.1.2), 14 Dec 2024. Its [README](https://github.com/emilkowalski/vaul/blob/v1.1.2/README.md) says: "This repo is unmaintained... This was and always will be a hobby project." | `@base-ui/react` [1.9.0](https://www.npmjs.com/package/@base-ui/react), 9 Oct 2026 (npm). |
-| React versions | React 19 only. React 18 is explicitly "not in the beta." | React 16.8 to 19 (`peerDependencies`: `^16.8 \|\| ^17.0 \|\| ^18.0 \|\| ^19.0.0 \|\| ^19.0.0-rc`). | React 17 to 19 (npm `peerDependencies`: `^17 \|\| ^18 \|\| ^19`). |
-| Snap points | Yes. Fractions of the viewport height or fixed pixel strings, nearest first. | Yes. Numbers 0–1 as a fraction, or pixel values. | Yes. Numbers 0–1 as a fraction, greater than 1 as pixels, or `px`/`rem` strings. |
-| Inner-content scroll handoff | Automatic. The inner scroller (`Drawer.Content`) is locked (`overflow-y: hidden`) until the drawer reaches its top snap point, then it scrolls natively. No attribute to add. | A per-event heuristic (`shouldDrag()`): drags the sheet unless the target has scrolled, has text selected, or carries `data-vaul-no-drag`. | Swipe applies to the whole panel by default; opt an element out with `data-base-ui-swipe-ignore` (optionally scoped to one axis). |
-| Mouse drag | Yes. A dedicated handler for `pointerType === 'mouse'` only: a short velocity history and a 240ms eased throw onto the nearest snap point. | Yes. The same pointer/touch handling drives every input type; no mouse-specific path. | Yes. Pointer and touch events drive every input type. |
-| Sides (bottom/top/left/right) | Bottom only. | All four (`direction` prop, default `'bottom'`). | All four (`swipeDirection` prop, default `'down'`). |
-| Non-modal | No. Modal only. | Yes (`modal` prop: `true` or `false`). | Yes (`modal` prop: `true`, `false`, or `'trap-focus'`). |
-| Nested drawers | No. | Yes (`nested` prop). | Yes. Dedicated `data-nested-drawer-open`/`data-nested-drawer-swiping` attributes and `--nested-drawers`/`--drawer-frontmost-height` CSS variables. |
-| Background indent/scale | No. [ADR 0001](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/docs/adr/0001-native-scrolling-is-the-engine.md) found that a scroll-driven animation does not resolve across the top layer, so "a background indent needs JS, or a different structure", not built yet. | Yes (`shouldScaleBackground` prop). | Yes. `Drawer.Provider`, `Drawer.IndentBackground` and `Drawer.Indent` scale the background when a drawer opens. |
-| On-screen keyboard handling | Not yet. Listed as still open in [#230](https://github.com/pedrosousa13/deck-cool/issues/230) and the "Why native scrolling" guide. | Yes. Repositions the drawer on `visualViewport` resize (`repositionInputs`, on by default once `snapPoints` is set). | Yes. `Drawer.VirtualKeyboardProvider` gives keyboard-aware focus and scroll handling, and sets `--drawer-keyboard-inset`. |
-| Uses `<dialog>`/top layer | Yes. `Drawer.Popup` renders a `<dialog>`, opened with `showModal()`: the top layer, focus trap and Escape for free. | No. Built on `@radix-ui/react-dialog`: a `<div>`, not the native element. | No. A custom `<div>`-based implementation. |
-| Drag engine | Native CSS scroll-snap drives touch, wheel and trackpad. Mouse alone gets a JS pointer handler, because a mouse cannot drag a scroll container. | JS pointer and touch events throughout: writes `translate3d` on every move. | JS pointer and touch events throughout: writes `--drawer-swipe-movement-x`/`-y` CSS variables that drive a transform. |
-| Headless/unstyled | Yes. | Yes. | Yes. |
-| Bundle size (min+gzip, React external) | 5.05 KB: the real `@drawerdeck/react` plus `@drawerdeck/core` underneath it, built from `main` and packed, with `react`, `react-dom` and `react/jsx-runtime` external, the same as the rivals. | 22.48 KB (`vaul` 1.1.2). | 30.47 KB (`@base-ui/react` 1.9.0, the `Drawer` export). |
+| Feature | drawerdeck | vaul | Base UI Drawer | React Aria Sheet |
+| --- | --- | --- | --- | --- |
+| Maintained (last release) | Beta, unreleased (`0.0.0`, private). The engine landed in [#240](https://github.com/pedrosousa13/deck-cool/issues/240); the release is tracked in [#242](https://github.com/pedrosousa13/deck-cool/issues/242). | [1.1.2](https://github.com/emilkowalski/vaul/releases/tag/v1.1.2), 14 Dec 2024. Its [README](https://github.com/emilkowalski/vaul/blob/v1.1.2/README.md) says: "This repo is unmaintained... This was and always will be a hobby project." | `@base-ui/react` [1.9.0](https://www.npmjs.com/package/@base-ui/react), 9 Oct 2026 (npm). | `react-aria-components` [1.22.1](https://www.npmjs.com/package/react-aria-components), 9 Oct 2026 (npm), Apache-2.0, built and maintained by Adobe. |
+| React versions | React 19 only. React 18 is explicitly "not in the beta." | React 16.8 to 19 (`peerDependencies`: `^16.8 \|\| ^17.0 \|\| ^18.0 \|\| ^19.0.0 \|\| ^19.0.0-rc`). | React 17 to 19 (npm `peerDependencies`: `^17 \|\| ^18 \|\| ^19`). | React 16.8 to 19 (npm `peerDependencies`: `^16.8.0 \|\| ^17.0.0-rc.1 \|\| ^18.0.0 \|\| ^19.0.0-rc.1`). |
+| Snap points | Yes. Fractions of the viewport height or fixed pixel strings, nearest first. | Yes. Numbers 0-1 as a fraction, or pixel values. | Yes. Numbers 0-1 as a fraction, greater than 1 as pixels, or `px`/`rem` strings. | Yes. `snapPoints`: a bare number as pixels of the sheet visible, a CSS length, or a percentage, "relative to the size of the sheet" ([react-aria.adobe.com/Sheet](https://react-aria.adobe.com/Sheet)), not the viewport; the bench bounds `Sheet`'s own box to `100dvh` first so its percentages match the other three decks' fractions of the viewport. |
+| Inner-content scroll handoff | Automatic. The inner scroller (`Drawer.Content`) is locked (`overflow-y: hidden`) until the drawer reaches its top snap point, then it scrolls natively. No attribute to add. | A per-event heuristic (`shouldDrag()`): drags the sheet unless the target has scrolled, has text selected, or carries `data-vaul-no-drag`. | Swipe applies to the whole panel by default; opt an element out with `data-base-ui-swipe-ignore` (optionally scoped to one axis). | Not documented on its docs or blog post; the sheet's own drag already is native scrolling (see "Drag engine" below), so there's no separate handoff to describe. |
+| Mouse drag | Yes. A dedicated handler for `pointerType === 'mouse'` only: a short velocity history and a 240ms eased throw onto the nearest snap point. | Yes. The same pointer/touch handling drives every input type; no mouse-specific path. | Yes. Pointer and touch events drive every input type. | No (the bench measured it not responding): neither [react-aria.adobe.com/Sheet](https://react-aria.adobe.com/Sheet) nor the [blog post](https://react-aria.adobe.com/blog/sheet) mentions mouse dragging, and a plain `overflow-y: auto` scroll container does not turn a left-button press-move-release into a scroll in Chromium the way touch or a trackpad pan does. |
+| Sides (bottom/top/left/right) | Bottom only. | All four (`direction` prop, default `'bottom'`). | All four (`swipeDirection` prop, default `'down'`). | All four, plus `'center'`, and `'start'`/`'end'` ("mirrored in right-to-left locales") (`position` prop: `'bottom' \| 'top' \| 'left' \| 'right' \| 'start' \| 'end' \| 'center'`). |
+| Non-modal | No. Modal only. | Yes (`modal` prop: `true` or `false`). | Yes (`modal` prop: `true`, `false`, or `'trap-focus'`). | Not documented. `Sheet` has no modal prop; `preventDismissal` blocks Escape, outside-press and swipe dismissal, but there's no option to render it non-modal. |
+| Nested drawers | No. | Yes (`nested` prop). | Yes. Dedicated `data-nested-drawer-open`/`data-nested-drawer-swiping` attributes and `--nested-drawers`/`--drawer-frontmost-height` CSS variables. | Yes. Sheets stack by nesting one `SheetTrigger` inside another; a parent sheet scales back when a child opens (`stackAnimation`), tracked by `data-stack-index`. |
+| Background indent/scale | No. [ADR 0001](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/docs/adr/0001-native-scrolling-is-the-engine.md) found that a scroll-driven animation does not resolve across the top layer, so "a background indent needs JS, or a different structure", not built yet. | Yes (`shouldScaleBackground` prop). | Yes. `Drawer.Provider`, `Drawer.IndentBackground` and `Drawer.Indent` scale the background when a drawer opens. | Partial. `SheetBackdrop` dims only the bottom-most sheet in a stack, and a parent sheet scales back behind a nested child (`stackAnimation`); there's no option to indent or scale the page itself behind a single, non-nested sheet. |
+| On-screen keyboard handling | Not yet. Listed as still open in [#230](https://github.com/pedrosousa13/deck-cool/issues/230) and the "Why native scrolling" guide. | Yes. Repositions the drawer on `visualViewport` resize (`repositionInputs`, on by default once `snapPoints` is set). | Yes. `Drawer.VirtualKeyboardProvider` gives keyboard-aware focus and scroll handling, and sets `--drawer-keyboard-inset`. | Yes. Pads the sheet (`padding-bottom: calc(100dvh - var(--visual-viewport-height))`) so the keyboard doesn't push the page. |
+| Uses `<dialog>`/top layer | Yes. `Drawer.Popup` renders a `<dialog>`, opened with `showModal()`: the top layer, focus trap and Escape for free. | No. Built on `@radix-ui/react-dialog`: a `<div>`, not the native element. | No. A custom `<div>`-based implementation. | No. `Sheet` is a scrollable overlay (a styled `<div>`), not `<dialog>`; its [blog post](https://react-aria.adobe.com/blog/sheet) says it is "double the height of the window viewport, and positioned so that only the top half is visible, with the sheet in the bottom half." |
+| Drag engine | Native CSS scroll-snap drives touch, wheel and trackpad. Mouse alone gets a JS pointer handler, because a mouse cannot drag a scroll container. | JS pointer and touch events throughout: writes `translate3d` on every move. | JS pointer and touch events throughout: writes `--drawer-swipe-movement-x`/`-y` CSS variables that drive a transform. | Native CSS scroll-snap and `view-timeline`, like drawerdeck's own engine, but with no mouse path: its [blog post](https://react-aria.adobe.com/blog/sheet) says "Scrolling is All You Need", so "swipe gestures run off the main thread at the native display refresh rate without any JavaScript touch handling." |
+| Headless/unstyled | Yes. | Yes. | Yes. | Yes. |
+| Bundle size (min+gzip, React external) | 5.21 KB: the real `@drawerdeck/react` plus `@drawerdeck/core`, built from `main` and packed, with `react`, `react-dom` and `react/jsx-runtime` external, the same as the rivals. | 22.51 KB (`vaul` 1.1.2). | 30.51 KB (`@base-ui/react` 1.9.0, the `Drawer` export). | 30.59 KB (`react-aria-components` 1.22.1, the `Sheet` subpath export: `Sheet`, `SheetTrigger`, `SheetOverlay`, `SheetBackdrop`, `SheetContent`), the whole cost of importing `Sheet`: overlays, focus management, everything else it pulls in. |
 
 ## The benchmark
 
-Branch [`prototype/drawer-bench`](https://github.com/pedrosousa13/deck-cool/tree/prototype/drawer-bench),
-full write-up at
-[`decks/carouseldeck/prototypes/drawer-bench/RESULTS.md`](https://github.com/pedrosousa13/deck-cool/blob/prototype/drawer-bench/decks/carouseldeck/prototypes/drawer-bench/RESULTS.md),
-commit `59dff00`. Answers
-[#233](https://github.com/pedrosousa13/deck-cool/issues/233) and its quiet
-re-run, [#245](https://github.com/pedrosousa13/deck-cool/issues/245), part
-of the drawerdeck map ([#230](https://github.com/pedrosousa13/deck-cool/issues/230)).
+Answers [#266](https://github.com/pedrosousa13/deck-cool/issues/266) and
+[#283](https://github.com/pedrosousa13/deck-cool/issues/283), part of the
+drawerdeck map ([#230](https://github.com/pedrosousa13/deck-cool/issues/230)).
+Full write-up, including all 11 fairness rules in full, at
+[`decks/drawerdeck/bench/RESULTS.md`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/bench/RESULTS.md).
 
-**Method.** A Chromium trace scores each run's longest visual stall, its
-hitch ratio and its percent of dropped frames. Touch gestures use Chrome
-DevTools Protocol's trusted touch input, not simulated events. Every
-scenario runs at three main-thread loads: none, a 100ms busy-loop tick,
-and a 200ms tick, 5 reps each. Tables below are the median, with the
-min–max spread in parentheses. All three drawers render the same 50-row
-content, the same snap points (half and full), and the same bench-owned
-probe for "openness," so a native-scroll drawer, a `translate3d` drawer
-and a CSS-variable drawer are all read the same way.
+**Method, in brief.** A Chromium trace scores each run's longest visual
+stall, dropped frames and settle time, from Chrome DevTools Protocol's
+trusted touch input, not simulated events, restricted to each gesture's own
+active window (so an idle pause between two drags never counts as a
+stall). Four scenarios (touch drag half to full and back, touch flick
+dismiss, mouse drag throw, open to half) each run at three main-thread
+loads (none, a 100ms busy-loop tick, a 200ms tick). All four drawers render
+the same 50-row content, the same snap points (half and full, `[0.5,
+0.92]`), and the same bench-owned probe for "openness," so a native-scroll
+drawer, a `translate3d` drawer, a CSS-variable drawer and a scroll-snap
+drawer are all read the same way.
 
-### First run, on a busy 4-core machine: history
+**This run:** GitHub Actions run
+[40858353381](https://github.com/pedrosousa13/deck-cool/actions/runs/40858353381)
+of `drawer-bench.yml`, on commit `6772ebe`, scored against all 11 fairness
+rules below. Six parallel, dedicated `ubuntu-latest` shards (never a
+machine shared with other work), each running the complete interleaved
+bench with 5 reps per (scenario, load, deck) cell; every rep's own run
+order is reshuffled fresh, so no deck's reps land disproportionately on a
+busier or quieter stretch of a shard's run. Pooled across all six shards:
+1440 scored rows, n=30 per cell (a discarded warm-up rep per page excluded).
 
-The first run ([#233](https://github.com/pedrosousa13/deck-cool/issues/233))
-shared its machine with other work (load average 2.2 to 6.1 on 4 cores,
-against a quiet run's under 1.0) and benched drawerdeck's ported
-mechanics, not the shipped package, so its size row had no React wrapper
-either. Its full tables are kept in RESULTS.md at the bench's commit
-`5216788`, for the record. Every table below is the quiet re-run instead
-([#245](https://github.com/pedrosousa13/deck-cool/issues/245)), and is
-what this page now trusts.
+**The 11 fairness rules** ([#266](https://github.com/pedrosousa13/deck-cool/issues/266),
+full text in RESULTS.md):
 
-### Quiet run, against the real package
+1. Same runner, interleaved: one Playwright worker, foreground, every rep's run order freshly shuffled.
+2. Production builds for everyone: `vite build`, one shared React version, no `<StrictMode>`.
+3. Each rival configured the way its own docs recommend, with every non-default option listed and why.
+4. The same task: the same content, snap points and viewport for every deck, with React Aria's one documented exception (percentage strings, not bare fractions).
+5. Latest stable versions, pinned, with release dates.
+6. A warm-up rep, discarded.
+7. Ties are ties: a winner needs every shard to agree, and a gap bigger than the winning deck's own spread.
+8. Reproducible and reviewable: every adapter is checked in, and raw results, the pooled jsonl and every rep's trace are uploaded.
+9. Losses stay visible: every metric is printed for every deck, win or lose.
+10. Stalls score motion, not a scripted pause: only a gesture's own active window counts.
+11. A drawer that does not respond to a gesture cannot win it (React Aria's mouse throw, below).
 
-Every run held a 1-minute load average (`uptime`, checked before starting)
-at or under 1.0, max 0.96. drawerdeck's rows are the real
-`@drawerdeck/react` plus `@drawerdeck/core`, built from `main` and packed,
-driven only through `Drawer.*`'s public API.
+**Versions, with release dates**
 
-**Touch drag half → full → back: longest stall (ms)**
-
-| Deck | load=0 | load=100 | load=200 |
-| --- | --- | --- | --- |
-| drawerdeck | 500 (500–517) | 567 (567–600) | 583 (567–767) |
-| vaul | 167 (167–167) | 167 (167–167) | 217 (217–417) |
-| Base UI | 450 (450–450) | 483 (450–500) | 517 (483–517) |
-
-drawerdeck's stall barely moved from the busy run (517ms to 500ms at
-load=0): the quiet machine does not explain it. [#243](https://github.com/pedrosousa13/deck-cool/issues/243)
-looked for the cause in the trace and could not find one, because no run
-of this bench has ever kept a trace file; see "numbers we don't trust"
-below.
-
-**Same scenario: dropped frames (%)**
-
-| Deck | load=0 | load=100 | load=200 |
-| --- | --- | --- | --- |
-| drawerdeck | 9 (6–11) | 20 (14–26) | 49 (42–54) |
-| vaul | 0 (0–3) | 29 (12–38) | 23 (10–45) |
-| Base UI | 4 (2–4) | 20 (17–24) | 57 (54–58) |
-
-**Touch flick down from half: settle time (ms)**
-
-| Deck | load=0 | load=100 | load=200 |
-| --- | --- | --- | --- |
-| drawerdeck | 766 (757–1444) | 1134 (1123–1741) | 1579 (1108–1607) |
-| vaul | 1186 (1154–1219) | 1405 (1352–1432) | 1745 (1736–2006) |
-| Base UI | 865 (844–899) | 918 (912–1053) | 1408 (1183–1435) |
-
-**Same scenario: ended closed? (fail count of 5 reps, by load)**
-
-| Deck | load=0 | load=100 | load=200 |
-| --- | --- | --- | --- |
-| drawerdeck | 0 of 5 | 0 of 5 | 0 of 5 |
-| vaul | 0 of 5 | 0 of 5 | 1 of 5 |
-| Base UI | 0 of 5 | 3 of 5 | 5 of 5 |
-
-**Mouse drag and release, upward throw: settle time (ms)**
-
-| Deck | load=0 | load=100 | load=200 |
-| --- | --- | --- | --- |
-| drawerdeck | 672 (657–692) | 827 (743–878) | 859 (848–1096) |
-| vaul | 997 (992–1004) | 1393 (1290–1406) | 1746 (1744–1762) |
-| Base UI | 629 (628–647) | 642 (630–662) | 925 (899–935) |
-
-**Open to settled half: settle time (ms)**
-
-| Deck | load=0 | load=100 | load=200 |
-| --- | --- | --- | --- |
-| drawerdeck | 959 (953–990) | 938 (926–957) | 1169 (1158–1171) |
-| vaul | 1066 (1049–1075) | 1193 (1185–1203) | 1418 (1412–1419) |
-| Base UI | 576 (567–596) | 632 (630–638) | 918 (915–919) |
-
-**Cost: bundle size (min+gzip)**
-
-| Deck | Size | Notes |
+| Deck | Version | Released |
 | --- | --- | --- |
-| drawerdeck | 5.05 KB | `@drawerdeck/react` + `@drawerdeck/core`, React/react-dom/jsx-runtime external |
-| vaul 1.1.2 | 22.48 KB | same externals |
-| Base UI Drawer 1.9.0 | 30.47 KB | same externals |
+| drawerdeck | this commit (`workspace:*`, unreleased) | - |
+| vaul | 1.1.2 | 2024-12-14 |
+| Base UI (`@base-ui/react`) | 1.9.0 | 2026-10-09 |
+| React Aria (`react-aria-components`) | 1.22.1 | 2026-10-09 |
 
-**Cost: script time per frame during the touch drag (LoAF total blocking, median of 5)**
+### Touch drag half to full to back: longest stall (ms)
+
+Scoped to each drag's own active window (rule 10); the legacy, unscoped
+numbers (a whole gesture, idle wait included) are in the `RESULTS.md`
+artifact's "unscoped (legacy)" columns, kept there so the fix stays
+checkable, not reproduced on this page.
 
 | Deck | load=0 | load=100 | load=200 |
 | --- | --- | --- | --- |
-| drawerdeck | 0 ms / 0 | 654 ms / 13 | 3167 ms / 21 |
-| vaul | 0 ms / 0 | 567 ms / 11 | 2705 ms / 18 |
-| Base UI | 0 ms / 0 | 557 ms / 11 | 3005 ms / 20 |
+| drawerdeck | 33.3 (33.3-33.3) | 125.0 (116.7-133.3) | 233.3 (216.7-250.0) |
+| vaul | 166.7 (166.7-166.7) | 166.7 (166.7-166.7) | 216.7 (216.7-233.3) |
+| Base UI | 33.3 (33.3-33.3) | 116.7 (116.7-116.7) | 216.7 (200.0-233.3) |
+| React Aria | 33.3 (33.3-33.3) | 133.3 (116.7-133.3) | 233.3 (233.3-250.0) |
 
-All three show zero at load=0: no library's own drag handling blocks a
-frame past LoAF's 50ms threshold during ordinary use. The loaded columns
-track the injected busy loop's own cost, not a difference between the
-three libraries.
+n=30 per cell. Overall: tie at every load (rule 7: every shard agreed, but
+the gap never cleared the winning deck's own spread across shards).
 
-### Where drawerdeck loses
+### Same scenario: dropped frames (%)
 
-- **Longest stall during the half ↔ full drag, at every load.** vaul is
-  roughly 3x shorter (167–217ms against drawerdeck's 500–583ms), and
-  Base UI also beats drawerdeck here (450–517ms). drawerdeck does not win
-  this metric at any load, and the quiet machine does not close the gap:
-  drawerdeck's own figure barely moved from the busy run. See
-  [#243](https://github.com/pedrosousa13/deck-cool/issues/243): no run of
-  this bench has kept a trace, so the cause is still open.
-- **Dropped frames while dragging, with no load.** drawerdeck is worst of
-  the three unloaded (9%, against vaul's 0% and Base UI's 4%).
-- **Dropped frames while dragging, under heavy load, too.** Quiet,
-  vaul is now the least-dropped at load=200 (23%), with drawerdeck (49%)
-  and Base UI (57%) both well behind it. The busy run's reading that
-  drawerdeck degraded the least steeply does not hold up quiet: that was
-  the busy machine hurting vaul's own numbers specifically, not a
-  property of drawerdeck's frame scheduling under load.
-- **Settle time for a mouse-drag throw, and for opening to half.** Base
-  UI is still faster at both, at every load tested, though the margin on
-  the mouse throw narrowed a great deal (629ms against drawerdeck's
-  672ms at load=0, down from 690ms against 1053ms in the first run).
-  Opening to half stayed a clear Base UI win (576ms against drawerdeck's
-  959ms at load=0). vaul is slower than drawerdeck at both, so this is a
-  Base UI difference, not a two-rivals-beat-drawerdeck pattern.
+| Deck | load=0 | load=100 | load=200 |
+| --- | --- | --- | --- |
+| drawerdeck | 0.0 (0.0-0.0) | 0.0 (0.0-0.0) | 0.0 (0.0-3.7) |
+| vaul | 0.0 (0.0-0.0) | 0.0 (0.0-32.8) | 22.4 (0.0-72.1) |
+| Base UI | 0.0 (0.0-3.8) | 17.1 (16.4-22.7) | 58.3 (3.8-78.3) |
+| React Aria | 3.4 (3.2-3.4) | 20.5 (15.2-22.2) | 47.9 (38.7-50.0) |
 
-### Where drawerdeck wins
+n=30 per cell. Overall: tie at load=0 and load=100 (all six shards agreed on
+drawerdeck both times, but the gap didn't clear its own spread); drawerdeck
+outright wins at load=200, the only cell in this run where agreement and gap
+both held.
 
-- **Dismiss reliability under load, outright.** `touch-flick-dismiss`
-  closed on every one of drawerdeck's 15 reps, at every load. vaul lost
-  one of its 15 (one rep at load=200 settled back open) that it did not
-  lose in the first run; Base UI's did not close reliably at all once
-  loaded, settling back to half on 3 of 5 reps at load=100 and 5 of 5 at
-  load=200.
-- **Settle time for the touch-flick dismiss, at no load.** drawerdeck is
-  now fastest here (766ms, against Base UI's 865ms and vaul's 1186ms),
-  where the first run's ported mechanics had it slowest of the three.
-  The real package's settle logic is not the code the first run
-  benched.
-- **Bundle size, on equal terms this time.** With its React wrapper
-  counted (5.05 KB, `@drawerdeck/react` plus `@drawerdeck/core`),
-  drawerdeck is still the smallest of the three by a wide margin against
-  vaul's 22.48 KB and Base UI's 30.47 KB: a real win now, not a
-  difference in kind.
+### Touch flick dismiss: settle time (ms)
 
-### Numbers we don't trust, and why
+| Deck | load=0 | load=100 | load=200 |
+| --- | --- | --- | --- |
+| drawerdeck | 1010.5 (967.0-1358.0) | 1140.5 (1123.0-1172.0) | 1389.0 (1376.0-1640.0) |
+| vaul | 1154.0 (1108.0-1241.0) | 1420.5 (1312.0-1445.0) | 1765.5 (1528.0-1792.0) |
+| Base UI | 840.0 (823.0-867.0) | 936.5 (916.0-1102.0) | 1199.5 (1187.0-1955.0) |
+| React Aria | 730.5 (707.0-1413.0) | 1141.5 (848.0-1518.0) | 1127.0 (1110.0-1619.0) |
 
-- **No run of this bench has ever kept a trace.** `bench/bench.spec.ts`
-  captures each run's CDP trace in memory, reduces it to the summary
-  numbers in this page's tables, and never writes the raw events to
-  disk. [#243](https://github.com/pedrosousa13/deck-cool/issues/243)
-  asked whether drawerdeck's longest-stall figure is a real stall or the
-  scenario's own idle pause between its two drags; without a trace, that
-  stays open.
-- **The longest-stall figure spans a whole gesture, not just the drag.**
-  It includes the mid-run settle wait between the two drags, so a gap
-  can be genuine idle time as much as a real stall. Read the
-  within-deck, across-load comparison, not the absolute figure.
-- **Script time per frame (LoAF) at load=100/200 is dominated by the
-  injected load, not by a library's own cost**. The same finding
-  carouseldeck's own bench made. The load=0 column, where all three show
-  zero, is the real, comparable figure.
-- **Input-to-first-moved-frame and blank/seam-frame counts are not
-  measured** for any deck here (a drawer has no seam; the input mark was
-  not armed).
-- **Chromium only.** Two of the four scenarios need trusted touch input,
-  which Playwright only gives on Chromium. Nothing here says anything
-  about Safari, iOS or Firefox.
-- **Headless Chromium paces frames with a timer**, not a real display's
-  vsync: absolute ms figures are comparative within this run, not a
-  device's real frame budget.
+n=30 per cell. Overall: tie at every load. At load=0, all six shards agreed
+on React Aria, but the gap over Base UI didn't clear React Aria's own
+spread; at load=100 and load=200 the shards split between React Aria and
+Base UI outright. drawerdeck is the numerically slowest of the four at
+load=0 regardless of the tie label; [#296](https://github.com/pedrosousa13/deck-cool/issues/296)
+tracks closing it.
 
-**Reproduce it:** RESULTS.md's own "Exact commands to re-run" has the full
-steps, including packing the real `@drawerdeck/react` and
-`@drawerdeck/core` from `main` before installing the bench.
+### Mouse drag and release, upward throw: settle time (ms)
+
+| Deck | load=0 | load=100 | load=200 |
+| --- | --- | --- | --- |
+| drawerdeck | 876.5 (851.0-895.0) | 889.5 (863.0-921.0) | 1132.5 (1121.0-1153.0) |
+| vaul | 957.5 (925.0-984.0) | 1298.5 (1272.0-1322.0) | 1753.5 (1519.0-2028.0) |
+| Base UI | 606.0 (587.0-628.0) | 672.0 (653.0-702.0) | 946.5 (939.0-1459.0) |
+| React Aria | not supported | not supported | not supported |
+
+**Not supported:** React Aria did not respond to this gesture in most of
+its reps ([#294](https://github.com/pedrosousa13/deck-cool/issues/294),
+rule 11), so it is excluded from this scenario's winners and ties rather
+than crowned for never moving. n=30 for the three decks that responded.
+Overall: Base UI wins outright at load=0 and load=100 (every shard agreed,
+gap held); tie at load=200, where two shards picked drawerdeck instead.
+[#269](https://github.com/pedrosousa13/deck-cool/issues/269) tracks closing
+the gap to Base UI.
+
+### Open to settled half: settle time (ms)
+
+| Deck | load=0 | load=100 | load=200 |
+| --- | --- | --- | --- |
+| drawerdeck | 904.0 (868.0-928.0) | 931.0 (912.0-951.0) | 1180.0 (1173.0-1183.0) |
+| vaul | 1020.0 (1003.0-1065.0) | 1199.5 (1178.0-1231.0) | 1431.0 (1427.0-1434.0) |
+| Base UI | 535.5 (513.0-555.0) | 637.0 (578.0-648.0) | 928.0 (679.0-930.0) |
+| React Aria | 927.5 (887.0-956.0) | 929.5 (913.0-951.0) | 1179.0 (1172.0-1182.0) |
+
+n=30 per cell. Overall: Base UI wins outright at load=0 and load=100 (every
+shard agreed, gap held); tie at load=200, where all six shards still picked
+Base UI but the gap didn't clear its own spread.
+[#268](https://github.com/pedrosousa13/deck-cool/issues/268) tracks closing
+the gap to Base UI.
+
+### Cost: bundle size (min+gzip, React external)
+
+| Deck | Size |
+| --- | --- |
+| drawerdeck | 5.21 KB |
+| vaul | 22.51 KB |
+| Base UI | 30.51 KB |
+| React Aria | 30.59 KB |
+
+Overall: drawerdeck wins, by a wide margin; not a per-shard metric (the
+build is the same on every shard), so there's no agreement question here.
+
+### Per-shard agreement
+
+Of the twelve scored (scenario, load) cells above, all six shards agreed on
+a single deck in nine of them; the other three (stall at load=100, flick
+dismiss at load=100 and load=200, and mouse throw at load=200) split
+outright between two decks. Agreement alone isn't enough to win, though:
+four of those nine unanimous cells (stall at every load, dropped frames at
+load=0 and load=100) still report "tie," because the gap between the best
+and second-best medians never cleared the winning deck's own spread across
+shards (rule 7). Only four cells in this run are outright wins: dropped
+frames at load=200 (drawerdeck), and mouse throw and open-to-half at load=0
+and load=100 (Base UI, both).
+
+### Where the earlier local runs went
+
+This page used to carry two local runs instead of a CI run: the first on a
+busy 4-core machine shared with other work, and a quieter re-run that still
+scored a drawer's longest stall across its whole gesture, counting the idle
+wait between two drags as if it were a stall. Both are dropped entirely
+here, not kept for comparison: the busy machine's numbers were never
+trustworthy, and the quiet re-run's own stall figure wasn't fair to compare
+against a rival's, which is what rule 10's active-window scoring exists to
+fix. The CI run above is what this page now trusts.
 
 ## How this page stays honest
 
-The numbers above come from the bench at commit `59dff00` on
-`prototype/drawer-bench`, not from this page's own claims. They are
-re-run before every drawerdeck release, against whatever `@drawerdeck/react`
-ships that release, not just drawerdeck's first beta. A loss stays on this
-page until a re-run says otherwise: this page does not drop a losing row
-to look better.
+The numbers above come from one named CI run
+([40858353381](https://github.com/pedrosousa13/deck-cool/actions/runs/40858353381),
+commit `6772ebe`), not from this page's own claims. `drawer-bench.yml` runs
+the bench weekly, and the numbers here are re-run before every drawerdeck
+release, against whatever `@drawerdeck/react` ships that release, not just
+drawerdeck's first beta. A loss stays on this page until a re-run says
+otherwise: this page does not drop a losing row to look better. Every
+rival's adapter is checked into
+[`decks/drawerdeck/bench/src/`](https://github.com/pedrosousa13/deck-cool/tree/main/decks/drawerdeck/bench/src),
+and that project's own maintainers are invited to flag a misconfiguration
+there.
