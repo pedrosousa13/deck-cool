@@ -102,6 +102,28 @@ test('a render prop clones the part onto the given element', () => {
   expect(trigger).toHaveAttribute('data-drawerdeck-trigger');
 });
 
+test("a render element's own ref composes with the part's", () => {
+  const anchorRef = createRef<HTMLAnchorElement>();
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  render(
+    <Drawer.Root>
+      <Drawer.Trigger render={<a ref={anchorRef} href="#" />}>
+        Open
+      </Drawer.Trigger>
+      <Drawer.Popup>
+        <Drawer.Viewport>
+          <Drawer.Panel />
+        </Drawer.Viewport>
+      </Drawer.Popup>
+    </Drawer.Root>
+  );
+
+  expect(anchorRef.current?.tagName).toBe('A');
+  expect(anchorRef.current).toHaveAttribute('data-drawerdeck-trigger');
+  expect(error).not.toHaveBeenCalled();
+  error.mockRestore();
+});
+
 test('server HTML renders every part and React 18 warns of nothing', () => {
   const error = vi.spyOn(console, 'error');
   const html = renderToString(
