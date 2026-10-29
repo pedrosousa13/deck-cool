@@ -144,6 +144,8 @@ describe('the engine’s own ease, not native smooth scrolling (#268)', () => {
 
     await expectSettledTo(() => drawer.phase, 'open');
     expect(viewport.style.scrollSnapType).toBe('y mandatory');
+    const expected = Math.round(viewport.clientHeight * 0.5);
+    expect(Math.abs(viewport.scrollTop - expected)).toBeLessThan(4);
   });
 
   it('snapTo turns scroll-snap off while it animates, and restores it once snapped', async () => {
@@ -160,6 +162,79 @@ describe('the engine’s own ease, not native smooth scrolling (#268)', () => {
 
     await expectSettledTo(() => drawer.snapIndex, 1);
     expect(viewport.style.scrollSnapType).toBe('y mandatory');
+    expect(drawer.phase).toBe('open');
+    const expected = Math.round(viewport.clientHeight * 1);
+    expect(Math.abs(viewport.scrollTop - expected)).toBeLessThan(4);
+  });
+
+  it('close() eases scrollTop to 0 and lands there, not a native snap-back', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    drawer.close();
+    await sleep(40);
+    expect(drawer.phase).toBe('closing');
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(viewport.scrollTop).toBeLessThan(4);
+  });
+
+  it('Escape eases scrollTop to 0 and lands there', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { dialog, viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(viewport.scrollTop).toBeLessThan(4);
+  });
+
+  it('an outside press (the gap) eases scrollTop to 0 and lands there', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    const gap = viewport.querySelector('[data-drawer-gap]')!;
+    gap.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(viewport.scrollTop).toBeLessThan(4);
+  });
+
+  it("close('close-button') -- Drawer.Close's own reason, which works even when not dismissible -- eases scrollTop to 0 and lands there", async () => {
+    fixture = mount({ snapPoints: [0.5], dismissible: false });
+    const { viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    drawer.close('close-button');
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(viewport.scrollTop).toBeLessThan(4);
+  });
+
+  it('reduced motion reaches the target within the first frame, never an animation', async () => {
+    mockReducedMotion();
+    fixture = mount({ snapPoints: [0.5] });
+    const { viewport, drawer } = fixture;
+
+    drawer.open();
+    // `open()` queues its first ease frame with its own `requestAnimationFrame`;
+    // reduced motion resolves `scrollTop` synchronously inside that frame,
+    // never over `EASE_DURATION_MS`'s several frames. A second
+    // `requestAnimationFrame` callback, registered after `open()`'s, runs
+    // after it on the same frame.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+    const expected = Math.round(viewport.clientHeight * 0.5);
+    expect(Math.abs(viewport.scrollTop - expected)).toBeLessThan(4);
+    expect(drawer.phase).toBe('open');
   });
 });
 
