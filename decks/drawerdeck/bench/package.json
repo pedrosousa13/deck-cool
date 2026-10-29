@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "bench": "playwright test -c playwright.config.ts bench.spec.ts",
-    "smoke": "playwright test -c playwright.config.ts smoke.spec.ts"
+    "smoke": "playwright test -c playwright.config.ts smoke.spec.ts",
+    "test": "node --test trace.test.ts"
   },
   "dependencies": {
     "@drawerdeck/react": "workspace:*"

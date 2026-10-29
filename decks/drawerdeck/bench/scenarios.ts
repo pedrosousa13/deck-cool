@@ -20,12 +20,16 @@ export async function geometry(page: Page): Promise<Geometry> {
 }
 
 /** Waits for `window.__bench.idleFor()` to clear a threshold: the drawer
- * (open or closed) has stopped moving. */
+ * (open or closed) has stopped moving. Marks the end of the active window
+ * opened by the gesture this follows (#266 rule 10: `trace.ts`'s scorer
+ * reads this mark, paired with the `markWindowStart()` call that preceded
+ * the gesture, to bound stall scoring to the gesture itself). */
 export async function settle(page: Page, thresholdMs = 400): Promise<void> {
   await page.waitForTimeout(100);
   await page.waitForFunction((t) => window.__bench.idleFor() > t, thresholdMs, {
     timeout: 15_000
   });
+  await page.evaluate(() => window.__bench.markWindowEnd());
 }
 
 /** Opens the drawer and waits for it to settle at the half snap point. */
@@ -74,6 +78,9 @@ async function touchDrag(
   const at = (frac: number) => [
     { x: g.cx, y: g.cy - distancePx * frac, id: 1 }
   ];
+  // Marks this gesture's active window open (#266 rule 10), at its first
+  // input event, right before dispatching it.
+  await page.evaluate(() => window.__bench.markWindowStart());
   await cdp.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
     touchPoints: at(0)
@@ -126,6 +133,9 @@ export const scenarios: Scenario[] = [
       const at = (frac: number) => [
         { x: g.cx, y: g.cy + distance * frac, id: 1 }
       ];
+      // Marks this gesture's active window open (#266 rule 10), at its
+      // first input event, right before dispatching it.
+      await page.evaluate(() => window.__bench.markWindowStart());
       await cdp.send('Input.dispatchTouchEvent', {
         type: 'touchStart',
         touchPoints: at(0)
@@ -155,6 +165,9 @@ export const scenarios: Scenario[] = [
       // half-to-full distance.
       const distance = g.vh * 0.3;
       await page.mouse.move(g.cx, g.cy);
+      // Marks this gesture's active window open (#266 rule 10), at its
+      // first input event, right before the press.
+      await page.evaluate(() => window.__bench.markWindowStart());
       await page.mouse.down();
       for (let i = 1; i <= 6; i++) {
         await page.mouse.move(g.cx, g.cy - (distance * i) / 6);
@@ -170,6 +183,9 @@ export const scenarios: Scenario[] = [
       // Starts closed: nothing to do.
     },
     async run(page) {
+      // Marks this gesture's active window open (#266 rule 10), at its
+      // first input event, right before the click.
+      await page.evaluate(() => window.__bench.markWindowStart());
       await page.click('#trigger');
     }
   }

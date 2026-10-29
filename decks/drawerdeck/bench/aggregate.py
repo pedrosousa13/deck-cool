@@ -28,7 +28,14 @@ DECKS = ['drawerdeck', 'vaul', 'baseui', 'reactaria']
 LOADS = [0, 100, 200]
 VERSIONS_PATH = os.path.join(os.path.dirname(__file__), 'versions.json')
 
-# (scenario, metric key, label, lower-is-better, extractor)
+# (scenario, metric key, label, lower-is-better, extractor, legacy extractor)
+#
+# The legacy extractor (#266 rule 10) is only set for the two metrics
+# `trace.ts`'s scorer restricts to active windows: it reads the same trace,
+# scored the old way (one window spanning the whole trace, idle time
+# between gestures included), so `render_tables` can print it in a
+# clearly-labelled "unscoped (legacy)" column rather than swapping numbers
+# quietly. It never feeds a winner: `cell_winner` only ever sees `pick`.
 METRICS = [
     (
         'touch-drag-half-full-back',
@@ -36,6 +43,7 @@ METRICS = [
         'Touch drag half->full->back: longest stall (ms)',
         True,
         lambda r: r['trace']['longestStallMs'] if r.get('trace') else None,
+        lambda r: r['trace']['legacy']['longestStallMs'] if r.get('trace') else None,
     ),
     (
         'touch-drag-half-full-back',
@@ -43,6 +51,7 @@ METRICS = [
         'Touch drag half->full->back: dropped frames (%)',
         True,
         lambda r: r['trace']['droppedPct'] if r.get('trace') else None,
+        lambda r: r['trace']['legacy']['droppedPct'] if r.get('trace') else None,
     ),
     (
         'touch-flick-dismiss',
@@ -50,6 +59,7 @@ METRICS = [
         'Touch flick dismiss: settle time (ms)',
         True,
         lambda r: r['settleMs'],
+        None,
     ),
     (
         'mouse-drag-throw',
@@ -57,6 +67,7 @@ METRICS = [
         'Mouse drag and release, upward throw: settle time (ms)',
         True,
         lambda r: r['settleMs'],
+        None,
     ),
     (
         'open-to-half',
@@ -64,6 +75,7 @@ METRICS = [
         'Open to settled half: settle time (ms)',
         True,
         lambda r: r['settleMs'],
+        None,
     ),
 ]
 
@@ -145,21 +157,27 @@ def cell_winner(rows, scenario, load_, pick, lower_is_better):
 
 def render_tables(rows):
     lines = []
-    for scenario, _metric, label, _lower, pick in METRICS:
+    for scenario, _metric, label, _lower, pick, legacy_pick in METRICS:
         lines.append(f'\n### {label}\n')
-        lines.append('| Deck | load=0 | load=100 | load=200 |')
-        lines.append('| --- | --- | --- | --- |')
+        load_cols = [f'load={load_}' for load_ in LOADS]
+        if legacy_pick is not None:
+            load_cols += [f'load={load_} unscoped (legacy)' for load_ in LOADS]
+        lines.append('| Deck | ' + ' | '.join(load_cols) + ' |')
+        lines.append('| --- | ' + ' | '.join('---' for _ in load_cols) + ' |')
         for deck in DECKS:
-            cells = []
-            for load_ in LOADS:
-                vals = [
-                    pick(r)
+
+            def vals_for(pick_fn, load_):
+                vs = [
+                    pick_fn(r)
                     for r in rows
                     if r['deck'] == deck and r['scenario'] == scenario and r['load'] == load_
                 ]
-                vals = [v for v in vals if v is not None]
-                cells.append(fmt_cell(vals))
-            lines.append(f'| {deck} | {cells[0]} | {cells[1]} | {cells[2]} |')
+                return [v for v in vs if v is not None]
+
+            cells = [fmt_cell(vals_for(pick, load_)) for load_ in LOADS]
+            if legacy_pick is not None:
+                cells += [fmt_cell(vals_for(legacy_pick, load_)) for load_ in LOADS]
+            lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
     return '\n'.join(lines)
 
 
@@ -173,7 +191,7 @@ def render_winner_table(rows):
         '| Scenario / metric | load | ' + ' | '.join(f'shard {s}' for s in shard_ids) + ' | Overall |',
         '| --- | --- | ' + ' | '.join('---' for _ in shard_ids) + ' | --- |',
     ]
-    for scenario, _metric, label, lower, pick in METRICS:
+    for scenario, _metric, label, lower, pick, _legacy_pick in METRICS:
         for load_ in LOADS:
             overall, per_shard = cell_winner(rows, scenario, load_, pick, lower)
             shard_cells = [str(per_shard.get(s, 'n/a')) for s in shard_ids]
@@ -185,7 +203,7 @@ def render_winner_table(rows):
 
 def render_summary(rows, bundle_rows):
     lines = ['| Scenario / metric | load | Winner |', '| --- | --- | --- |']
-    for scenario, _metric, label, lower, pick in METRICS:
+    for scenario, _metric, label, lower, pick, _legacy_pick in METRICS:
         for load_ in LOADS:
             overall, _ = cell_winner(rows, scenario, load_, pick, lower)
             lines.append(f'| {label} | {load_} | {overall} |')

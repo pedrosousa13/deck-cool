@@ -22,7 +22,7 @@ from the workflow's run page for real numbers, not this file.
 
 ## Fairness (#266)
 
-Every number this bench reports is checked against the maintainer's nine
+Every number this bench reports is checked against the maintainer's ten
 fairness rules (#266's own "Fairness rules" comment) before it goes on the
 comparison page:
 
@@ -66,6 +66,10 @@ comparison page:
    metric in `METRICS` for every deck, win or lose; `render_summary`'s
    at-a-glance table is an index into those full tables, never a
    replacement for them.
+10. **Stalls score motion, not a scripted pause.** Dropped frames, the
+    longest stall and the hitch ratio are scored only from a gesture's own
+    active window, not the scenario's own pauses between gestures. See
+    "Active windows" below.
 
 ## Versions, with release dates (#266 rule 5)
 
@@ -114,7 +118,12 @@ scored rep isn't the one paying for a cold parse/compile.
 - `trace.ts` -- copied from `decks/carouseldeck/prototypes/scroll-snap/bench/trace.ts`
   (a cross-deck import would couple this deck's bench to carouseldeck's;
   copying it in means it can diverge, which it already has: `frameTimeline`
-  is new here, for #243 below).
+  is new here, for #243 below, and so is the active-window scoring, for
+  "Active windows" below).
+- `trace.test.ts` -- unit tests for `trace.ts`'s scorer, against synthetic
+  trace timelines (`node --test trace.test.ts`, or `pnpm test` in this
+  package; not part of `pnpm --dir decks/drawerdeck verify`, see this
+  deck's own `AGENTS.md`).
 - `seed.ts` -- the interleaving's deterministic shuffle (next section).
 - `bench.spec.ts` -- the real run: Chromium only (a drawer's touch scenarios
   need CDP's trusted touch), one JSON line per run to
@@ -176,6 +185,40 @@ not the statistical picture #243 needs (whether this holds across loads,
 and whether it's the _whole_ gap or only part of it once a real drag is
 running under load, needs the full run); it does rule out "a late input
 event" as the cause, for this rep.
+
+## Active windows (#266 rule 10)
+
+The trace diagnosis above found a real cause, not a fixable one on the
+scenario's own side: `touch-drag-half-full-back` pauses for its own
+`settle()` wait between the drag up and the drag down, and a drawer that
+finishes moving quickly then sits still through that pause used to be
+scored as if the idle time itself were a stall, while a drawer whose
+release animation kept drawing frames through the same wall-clock window
+scored _better_ for finishing more slowly.
+
+`scenarios.ts` now marks each gesture's own active window: `markWindowStart()`
+right before dispatching its first input event (a touch or pointer down,
+or a click for `open-to-half`), and `markWindowEnd()` from `settle()`, once
+the drawer has been quiet for the settle detector's threshold (or `settle()`
+hits its own timeout). `touch-drag-half-full-back` produces two windows,
+one per drag, with the scenario's own pause between them outside both.
+
+`trace.ts`'s scorer (`analyzeMotion`) restricts dropped frames, the longest
+stall and the hitch ratio to frames inside those windows: a gap between two
+presented frames only counts as a stall when both sit inside the _same_
+window. That excludes the idle time between gestures by construction (the
+two frames bounding that gap belong to different windows), and it excludes
+the quiet tail after a gesture settles for the same reason the idle time
+between gestures always scored correctly in between-trace comparisons --
+nothing presents while the drawer is truly still, so there is no later
+presented frame left inside the window to gap against.
+
+The pre-fix numbers (one window spanning the whole trace, exactly what a
+run before this fix scored) are still computed and reported, in each
+affected table's "unscoped (legacy)" columns (`aggregate.py`'s and
+`report.py`'s `legacy_pick`, reading `trace.legacy` off the same row) --
+so the change stays visible rather than swapping numbers quietly, and a
+reader can see the old, unfair gap directly.
 
 ## React Aria's Sheet (#283)
 
@@ -240,12 +283,13 @@ left: 0; right: 0; bottom: 0` from the consumer; without it every snap
   actionability timeout for an element that doesn't exist yet. Fixed with
   `needsGeometry: false` on the one scenario that starts closed
   (`open-to-half`).
-- **`longestStallMs` for `touch-drag-half-full-back` spans the whole
-  up-then-settle-then-down gesture**, including the scenario's own
-  mid-gesture `settle()` wait, by design (so settle-to-full is itself part
-  of what's measured). Read the within-deck, across-load comparison as the
-  trustworthy signal; the absolute figure less so. See "Traces, for #243"
-  above for how to check this properly now that traces are kept.
+- **`longestStallMs` for `touch-drag-half-full-back` is scored per gesture,
+  not across the scenario's own mid-gesture `settle()` wait** (#266 rule
+  10, above): the drag up and the drag down are two active windows, and
+  the idle time between them is never scored as a stall. The "unscoped
+  (legacy)" columns show what the same trace would have scored before that
+  fix, for comparison. See "Traces, for #243" above for how to check a
+  stall against frame and input timestamps directly.
 - **LoAF during scenario 1 is dominated by the injected load, not by a
   library's own cost.** All four show zero LoAF entries at load=0 in every
   prior run; the loaded columns are the busy-loop's own cost.

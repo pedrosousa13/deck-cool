@@ -40,11 +40,20 @@ def cell(rows, deck, scenario, load_, pick):
     return fmt([pick(r) for r in g])
 
 
-def table(rows, scenario, pick, digits=0):
-    lines = [f'| Deck | load=0 | load=100 | load=200 |', '| --- | --- | --- | --- |']
+def table(rows, scenario, pick, digits=0, legacy_pick=None):
+    # `legacy_pick` (#266 rule 10) adds an "unscoped (legacy)" column per
+    # load: the same trace, scored the old way (one window spanning the
+    # whole trace, idle time between gestures included), so the fix is
+    # visible rather than swapping numbers quietly.
+    load_cols = [f'load={load_}' for load_ in LOADS]
+    if legacy_pick is not None:
+        load_cols += [f'load={load_} unscoped (legacy)' for load_ in LOADS]
+    lines = ['| Deck | ' + ' | '.join(load_cols) + ' |', '| --- | ' + ' | '.join('---' for _ in load_cols) + ' |']
     for deck in DECKS:
         cells = [cell(rows, deck, scenario, load_, pick) for load_ in LOADS]
-        lines.append(f'| {deck} | {cells[0]} | {cells[1]} | {cells[2]} |')
+        if legacy_pick is not None:
+            cells += [cell(rows, deck, scenario, load_, legacy_pick) for load_ in LOADS]
+        lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
     return '\n'.join(lines)
 
 
@@ -54,10 +63,18 @@ if __name__ == '__main__':
     print(f'rows: {len(rows)}')
 
     print('\n### touch-drag-half-full-back: longest stall (ms)\n')
-    print(table(rows, 'touch-drag-half-full-back', lambda r: r['trace']['longestStallMs'] if r['trace'] else None, 1))
+    print(table(
+        rows, 'touch-drag-half-full-back',
+        lambda r: r['trace']['longestStallMs'] if r['trace'] else None, 1,
+        legacy_pick=lambda r: r['trace']['legacy']['longestStallMs'] if r['trace'] else None,
+    ))
 
     print('\n### touch-drag-half-full-back: dropped frames (%)\n')
-    print(table(rows, 'touch-drag-half-full-back', lambda r: r['trace']['droppedPct'] if r['trace'] else None, 1))
+    print(table(
+        rows, 'touch-drag-half-full-back',
+        lambda r: r['trace']['droppedPct'] if r['trace'] else None, 1,
+        legacy_pick=lambda r: r['trace']['legacy']['droppedPct'] if r['trace'] else None,
+    ))
 
     print('\n### touch-flick-dismiss: settle time (ms)\n')
     print(table(rows, 'touch-flick-dismiss', lambda r: r['settleMs']))

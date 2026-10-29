@@ -3,7 +3,10 @@
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    // trace.test.ts imports trace.ts by its `.ts` extension, the way
+    // `node --test` (no bundler) resolves it.
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "*.ts", "vite.config.ts", "playwright.config.ts"]
 }

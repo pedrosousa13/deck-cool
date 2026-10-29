@@ -43,6 +43,16 @@ export interface DrawerBenchProbe {
   heap(): number | null;
   /** `bench-init`'s duration, once `markInitEnd` has run. */
   initDuration(): number | null;
+  /** Marks the start of one gesture's active window (#266 rule 10):
+   * `scenarios.ts` calls this right before dispatching a gesture's first
+   * input event. Captured by the trace in the same clock as
+   * `PipelineReporter`, so `trace.ts` can bound stall scoring to it. */
+  markWindowStart(): void;
+  /** Marks the end of one gesture's active window (#266 rule 10):
+   * `settle()` calls this once the drawer has been quiet for its threshold
+   * (or it hits its own timeout), pairing with the `markWindowStart()` that
+   * opened the gesture. */
+  markWindowEnd(): void;
 }
 
 declare global {
@@ -164,7 +174,9 @@ export function attachHarness(opts: { panelSelector: string }): void {
     initDuration: () => {
       const [entry] = performance.getEntriesByName('bench-init', 'measure');
       return entry ? entry.duration : null;
-    }
+    },
+    markWindowStart: () => performance.mark('bench-window-start'),
+    markWindowEnd: () => performance.mark('bench-window-end')
   };
 
   // Not used by this module, but keeps `raf`'s only write from being
