@@ -120,6 +120,29 @@ test("a render element's own ref composes with the part's", () => {
 
   expect(anchorRef.current?.tagName).toBe('A');
   expect(anchorRef.current).toHaveAttribute('data-drawerdeck-trigger');
+  expect(anchorRef.current).not.toHaveAttribute('ref');
+  expect(error).not.toHaveBeenCalled();
+  error.mockRestore();
+});
+
+test("a render element's own callback ref composes with the part's", () => {
+  let anchor: HTMLAnchorElement | null = null;
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  render(
+    <Drawer.Root>
+      <Drawer.Trigger render={<a ref={(el) => (anchor = el)} href="#" />}>
+        Open
+      </Drawer.Trigger>
+      <Drawer.Popup>
+        <Drawer.Viewport>
+          <Drawer.Panel />
+        </Drawer.Viewport>
+      </Drawer.Popup>
+    </Drawer.Root>
+  );
+
+  expect(anchor?.tagName).toBe('A');
+  expect(anchor).toHaveAttribute('data-drawerdeck-trigger');
   expect(error).not.toHaveBeenCalled();
   error.mockRestore();
 });

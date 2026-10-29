@@ -18,17 +18,25 @@ function elementRef(element: unknown): unknown {
  * (`render.props.ref`), where React 19 keeps it. React 18 keeps it on the
  * element's own `ref` field instead, off `props`, so copy it in before the
  * source ever reads `props.render`: a shallow copy of the element, with a
- * shallow copy of its `props` that now includes the ref. */
+ * shallow copy of its `props` that now includes the ref. The copy's `ref` is
+ * non-enumerable, so `render.props.ref` still reads it, but the source's
+ * `cloneElement` (which copies `element.props` into the new element, and
+ * treats only its own `config.ref` as reserved) never copies it into the
+ * cloned element's props, where React DOM would render it as a plain
+ * attribute. */
 function withRenderRef(props: object): object {
   const element = (props as { render?: unknown }).render;
   const ref = elementRef(element);
   if (ref == null) return props;
+  const elementProps = { ...(element as { props: object }).props };
+  Object.defineProperty(elementProps, 'ref', {
+    value: ref,
+    enumerable: false,
+    configurable: true
+  });
   return {
     ...props,
-    render: {
-      ...(element as object),
-      props: { ...(element as { props: object }).props, ref }
-    }
+    render: { ...(element as object), props: elementProps }
   };
 }
 
