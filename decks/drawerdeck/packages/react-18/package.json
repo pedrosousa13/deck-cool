@@ -1,6 +1,6 @@
 {
   "name": "@drawerdeck/react-18",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "@drawerdeck/react built for React 18: a headless drawer on native scrolling.",
   "license": "MIT",
   "homepage": "https://drawer.deck.cool",
