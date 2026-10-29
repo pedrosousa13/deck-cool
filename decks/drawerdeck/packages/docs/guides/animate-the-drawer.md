@@ -10,19 +10,20 @@ by two attributes the engine sets for you.
 
 ## The attributes
 
-| Attribute             | On open or close | What it means                                                                                |
-| --------------------- | ---------------- | -------------------------------------------------------------------------------------------- |
-| `data-starting-style` | Open             | Present for exactly one frame, so a transition has somewhere to start from.                  |
-| `data-ending-style`   | Close            | Present for the whole exit, on the Panel and the Backdrop, until the dialog actually closes. |
+| Attribute             | On open or close | What it means                                                                                                   |
+| --------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| `data-starting-style` | Open             | Present on the Panel and the Backdrop for the first painted frame, so a transition has somewhere to start from. |
+| `data-ending-style`   | Close            | Present for the whole exit, on the Panel and the Backdrop, until the dialog actually closes.                    |
 
 These are Base UI’s own attribute names, carried over so migrating from it
 (or to it) needs no new vocabulary.
 
-On open, `data-starting-style` paints on the Panel’s first frame, before
-the browser has shown anything else, then is removed on the next frame.
-Removing it is what starts the transition: give the Panel’s resting state
-a `transition`, and give `[data-starting-style]` the state you want the
-entrance to begin from.
+On open, `data-starting-style` goes on the Panel and the Backdrop before
+the dialog opens, so the browser paints their starting state on its very
+first frame, then is removed once that frame has actually shown. Removing
+it is what starts the transition: give the Panel’s and the Backdrop’s
+resting state a `transition`, and give `[data-starting-style]` the state
+you want each entrance to begin from.
 
 On a programmatic close (`close()`, Escape, an outside press or
 `Drawer.Close`), `data-ending-style` goes on the Panel and the Backdrop
@@ -61,11 +62,16 @@ fully below the viewport:
     transition: opacity 300ms cubic-bezier(0.32, 0.72, 0, 1);
   }
 
+  .backdrop[data-starting-style],
   .backdrop[data-ending-style] {
     opacity: 0;
   }
 }
 ```
+
+The Backdrop's own dim (`animation-timeline: --drawer`, "Style the
+backdrop") drives `background-color`, not `opacity`, so the two compose by
+multiplying rather than one replacing the other.
 
 `prefers-reduced-motion: reduce` holds every animation still (GLOSSARY,
 Motion) by leaving `transition` undeclared there. Its computed duration is
@@ -84,9 +90,5 @@ exit ever moves `scrollTop`.
 ## Why not the engine’s own ease
 
 An earlier version of this animated `scrollTop` itself, in JavaScript, on
-every frame (closed PR #292). It measured about 90ms faster than native
-`scrollTo({ behavior: 'smooth' })` with nothing else running, and nothing
-faster under real load. A CSS transition on `transform` runs on the
-compositor instead, with no main-thread work per frame, whatever else the
-page is doing. vaul and Base UI, the two fastest rivals the bench measures
-(`compare.md`), both animate this way already.
+every frame (closed PR #292). A CSS transition on `transform` runs on the
+compositor instead. See #268 for the reasoning.

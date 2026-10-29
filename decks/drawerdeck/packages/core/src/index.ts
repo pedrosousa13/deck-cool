@@ -185,8 +185,8 @@ export function createDrawer(
 
   // ---------- the CSS entrance and exit (#268) ----------
   // `data-starting-style` and `data-ending-style` are the only moving parts:
-  // a consumer's own CSS transition on the Panel (and the Backdrop, for the
-  // exit) does the sliding, on the compositor, with nothing here running
+  // a consumer's own CSS transition on the Panel and the Backdrop does the
+  // sliding and the fading, on the compositor, with nothing here running
   // per frame. See the "Animate the drawer" guide for the recipe.
   let enterRaf = 0;
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
@@ -390,7 +390,7 @@ export function createDrawer(
     viewport.removeEventListener('pointerdown', onInterrupt);
   }
 
-  /** Cancels a Panel entrance still in flight: the one-frame
+  /** Cancels a Panel (and Backdrop) entrance still in flight: the
    * `data-starting-style` window (`open`, below). Safe to call whether or
    * not one is under way. */
   function cancelEnter() {
@@ -399,6 +399,7 @@ export function createDrawer(
       enterRaf = 0;
     }
     panel.removeAttribute(STARTING_STYLE_ATTR);
+    parts.backdrop?.removeAttribute(STARTING_STYLE_ATTR);
     detachInterruptListeners();
   }
 
@@ -710,8 +711,19 @@ export function createDrawer(
       if (index !== snapIndex) snapTo(index);
       return;
     }
+    // Before `showModal()`, and before the layout reads below (`measure`,
+    // the `scrollTop` write): a style recalc that sees this attribute only
+    // after the dialog is already open and laid out has nothing left to
+    // transition from -- the removal a frame later just lands on the same
+    // computed value, and the entrance never moves.
+    panel.setAttribute(STARTING_STYLE_ATTR, '');
+    parts.backdrop?.setAttribute(STARTING_STYLE_ATTR, '');
     dialog.showModal();
     dialog.focus({ preventScroll: true });
+    // Forces the recalc the attribute above needs to land as a real,
+    // committed value -- not folded into whatever recalc `measure` or the
+    // `scrollTop` write below triggers next.
+    void getComputedStyle(panel).transform;
     measure();
     positionMarkers();
     // Straight to the snap point, before this task yields to a paint: no
@@ -721,19 +733,20 @@ export function createDrawer(
     snapIndex = index;
     updateContentLock();
     setPhase('opening');
-    // `data-starting-style` paints on this same, still-unpainted frame (no
-    // prior frame exists for a dialog `showModal()` just revealed, so nothing
-    // transitions yet); removing it next frame is what starts a consumer's
-    // CSS `transition: transform` sliding the Panel in -- one write now, one
-    // on the next frame, nothing per frame after that.
-    panel.setAttribute(STARTING_STYLE_ATTR, '');
     attachInterruptListeners();
+    // One frame lets the browser actually paint the starting style; only
+    // the frame after that removes it, which is what starts a consumer's
+    // CSS transition sliding the Panel (and fading the Backdrop) in --
+    // nothing here runs per frame after that.
     enterRaf = requestAnimationFrame(() => {
-      enterRaf = 0;
-      panel.removeAttribute(STARTING_STYLE_ATTR);
-      detachInterruptListeners();
-      setPhase('open');
-      updateContentLock();
+      enterRaf = requestAnimationFrame(() => {
+        enterRaf = 0;
+        panel.removeAttribute(STARTING_STYLE_ATTR);
+        parts.backdrop?.removeAttribute(STARTING_STYLE_ATTR);
+        detachInterruptListeners();
+        setPhase('open');
+        updateContentLock();
+      });
     });
   }
 

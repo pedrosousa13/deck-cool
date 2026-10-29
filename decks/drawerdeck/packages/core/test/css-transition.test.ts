@@ -1,7 +1,8 @@
 // The CSS entrance and exit (#268): open sets scrollTop straight to the
-// snap point and gives the Panel `data-starting-style` for one frame so a
-// consumer's own CSS transition slides it in; a programmatic close, Escape,
-// an outside press or `Drawer.Close` gives the Panel (and the Backdrop)
+// snap point and gives the Panel and the Backdrop `data-starting-style`,
+// surviving one painted frame before coming off, so a consumer's own CSS
+// transition slides and fades them in; a programmatic close, Escape, an
+// outside press or `Drawer.Close` gives the Panel and the Backdrop
 // `data-ending-style` and waits for the Panel's own `transitionend` (or a
 // timeout, or not at all) before closing the dialog. A drag or a flick
 // dismissal is untouched by any of this -- see `index.test.ts`.
@@ -22,8 +23,8 @@ afterEach(() => {
 });
 
 /** Resolves on the browser's own next animation frame -- never a fake
- * timer -- so a test can check what the one-frame entrance did, or did
- * not, do by then. */
+ * timer -- so a test can check what the entrance did, or did not, do by
+ * then. */
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
@@ -53,6 +54,42 @@ function withTransition(
   };
 }
 
+/** The same recipe as `withTransition`, but on `transform`: the one the
+ * documented recipe actually ships, and the one the broken entrance could
+ * set and remove without ever painting in between. `translateY(100%)` is
+ * big enough, against the fixture's tall panel, that a real transition's
+ * mid-flight value is never mistakable for 0. */
+function withTransformTransition(
+  el: HTMLElement,
+  { durationMs }: { durationMs: number }
+): () => void {
+  const marker = `data-test-${Math.random().toString(36).slice(2)}`;
+  el.setAttribute(marker, '');
+  const style = document.createElement('style');
+  style.textContent = `
+    [${marker}] { transform: translateY(0); transition: transform ${durationMs}ms linear; }
+    [${marker}][data-starting-style], [${marker}][data-ending-style] { transform: translateY(100%); }
+  `;
+  document.head.append(style);
+  return () => {
+    style.remove();
+    el.removeAttribute(marker);
+  };
+}
+
+/** The `f` component (vertical translation) of a computed `transform`'s
+ * 2D matrix, or 0 for `'none'`: a real transition's mid-flight value is
+ * never exactly 0, which is what the broken entrance -- the Panel's
+ * transform frozen at `matrix(1,0,0,1,0,0)` for its whole run -- always
+ * read as. */
+function translateY(transform: string): number {
+  if (transform === 'none') return 0;
+  const match = /matrix\(([^)]+)\)/.exec(transform);
+  if (!match) return NaN;
+  const parts = match[1].split(',').map(Number);
+  return parts[5];
+}
+
 /** Declares a transition-duration on `el` for a property nothing ever
  * actually changes: `getComputedStyle` reports it (so the engine waits),
  * but no transition ever starts, so `transitionend` never fires -- the
@@ -72,9 +109,9 @@ function withUnfireableDuration(
 }
 
 describe('the CSS entrance', () => {
-  it('sets scrollTop to the snap point and data-starting-style on the Panel before the first paint, for exactly one frame', async () => {
+  it('sets scrollTop to the snap point and data-starting-style on the Panel and the Backdrop before the first paint, surviving one full painted frame', async () => {
     fixture = mount({ snapPoints: [0.5, 1] });
-    const { viewport, panel, drawer } = fixture;
+    const { viewport, panel, backdrop, drawer } = fixture;
 
     drawer.open();
 
@@ -82,12 +119,38 @@ describe('the CSS entrance', () => {
     const expected = Math.round(viewport.clientHeight * 0.5);
     expect(Math.abs(viewport.scrollTop - expected)).toBeLessThan(2);
     expect(panel.hasAttribute('data-starting-style')).toBe(true);
+    expect(backdrop.hasAttribute('data-starting-style')).toBe(true);
     expect(drawer.phase).toBe('opening');
 
     await nextFrame();
 
+    // Still mid-entrance: the attribute survives one whole painted frame,
+    // so the browser has actually committed the starting style -- this is
+    // what a single `requestAnimationFrame` here skipped, and why its
+    // removal a frame later had nothing real to transition from.
+    expect(panel.hasAttribute('data-starting-style')).toBe(true);
+    expect(backdrop.hasAttribute('data-starting-style')).toBe(true);
+
+    await nextFrame();
+
     expect(panel.hasAttribute('data-starting-style')).toBe(false);
+    expect(backdrop.hasAttribute('data-starting-style')).toBe(false);
     expect(drawer.phase).toBe('open');
+  });
+
+  it('really moves: the Panel’s computed transform has a non-zero translateY about 100ms into a real 300ms entrance', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { panel, drawer } = fixture;
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+
+    drawer.open();
+    await sleep(100);
+
+    const y = translateY(getComputedStyle(panel).transform);
+    expect(y).not.toBe(0);
+    removeTransition();
   });
 
   it('writes the Panel’s attribute once to start the entrance and once to end it, nothing more', async () => {
@@ -149,6 +212,25 @@ describe('the CSS exit', () => {
     expect(panel.hasAttribute('data-ending-style')).toBe(false);
     expect(backdrop.hasAttribute('data-ending-style')).toBe(false);
     expect(onOpenChange).toHaveBeenCalledWith(false, 'close-button');
+    removeTransition();
+  });
+
+  it('really moves: the Panel’s computed transform has a non-zero translateY about 100ms into a real 300ms exit', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { panel, drawer } = fixture;
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    drawer.close('close-button');
+    await sleep(100);
+
+    const y = translateY(getComputedStyle(panel).transform);
+    expect(y).not.toBe(0);
+
+    await expectSettledTo(() => drawer.phase, 'closed');
     removeTransition();
   });
 
