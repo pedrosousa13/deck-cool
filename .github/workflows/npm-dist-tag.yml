@@ -1,0 +1,107 @@
+name: Add an npm dist-tag
+
+# A manual run that adds a dist-tag to a version already on npm, with the
+# NPM_TOKEN secret, so the maintainer never runs `npm dist-tag add` by hand.
+# Add only: this never runs `dist-tag rm` or `publish`, and a dist-tag
+# already points at some version, so adding one never removes anything.
+#
+# Runs only from main, since a dist-tag is a release action and main is the
+# reviewed history: a dispatch on another ref fails before anything reaches
+# npm. Every input is checked before use and reaches a `run:` step only
+# through `env`, never interpolated into the script.
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "Space-separated package names, e.g. @drawerdeck/core @drawerdeck/react"
+        required: true
+        type: string
+      version:
+        description: "The version already on npm, e.g. 0.1.0-beta.0"
+        required: true
+        type: string
+      tag:
+        description: "The dist-tag to add, e.g. beta"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  add-dist-tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PACKAGES: ${{ inputs.packages }}
+      VERSION: ${{ inputs.version }}
+      TAG: ${{ inputs.tag }}
+      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+    steps:
+      - name: Refuse a ref other than main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Dispatched on $GITHUB_REF, not refs/heads/main. Re-run with main selected as the branch."
+            exit 1
+          fi
+
+      - name: Validate the inputs
+        run: |
+          package_re='^@(drawerdeck|carouseldeck)/[a-z0-9-]+$'
+          version_re='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+          tag_re='^[a-z][a-z0-9-]*$'
+          if [ -z "$PACKAGES" ]; then
+            echo "::error::packages is empty."
+            exit 1
+          fi
+          for pkg in $PACKAGES; do
+            if ! [[ "$pkg" =~ $package_re ]]; then
+              echo "::error::'$pkg' does not match $package_re."
+              exit 1
+            fi
+          done
+          if ! [[ "$VERSION" =~ $version_re ]]; then
+            echo "::error::'$VERSION' does not match semver $version_re."
+            exit 1
+          fi
+          if ! [[ "$TAG" =~ $tag_re ]]; then
+            echo "::error::'$TAG' does not match $tag_re."
+            exit 1
+          fi
+
+      - name: Check a credential can add a dist-tag
+        if: env.HAS_NPM_TOKEN != 'true'
+        run: |
+          echo "::error::No NPM_TOKEN secret is set. Nothing was tagged."
+          exit 1
+
+      # No `registry-url`: it writes an `.npmrc` holding `${NODE_AUTH_TOKEN}`,
+      # which npm can send unresolved as a bearer token, the same reason
+      # release.yml's `publish` job avoids it.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Use the NPM_TOKEN secret
+        run: |
+          # shellcheck disable=SC2016 # npm expands the placeholder, not the shell.
+          echo '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}' >> ~/.npmrc
+
+      # Checks each version is on npm before tagging it, and only ever adds a
+      # tag: never `dist-tag rm`, never `publish`.
+      - name: Add the dist-tag, package by package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for pkg in $PACKAGES; do
+            echo "Before:"
+            npm view "$pkg" dist-tags --json
+            if ! npm view "$pkg@$VERSION" version > /dev/null 2>&1; then
+              echo "::error::$pkg@$VERSION is not on npm. Nothing was tagged for it."
+              exit 1
+            fi
+            npm dist-tag add "$pkg@$VERSION" "$TAG"
+            echo "After:"
+            npm view "$pkg" dist-tags --json
+          done
