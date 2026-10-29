@@ -386,9 +386,11 @@ export interface PopupProps extends ComponentProps<'dialog'> {
 }
 
 /** The `<dialog>`: the top layer, so no portal is needed. Labelled by
- * `Drawer.Title` and described by `Drawer.Description`; `--drawer-progress`
- * (0 closed, 1 at the first snap point) is written here, straight to the
- * DOM, as the viewport scrolls. */
+ * `Drawer.Title` and described by `Drawer.Description`. Carries `timeline-scope`
+ * for the Backdrop's native scroll-driven dim, `--drawer-first-snap` (the
+ * dim's range, set once per layout), and, only where a scroll timeline is
+ * unsupported (Firefox, #249), the `--drawer-progress` fallback, written as
+ * the viewport scrolls. */
 export function Popup({ render, ref, ...rest }: PopupProps) {
   const ctx = useDrawerContext('Popup');
   return useRenderPart('dialog', render, {
@@ -405,9 +407,12 @@ export interface PartProps extends ComponentProps<'div'> {
   render?: RenderProp;
 }
 
-/** The dim: purely visual, driven by the scroll position (`--drawer-progress`
- * on `Drawer.Popup`). Never intercepts a press -- the viewport's own
- * `[data-drawer-gap]` closes a dismissible drawer on an outside press. */
+/** The dim: purely visual and headless -- style it with your own
+ * `@keyframes` on `animation-timeline: --drawer` (native scroll-driven, no
+ * JS; see the "Style the backdrop" guide), falling back to
+ * `--drawer-progress` where that is unsupported (#249). Never intercepts a
+ * press -- the viewport's own `[data-drawer-gap]` closes a dismissible
+ * drawer on an outside press. */
 export function Backdrop({ render, ref, ...rest }: PartProps) {
   const ctx = useDrawerContext('Backdrop');
   return useRenderPart('div', render, {

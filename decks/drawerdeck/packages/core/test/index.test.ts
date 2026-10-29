@@ -144,65 +144,150 @@ describe('the inner content', () => {
   });
 });
 
-describe('--drawer-progress', () => {
+describe('the dim (#249)', () => {
   beforeEach(() => mockReducedMotion());
 
-  it('tracks the scroll position up to the first snap point', async () => {
-    fixture = mount({ snapPoints: [0.5, 1] });
-    const { dialog, viewport, panel, drawer } = fixture;
-    drawer.open();
-    await expectSettledTo(() => drawer.phase, 'open');
+  describe('the native scroll timeline, where supported', () => {
+    it('exposes the drag as a named scroll timeline the Backdrop can use', async () => {
+      fixture = mount({ snapPoints: [0.5, 1] });
+      const { dialog, viewport, backdrop, drawer } = fixture;
+      drawer.open();
+      await expectSettledTo(() => drawer.phase, 'open');
 
-    // Mid-drag: the engine itself turns scroll-snap off for this (so a
-    // mandatory snap cannot pull a script-set, off-snap-point scrollTop
-    // like this one straight back to the nearest point before the test
-    // can read it).
-    const box = panel.getBoundingClientRect();
-    const dy = -Math.round(viewport.clientHeight * 0.25 - viewport.scrollTop);
-    const letGo = await mouseDrag(
-      panel,
-      { x: box.left + 10, y: box.top + 10 },
-      [{ dy }],
-      { release: false }
-    );
-    await sleep(80);
+      // Consumer CSS: the engine sets only the plumbing (`scroll-timeline`,
+      // `timeline-scope`), never a `@keyframes` or an `animation-*`
+      // property of its own.
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(
+        '@keyframes drawerdeck-test-dim { from { opacity: 0; } to { opacity: 1; } }' +
+          '[data-test-dim] { animation: drawerdeck-test-dim 1s linear; animation-timeline: --drawer; }'
+      );
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+      backdrop.setAttribute('data-test-dim', '');
 
-    const progress = Number(dialog.style.getPropertyValue('--drawer-progress'));
-    expect(progress).toBeGreaterThan(0.4);
-    expect(progress).toBeLessThan(0.6);
-    letGo();
+      expect(viewport.style.getPropertyValue('scroll-timeline')).toBe(
+        '--drawer y'
+      );
+      expect(dialog.style.getPropertyValue('timeline-scope')).toBe('--drawer');
+      const animation = backdrop.getAnimations()[0];
+      expect(animation).toBeDefined();
+      expect(animation.timeline).toBeInstanceOf(ScrollTimeline);
+      expect(animation.timeline).not.toBe(document.timeline);
+
+      document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+        (s) => s !== sheet
+      );
+    });
+
+    it('sets the dim range once per layout, as a CSS variable', async () => {
+      fixture = mount({ snapPoints: [0.5, 1] });
+      const { dialog, viewport, drawer } = fixture;
+      drawer.open();
+      await expectSettledTo(() => drawer.phase, 'open');
+
+      const expected = `${Math.round(viewport.clientHeight * 0.5)}px`;
+      expect(dialog.style.getPropertyValue('--drawer-first-snap')).toBe(
+        expected
+      );
+    });
+
+    it('runs no JS at all while the Viewport scrolls between snap points', async () => {
+      fixture = mount({ snapPoints: [0.5, 1] });
+      const { panel, drawer } = fixture;
+      drawer.open(1);
+      await expectSettledTo(() => drawer.phase, 'open');
+
+      const setPropertySpy = vi.spyOn(
+        CSSStyleDeclaration.prototype,
+        'setProperty'
+      );
+      const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
+
+      const box = panel.getBoundingClientRect();
+      const letGo = await mouseDrag(
+        panel,
+        { x: box.left + 10, y: box.top + 10 },
+        [
+          { dy: -20, waitMs: 30 },
+          { dy: 15, waitMs: 30 },
+          { dy: -10, waitMs: 30 },
+          { dy: 12, waitMs: 30 }
+        ],
+        { release: false }
+      );
+      await sleep(80);
+      letGo();
+
+      expect(setPropertySpy).not.toHaveBeenCalled();
+      expect(rafSpy).not.toHaveBeenCalled();
+    });
   });
 
-  it('is not rewritten on a scroll frame where it has not changed (#267)', async () => {
-    // Every scroll frame beyond the first snap point clamps to the same
-    // value (1): a drag there should not keep calling setProperty, which
-    // (unlike a standard CSS property) does not skip the main-thread write
-    // and the commit it schedules just because the value is unchanged.
-    fixture = mount({ snapPoints: [0.5, 1] });
-    const { dialog, panel, drawer } = fixture;
-    drawer.open(1);
-    await expectSettledTo(() => drawer.phase, 'open');
+  describe('--drawer-progress, the fallback (Firefox, or forced here via a stubbed CSS.supports)', () => {
+    beforeEach(() => {
+      vi.spyOn(CSS, 'supports').mockReturnValue(false);
+    });
 
-    const spy = vi.spyOn(dialog.style, 'setProperty');
-    const box = panel.getBoundingClientRect();
-    const letGo = await mouseDrag(
-      panel,
-      { x: box.left + 10, y: box.top + 10 },
-      [
-        { dy: -20, waitMs: 30 },
-        { dy: 15, waitMs: 30 },
-        { dy: -10, waitMs: 30 },
-        { dy: 12, waitMs: 30 }
-      ],
-      { release: false }
-    );
-    await sleep(80);
-    letGo();
+    it('tracks the scroll position up to the first snap point', async () => {
+      fixture = mount({ snapPoints: [0.5, 1] });
+      const { dialog, viewport, panel, drawer } = fixture;
+      drawer.open();
+      await expectSettledTo(() => drawer.phase, 'open');
 
-    const progressCalls = spy.mock.calls.filter(
-      ([name]) => name === '--drawer-progress'
-    );
-    expect(progressCalls.length).toBe(0);
+      // Mid-drag: the engine itself turns scroll-snap off for this (so a
+      // mandatory snap cannot pull a script-set, off-snap-point scrollTop
+      // like this one straight back to the nearest point before the test
+      // can read it).
+      const box = panel.getBoundingClientRect();
+      const dy = -Math.round(viewport.clientHeight * 0.25 - viewport.scrollTop);
+      const letGo = await mouseDrag(
+        panel,
+        { x: box.left + 10, y: box.top + 10 },
+        [{ dy }],
+        { release: false }
+      );
+      await sleep(80);
+
+      const progress = Number(
+        dialog.style.getPropertyValue('--drawer-progress')
+      );
+      expect(progress).toBeGreaterThan(0.4);
+      expect(progress).toBeLessThan(0.6);
+      letGo();
+    });
+
+    it('is not rewritten on a scroll frame where it has not changed (#267)', async () => {
+      // Every scroll frame beyond the first snap point clamps to the same
+      // value (1): a drag there should not keep calling setProperty, which
+      // (unlike a standard CSS property) does not skip the main-thread
+      // write and the commit it schedules just because the value is
+      // unchanged.
+      fixture = mount({ snapPoints: [0.5, 1] });
+      const { dialog, panel, drawer } = fixture;
+      drawer.open(1);
+      await expectSettledTo(() => drawer.phase, 'open');
+
+      const spy = vi.spyOn(dialog.style, 'setProperty');
+      const box = panel.getBoundingClientRect();
+      const letGo = await mouseDrag(
+        panel,
+        { x: box.left + 10, y: box.top + 10 },
+        [
+          { dy: -20, waitMs: 30 },
+          { dy: 15, waitMs: 30 },
+          { dy: -10, waitMs: 30 },
+          { dy: 12, waitMs: 30 }
+        ],
+        { release: false }
+      );
+      await sleep(80);
+      letGo();
+
+      const progressCalls = spy.mock.calls.filter(
+        ([name]) => name === '--drawer-progress'
+      );
+      expect(progressCalls.length).toBe(0);
+    });
   });
 });
 

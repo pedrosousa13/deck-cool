@@ -278,8 +278,34 @@ main .home-family .home-more {
   cursor: pointer;
 }
 
-.drawer-demo__backdrop {
-  background: rgb(0 0 0 / calc(var(--drawer-progress, 0) * 0.5));
+/* The dim: the engine only exposes the scroll timeline and its range
+   (--drawer-first-snap); this is the look, same recipe as the "Style the
+   backdrop" guide. Chromium and Safari drive it natively, with no JS per
+   scroll frame; Firefox falls back to --drawer-progress. */
+@supports (animation-timeline: scroll()) {
+  @keyframes drawer-demo-dim {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .drawer-demo__backdrop {
+    background: rgb(0 0 0 / 0.5);
+    opacity: 0;
+    animation: drawer-demo-dim 1s linear;
+    animation-timeline: --drawer;
+    animation-range: 0 var(--drawer-first-snap);
+    animation-fill-mode: both;
+  }
+}
+
+@supports not (animation-timeline: scroll()) {
+  .drawer-demo__backdrop {
+    background: rgb(0 0 0 / calc(var(--drawer-progress, 0) * 0.5));
+  }
 }
 
 .drawer-demo__panel {
