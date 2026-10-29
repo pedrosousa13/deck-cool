@@ -172,6 +172,38 @@ describe('--drawer-progress', () => {
     expect(progress).toBeLessThan(0.6);
     letGo();
   });
+
+  it('is not rewritten on a scroll frame where it has not changed (#267)', async () => {
+    // Every scroll frame beyond the first snap point clamps to the same
+    // value (1): a drag there should not keep calling setProperty, which
+    // (unlike a standard CSS property) does not skip the main-thread write
+    // and the commit it schedules just because the value is unchanged.
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { dialog, panel, drawer } = fixture;
+    drawer.open(1);
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    const spy = vi.spyOn(dialog.style, 'setProperty');
+    const box = panel.getBoundingClientRect();
+    const letGo = await mouseDrag(
+      panel,
+      { x: box.left + 10, y: box.top + 10 },
+      [
+        { dy: -20, waitMs: 30 },
+        { dy: 15, waitMs: 30 },
+        { dy: -10, waitMs: 30 },
+        { dy: 12, waitMs: 30 }
+      ],
+      { release: false }
+    );
+    await sleep(80);
+    letGo();
+
+    const progressCalls = spy.mock.calls.filter(
+      ([name]) => name === '--drawer-progress'
+    );
+    expect(progressCalls.length).toBe(0);
+  });
 });
 
 describe('a mouse drag (#235)', () => {
