@@ -40,6 +40,17 @@ def cell(rows, deck, scenario, load_, pick):
     return fmt([pick(r) for r in g])
 
 
+def not_supported(rows, deck, scenario):
+    # #294, #266 rule 11: a deck that never responded to a scenario's own
+    # gesture (`responded`, false in more than half of its reps for that
+    # scenario) cannot win or tie it.
+    vals = [r.get('responded') for r in rows if r['deck'] == deck and r['scenario'] == scenario]
+    vals = [v for v in vals if v is not None]
+    if not vals:
+        return False
+    return sum(1 for v in vals if v is False) > len(vals) / 2
+
+
 def table(rows, scenario, pick, digits=0, legacy_pick=None):
     # `legacy_pick` (#266 rule 10) adds an "unscoped (legacy)" column per
     # load: the same trace, scored the old way (one window spanning the
@@ -49,11 +60,23 @@ def table(rows, scenario, pick, digits=0, legacy_pick=None):
     if legacy_pick is not None:
         load_cols += [f'load={load_} unscoped (legacy)' for load_ in LOADS]
     lines = ['| Deck | ' + ' | '.join(load_cols) + ' |', '| --- | ' + ' | '.join('---' for _ in load_cols) + ' |']
+    unsupported = []
     for deck in DECKS:
+        if not_supported(rows, deck, scenario):
+            unsupported.append(deck)
+            cells = ['not supported'] * len(load_cols)
+            lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
+            continue
         cells = [cell(rows, deck, scenario, load_, pick) for load_ in LOADS]
         if legacy_pick is not None:
             cells += [cell(rows, deck, scenario, load_, legacy_pick) for load_ in LOADS]
         lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
+    if unsupported:
+        lines.append('')
+        lines.append(
+            f"Not supported: {', '.join(unsupported)} did not respond to this "
+            'gesture in most of its reps (#294, #266 rule 11).'
+        )
     return '\n'.join(lines)
 
 

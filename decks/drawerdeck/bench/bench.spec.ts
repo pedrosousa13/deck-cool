@@ -75,6 +75,19 @@ function record(row: Record<string, unknown>): void {
   appendFileSync(`${OUT}chromium.jsonl`, `${JSON.stringify(row)}\n`);
 }
 
+// A drawer that never moves still finishes `settle()` at its own timeout, so
+// "settle time" alone cannot tell "fastest" from "never moved" (#294, #266
+// rule 11). `maxStep` -- not `travel` -- is the right signal: a scenario
+// that drags a drawer up and back down nets ~0 `travel` on a drawer that
+// genuinely moved, but `maxStep` still shows the drag's own per-frame
+// motion. 2px is comfortably above the sub-pixel jitter `harness.ts`'s own
+// `tick()` can report on an otherwise-still drawer.
+const RESPONSE_THRESHOLD_PX = 2;
+
+function responded(raf: PassResult['raf']): boolean {
+  return Math.abs(raf.maxStep) > RESPONSE_THRESHOLD_PX;
+}
+
 interface PassResult {
   settleMs: number;
   opennessAfter: number;
@@ -154,6 +167,7 @@ for (const scenario of scenarios) {
             warmup: true,
             settleMs: warmup.settleMs,
             opennessAfter: warmup.opennessAfter,
+            responded: responded(warmup.raf),
             raf: { ...warmup.raf, blankFrames: 0 },
             loaf: warmup.loaf,
             trace: warmup.trace
@@ -190,6 +204,7 @@ for (const scenario of scenarios) {
             initDurationMs,
             settleMs: scored.settleMs,
             opennessAfter: scored.opennessAfter,
+            responded: responded(scored.raf),
             raf: { ...scored.raf, blankFrames: 0 },
             loaf: scored.loaf,
             trace: scored.trace
