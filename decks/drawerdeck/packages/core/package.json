@@ -1,6 +1,6 @@
 {
   "name": "@drawerdeck/core",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "Framework-neutral engine for drawerdeck, a headless drawer built on native scrolling.",
   "license": "MIT",
   "homepage": "https://drawer.deck.cool",

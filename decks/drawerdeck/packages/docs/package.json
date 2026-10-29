@@ -1,6 +1,6 @@
 {
   "name": "@drawerdeck/docs",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "The drawerdeck docs as markdown, at the version of the code they document, for deck.cool to build the docs site from.",
   "license": "MIT",
   "homepage": "https://drawer.deck.cool/docs/",
