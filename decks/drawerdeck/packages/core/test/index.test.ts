@@ -234,6 +234,146 @@ describe('a mouse drag (#235)', () => {
   });
 });
 
+describe('a mouse drag released partway, slowly (#279)', () => {
+  // No mockReducedMotion here: the bug is in the eased throw itself
+  // (`motionBehavior`'s real, non-reduced path), so forcing an instant
+  // scroll would skip right over it.
+
+  /** Breaks a drag of `totalDy` into many small steps, 20ms apart, plus a
+   * final 150ms pause with no movement: `DRAG_HISTORY_MS` (100ms) then
+   * holds nothing but that pause, so the release velocity is ~0 however
+   * fast the drag itself was. */
+  function slowDragSteps(totalDy: number) {
+    const stepCount = 12;
+    const perStep = Math.round(totalDy / stepCount);
+    const steps = Array.from({ length: stepCount }, (_, i) => ({
+      dy: i === stepCount - 1 ? totalDy - perStep * (stepCount - 1) : perStep,
+      waitMs: 20
+    }));
+    steps.push({ dy: 0, waitMs: 150 });
+    return steps;
+  }
+
+  /** Samples `viewport.scrollTop` on every animation frame for `ms`. */
+  async function sampleScrollTopFor(viewport: HTMLElement, ms: number) {
+    const samples: number[] = [];
+    const start = performance.now();
+    await new Promise<void>((resolve) => {
+      function frame() {
+        samples.push(viewport.scrollTop);
+        if (performance.now() - start < ms) {
+          requestAnimationFrame(frame);
+        } else {
+          resolve();
+        }
+      }
+      requestAnimationFrame(frame);
+    });
+    return samples;
+  }
+
+  // A real release, not a mocked one: the pointer's own last couple of
+  // events can still be settling (coalesced input, sub-pixel rounding)
+  // for a few px either side of the exact release position. The flash
+  // this bug produces dwarfs that noise by well over an order of
+  // magnitude (a 100+px single-frame jump, or straight to closed).
+  const RELEASE_JITTER_PX = 16;
+
+  /** The flash this bug produces is a native re-snap landing the scroll
+   * position far from where the eased throw was on its way to, in a
+   * single frame: a real 240ms ease, sampled a frame at a time, never
+   * covers more than a slice of the remaining distance in one step, and
+   * never moves back out past where the drag released it. */
+  function assertNoFlash(samples: number[], released: number, target: number) {
+    const distance = Math.abs(target - released);
+    const towardTarget = Math.sign(target - released);
+    let sawMidway = false;
+    for (let i = 0; i < samples.length; i++) {
+      const st = samples[i];
+      if (towardTarget >= 0) {
+        expect(st).toBeGreaterThanOrEqual(released - RELEASE_JITTER_PX);
+      } else {
+        expect(st).toBeLessThanOrEqual(released + RELEASE_JITTER_PX);
+      }
+      if (
+        Math.abs(st - released) > distance * 0.2 &&
+        Math.abs(st - target) > distance * 0.2
+      ) {
+        sawMidway = true;
+      }
+      if (i > 0) {
+        const delta = Math.abs(st - samples[i - 1]);
+        expect(delta).toBeLessThanOrEqual(distance * 0.5 + RELEASE_JITTER_PX);
+      }
+    }
+    // A genuine multi-frame ease spends several frames measurably between
+    // the release point and the target; an instant re-snap jumps straight
+    // from one to the other and never does.
+    expect(sawMidway).toBe(true);
+  }
+
+  for (const depthFraction of [0.25, 0.4, 0.45]) {
+    it(`springs back to half from a slow drag ${depthFraction * 100}% of the way to closed, without flashing`, async () => {
+      fixture = mount({ snapPoints: [0.5, 1] });
+      const { viewport, panel, drawer } = fixture;
+      drawer.open();
+      await expectSettledTo(() => drawer.phase, 'open');
+      const halfPx = viewport.scrollTop;
+
+      const box = panel.getBoundingClientRect();
+      const dy = Math.round(halfPx * depthFraction);
+
+      // `mouseDrag` (release defaults true) returns right after dispatching
+      // the pointerup, before the throw's first eased frame (scheduled by
+      // `requestAnimationFrame`, not run synchronously): `scrollTop` here
+      // is still exactly wherever the drag itself left it.
+      await mouseDrag(
+        panel,
+        { x: box.left + 10, y: box.top + 10 },
+        slowDragSteps(dy)
+      );
+      const releasedAt = viewport.scrollTop;
+      const samples = await sampleScrollTopFor(viewport, 600);
+
+      assertNoFlash(samples, releasedAt, halfPx);
+      await expectSettledTo(() => drawer.phase, 'open');
+      await expectSettledTo(() => viewport.scrollTop, halfPx);
+    });
+  }
+
+  it('a fast throw down still closes', async () => {
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { viewport, panel, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    const box = panel.getBoundingClientRect();
+    await mouseDrag(panel, { x: box.left + 10, y: box.top + 10 }, [
+      { dy: viewport.scrollTop + 100 }
+    ]);
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+  });
+
+  it('a slow drag past the closed threshold still closes', async () => {
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { viewport, panel, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const halfPx = viewport.scrollTop;
+
+    const box = panel.getBoundingClientRect();
+    const dy = Math.round(halfPx * 0.7);
+    await mouseDrag(
+      panel,
+      { x: box.left + 10, y: box.top + 10 },
+      slowDragSteps(dy)
+    );
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+  });
+});
+
 describe('a resize', () => {
   it('mid-open never closes the drawer (ADR 0001)', async () => {
     fixture = mount({ snapPoints: [0.5, 1] });

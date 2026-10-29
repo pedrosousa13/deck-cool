@@ -304,8 +304,14 @@ export function createDrawer(
     // off): the browser still eventually fires a `scrollend` for that, but
     // the drag is not over, and `settleOpenAt`/`finishClose` turning
     // snapping back on now, while it rests off every snap point, would
-    // fight the drag that owns it until release.
-    if (dragging) return;
+    // fight the drag that owns it until release. The eased throw back to a
+    // snap point (`throwTo`) drives `scrollTop` the same way, off every
+    // snap point until its last frame: a `scrollend` the browser fires
+    // mid-ease (it does, well before the ease is done) would turn snapping
+    // back on at that in-between position too, and the resulting re-snap
+    // can land on a different point than the one the throw was easing
+    // toward -- the flash (#279).
+    if (dragging || throwing) return;
     const st = viewport.scrollTop;
 
     if (phase === 'opening') {
@@ -417,6 +423,9 @@ export function createDrawer(
   let dragMaxTop = 0;
   let dragHistory: { t: number; st: number }[] = [];
   let throwFrame = 0;
+  /** Set for `throwTo`'s whole run, including its final, synchronous
+   * frame: guards `onScrollEnd` the way `dragging` does, below. */
+  let throwing = false;
 
   function onPointerDown(event: PointerEvent) {
     if (
@@ -436,6 +445,7 @@ export function createDrawer(
     dragMaxTop = viewport.scrollHeight - viewport.clientHeight;
     dragHistory = [{ t: event.timeStamp, st: dragStartTop }];
     cancelAnimationFrame(throwFrame);
+    throwing = false;
     try {
       panel.setPointerCapture(event.pointerId);
     } catch {
@@ -461,23 +471,28 @@ export function createDrawer(
 
   function throwTo(target: number, onDone: () => void) {
     cancelAnimationFrame(throwFrame);
+    throwing = true;
+    const finish = () => {
+      throwing = false;
+      onDone();
+    };
     const start = viewport.scrollTop;
     const delta = target - start;
     if (delta === 0 || reducedMotion()) {
       viewport.scrollTop = target;
-      onDone();
+      finish();
       return;
     }
     const startTime = performance.now();
     const tick = (now: number) => {
-      const t = Math.min(1, (now - startTime) / THROW_DURATION_MS);
+      const t = Math.min(1, Math.max(0, (now - startTime) / THROW_DURATION_MS));
       const eased = 1 - Math.pow(1 - t, 3);
       viewport.scrollTop = start + delta * eased;
       if (t < 1) {
         throwFrame = requestAnimationFrame(tick);
       } else {
         viewport.scrollTop = target;
-        onDone();
+        finish();
       }
     };
     throwFrame = requestAnimationFrame(tick);
