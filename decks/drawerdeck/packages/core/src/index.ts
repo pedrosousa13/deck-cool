@@ -582,6 +582,26 @@ export function createDrawer(
     animFrame = requestAnimationFrame(tick);
   }
 
+  // A touch or wheel scroll grabbing the viewport while an eased,
+  // programmatic move (`animateScrollTo`: `open`, `close`/Escape/the
+  // outside press/`Drawer.Close`, or `snapTo`) is still running must win
+  // it, the way native smooth scrolling already let it: left running, the
+  // ease overwrites the gesture's own `scrollTop` writes every frame, then
+  // forces its target on top of wherever the gesture left it, closing a
+  // drawer the user was still holding open. Passive: this never calls
+  // `preventDefault()`, so the gesture itself stays entirely native.
+  function cancelEaseForNativeScroll() {
+    if (!animating) return;
+    cancelAnimationFrame(animFrame);
+    animating = false;
+  }
+  viewport.addEventListener('touchstart', cancelEaseForNativeScroll, {
+    passive: true
+  });
+  viewport.addEventListener('wheel', cancelEaseForNativeScroll, {
+    passive: true
+  });
+
   function onPointerUp(event: PointerEvent) {
     if (!dragging || event.pointerType !== 'mouse') return;
     dragging = false;
@@ -721,6 +741,8 @@ export function createDrawer(
     viewport.removeEventListener('scrollend', onScrollEnd);
     viewport.removeEventListener('scroll', onScrollEndDebounce);
     viewport.removeEventListener('scroll', onScroll);
+    viewport.removeEventListener('touchstart', cancelEaseForNativeScroll);
+    viewport.removeEventListener('wheel', cancelEaseForNativeScroll);
     dialog.removeEventListener('cancel', onCancel);
     gap?.removeEventListener('click', onGapClick);
     panel.removeEventListener('pointerdown', onPointerDown);

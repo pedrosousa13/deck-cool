@@ -263,6 +263,51 @@ describe('the engine’s own ease, not native smooth scrolling (#268)', () => {
   });
 });
 
+describe('a touch or wheel scroll interrupts the ease (#292)', () => {
+  // No mockReducedMotion here: reduced motion resolves `animateScrollTo`
+  // synchronously, within the call that starts it, so there is no 240ms
+  // window left for a touch or wheel scroll to land inside.
+
+  it('a touchstart mid-close cancels the ease, and a later native settle leaves the drawer open', async () => {
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const halfPx = viewport.scrollTop;
+
+    drawer.close();
+    await sleep(40);
+    expect(drawer.phase).toBe('closing');
+
+    // A real touch grabbing the viewport: the ease must stop driving
+    // `scrollTop` itself, or this write is just overwritten on the ease's
+    // next frame, same as the bug this covers.
+    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    viewport.scrollTo({ top: halfPx, behavior: 'instant' });
+
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(viewport.scrollTop).toBeGreaterThan(halfPx / 2);
+  });
+
+  it('a wheel event mid-close cancels the ease, and a later native settle leaves the drawer open', async () => {
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const halfPx = viewport.scrollTop;
+
+    drawer.close();
+    await sleep(40);
+    expect(drawer.phase).toBe('closing');
+
+    viewport.dispatchEvent(new Event('wheel', { bubbles: true }));
+    viewport.scrollTo({ top: halfPx, behavior: 'instant' });
+
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(viewport.scrollTop).toBeGreaterThan(halfPx / 2);
+  });
+});
+
 describe("close() or destroy() racing open()'s first eased frame", () => {
   // `open()` queues its first eased frame with a bare `requestAnimationFrame`,
   // not yet run when these fire in the same task right after it. Regression
