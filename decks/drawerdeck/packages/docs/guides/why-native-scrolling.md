@@ -20,9 +20,8 @@ press, `Drawer.Close` or `close()`) and `snapTo` animate `scrollTop`
 themselves, on the same curve and duration as a mouse throw's release
 (`cubic-bezier(.32,.72,0,1)`, 240ms), with scroll snap off for the move and
 back on once it settles. Native smooth scrolling and mandatory snap both
-wanted to drive the same scroll at once, which cost open its speed; the
-engine owns it alone instead. Touch, wheel and trackpad input stay purely
-native throughout.
+wanted to drive the same scroll at once; the engine owns it alone instead.
+Touch, wheel and trackpad input stay purely native throughout.
 
 ## What a throwaway prototype found
 
