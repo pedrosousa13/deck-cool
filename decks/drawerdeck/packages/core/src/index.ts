@@ -363,13 +363,19 @@ export function createDrawer(
   /** Forces the style flush that starts the transition `el`'s attribute
    * change (just above the call site) triggers -- the same flush `open()`
    * forces for the entrance's own starting value -- then finishes every
-   * resulting animation at once, jumping `el` straight to its resting
-   * value instead of letting it ease there. */
+   * resulting *transition* at once, jumping `el` straight to its resting
+   * value instead of letting it ease there. Only `CSSTransition`s: `el`
+   * (the Backdrop) can also carry a `CSSAnimation` of its own -- the
+   * scroll-timeline dim from the "Style the backdrop" recipe -- and
+   * finishing that one would detach it from the scroll timeline instead of
+   * leaving it to keep following the drag. */
   function finishTransition(el: Element) {
     const style = getComputedStyle(el);
     void style.transform;
     void style.opacity;
-    el.getAnimations().forEach((animation) => animation.finish());
+    el.getAnimations().forEach((animation) => {
+      if (animation instanceof CSSTransition) animation.finish();
+    });
   }
 
   /** Any touch, wheel or pointer down while the Panel's CSS entrance or
@@ -592,7 +598,11 @@ export function createDrawer(
   gap?.addEventListener('click', onGapClick);
 
   function onResize() {
-    if (phase === 'opening' || phase === 'closed') return;
+    // `opening` reconciles too: `open()` no longer animates `scrollTop` (it
+    // is already at its snap point, synchronously, before the entrance's
+    // own CSS transition on `transform` even starts), so there is nothing
+    // left here for a resize mid-entrance to race.
+    if (phase === 'closed') return;
     const oldSnapPx = snapPx;
     const st = viewport.scrollTop;
     measure();

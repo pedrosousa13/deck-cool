@@ -471,6 +471,146 @@ describe('interrupting the entrance or the exit', () => {
   });
 });
 
+describe('interrupting the entrance and the exit with the scroll-timeline dim applied', () => {
+  it('leaves the Backdrop’s dim tracking scrollTop on a later drag, not stuck wherever the interrupt finished it', async () => {
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { dialog, viewport, panel, backdrop, drawer } = fixture;
+    const removePanelTransition = withTransition(panel, { durationMs: 300 });
+    const removeBackdropTransition = withTransition(backdrop, {
+      durationMs: 300
+    });
+    // The "Style the backdrop" recipe: a scroll-timeline `CSSAnimation` on
+    // `background-color`, composing with the Backdrop's own entrance/exit
+    // `opacity` transition above by multiplying rather than one replacing
+    // the other -- the same two animations `onInterrupt`'s
+    // `finishTransition` must tell apart.
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(
+      '@keyframes drawerdeck-test-dim {' +
+        'from { background-color: rgb(0 0 0 / 0); }' +
+        'to { background-color: rgb(0 0 0 / 0.5); }' +
+        '}' +
+        '[data-test-dim] {' +
+        'background-color: rgb(0 0 0 / 0);' +
+        'animation: drawerdeck-test-dim 1s linear;' +
+        'animation-timeline: --drawer;' +
+        'animation-range: 0 var(--drawer-first-snap);' +
+        'animation-fill-mode: both;' +
+        '}'
+    );
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+    backdrop.setAttribute('data-test-dim', '');
+
+    drawer.open();
+    // The scroll-driven `CSSAnimation` only exists once the dialog is
+    // actually showing (a <dialog> with no `open` attribute renders
+    // nothing): `showModal()`, inside `open()` above, already ran. Its
+    // identity stays stable for as long as `data-test-dim` does, unlike
+    // the Backdrop's own entrance/exit `opacity` transition, which a
+    // `data-ending-style`/`data-starting-style` change cancels and
+    // replaces -- so spying on *this* one is the reliable way to tell
+    // whether `finishTransition` reached into it.
+    const dimAnimation = backdrop
+      .getAnimations()
+      .find((a) => a instanceof CSSAnimation);
+    expect(dimAnimation).toBeDefined();
+    const dimFinish = vi.spyOn(dimAnimation!, 'finish');
+    await sleep(60);
+
+    // Mid-entrance: the interrupt finishes the Backdrop's own `opacity`
+    // transition. The bug finished the scroll-driven dim right along with
+    // it, detaching it from the scroll position for good.
+    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    expect(drawer.phase).toBe('open');
+    expect(dimFinish).not.toHaveBeenCalled();
+    // Lets the finished entrance transition's own (late, asynchronous)
+    // `transitionend` flush before the exit attaches its own listener for
+    // the same element -- otherwise it can land there instead.
+    await sleep(50);
+
+    drawer.close('close-button');
+    await sleep(60);
+
+    // Mid-exit, the same way -- a second chance for the bug to stick.
+    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    expect(drawer.phase).toBe('open');
+    expect(dimFinish).not.toHaveBeenCalled();
+
+    // Behaviour, not just the spy: the dim still follows a later drag,
+    // the way it would have if it had never been touched.
+    const firstSnapPx = Number.parseFloat(
+      dialog.style.getPropertyValue('--drawer-first-snap')
+    );
+    const box = panel.getBoundingClientRect();
+    const startX = box.left + 10;
+    const startY = box.top + 10;
+    const firePointer = (type: string, y: number) =>
+      panel.dispatchEvent(
+        new PointerEvent(type, {
+          clientX: startX,
+          clientY: y,
+          pointerId: 1,
+          pointerType: 'mouse',
+          button: 0,
+          bubbles: true,
+          cancelable: true
+        })
+      );
+
+    firePointer('pointerdown', startY);
+    const step = firstSnapPx * 0.25;
+    let y = startY;
+    const samples: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      y += step;
+      firePointer('pointermove', y);
+      // A scroll-driven animation's computed value updates on the next
+      // frame, not synchronously with the `scrollTop` write that drives
+      // it.
+      await sleep(80);
+      samples.push(alphaOf(getComputedStyle(backdrop).backgroundColor));
+    }
+    firePointer('pointerup', y);
+
+    // scrollTop at 0.75, 0.5 and 0.25 of the first snap point: the dim's
+    // alpha, 0 to 0.5 over that same range, still follows it.
+    expect(samples[0]).toBeCloseTo(0.75 * 0.5, 1);
+    expect(samples[1]).toBeCloseTo(0.5 * 0.5, 1);
+    expect(samples[2]).toBeCloseTo(0.25 * 0.5, 1);
+
+    document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+      (s) => s !== sheet
+    );
+    removePanelTransition();
+    removeBackdropTransition();
+  });
+});
+
+describe('a resize during the entrance', () => {
+  it('reconciles onto the new snap offset, not the one it opened to', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { dialog, viewport, drawer } = fixture;
+    dialog.style.height = '800px';
+
+    drawer.open();
+    expect(drawer.phase).toBe('opening');
+    expect(Math.abs(viewport.scrollTop - 400)).toBeLessThan(2);
+
+    dialog.style.height = '600px';
+    window.dispatchEvent(new Event('resize'));
+    await nextFrame();
+
+    // Reconciled while still mid-entrance: the new viewport's own 0.5
+    // snap offset (300px), not the 800px one it opened to (400px).
+    expect(drawer.phase).toBe('opening');
+    expect(Math.abs(viewport.scrollTop - 300)).toBeLessThan(2);
+
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(Math.abs(viewport.scrollTop - 300)).toBeLessThan(2);
+    dialog.style.height = '';
+  });
+});
+
 describe('a resize during the exit', () => {
   it('does not settle the exit early through a stale scrollend, and it still closes', async () => {
     fixture = mount({ snapPoints: [0.5, 1] });
