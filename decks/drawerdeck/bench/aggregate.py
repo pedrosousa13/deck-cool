@@ -102,6 +102,28 @@ def shards_of(rows):
     return sorted({str(r.get('shard', 'local')) for r in rows})
 
 
+def not_supported(rows, deck, scenario):
+    # #294, #266 rule 11: a deck that never responded to a scenario's own
+    # gesture -- bench.spec.ts's `responded`, false in most (more than
+    # half) of its scored reps for that scenario, across every load --
+    # cannot win or tie it. One rep timing out never flips this; a deck
+    # that consistently ignores the gesture does.
+    vals = [
+        r.get('responded')
+        for r in rows
+        if r['deck'] == deck and r['scenario'] == scenario
+    ]
+    vals = [v for v in vals if v is not None]
+    if not vals:
+        return False
+    not_responded = sum(1 for v in vals if v is False)
+    return not_responded > len(vals) / 2
+
+
+def unsupported_decks(rows, scenario):
+    return {deck for deck in DECKS if not_supported(rows, deck, scenario)}
+
+
 def medians(rows, scenario, load_, pick):
     out = {}
     for deck in DECKS:
@@ -134,8 +156,12 @@ def winner_of(vals_by_deck, lower_is_better):
     return best_deck, gap, best_med
 
 
-def cell_winner(rows, scenario, load_, pick, lower_is_better):
-    pooled = medians(rows, scenario, load_, pick)
+def cell_winner(rows, scenario, load_, pick, lower_is_better, unsupported):
+    # #294, #266 rule 11: a deck that didn't respond to this scenario's
+    # gesture never enters the race for its winner or its ties.
+    pooled = {
+        d: v for d, v in medians(rows, scenario, load_, pick).items() if d not in unsupported
+    }
     best_deck, gap, _ = winner_of(pooled, lower_is_better)
     if best_deck is None:
         return 'n/a', {}
@@ -145,7 +171,11 @@ def cell_winner(rows, scenario, load_, pick, lower_is_better):
     per_shard_winner = {}
     for shard in shards_of(rows):
         shard_rows = [r for r in rows if str(r.get('shard', 'local')) == shard]
-        shard_pooled = medians(shard_rows, scenario, load_, pick)
+        shard_pooled = {
+            d: v
+            for d, v in medians(shard_rows, scenario, load_, pick).items()
+            if d not in unsupported
+        }
         shard_best, _, _ = winner_of(shard_pooled, lower_is_better)
         per_shard_winner[shard] = shard_best
 
@@ -164,7 +194,12 @@ def render_tables(rows):
             load_cols += [f'load={load_} unscoped (legacy)' for load_ in LOADS]
         lines.append('| Deck | ' + ' | '.join(load_cols) + ' |')
         lines.append('| --- | ' + ' | '.join('---' for _ in load_cols) + ' |')
+        unsupported = unsupported_decks(rows, scenario)
         for deck in DECKS:
+            if deck in unsupported:
+                cells = ['not supported'] * len(load_cols)
+                lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
+                continue
 
             def vals_for(pick_fn, load_):
                 vs = [
@@ -178,6 +213,13 @@ def render_tables(rows):
             if legacy_pick is not None:
                 cells += [fmt_cell(vals_for(legacy_pick, load_)) for load_ in LOADS]
             lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
+        if unsupported:
+            names = ', '.join(sorted(unsupported))
+            lines.append(
+                f'\n**Not supported:** {names} did not respond to this gesture in '
+                'most of its reps (#294, #266 rule 11); excluded from its winners '
+                'and ties.\n'
+            )
     return '\n'.join(lines)
 
 
@@ -192,8 +234,9 @@ def render_winner_table(rows):
         '| --- | --- | ' + ' | '.join('---' for _ in shard_ids) + ' | --- |',
     ]
     for scenario, _metric, label, lower, pick, _legacy_pick in METRICS:
+        unsupported = unsupported_decks(rows, scenario)
         for load_ in LOADS:
-            overall, per_shard = cell_winner(rows, scenario, load_, pick, lower)
+            overall, per_shard = cell_winner(rows, scenario, load_, pick, lower, unsupported)
             shard_cells = [str(per_shard.get(s, 'n/a')) for s in shard_ids]
             lines.append(
                 f'| {label} | {load_} | ' + ' | '.join(shard_cells) + f' | {overall} |'
@@ -204,8 +247,9 @@ def render_winner_table(rows):
 def render_summary(rows, bundle_rows):
     lines = ['| Scenario / metric | load | Winner |', '| --- | --- | --- |']
     for scenario, _metric, label, lower, pick, _legacy_pick in METRICS:
+        unsupported = unsupported_decks(rows, scenario)
         for load_ in LOADS:
-            overall, _ = cell_winner(rows, scenario, load_, pick, lower)
+            overall, _ = cell_winner(rows, scenario, load_, pick, lower, unsupported)
             lines.append(f'| {label} | {load_} | {overall} |')
     if bundle_rows:
         smallest = min(bundle_rows, key=lambda r: r['bytes'])

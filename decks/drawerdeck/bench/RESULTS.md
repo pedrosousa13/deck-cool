@@ -70,6 +70,10 @@ comparison page:
     longest stall and the hitch ratio are scored only from a gesture's own
     active window, not the scenario's own pauses between gestures. See
     "Active windows" below.
+11. **A drawer that does not respond to a gesture cannot win it.** (#294)
+    `aggregate.py` and `report.py` mark a deck "not supported" for a
+    scenario it never responded to, and drop it from that scenario's
+    winners and ties. See "Not supported" below.
 
 ## Versions, with release dates (#266 rule 5)
 
@@ -124,6 +128,10 @@ scored rep isn't the one paying for a cold parse/compile.
   trace timelines (`node --test trace.test.ts`, or `pnpm test` in this
   package; not part of `pnpm --dir decks/drawerdeck verify`, see this
   deck's own `AGENTS.md`).
+- `aggregate_test.py` -- unit tests for `aggregate.py`'s "not supported"
+  rule (#294, #266 rule 11), against a tiny synthetic jsonl
+  (`python3 aggregate_test.py`); not part of
+  `pnpm --dir decks/drawerdeck verify` either.
 - `seed.ts` -- the interleaving's deterministic shuffle (next section).
 - `bench.spec.ts` -- the real run: Chromium only (a drawer's touch scenarios
   need CDP's trusted touch), one JSON line per run to
@@ -257,7 +265,39 @@ reader can see the old, unfair gap directly.
   it started from (vs. the other three decks, which all move). This is a
   real cost of the "scrolling is all you need" design, not a bench bug --
   it was not mentioned in the blog post, which is why #283 asked for it to
-  be checked and recorded here.
+  be checked and recorded here. Because of this, React Aria reports "not
+  supported" for `mouse-drag-throw` rather than a winning settle time --
+  see "Not supported" below (#294, #266 rule 11).
+
+## Not supported (#294, #266 rule 11)
+
+A drawer that never responds to a scenario's own gesture still finishes
+`settle()`, at that function's own timeout, so "settle time" alone cannot
+tell "fastest" from "never moved" -- which is how React Aria's Sheet, never
+moving a pixel for `mouse-drag-throw` (see "Mouse drag does not work"
+above), was crowned that scenario's winner before this rule existed.
+
+`bench.spec.ts` records whether a gesture actually moved the drawer as
+`responded: true|false` on every row, from the same per-frame probe
+`harness.ts` already tracks (`raf.maxStep`, in `window.__bench.m`): a
+drawer that moves by more than 2px in any single frame during the gesture
+and its settle responded; one that never clears that threshold did not.
+`maxStep`, not `travel` (the signed, cumulative px moved), is the right
+signal here -- `touch-drag-half-full-back` drags a drawer up and then back
+down to where it started, so a drawer that genuinely moved still nets
+close to 0 `travel`, while its `maxStep` still shows the drag's own
+per-frame motion.
+
+`aggregate.py` and `report.py` mark a deck "not supported" for a scenario
+when `responded` is `false` in most (more than half) of its scored reps for
+that scenario, pooled across every load: one rep timing out for an
+unrelated reason never flips this, but a deck that consistently ignores the
+gesture does. A "not supported" deck's row in that scenario's tables reads
+"not supported" instead of a number, it never enters `winner_of`'s
+candidates (so it can neither win nor force a tie), and a "Not supported"
+note under the table lists it. `aggregate_test.py` unit-tests the majority
+rule and the winner exclusion against a tiny synthetic jsonl
+(`python3 aggregate_test.py`).
 
 ## Method notes (carried forward from the original prototype)
 
