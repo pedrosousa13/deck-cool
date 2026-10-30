@@ -602,6 +602,13 @@ export function createDrawer(
     enterTransitionCleanup?.();
     enterTransitionCleanup = undefined;
     detachInterruptListeners();
+    // Re-measures now that the entrance's own transform is gone (#312): the
+    // `measure()` call in `open()` ran while the Panel still carried the
+    // entrance's starting style (a `translateY` recipe, say), which the
+    // scrollable-overflow spec folds into the Viewport's `scrollHeight`, so
+    // `--drawer-max-scroll` came out inflated. The Panel now rests at its
+    // real, untransformed position, so this is the first accurate reading.
+    measure();
     // Arms the leave-view close (#296) only now: the entrance has actually
     // settled, so the Panel's own position reflects where it rests open,
     // not wherever a consumer's CSS transform still had it mid-flight.
@@ -621,6 +628,9 @@ export function createDrawer(
     cancelEnter();
     finishTransition(panel);
     if (parts.backdrop) finishTransition(parts.backdrop);
+    // Re-measures now the jump has landed the Panel at its real position
+    // (`settleEnter`'s own comment: #312).
+    measure();
     // Arms the leave-view close (#296): see `settleEnter`, above.
     panelVisibilityObserver.observe(panel);
     setPhase('open');

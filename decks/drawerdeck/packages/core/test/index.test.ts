@@ -11,6 +11,30 @@ import {
   type Fixture
 } from './fixtures';
 
+/** Gives `el` a real CSS transition on `transform`, the way the "Animate
+ * the drawer" guide's own recipe does: `data-starting-style` (and
+ * `data-ending-style`) slide it to `translateY(100%)`, its resting state
+ * `translateY(0)` (`css-transition.test.ts`'s own copy of this). A
+ * `<style>` scoped to a unique marker attribute, so one test's transition
+ * never leaks into another's. Returns the cleanup. */
+function withTransformTransition(
+  el: HTMLElement,
+  { durationMs }: { durationMs: number }
+): () => void {
+  const marker = `data-test-${Math.random().toString(36).slice(2)}`;
+  el.setAttribute(marker, '');
+  const style = document.createElement('style');
+  style.textContent = `
+    [${marker}] { transform: translateY(0); transition: transform ${durationMs}ms linear; }
+    [${marker}][data-starting-style], [${marker}][data-ending-style] { transform: translateY(100%); }
+  `;
+  document.head.append(style);
+  return () => {
+    style.remove();
+    el.removeAttribute(marker);
+  };
+}
+
 let fixture: Fixture | undefined;
 afterEach(() => {
   if (fixture) unmount(fixture);
@@ -743,7 +767,13 @@ describe('non-modal (#271)', () => {
   it('a real click on a page input outside the Panel reaches and focuses it', async () => {
     const behind = appendBehindInput();
     fixture = mount({ snapPoints: [0.5], modal: false });
-    const { drawer } = fixture;
+    const { drawer, panel } = fixture;
+    // A real transform entrance, the guide's own recipe: proves the hit
+    // area is right once the Panel actually rests open, not just when the
+    // fixture jumps it open with nothing to measure wrong (#312).
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
 
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
@@ -756,6 +786,7 @@ describe('non-modal (#271)', () => {
     await userEvent.click(behind);
     expect(document.activeElement).toBe(behind);
     behind.remove();
+    removeTransition();
   });
 
   it('a modal drawer (the default) covers the same point and refuses it focus', async () => {
@@ -777,7 +808,11 @@ describe('non-modal (#271)', () => {
 
   it('the hit area follows the Panel across snap points: above its top edge is the page, below is the Viewport', async () => {
     fixture = mount({ snapPoints: [0.5, 0.9], modal: false });
-    const { viewport, drawer } = fixture;
+    const { viewport, panel, drawer } = fixture;
+    // A real transform entrance (#312): see the click test's own comment.
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
 
     drawer.open(0);
     await expectSettledTo(() => drawer.phase, 'open');
@@ -800,6 +835,7 @@ describe('non-modal (#271)', () => {
     expect(viewport.contains(document.elementFromPoint(50, edge + 10))).toBe(
       true
     );
+    removeTransition();
   });
 
   it('lets the page itself scroll while it is open', async () => {
@@ -822,12 +858,26 @@ describe('non-modal (#271)', () => {
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
 
-    document.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-    );
+    await userEvent.keyboard('{Escape}');
 
     await expectSettledTo(() => drawer.phase, 'closed');
     expect(onOpenChange).toHaveBeenCalledWith(false, 'escape');
+  });
+
+  it('closes on Escape with focus on a page input: the engine itself leaves focus there, unlike React’s Trigger-restoring Root', async () => {
+    const behind = appendBehindInput();
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    behind.focus();
+    expect(document.activeElement).toBe(behind);
+
+    await userEvent.keyboard('{Escape}');
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(document.activeElement).toBe(behind);
+    behind.remove();
   });
 
   it('does not close on Escape when not dismissible', async () => {
@@ -836,9 +886,7 @@ describe('non-modal (#271)', () => {
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
 
-    document.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-    );
+    await userEvent.keyboard('{Escape}');
 
     await sleep(300);
     expect(drawer.phase).toBe('open');
@@ -943,7 +991,11 @@ describe('non-modal (#271)', () => {
     // The marker sits at the same point the bug report measured (200, 100).
     document.body.style.minHeight = '3000px';
     fixture = mount({ snapPoints: [0.5, 1], modal: false });
-    const { viewport, drawer } = fixture;
+    const { viewport, panel, drawer } = fixture;
+    // A real transform entrance (#312): see the click test's own comment.
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
     const marker = document.createElement('div');
     Object.assign(marker.style, {
       position: 'fixed',
@@ -964,5 +1016,6 @@ describe('non-modal (#271)', () => {
     await expect.poll(() => window.scrollY).toBeGreaterThan(0);
     expect(viewport.scrollTop).toBe(before);
     marker.remove();
+    removeTransition();
   });
 });

@@ -495,15 +495,30 @@ describe('non-modal (modal={false}, #271)', () => {
     const popup = popupOf(document.body);
     await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
 
-    act(() =>
-      document.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-      )
-    );
+    await userEvent.keyboard('{Escape}');
 
     await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
     expect(onOpenChange).toHaveBeenCalledWith(false, { reason: 'escape' });
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('closes on Escape with focus on a page input, still moving focus to the trigger: Root restores it on every close, not only one starting inside the dialog', async () => {
+    mockReducedMotion();
+    const behind = document.createElement('input');
+    document.body.append(behind);
+    render(<TestDrawer modal={false} />);
+    const trigger = screen.getByText('Open');
+    act(() => trigger.click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    behind.focus();
+    expect(document.activeElement).toBe(behind);
+
+    await userEvent.keyboard('{Escape}');
+
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
+    expect(document.activeElement).toBe(trigger);
+    behind.remove();
   });
 
   it('does not close on an outside press by default, unlike a modal drawer', async () => {
