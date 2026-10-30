@@ -1,3 +1,4 @@
+import { commands } from 'vitest/browser';
 import { expect, vi } from 'vitest';
 import { createDrawer, type Drawer, type DrawerOptions } from '../src/index';
 
@@ -130,4 +131,42 @@ export async function mouseDrag(
     panel.dispatchEvent(pointerEvent('pointerup', { x: from.x, y }));
   if (release) letGo();
   return letGo;
+}
+
+/** A mouse drag on `panel` with real, trusted OS-level input (Playwright's
+ * own `page.mouse`, via the `dragPointerDown`/`dragPointerMoveTo`/
+ * `dragPointerUp` commands in `vitest.config.ts`), not `mouseDrag`'s
+ * hand-dispatched `PointerEvent`s: presses `{x, y}` away from `panel`'s own
+ * top-left corner, then nudges the pointer by `step` CSS pixels at a time
+ * (negative moves it up), re-reading `viewport.scrollTop` after each nudge,
+ * until `until(…)` is true or `maxSteps` is reached, then releases. A
+ * closed loop, not a single multi-step move to a precomputed target: how
+ * far a given `page.mouse` delta actually moves the pointer is not 1:1 with
+ * the CSS pixels asked for in this environment, so this drives the real,
+ * resulting scroll position back into the loop instead of trusting the
+ * math. `panel` needs a unique attribute to reach it from the command's
+ * own, Node-side `Locator`, set here and cleared after. */
+export async function realMouseDrag(
+  panel: HTMLElement,
+  viewport: HTMLElement,
+  { x, y }: { x: number; y: number },
+  until: (scrollTop: number) => boolean,
+  { step = 12, maxSteps = 400 }: { step?: number; maxSteps?: number } = {}
+) {
+  const marker = `data-test-drag-${Math.random().toString(36).slice(2)}`;
+  panel.setAttribute(marker, '');
+  try {
+    const start = await commands.dragPointerDown(`[${marker}]`, x, y);
+    let cursorY = start.y;
+    let steps = 0;
+    while (!until(viewport.scrollTop) && steps < maxSteps) {
+      cursorY += step;
+      await commands.dragPointerMoveTo(start.x, cursorY);
+      await nextFrame();
+      steps += 1;
+    }
+  } finally {
+    await commands.dragPointerUp();
+    panel.removeAttribute(marker);
+  }
 }
