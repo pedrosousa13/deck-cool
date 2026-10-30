@@ -36,6 +36,18 @@
 // load. The reload still reuses Chromium's own HTTP and V8 code caches for
 // this origin, the way a real second visit would. `aggregate.py` and
 // `report.py` both drop `warmup: true` rows before computing anything.
+//
+// A dismiss counts only when the library reports it closed (#266 fairness
+// rule 12, #311): every `Scenario` marked `dismiss: true` (today, only
+// `touch-flick-dismiss`) gets a `closed` field on its row, from
+// `window.__bench.isOpen()` -- the library's own `onOpenChange`/`open`,
+// never this bench's own reading of the drawer's on-screen position (see
+// `scenarios.ts` and each deck's own `src/*-app.tsx`). `settleMs` for a
+// `dismiss` scenario is the later of motion settling and the library
+// reporting closed; `closed: false` means it never did, within
+// `CLOSE_WAIT_MS`, and `aggregate.py`/`report.py` score that row "did not
+// close" for that scenario (excluded from winners and ties, the same
+// treatment rule 11 gives "not supported").
 
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
@@ -88,6 +100,13 @@ function responded(raf: PassResult['raf']): boolean {
   return Math.abs(raf.maxStep) > RESPONSE_THRESHOLD_PX;
 }
 
+// How long a dismiss scenario's extra wait for `window.__bench.isOpen()`
+// may run past motion settling (fairness rule 12, #311): long enough for
+// a library's own close animation/teardown to finish, short enough that a
+// deck that never closes doesn't meaningfully lengthen the run.
+// `closes.spec.ts`'s guard uses the same bound.
+const CLOSE_WAIT_MS = 2_000;
+
 interface PassResult {
   settleMs: number;
   opennessAfter: number;
@@ -95,6 +114,9 @@ interface PassResult {
   loaf: { count: number; totalBlocking: number } | null;
   trace: MotionAnalysis | null;
   events: TraceEvent[] | null;
+  /** Whether the library itself reported the drawer closed (fairness rule
+   * 12): `null` for a scenario that isn't `dismiss` (nothing to report). */
+  closed: boolean | null;
 }
 
 /** One pass of a scenario: setup, inject load, run, settle, read the
@@ -127,14 +149,41 @@ async function runPass(
     await scenario.run(page, g);
     await settle(page);
   }
-  const settleMs = Date.now() - began;
+  const motionSettledMs = Date.now() - began;
   await page.evaluate(() => window.__bench.jank(0));
+
+  // Fairness rule 12 (#311): a dismiss only counts once the library itself
+  // reports closed (`window.__bench.isOpen() === false`), not from this
+  // bench's own reading of the drawer's on-screen position -- motion
+  // settling (above) is necessary but not sufficient. The settle time for
+  // a `dismiss` scenario is the later of the two.
+  let closed: boolean | null = null;
+  let settleMs = motionSettledMs;
+  if (scenario.dismiss) {
+    closed = await page.evaluate(() => window.__bench.isOpen() === false);
+    if (!closed) {
+      try {
+        await page.waitForFunction(
+          () => window.__bench.isOpen() === false,
+          null,
+          {
+            timeout: CLOSE_WAIT_MS
+          }
+        );
+        closed = true;
+      } catch {
+        closed = false;
+      }
+    }
+    const closedMs = Date.now() - began;
+    settleMs = closed ? Math.max(motionSettledMs, closedMs) : motionSettledMs;
+  }
 
   const raf = await page.evaluate(() => ({ ...window.__bench.m }));
   const loaf = await page.evaluate(() => window.__bench.loaf());
   const opennessAfter = await page.evaluate(() => window.__bench.openness());
 
-  return { settleMs, opennessAfter, raf, loaf, trace, events };
+  return { settleMs, opennessAfter, raf, loaf, trace, events, closed };
 }
 
 for (const scenario of scenarios) {
@@ -168,6 +217,7 @@ for (const scenario of scenarios) {
             settleMs: warmup.settleMs,
             opennessAfter: warmup.opennessAfter,
             responded: responded(warmup.raf),
+            closed: warmup.closed,
             raf: { ...warmup.raf, blankFrames: 0 },
             loaf: warmup.loaf,
             trace: warmup.trace
@@ -205,6 +255,7 @@ for (const scenario of scenarios) {
             settleMs: scored.settleMs,
             opennessAfter: scored.opennessAfter,
             responded: responded(scored.raf),
+            closed: scored.closed,
             raf: { ...scored.raf, blankFrames: 0 },
             loaf: scored.loaf,
             trace: scored.trace

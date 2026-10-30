@@ -42,6 +42,11 @@ export interface Scenario {
   name: string;
   /** Whether this scenario needs trusted touch (Chromium CDP only). */
   chromiumOnly?: boolean;
+  /** Whether this scenario ends with the drawer dismissed (fairness rule
+   * 12, #311): `bench.spec.ts` only waits on `window.__bench.isOpen()`
+   * going `false`, and only scores a deck "did not close" for a scenario
+   * marked this way. `touch-flick-dismiss` is the only one today. */
+  dismiss?: boolean;
   /** False for a scenario that starts closed (no `#panel` yet): calling
    * `geometry()` there would wait out Playwright's default actionability
    * timeout for an element that never appears before the scenario's own
@@ -120,6 +125,7 @@ export const scenarios: Scenario[] = [
   {
     name: 'touch-flick-dismiss',
     chromiumOnly: true,
+    dismiss: true,
     async setup(page) {
       await openToHalf(page);
     },

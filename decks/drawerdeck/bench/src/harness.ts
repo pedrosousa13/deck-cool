@@ -53,6 +53,15 @@ export interface DrawerBenchProbe {
    * (or it hits its own timeout), pairing with the `markWindowStart()` that
    * opened the gesture. */
   markWindowEnd(): void;
+  /** Whether the drawer's own library currently reports itself open
+   * (fairness rule 12, #311): the value `reportOpen()` was last called
+   * with, never a read of `openness()`/the DOM. A dismiss only counts once
+   * this reports `false`. */
+  isOpen(): boolean;
+  /** Each deck's own adapter calls this from the library's own
+   * `onOpenChange` callback or controlled `open`/`isOpen` prop (fairness
+   * rule 12) -- the one way `isOpen()` ever changes. */
+  reportOpen(open: boolean): void;
 }
 
 declare global {
@@ -132,6 +141,11 @@ export function attachHarness(opts: { panelSelector: string }): void {
     }
   }, 250);
 
+  // Fairness rule 12 (#311): the drawer's own reported open state,
+  // never read from the DOM. Starts closed, matching every deck's own
+  // initial, unopened render.
+  let openState = false;
+
   let loafCount = 0;
   let loafBlocking = 0;
   if (
@@ -176,7 +190,11 @@ export function attachHarness(opts: { panelSelector: string }): void {
       return entry ? entry.duration : null;
     },
     markWindowStart: () => performance.mark('bench-window-start'),
-    markWindowEnd: () => performance.mark('bench-window-end')
+    markWindowEnd: () => performance.mark('bench-window-end'),
+    isOpen: () => openState,
+    reportOpen: (open) => {
+      openState = open;
+    }
   };
 
   // Not used by this module, but keeps `raf`'s only write from being

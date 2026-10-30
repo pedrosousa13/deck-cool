@@ -51,6 +51,21 @@ def not_supported(rows, deck, scenario):
     return sum(1 for v in vals if v is False) > len(vals) / 2
 
 
+def did_not_close(rows, deck, scenario):
+    # #311, #266 rule 12: a dismiss only counts once the library itself
+    # reports closed (`closed`, from `window.__bench.isOpen()`, never this
+    # bench's own reading of the drawer's on-screen position). A deck that
+    # never reports closed in more than half of its reps for a `dismiss`
+    # scenario cannot win or tie it either -- the same majority rule as
+    # rule 11's "not supported". `closed` is `None` for every scenario
+    # that isn't `dismiss`.
+    vals = [r.get('closed') for r in rows if r['deck'] == deck and r['scenario'] == scenario]
+    vals = [v for v in vals if v is not None]
+    if not vals:
+        return False
+    return sum(1 for v in vals if v is False) > len(vals) / 2
+
+
 def table(rows, scenario, pick, digits=0, legacy_pick=None):
     # `legacy_pick` (#266 rule 10) adds an "unscoped (legacy)" column per
     # load: the same trace, scored the old way (one window spanning the
@@ -61,10 +76,16 @@ def table(rows, scenario, pick, digits=0, legacy_pick=None):
         load_cols += [f'load={load_} unscoped (legacy)' for load_ in LOADS]
     lines = ['| Deck | ' + ' | '.join(load_cols) + ' |', '| --- | ' + ' | '.join('---' for _ in load_cols) + ' |']
     unsupported = []
+    not_closed = []
     for deck in DECKS:
         if not_supported(rows, deck, scenario):
             unsupported.append(deck)
             cells = ['not supported'] * len(load_cols)
+            lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
+            continue
+        if did_not_close(rows, deck, scenario):
+            not_closed.append(deck)
+            cells = ['did not close'] * len(load_cols)
             lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
             continue
         cells = [cell(rows, deck, scenario, load_, pick) for load_ in LOADS]
@@ -76,6 +97,12 @@ def table(rows, scenario, pick, digits=0, legacy_pick=None):
         lines.append(
             f"Not supported: {', '.join(unsupported)} did not respond to this "
             'gesture in most of its reps (#294, #266 rule 11).'
+        )
+    if not_closed:
+        lines.append('')
+        lines.append(
+            f"Did not close: {', '.join(not_closed)} never reported itself "
+            'closed in most of its reps (#311, #266 rule 12).'
         )
     return '\n'.join(lines)
 

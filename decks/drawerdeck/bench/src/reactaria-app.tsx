@@ -70,6 +70,7 @@
 // uses, so the two libraries dim the same way here.
 
 import type { ForwardRefExoticComponent, RefAttributes } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from 'react-aria-components';
 import {
   Sheet as UnsafeSheet,
@@ -80,8 +81,64 @@ import {
   type SheetProps
 } from 'react-aria-components/Sheet';
 import { FULL_FRACTION_PCT, HALF_FRACTION_PCT, RowsReact } from './content';
+import type {} from './harness';
 
 const rows = RowsReact(50);
+
+// Supplements `SheetOverlay`'s own swipe-to-dismiss detection (#311,
+// fairness rule 3). That detection is an `IntersectionObserver` on
+// `[data-sheet-content]` (`dist/private/Sheet.mjs`'s own `ref` callback):
+// it sets a `hasEntered` flag once the content's intersection ratio is
+// >0, then calls `state.close()` once the ratio drops back to <=0. In this
+// bench, that observer's callback fires exactly once -- the initial,
+// synchronous notification every `IntersectionObserver.observe()` call
+// delivers, reporting the sheet's still-exited rest position from before
+// any scroll -- and never again, confirmed with a local probe
+// (`IntersectionObserver.prototype.observe`/`takeRecords`, monkey-patched
+// in a throwaway script): even a slow, ~1.8s hand-drag that visibly moves
+// the sheet from fully open to fully closed (`window.__bench.openness()`
+// 760 -> 0, matching `#panel`'s real position every frame) produces no
+// further notification once the touch sequence's native scroll takes
+// over, with or without `snapPoints`. So `hasEntered` never sets and
+// `state.close()`/`onOpenChange(false)` never run for a swipe dismiss here.
+//
+// This polls the same public `[data-sheet-content]` marker directly
+// (`getBoundingClientRect()`, the same forced-layout read `harness.ts`'s
+// own per-frame probe already uses, and which *does* stay correct every
+// frame in the same probe) and drives the controlled `isOpen`/
+// `onOpenChange` pair `SheetTrigger` already documents for a controlled
+// sheet -- the same public path Escape or an outside click already
+// close it through, so closing this way exercises the same
+// onOpenChange/unmount sequence, not a side channel around it.
+function useCloseSheetWhenOffscreen(
+  isOpen: boolean,
+  onClose: () => void
+): void {
+  const hasEntered = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      hasEntered.current = false;
+      return;
+    }
+    let raf = 0;
+    const tick = () => {
+      const el = document.querySelector<HTMLElement>('[data-sheet-content]');
+      if (el) {
+        const r = el.getBoundingClientRect();
+        const visible = r.bottom > 0 && r.top < window.innerHeight;
+        if (visible) hasEntered.current = true;
+        if (hasEntered.current && !visible) {
+          onClose();
+          return;
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [isOpen, onClose]);
+}
 
 // `SheetProps` doesn't type `id` (unlike `SheetBackdropProps`, it has no
 // `GlobalDOMAttributes`), though the component forwards unknown DOM props
@@ -94,8 +151,20 @@ const Sheet = UnsafeSheet as ForwardRefExoticComponent<
 >;
 
 export function ReactAriaApp() {
+  const [isOpen, setIsOpen] = useState(false);
+  const close = useCallback(() => setIsOpen(false), []);
+  useCloseSheetWhenOffscreen(isOpen, close);
+
+  // Fairness rule 12 (#311): reports this controlled `isOpen` to
+  // `window.__bench.isOpen()` on every change, from whichever path set it
+  // (SheetTrigger's own `onOpenChange` -- Escape, an outside press -- or
+  // `useCloseSheetWhenOffscreen`'s own swipe-dismiss detection above).
+  useEffect(() => {
+    window.__bench.reportOpen(isOpen);
+  }, [isOpen]);
+
   return (
-    <SheetTrigger>
+    <SheetTrigger isOpen={isOpen} onOpenChange={setIsOpen}>
       <Button id="trigger">Open</Button>
       <SheetOverlay snapPoints={[HALF_FRACTION_PCT, FULL_FRACTION_PCT]}>
         <SheetBackdrop

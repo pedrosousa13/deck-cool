@@ -27,15 +27,25 @@
 // `Drawer.Viewport` > `Drawer.Popup`. `id="panel"` on `Drawer.Popup` is
 // this bench's own marker, the same convention as the other decks'
 // `#panel`.
+//
+// `onOpenChange` (fairness rule 12, #311): reports Base UI's own open
+// state to `window.__bench.isOpen()`, left otherwise uncontrolled (no
+// `open` prop) -- a pure listener, the same convention every deck's
+// adapter here now uses, so a dismiss only counts once the library itself,
+// not this bench's reading of `#panel`'s position, says so.
 
 import { Drawer } from '@base-ui/react/drawer';
 import { FULL_FRACTION, HALF_FRACTION, RowsReact } from './content';
+import type {} from './harness';
 
 const rows = RowsReact(50);
 
 export function BaseUiApp() {
   return (
-    <Drawer.Root snapPoints={[HALF_FRACTION, FULL_FRACTION]}>
+    <Drawer.Root
+      snapPoints={[HALF_FRACTION, FULL_FRACTION]}
+      onOpenChange={(open) => window.__bench.reportOpen(open)}
+    >
       <Drawer.Trigger id="trigger">Open</Drawer.Trigger>
       <Drawer.Portal>
         <Drawer.Backdrop className="backdrop" />
