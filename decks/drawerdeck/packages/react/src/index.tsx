@@ -181,8 +181,8 @@ export type RootProps = (OpenControlledProps | OpenUncontrolledProps) &
     /** Whether Escape, an outside press and a drag to closed can close the
      * drawer. `Drawer.Close` always can. Defaults to true. An outside
      * press never closes a non-modal drawer (`modal={false}`), regardless
-     * of this option, matching vaul's and Base UI's own non-modal
-     * behaviour. */
+     * of this option, following Base UI's own non-modal example
+     * (`modal={false}` with `disablePointerDismissal`). */
     dismissible?: boolean;
     /** Whether `Drawer.Popup` opens as a modal dialog (the top layer, a
      * focus trap, an inert page, and Escape for free) or a non-modal one:

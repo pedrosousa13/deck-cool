@@ -38,24 +38,22 @@ under the hood (below), but the behaviour does not.
 
 ## What does not
 
-**An outside press never closes a non-modal drawer by default.** vaul's
-and Base UI's own docs draw the same line for their `modal={false}`: vaul
-still closes on an outside press unless a consumer also disables it, but
-Base UI's non-modal example (`modal={false}` with `disablePointerDismissal`)
-reads "this drawer does not trap focus and ignores outside clicks":
-dismissal by the handle or a close button only. drawerdeck follows Base
-UI's reading: once the page behind is genuinely interactive, a press that
-lands there is a press on the page, not on the drawer, so it is never
-read as a request to close the drawer. `dismissible` still governs Escape
-and a drag to closed; it has nothing left to say about an outside press
-once there no longer is one.
+**An outside press never closes a non-modal drawer by default.** Base UI's
+own non-modal example (`modal={false}` with `disablePointerDismissal`) reads
+"this drawer does not trap focus and ignores outside clicks": dismissal by
+the handle or a close button only. drawerdeck follows that reading: once
+the page behind is genuinely interactive, a press that lands there is a
+press on the page, not on the drawer, so it is never read as a request to
+close the drawer. `dismissible` still governs Escape and a drag to closed;
+it has nothing left to say about an outside press once there no longer is
+one.
 
 ## `show()`, not the Popover API
 
 Non-modal needed a different way to show `Drawer.Popup`. Two native
-candidates give an element the top layer without a portal: a non-modal
-`<dialog>` (`show()`) and the Popover API (`showPopover()`). Checked
-against Chromium and WebKit:
+candidates were on the table: a non-modal `<dialog>` (`show()`) and the
+Popover API (`showPopover()`), which does give the top layer without a
+portal. Checked against Chromium and WebKit:
 
 - **The top layer.** Only a _modal_ dialog is promoted to the top layer;
   `show()` leaves it in normal flow, stacked by `z-index` like any other
@@ -85,14 +83,32 @@ drawerdeck keeps `<dialog>` for both, and reads `modal` to pick `show()` or
 `showModal()`. The engine adds its own `document`-level `keydown` listener
 for Escape when non-modal (closed over the same `beginExit('escape')` path
 `cancel` already uses for modal, so the behaviour, not just the event, is
-identical), and sets `pointer-events: none` on the Popup and the Viewport
-so a real click, touch or wheel outside the Panel falls through to the
-page; the Panel opts back in with `pointer-events: auto` so dragging and
-its own buttons and inputs keep working. The trade-off: a non-modal drawer
-gives up the top layer, the one piece `show()` cannot recover. In
-practice this costs drawerdeck nothing it did not already accept for its
-rivals: neither vaul nor Base UI's Drawer uses the top layer at all, modal
-or not, so losing it only for `modal={false}` is a narrower gap than
-either of them has everywhere. A page whose own content sets an unusually
-high `z-index` may need to give `Drawer.Popup` one of its own; most pages
-will not.
+identical), and sets `pointer-events: none` on the Popup so a real click,
+hover, text selection or scroll outside it falls through to the page.
+
+The Viewport itself still needs `pointer-events: auto`: WebKit refuses to
+wheel- or trackpad-scroll an overflow element with `pointer-events: none`
+at all, even where the point under the cursor resolves to a descendant
+that overrides it back to `auto`. Left covering the whole screen, though,
+an `auto` Viewport would just put itself back in the page's way: every
+point outside the Panel would hit it instead of falling through. A
+`clip-path` on the Viewport closes that gap, clipped to exactly the
+Panel's own visible region, so hit-testing (which respects `clip-path` the
+same way it respects `pointer-events`) only ever reaches the Viewport over
+the Panel, and falls through the (opted-out) Popup to the page everywhere
+else. The Panel's visible height is simply the Viewport's own `scrollTop`
+(the gap above it is always one Viewport height), so the clip tracks it
+directly off the existing `--drawer` scroll timeline, the same one the dim
+already reads (#249), with a JS fallback that writes on scroll only where
+that timeline is unsupported. The trade-off: a non-modal drawer
+gives up the top layer, the one piece `show()` cannot recover. In practice
+this costs drawerdeck nothing it did not already accept for its rivals:
+neither vaul nor Base UI's Drawer uses the top layer at all, modal or not,
+so losing it only for `modal={false}` is a narrower gap than either of
+them has everywhere. Without the top layer, a non-modal `Drawer.Popup` is
+an ordinary `position: fixed` element in normal flow: an ancestor with its
+own `transform`, `filter`, `contain` or stacking context can clip or
+reposition it, and the page's own content can cover it with a higher
+`z-index`. A page whose layout does either may need to render
+`Drawer.Popup` through a portal, or give it a `z-index` of its own; most
+pages will not.

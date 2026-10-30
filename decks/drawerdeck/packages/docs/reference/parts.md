@@ -7,19 +7,19 @@ This is the beta API proposed in #234, which #240 is building: no part
 renders yet. Each part will take `className`, `style` and a `render` prop,
 as carouseldeck's primitives do, besides the props below.
 
-| Part                 | Renders    | What it does                                                                                                  |
-| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
-| `Drawer.Root`        | nothing    | Holds the drawer's state: whether it is open, its snap point and whether it dismisses. Holds the props below. |
-| `Drawer.Trigger`     | `<button>` | Opens the drawer.                                                                                             |
-| `Drawer.Popup`       | `<dialog>` | The top layer when modal; no portal needed either way.                                                        |
-| `Drawer.Backdrop`    | `<div>`    | Dims the page, driven by the scroll position. Optional, especially non-modal.                                 |
-| `Drawer.Viewport`    | `<div>`    | The native scroll-snap container.                                                                             |
-| `Drawer.Panel`       | `<div>`    | The visible sheet. You style this.                                                                            |
-| `Drawer.Handle`      | `<div>`    | The drag handle.                                                                                              |
-| `Drawer.Title`       | an element | Names the drawer for assistive technology.                                                                    |
-| `Drawer.Description` | an element | Describes the drawer for assistive technology.                                                                |
-| `Drawer.Content`     | `<div>`    | Scrollable; locked until the top snap point.                                                                  |
-| `Drawer.Close`       | `<button>` | Closes the drawer.                                                                                            |
+| Part                 | Renders    | What it does                                                                                                                                                                                         |
+| -------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Drawer.Root`        | nothing    | Holds the drawer's state: whether it is open, its snap point and whether it dismisses. Holds the props below.                                                                                        |
+| `Drawer.Trigger`     | `<button>` | Opens the drawer.                                                                                                                                                                                    |
+| `Drawer.Popup`       | `<dialog>` | The top layer when modal; no portal needed then. Non-modal, it is an ordinary `position: fixed` element in normal flow, so it can need a portal or a `z-index` of its own (see "Non-modal drawers"). |
+| `Drawer.Backdrop`    | `<div>`    | Dims the page, driven by the scroll position. Optional, especially non-modal.                                                                                                                        |
+| `Drawer.Viewport`    | `<div>`    | The native scroll-snap container.                                                                                                                                                                    |
+| `Drawer.Panel`       | `<div>`    | The visible sheet. You style this.                                                                                                                                                                   |
+| `Drawer.Handle`      | `<div>`    | The drag handle.                                                                                                                                                                                     |
+| `Drawer.Title`       | an element | Names the drawer for assistive technology.                                                                                                                                                           |
+| `Drawer.Description` | an element | Describes the drawer for assistive technology.                                                                                                                                                       |
+| `Drawer.Content`     | `<div>`    | Scrollable; locked until the top snap point.                                                                                                                                                         |
+| `Drawer.Close`       | `<button>` | Closes the drawer.                                                                                                                                                                                   |
 
 ## `Drawer.Root` props
 

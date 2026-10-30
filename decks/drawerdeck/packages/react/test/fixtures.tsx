@@ -40,6 +40,16 @@ export function TestDrawer({
 export const sleep = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Waits for one real rendered frame: a `setTimeout`-based wait, however
+ * long, is not enough in WebKit for a scroll-driven `clip-path` animation's
+ * sampled value to reach `getComputedStyle` (and so hit-testing); only an
+ * actual `requestAnimationFrame` tick does (#312's non-modal hit area). A
+ * real gesture always has one of these between a scroll and a later click or
+ * wheel; a test that jumps `scrollTop` synchronously and checks a hit test
+ * right after needs one explicitly. */
+export const nextFrame = () =>
+  new Promise((resolve) => requestAnimationFrame(resolve));
+
 export async function expectSettledTo<T>(
   read: () => T,
   expected: T,

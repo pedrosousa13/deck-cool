@@ -53,8 +53,9 @@ export interface DrawerOptions {
   /** Whether the dialog opens with `showModal()` (the top layer, a focus
    * trap, an inert page, and Escape for free) or `show()` (none of that:
    * the page behind stays interactive). Defaults to true. An outside press
-   * never closes a non-modal drawer, matching vaul's and Base UI's own
-   * non-modal behaviour. Escape is read from `document`, not the dialog's
+   * never closes a non-modal drawer, following Base UI's own non-modal
+   * example (`modal={false}` with `disablePointerDismissal`). Escape is
+   * read from `document`, not the dialog's
    * own `cancel` event, which a non-modal dialog does not fire (#271; see
    * the "Non-modal drawers" guide for why `show()`, not the Popover
    * API). */
@@ -113,11 +114,31 @@ const RESET_CLASS = 'drawerdeck-reset';
  * drawers on the same page never see each other's `--drawer`. */
 const SCROLL_TIMELINE_NAME = '--drawer';
 
-/** The reset rule's sheet, once constructed, kept alive while any drawer is
+/** Added to the Viewport, non-modal only, while the hit area should track
+ * the scroll position (`updateHitArea`, below): drives `clip-path` natively
+ * from the same `--drawer` scroll timeline, so the Viewport's hit-testable
+ * region follows the Panel with no JS per scroll frame (#271, #312). */
+const HIT_AREA_CLASS = 'drawerdeck-hit-area-tracking';
+const HIT_AREA_KEYFRAMES = 'drawerdeck-hit-area';
+/** The pixel offset of the Viewport's own maximum scroll position (its
+ * `scrollHeight - clientHeight`), set once per layout (`measure`, below) so
+ * the hit area's own scroll-driven animation (`HIT_AREA_CLASS`) has a fixed
+ * "fully open" value to animate to: the scroll timeline's progress alone
+ * only ever gives a 0-to-1 fraction, not a pixel value `clip-path` needs. */
+const MAX_SCROLL_VAR = '--drawer-max-scroll';
+
+/** The shared rules' sheet, once constructed, kept alive while any drawer is
  * mounted (ref-counted by `mountedDrawers`, below) and dropped from
  * `document.adoptedStyleSheets` when the last one is destroyed. A
  * constructed sheet, not a `<style>` element: `style-src` governs an
- * injected tag, but not `CSSStyleSheet.replaceSync` (#252). */
+ * injected tag, but not `CSSStyleSheet.replaceSync` (#252). Carries the
+ * `::backdrop` reset and the non-modal hit area's `@keyframes`: both are
+ * the same kind of shared, instance-independent rule.
+ *
+ * The maximum scroll's own fraction cannot be read inside `@keyframes`:
+ * a scroll timeline's progress is implicit there, not a value in scope,
+ * so the "to" keyframe reads `--drawer-max-scroll` instead, an ordinary
+ * custom property each Viewport sets on itself (`measure`). */
 let resetSheet: CSSStyleSheet | undefined;
 let mountedDrawers = 0;
 
@@ -125,7 +146,13 @@ function ensureBackdropReset() {
   mountedDrawers += 1;
   if (resetSheet) return;
   resetSheet = new CSSStyleSheet();
-  resetSheet.replaceSync(`.${RESET_CLASS}::backdrop{background:transparent}`);
+  resetSheet.replaceSync(
+    `.${RESET_CLASS}::backdrop{background:transparent}` +
+      `@keyframes ${HIT_AREA_KEYFRAMES}{from{clip-path:inset(100% 0 0 0)}` +
+      `to{clip-path:inset(calc(100% - var(${MAX_SCROLL_VAR},0px)) 0 0 0)}}` +
+      `.${HIT_AREA_CLASS}{animation:${HIT_AREA_KEYFRAMES} 1s linear both;` +
+      `animation-timeline:${SCROLL_TIMELINE_NAME}}`
+  );
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, resetSheet];
 }
 
@@ -265,20 +292,72 @@ export function createDrawer(
   if (gap) gap.style.height = '100%';
 
   // Non-modal (#271): `showModal()`'s own top layer, focus trap and inert
-  // page are what stop a click, a scroll or a focus move from reaching the
-  // page behind a modal drawer, not anything here. `show()` opts out of
-  // all three, but the dialog and the viewport still physically cover the
-  // whole screen (`position: fixed; inset: 0`, above), so without this they
-  // would still be the topmost hit-test target everywhere outside the
-  // Panel, defeating the point. `pointer-events: none` on both lets a real
-  // click, touch or wheel fall through to the page; the Panel opts back in
-  // so dragging and its own interactive parts (`Drawer.Close`, inputs...)
-  // keep working. Modal leaves both at their default (`auto`).
+  // page are what stop a click, a scroll, a hover, a text selection or a
+  // focus move from reaching the page behind a modal drawer, not anything
+  // here. `show()` opts out of all three, but the dialog still physically
+  // covers the whole screen (`position: fixed; inset: 0`, above), so
+  // without this it would still be the topmost hit-test target everywhere,
+  // defeating the point. `pointer-events: none` opts the dialog itself out;
+  // `pointer-events` inherits, so the Viewport needs its own `auto` back.
+  // `updateHitArea`, below, then clips the Viewport to just the Panel's own
+  // visible region with `clip-path`, so only a point actually over the
+  // Panel still hits the Viewport at all: hit-testing respects
+  // `clip-path` the same way it respects `pointer-events`. Every other
+  // point falls straight through the (opted-out) dialog to the page behind,
+  // a real hit there, not a forwarded one (#312: an earlier version left
+  // the Viewport covering the whole screen and forwarded a real click
+  // landing on its own bare surface by hand instead, which still left the
+  // page's own hover, text selection and WebKit's wheel- and
+  // trackpad-scrolling of the page unreachable). Modal, none of this runs:
+  // the dialog keeps its default `pointer-events: auto`, with nothing
+  // clipped away from it either, since its own top layer already does the
+  // job.
   function applyModalStyle() {
     const nonModal = opts.modal === false;
     dialog.style.pointerEvents = nonModal ? 'none' : '';
-    viewport.style.pointerEvents = nonModal ? 'none' : '';
-    panel.style.pointerEvents = 'auto';
+    viewport.style.pointerEvents = 'auto';
+    updateHitArea();
+  }
+
+  /** The Viewport's own hit-testable region, non-modal only (see
+   * `applyModalStyle`, above, for why it needs one at all): clipped to
+   * exactly the portion of the Panel currently scrolled into view, so a
+   * point outside it falls through to the page. The gap is always `100%`
+   * of the Viewport's own height, so the Panel's visible height, measured
+   * up from the Viewport's own bottom edge, is simply `viewport.scrollTop`:
+   * `inset(calc(100% - scrollTop) 0 0 0)`. Driven by the `--drawer` scroll
+   * timeline (`HIT_AREA_CLASS`, set up in `ensureBackdropReset`) wherever
+   * it resolves, so nothing here runs per scroll frame; written directly
+   * here only as the Firefox fallback (`onScroll`, below), the same split
+   * `updateProgress` already makes for the dim.
+   *
+   * Suppressed entirely (the Viewport given up everywhere, to the page)
+   * during the Panel's own CSS entrance and exit (`phase === 'opening'`, or
+   * a programmatic close's `cssExiting`): both move the Panel with a
+   * `transform`, never `scrollTop`, so the scroll-position-derived region
+   * above would already sit at the Panel's final, resting place from their
+   * very first frame, ahead of the Panel's own, still-animating position,
+   * and block real clicks on the page there until the transition catches
+   * up. A drag-driven close keeps tracking throughout instead: it moves
+   * `scrollTop` itself, the same native scroll the open already is, so the
+   * region above stays accurate all the way down to 0. */
+  function updateHitArea() {
+    if (opts.modal !== false) {
+      viewport.classList.remove(HIT_AREA_CLASS);
+      viewport.style.clipPath = '';
+      return;
+    }
+    const tracking = !cssExiting && phase !== 'opening' && phase !== 'closed';
+    if (!tracking) {
+      viewport.classList.remove(HIT_AREA_CLASS);
+      viewport.style.clipPath = 'inset(100% 0 0 0)';
+    } else if (supportsScrollTimeline) {
+      viewport.style.clipPath = '';
+      viewport.classList.add(HIT_AREA_CLASS);
+    } else {
+      viewport.classList.remove(HIT_AREA_CLASS);
+      viewport.style.clipPath = `inset(calc(100% - ${viewport.scrollTop}px) 0 0 0)`;
+    }
   }
   applyModalStyle();
 
@@ -294,6 +373,10 @@ export function createDrawer(
   function setPhase(next: Phase) {
     if (next === phase) return;
     phase = next;
+    // Non-modal only: the hit area tracks the scroll position everywhere
+    // except the Panel's own CSS entrance and exit (`updateHitArea`'s own
+    // comment), both of which land here on every phase change they cause.
+    updateHitArea();
     opts.onPhaseChange?.(next);
   }
 
@@ -312,6 +395,13 @@ export function createDrawer(
     // The scroll range a native dim's `animation-range` covers (closed to
     // the first snap point), once per layout -- never per frame (#249).
     dialog.style.setProperty('--drawer-first-snap', `${snapPx[0] ?? 0}px`);
+    // The hit area's own "fully open" target (#271, #312): see
+    // `MAX_SCROLL_VAR`'s own comment for why `@keyframes` needs this as a
+    // value instead of reading the scroll timeline's progress directly.
+    viewport.style.setProperty(
+      MAX_SCROLL_VAR,
+      `${viewport.scrollHeight - viewportHeight}px`
+    );
   }
 
   /** Positions every `[data-drawer-snap]` marker at its snap point's
@@ -717,6 +807,10 @@ export function createDrawer(
       progressFrame = 0;
       updateProgress();
       if (phase !== 'opening') updateContentLock();
+      // The non-modal hit area's own fallback (`updateHitArea`'s own
+      // comment): where the scroll timeline this otherwise rides resolves,
+      // it needs no scroll listener at all, same as the dim above.
+      updateHitArea();
     });
   }
   // The native dim needs no scroll listener at all: nothing here runs per
@@ -757,11 +851,11 @@ export function createDrawer(
 
   function onGapClick() {
     // An outside press never closes a non-modal drawer by default (#271),
-    // matching vaul's and Base UI's own non-modal behaviour: real-world
-    // clicks there already fall through to the page (`applyModalStyle`'s
-    // `pointer-events: none`) and never reach the gap at all, but a test
-    // (or a consumer) dispatching one straight at it should see the same
-    // no-op.
+    // following Base UI's own non-modal example (`disablePointerDismissal`):
+    // a real-world click there already reaches the page itself instead
+    // (the hit area clips it out of the Viewport entirely, `updateHitArea`)
+    // and never reaches the gap at all, but a test (or a consumer)
+    // dispatching one straight at it should see the same no-op.
     if (opts.modal === false || !opts.dismissible || phase !== 'open') return;
     beginExit('outside-press');
   }

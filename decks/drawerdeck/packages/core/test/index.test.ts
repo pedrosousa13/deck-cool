@@ -1,9 +1,11 @@
+import { userEvent } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   expectSettledTo,
   mockReducedMotion,
   mount,
   mouseDrag,
+  nextFrame,
   sleep,
   unmount,
   type Fixture
@@ -697,23 +699,24 @@ describe('destroy()', () => {
 describe('non-modal (#271)', () => {
   beforeEach(() => mockReducedMotion());
 
-  /** A page element outside the dialog entirely, positioned over the
-   * drawer's own gap area, so a point-based hit test (`elementFromPoint`)
-   * proves whether the drawer or the page itself is actually reachable
-   * there, not just whether a listener fires once an event is dispatched
-   * straight at a target, which skips hit-testing altogether. */
-  function appendBehindButton() {
-    const button = document.createElement('button');
-    button.textContent = 'Behind';
-    Object.assign(button.style, {
+  /** A page `<input>` outside the dialog entirely, positioned over the
+   * drawer's own gap area, so a real click (`userEvent.click`) proves
+   * whether the drawer or the page itself is actually reachable there:
+   * real hit-testing, a real focus move, not a handler dispatched straight
+   * at a target, which skips hit-testing altogether. An `<input>`, not a
+   * button: a button does not reliably take focus from a real click in
+   * every engine, but a text input always does. */
+  function appendBehindInput() {
+    const input = document.createElement('input');
+    Object.assign(input.style, {
       position: 'fixed',
       top: '0',
       left: '0',
       width: '50px',
       height: '50px'
     });
-    document.body.append(button);
-    return button;
+    document.body.append(input);
+    return input;
   }
 
   it('opens with show(), not showModal(): dialog.matches(":modal") is false', async () => {
@@ -737,26 +740,26 @@ describe('non-modal (#271)', () => {
     expect(dialog.matches(':modal')).toBe(true);
   });
 
-  it('lets a point over the drawer resolve to the page behind it, not the viewport', async () => {
-    const behind = appendBehindButton();
+  it('a real click on a page input outside the Panel reaches and focuses it', async () => {
+    const behind = appendBehindInput();
     fixture = mount({ snapPoints: [0.5], modal: false });
     const { drawer } = fixture;
 
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
+    await nextFrame();
 
+    // Above the Panel's own visible top edge: the hit area clips the
+    // Viewport out of this point entirely (#312), so the real hit test
+    // lands on the page input directly, not on the Viewport.
     expect(document.elementFromPoint(25, 25)).toBe(behind);
-    const onClick = vi.fn();
-    behind.addEventListener('click', onClick);
-    document
-      .elementFromPoint(25, 25)
-      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(onClick).toHaveBeenCalledTimes(1);
+    await userEvent.click(behind);
+    expect(document.activeElement).toBe(behind);
     behind.remove();
   });
 
-  it('a modal drawer (the default) covers the same point instead', async () => {
-    const behind = appendBehindButton();
+  it('a modal drawer (the default) covers the same point and refuses it focus', async () => {
+    const behind = appendBehindInput();
     fixture = mount({ snapPoints: [0.5] });
     const { drawer, viewport } = fixture;
 
@@ -765,33 +768,38 @@ describe('non-modal (#271)', () => {
 
     expect(document.elementFromPoint(25, 25)).not.toBe(behind);
     expect(viewport.contains(document.elementFromPoint(25, 25))).toBe(true);
-    behind.remove();
-  });
-
-  it('lets the page behind it take focus', async () => {
-    const behind = appendBehindButton();
-    fixture = mount({ snapPoints: [0.5], modal: false });
-    const { drawer } = fixture;
-
-    drawer.open();
-    await expectSettledTo(() => drawer.phase, 'open');
-
-    behind.focus();
-    expect(document.activeElement).toBe(behind);
-    behind.remove();
-  });
-
-  it('a modal drawer (the default) refuses to let the page behind it take focus', async () => {
-    const behind = appendBehindButton();
-    fixture = mount({ snapPoints: [0.5] });
-    const { drawer } = fixture;
-
-    drawer.open();
-    await expectSettledTo(() => drawer.phase, 'open');
-
+    // A modal `<dialog>`'s own inert page refuses even a programmatic
+    // focus move, not just a real click, so this checks the stronger claim.
     behind.focus();
     expect(document.activeElement).not.toBe(behind);
     behind.remove();
+  });
+
+  it('the hit area follows the Panel across snap points: above its top edge is the page, below is the Viewport', async () => {
+    fixture = mount({ snapPoints: [0.5, 0.9], modal: false });
+    const { viewport, drawer } = fixture;
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    await nextFrame();
+    let edge = viewport.clientHeight - viewport.scrollTop;
+    expect(viewport.contains(document.elementFromPoint(50, edge - 10))).toBe(
+      false
+    );
+    expect(viewport.contains(document.elementFromPoint(50, edge + 10))).toBe(
+      true
+    );
+
+    drawer.snapTo(1);
+    await expectSettledTo(() => drawer.snapIndex, 1);
+    await nextFrame();
+    edge = viewport.clientHeight - viewport.scrollTop;
+    expect(viewport.contains(document.elementFromPoint(50, edge - 10))).toBe(
+      false
+    );
+    expect(viewport.contains(document.elementFromPoint(50, edge + 10))).toBe(
+      true
+    );
   });
 
   it('lets the page itself scroll while it is open', async () => {
@@ -896,5 +904,65 @@ describe('non-modal (#271)', () => {
     expect(panel.hasAttribute('data-ending-style')).toBe(true);
     await expectSettledTo(() => drawer.phase, 'closed');
     expect(panel.hasAttribute('data-ending-style')).toBe(false);
+  });
+
+  it('scrolls with a real wheel over the Panel, confirmed in WebKit (#312)', async () => {
+    // A real, trusted wheel over the Panel, not a dispatched WheelEvent (an
+    // untrusted one never drives native scrolling at all): what Safari
+    // measured never moving `viewport.scrollTop` while the Viewport had
+    // `pointer-events: none` -- WebKit refuses to wheel- or trackpad-scroll
+    // an overflow element with that set at all, even where the point under
+    // the cursor resolves to a descendant (the Panel) that overrides it
+    // back to `auto`. Chromium never had this bug; this guards WebKit from
+    // a regression back to it. A marker right at the Panel's own top edge,
+    // not the Panel itself: the Panel here is much taller than the
+    // viewport, and hovering a point inside it that is not yet on screen
+    // would scroll the Viewport to reach it before the wheel ticks even
+    // start, defeating the point of measuring the wheel's own effect.
+    fixture = mount({ snapPoints: [0.5, 1], modal: false });
+    const { viewport, panel, drawer } = fixture;
+    const marker = document.createElement('div');
+    Object.assign(marker.style, { width: '20px', height: '20px' });
+    panel.prepend(marker);
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    const before = viewport.scrollTop;
+
+    await userEvent.wheel(marker, { delta: { y: 100 }, times: 4 });
+
+    await expect.poll(() => viewport.scrollTop).toBeGreaterThan(before);
+  });
+
+  it('scrolls the page, not the drawer, with a real wheel over the page area (#312)', async () => {
+    // The regression this guards: before the clip-path hit area, the
+    // Viewport covered the whole screen (`pointer-events: auto`
+    // everywhere), so a real wheel out here, over the page, well above the
+    // Panel's own visible top edge, still landed on the Viewport and moved
+    // the drawer instead of the page, in both Chromium and WebKit.
+    // The marker sits at the same point the bug report measured (200, 100).
+    document.body.style.minHeight = '3000px';
+    fixture = mount({ snapPoints: [0.5, 1], modal: false });
+    const { viewport, drawer } = fixture;
+    const marker = document.createElement('div');
+    Object.assign(marker.style, {
+      position: 'fixed',
+      left: '190px',
+      top: '90px',
+      width: '20px',
+      height: '20px'
+    });
+    document.body.append(marker);
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    await nextFrame();
+    const before = viewport.scrollTop;
+
+    await userEvent.wheel(marker, { delta: { y: 100 }, times: 4 });
+
+    await expect.poll(() => window.scrollY).toBeGreaterThan(0);
+    expect(viewport.scrollTop).toBe(before);
+    marker.remove();
   });
 });
