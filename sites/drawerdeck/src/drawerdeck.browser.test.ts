@@ -74,7 +74,7 @@ describe("the live drawer in a browser", () => {
   // 'opening'): wait for that, not just the <dialog>'s own open attribute,
   // which the engine sets as soon as the opening scroll starts.
   const openDrawer = async (page: Page) => {
-    const drawer = page.locator(".drawer-demo");
+    const drawer = page.locator(".drawer-demo--quickstart");
     const panel = drawer.locator("[data-drawerdeck-panel]");
     await drawer.getByRole("button", { name: "Open" }).click();
     await expect.poll(() => panel.getAttribute("data-phase"), SETTLE).toBe("open");
@@ -84,7 +84,7 @@ describe("the live drawer in a browser", () => {
   test.each(LIVE_DRAWER_PAGES)("%s: Open shows the drawer, open at its first snap point, under the CSP", async (path) => {
     const { page, violations } = await visit(path, { width: 1280, reducedMotion: "reduce" });
     await islandsHydrated(page);
-    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    const popup = page.locator(".drawer-demo--quickstart [data-drawerdeck-popup]");
     expect(await popup.getAttribute("open")).toBeNull();
     const drawer = await openDrawer(page);
     expect(await popup.getAttribute("open")).not.toBeNull();
@@ -95,7 +95,7 @@ describe("the live drawer in a browser", () => {
   test.each(LIVE_DRAWER_PAGES)("%s: Escape closes the drawer", async (path) => {
     const { page } = await visit(path, { width: 1280, reducedMotion: "reduce" });
     await islandsHydrated(page);
-    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    const popup = page.locator(".drawer-demo--quickstart [data-drawerdeck-popup]");
     await openDrawer(page);
     await page.keyboard.press("Escape");
     await expect.poll(() => popup.getAttribute("open"), SETTLE).toBeNull();
@@ -104,7 +104,7 @@ describe("the live drawer in a browser", () => {
   test("Done closes the drawer", async () => {
     const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     await islandsHydrated(page);
-    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    const popup = page.locator(".drawer-demo--quickstart [data-drawerdeck-popup]");
     const drawer = await openDrawer(page);
     await drawer.getByRole("button", { name: "Done" }).click();
     await expect.poll(() => popup.getAttribute("open"), SETTLE).toBeNull();
@@ -129,7 +129,7 @@ describe("the live drawer in a browser", () => {
   test("dragging the handle down past the lowest snap point closes the drawer", async () => {
     const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     await islandsHydrated(page);
-    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    const popup = page.locator(".drawer-demo--quickstart [data-drawerdeck-popup]");
     const drawer = await openDrawer(page);
     const handle = await drawer.locator("[data-drawerdeck-handle]").boundingBox();
     if (!handle) throw new Error("the handle has no box");

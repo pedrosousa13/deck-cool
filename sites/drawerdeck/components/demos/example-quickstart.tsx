@@ -23,7 +23,10 @@ const SETTINGS = [
 export default function Quickstart() {
   return (
     <DemoFrame>
-      <div className="drawer-demo">
+      {/* drawer-demo--quickstart: so the every-side demo's own .drawer-demo
+          (components/demos/example-sides.tsx), on the same home page, does
+          not make a bare .drawer-demo selector ambiguous. */}
+      <div className="drawer-demo drawer-demo--quickstart">
         <Drawer.Root snapPoints={[0.5, 1]}>
           <Drawer.Trigger className="drawer-demo__trigger">Open</Drawer.Trigger>
           <Drawer.Popup>
