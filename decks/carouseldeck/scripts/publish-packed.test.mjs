@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import {
   publishReleases,
   releasesFromPlan,
-  releasesFromTarballs
+  releasesFromTarballs,
+  releasesWithPublishConfigTags
 } from './publish-packed.mjs';
 
 /** @type {import('./publish-packed.mjs').PublishRelease} */
@@ -68,6 +69,34 @@ test('releasesFromTarballs throws on a dependency cycle', () => {
         tarball('b', { a: '1.0.0' })
       ]),
     /dependency cycle/
+  );
+});
+
+test('releasesWithPublishConfigTags reads a tag from the tarball manifest publishConfig', () => {
+  /** @type {import('./publish-packed.mjs').PublishRelease} */
+  const beta = {
+    kind: 'publish',
+    name: '@drawerdeck/react',
+    version: '0.1.0-beta.0',
+    access: 'public',
+    tag: 'latest', // what a Changesets publish plan sets, wrongly
+    tarball: { path: 'packages/drawerdeck-react-0.1.0-beta.0.tgz' }
+  };
+  /** @type {Record<string, { publishConfig?: { tag?: string } }>} */
+  const manifests = {
+    [beta.tarball.path]: { publishConfig: { tag: 'beta' } },
+    [core.tarball.path]: {}
+  };
+  const result = releasesWithPublishConfigTags({
+    releases: [beta, core],
+    readManifest: (release) => manifests[release.tarball.path]
+  });
+  assert.deepEqual(
+    result.map((r) => ({ name: r.name, tag: r.tag })),
+    [
+      { name: '@drawerdeck/react', tag: 'beta' },
+      { name: '@carouseldeck/core', tag: 'latest' }
+    ]
   );
 });
 

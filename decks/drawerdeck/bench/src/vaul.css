@@ -1,0 +1,33 @@
+/* vaul is unstyled beyond its own drag/transition behaviour
+   (vaul-vendor.css): the consumer positions `Drawer.Content` itself (vaul's
+   own getting-started example: `fixed bottom-0 left-0 right-0`). Without
+   this, `Drawer.Content` sits in normal document flow and every snap
+   offset vaul computes lands in the wrong place (found empirically in the
+   original prototype: with no position set, "half" measured ~299px instead
+   of the configured 380px (50% of a 760px viewport) -- a fixed,
+   bottom-anchored offset, not a fraction-of-screen one).
+
+   `.backdrop` (#304, fairness rule 3) is the same category of fix for
+   `Drawer.Overlay`: unstyled, it also sits in normal flow. The
+   getting-started quickstart's own Overlay is
+   `className="fixed inset-0 bg-black/40"`; `position`/`inset` and the dim
+   color are given here, and the fade itself is vaul-vendor.css's own
+   shipped `[data-vaul-overlay]` CSS, unchanged. */
+
+.panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgb(0 0 0 / 0.4);
+}

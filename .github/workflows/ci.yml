@@ -60,6 +60,7 @@ jobs:
       packages: ${{ steps.plan.outputs.packages }}
       next: ${{ steps.plan.outputs.next }}
       e2e: ${{ steps.plan.outputs.e2e }}
+      drawerdeck: ${{ steps.drawerdeck.outputs.run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -79,6 +80,17 @@ jobs:
           echo "base=$base" >> "$GITHUB_OUTPUT"
           node decks/carouseldeck/scripts/verify.mjs "--changed=$base" --dry-run
           node decks/carouseldeck/scripts/verify.mjs "--changed=$base" --ci-jobs | tee -a "$GITHUB_OUTPUT"
+      # drawerdeck's verify has no --changed logic of its own yet (#231): a
+      # push needs it whenever it touches the deck, or the install.
+      - id: drawerdeck
+        env:
+          BASE: ${{ steps.plan.outputs.base }}
+        run: |
+          if git diff --name-only --no-renames "$BASE" | grep -qE '^(decks/drawerdeck/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|\.github/workflows/ci\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # The gates that need no browser. Each gate job runs `pnpm --dir
   # decks/carouseldeck verify --job <its name> --changed=<base>`:
@@ -103,6 +115,36 @@ jobs:
       - env:
           BASE: ${{ needs.changes.outputs.base }}
         run: pnpm --dir decks/carouseldeck verify --job checks "--changed=$BASE"
+
+  # drawerdeck's whole verify (#231): three packages, so one job covers
+  # lint, typecheck, test, test:react-18, test:react-19, build and
+  # test:packages, with no shards.
+  # Its `test` is vitest's browser mode, Chromium and WebKit (#240): the
+  # Playwright image carouseldeck-unit uses, so their browsers and system
+  # libraries are already there.
+  drawerdeck:
+    needs: changes
+    if: needs.changes.outputs.drawerdeck == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user 1001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - run: |
+          mkdir -p "$RUNNER_TEMP/corepack"
+          corepack enable --install-directory "$RUNNER_TEMP/corepack"
+          echo "$RUNNER_TEMP/corepack" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir decks/drawerdeck verify
 
   # The packed tarballs: publint, attw and `'use client'`.
   carouseldeck-packages:
@@ -302,7 +344,7 @@ jobs:
   # The one check to require in branch protection: it passes when every job
   # passed, or was skipped because the change needs none of its gates.
   verify:
-    needs: [sites, changes, carouseldeck-checks, carouseldeck-packages, carouseldeck-next, carouseldeck-unit, carouseldeck-unit-react-18, carouseldeck-unit-react-19, carouseldeck-e2e]
+    needs: [sites, changes, carouseldeck-checks, carouseldeck-packages, carouseldeck-next, carouseldeck-unit, carouseldeck-unit-react-18, carouseldeck-unit-react-19, carouseldeck-e2e, drawerdeck]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

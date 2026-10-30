@@ -5,7 +5,7 @@ The umbrella site (`sites/deck-cool`) is served at `https://deck.cool` by **Work
 wrangler is `sites/deck-cool`'s exact-version dev dependency. Run it as `pnpm exec wrangler` in `sites/deck-cool`, never as `npx wrangler`, which takes whatever version is latest.
 
 
-carouseldeck's site (`sites/carouseldeck`), pagedeck's (`sites/pagedeck`) and playdeck's (`sites/playdeck`) deploy the same way, each to its own Worker, at `https://carousel.deck.cool`, `https://page.deck.cool` and `https://play.deck.cool`. carouseldeck's publishes only a release of its deck. Everything below describes deck.cool; [carouseldeck at carousel.deck.cool](#carouseldeck-at-carouseldeckcool), [pagedeck at page.deck.cool](#pagedeck-at-pagedeckcool) and [playdeck at play.deck.cool](#playdeck-at-playdeckcool) list what differs.
+carouseldeck's site (`sites/carouseldeck`), pagedeck's (`sites/pagedeck`), playdeck's (`sites/playdeck`) and drawerdeck's (`sites/drawerdeck`) deploy the same way, each to its own Worker, at `https://carousel.deck.cool`, `https://page.deck.cool`, `https://play.deck.cool` and `https://drawer.deck.cool`. carouseldeck's publishes only a release of its deck. Everything below describes deck.cool; [carouseldeck at carousel.deck.cool](#carouseldeck-at-carouseldeckcool), [pagedeck at page.deck.cool](#pagedeck-at-pagedeckcool), [playdeck at play.deck.cool](#playdeck-at-playdeckcool) and [drawerdeck at drawer.deck.cool](#drawerdeck-at-drawerdeckcool) list what differs.
 ## What gets deployed
 
 `sites/deck-cool/wrangler.jsonc` declares the Worker:
@@ -300,3 +300,32 @@ pnpm --filter @sites/playdeck check-live https://example.com  # any other origin
 `src/live-check.ts` lists this site's paths and holds the canonical check, which site-kit runs on each page it fetches. The other checks are site-kit's, as deck.cool's are.
 
 Rolling back, and taking the site off the domain, are the same as for deck.cool, with the Worker `play-deck-cool` in `sites/playdeck`.
+
+## drawerdeck at drawer.deck.cool
+
+`sites/drawerdeck` is served at `https://drawer.deck.cool` by a fifth Worker, `drawerdeck`, on the same `deck.cool` zone. drawerdeck is an in-repo deck (AGENTS.md), so the site uses `@drawerdeck/core`, `@drawerdeck/react` and `@drawerdeck/docs` from the workspace, as carouseldeck's site does, but it deploys from `main` directly, as pagedeck's and playdeck's sites do: both packages are still placeholders (#231), so there is no release to gate the deploy on yet.
+
+Every section above applies, with these differences:
+
+- **The config.** `sites/drawerdeck/wrangler.jsonc` declares the Worker `drawerdeck`, with the route `{ "pattern": "drawer.deck.cool", "custom_domain": true }`. The other settings are the same as deck.cool's. wrangler is `sites/drawerdeck`'s exact-version dev dependency, at the same version as deck.cool's.
+- **The build.** The site uses the workspace's deck packages, so the workflow builds it with `pnpm --filter "@sites/drawerdeck..." build`, which builds `@drawerdeck/core` and `@drawerdeck/react` first. `_headers` gets its CSP from `sites/drawerdeck/src/csp.ts` and the other headers from `sites/drawerdeck/src/headers.ts`, the same fields as deck.cool's. `_redirects` and `.assetsignore` are the same as deck.cool's.
+- **The workflow.** `.github/workflows/deploy-drawerdeck.yml` has the same three jobs as `deploy-pagedeck.yml`'s. A push runs its dry run only when it changes `sites/drawerdeck/`, `decks/drawerdeck/packages/`, `packages/`, the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` or the workflow itself. A manual run always runs.
+- **The token and the secret.** The publish job uses the same `CLOUDFLARE_API_TOKEN` in the `production` environment. Workers Editor is account-wide, and Workers Routes Write covers every hostname on the `deck.cool` zone, so the token would deploy this Worker too, once it exists.
+- **The zone.** Always Use HTTPS is a zone setting, so it already covers `drawer.deck.cool`. deck.cool's HSTS has `includeSubDomains`, and drawerdeck's `_headers` sends the same HSTS.
+
+### The Worker does not exist yet
+
+Unlike the other four, the `drawerdeck` Worker has not been created. Only the dry run can pass today; a manual run with `apply` fails at the publish step with Cloudflare's own "Worker not found" error, since creating a new Worker needs Workers → **Admin**, which the deploy token does not have (see "The API token" above). Before the first deploy, create the Worker empty through the Cloudflare API or dashboard, as `pagedeck` and `play-deck-cool` were, and check the zone's DNS records for `drawer.deck.cool`: the custom domain creates its own record, and it cannot be created on a hostname that already has a CNAME record.
+
+### Verifying drawerdeck
+
+```sh
+pnpm --filter @sites/drawerdeck check-live                      # https://drawer.deck.cool
+pnpm --filter @sites/drawerdeck check-live https://example.com  # any other origin
+```
+
+`check-live` fetches `/`, `/docs/` and `/icons/drawerdeck/still.svg`, and fails unless each answers `200` with every header in `sites/drawerdeck/src/headers.ts`, at its exact value, and no `immutable`. It then checks the hashed stylesheet that `/` links, as deck.cool's check does. It fails unless `/manifest.json` and `/no-such-page/` answer `404`, and unless `http://drawer.deck.cool/` answers `301` to `https://drawer.deck.cool/`. `sites/drawerdeck/src/live-check.test.ts` runs the same checks against the build served locally.
+
+`src/live-check.ts` lists this site's paths. The checks are site-kit's, as deck.cool's are.
+
+Rolling back, and taking the site off the domain, are the same as for deck.cool, with the Worker `drawerdeck` in `sites/drawerdeck`, once it exists.

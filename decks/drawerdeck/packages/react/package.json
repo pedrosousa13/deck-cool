@@ -1,0 +1,45 @@
+{
+  "name": "@drawerdeck/react",
+  "version": "0.1.0-beta.1",
+  "description": "Headless, composable React 19 drawer primitives for drawerdeck.",
+  "license": "MIT",
+  "homepage": "https://drawer.deck.cool",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pedrosousa13/deck-cool.git",
+    "directory": "decks/drawerdeck/packages/react"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.d.ts.map",
+    "!dist/.tsbuildinfo*"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "tag": "beta"
+  },
+  "dependencies": {
+    "@drawerdeck/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=19 <20",
+    "react-dom": ">=19 <20"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "6.0.3"
+  }
+}

@@ -142,7 +142,12 @@ class Component extends DCLogic {
         line: 'Zero JavaScript until a page needs it.',
         body: 'A React framework for CMS-driven sites. Each page ships only what it uses, and a per-page budget fails the build when it ships more.',
         install: 'npm create pagedeck',
-        facts: [['0 B', 'of JavaScript on a page with nothing interactive'], ['Per page', 'JavaScript budgets the build enforces'], ['Only changed', 'files upload on deploy']] }
+        facts: [['0 B', 'of JavaScript on a page with nothing interactive'], ['Per page', 'JavaScript budgets the build enforces'], ['Only changed', 'files upload on deploy']] },
+      { name: 'drawerdeck', kind: 'Drawer', tint: '#40c8e0', site: 'https://drawer.deck.cool',
+        line: 'A drawer that lets the browser do the dragging.',
+        body: 'Native scroll snap drives the drag, momentum and snap points, and <dialog> gives the top layer, focus trap and Escape for free.',
+        install: 'pnpm add @drawerdeck/react',
+        facts: [['<dialog>', 'top layer, focus trap and Escape included'], ['0', 'third-party libraries: the drag is native scroll snap'], ['Headless', 'every appearance is your own CSS']] }
     ];
     const copied = this.state.copied;
     return {

@@ -35,7 +35,7 @@ pnpm test        # vitest across the workspace
 
 `packages/docs` (`@deck-cool/docs`) renders a deck's `@<deck>/docs` package under a site's `/docs`, per `docs/docs-contract.md` and ADR 0001. A site's `pagedeck.config.ts` calls its `defineDocs`, and can pass a rewrite of the docs' HTML as its `prose` option, such as `scrollableProse`. `demoComponent` gives a demo's component name, and `docsHref` a docs page's path. A site's tests read its docs pages, and the demos each marks, through `docsNav`.
 
-deck.cool is deployed with wrangler, as Workers Static Assets, by `.github/workflows/deploy-deck-cool.yml`: a dry run on every push, a publish only on a manual run with `apply`. carouseldeck's site is deployed the same way to carousel.deck.cool, as the Worker `carouseldeck`, by `.github/workflows/deploy-carouseldeck.yml`, but only from a carouseldeck release: release.yml dispatches a run of it after tagging the release, and a manual run with `apply` does the same by hand, each publishing the latest `@carouseldeck/react@X.Y.Z` tag (ADR 0002). pagedeck's to page.deck.cool, as the Worker `pagedeck`, by `.github/workflows/deploy-pagedeck.yml`; and playdeck's to play.deck.cool, as the Worker `play-deck-cool`, by `.github/workflows/deploy-playdeck.yml`. Each one's dry run runs on a push that changes its site, `packages/` or the install, and carouseldeck's also on one that changes `decks/carouseldeck/packages/`. CI and deck.cool's deploy check out every tag, for the card. `docs/deploy.md` is the runbook.
+deck.cool is deployed with wrangler, as Workers Static Assets, by `.github/workflows/deploy-deck-cool.yml`: a dry run on every push, a publish only on a manual run with `apply`. carouseldeck's site is deployed the same way to carousel.deck.cool, as the Worker `carouseldeck`, by `.github/workflows/deploy-carouseldeck.yml`, but only from a carouseldeck release: release.yml dispatches a run of it after tagging the release, and a manual run with `apply` does the same by hand, each publishing the latest `@carouseldeck/react@X.Y.Z` tag (ADR 0002). pagedeck's to page.deck.cool, as the Worker `pagedeck`, by `.github/workflows/deploy-pagedeck.yml`; playdeck's to play.deck.cool, as the Worker `play-deck-cool`, by `.github/workflows/deploy-playdeck.yml`; and drawerdeck's to drawer.deck.cool, as the Worker `drawerdeck`, by `.github/workflows/deploy-drawerdeck.yml`, a manual run with `apply` deploying `main` directly, as pagedeck's and playdeck's do, since drawerdeck is an in-repo deck with no release yet. Each one's dry run runs on a push that changes its site, `packages/` or the install, and carouseldeck's and drawerdeck's also on one that changes their deck's packages (`decks/carouseldeck/packages/`, `decks/drawerdeck/packages/`). The `drawerdeck` Worker does not exist yet, so only its dry run can pass today. CI and deck.cool's deploy check out every tag, for the card. `docs/deploy.md` is the runbook.
 
 ## carouseldeck
 
@@ -44,6 +44,21 @@ root with `pnpm --dir decks/carouseldeck <script>`, and
 `pnpm --dir decks/carouseldeck verify` before landing a change to it (ADR
 0002). Its own ADRs are at `decks/carouseldeck/docs/adr/`, numbered on their
 own. `decks/carouseldeck/AGENTS.md` covers what's specific to working in it.
+
+## drawerdeck
+
+Its source lives in `decks/drawerdeck/`. Run its commands from the repo
+root with `pnpm --dir decks/drawerdeck <script>`, and
+`pnpm --dir decks/drawerdeck verify` before landing a change to it. Its own
+ADRs are at `decks/drawerdeck/docs/adr/`, numbered on their own.
+`decks/drawerdeck/AGENTS.md` covers what's specific to working in it. The
+engine (`@drawerdeck/core`) and the React 19 primitives (`@drawerdeck/react`)
+are the beta (#240): bottom, modal only. `@drawerdeck/react-18` builds the
+same source for React 18 too (#275). All three packages, and
+`@drawerdeck/docs`, are publishable at `0.1.0-beta.0`, under the npm dist-tag
+`beta` (#242); the maintainer still has to create the `@drawerdeck` npm scope
+before the release workflow can publish them (`decks/drawerdeck/AGENTS.md`,
+"Releasing").
 
 ## Releasing a deck
 

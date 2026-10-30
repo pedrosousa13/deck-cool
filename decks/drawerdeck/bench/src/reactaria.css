@@ -1,0 +1,44 @@
+/* React Aria's Sheet manages its own fixed/absolute positioning and
+   scroll-snap internally (#283's blog write-up, "Scrolling is All You
+   Need"): unlike vaul's and Base UI's headless drawers, no
+   `position: fixed` is needed from the consumer. It does not, on its own,
+   bound `Sheet`'s own box to the viewport height, though: found
+   empirically (same method the original prototype used for vaul/Base UI),
+   `Sheet`'s default height is its *content's* height (2172px for 50 rows,
+   the same unclamped-content bug vaul has without `max-height`), not
+   100dvh -- and since `snapPoints` percentages are relative to that box
+   (see src/reactaria-app.tsx), an unclamped height also breaks the
+   half/full snap offsets, not just "openness". `height: 100dvh` here
+   bounds it, the same fix vaul's own CSS needs. */
+
+.panel {
+  height: 100dvh;
+}
+
+.content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* `SheetBackdrop` paints nothing on its own (#304, fairness rule 3): the
+   dim color and the fade-in/out keyframes are the package's own starter
+   example's `Sheet.css` (react-spectrum repo, `starters/docs/src/
+   Sheet.css`), the CSS react-aria.adobe.com/Sheet's own "Example" is built
+   from -- its `swipeAnimation` prop (src/reactaria-app.tsx) only names a
+   `@keyframes`; it does not provide one. */
+
+.backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+@keyframes sheet-backdrop {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

@@ -151,7 +151,7 @@ describe("the Family bar's switcher in a browser", () => {
     const decksLinked = await page
       .locator(`${SWITCH_PANEL} a`)
       .evaluateAll((links) => links.map((a) => a.getAttribute("href")));
-    expect(decksLinked).toHaveLength(3);
+    expect(decksLinked).toHaveLength(4);
     for (const href of decksLinked) {
       await page.keyboard.press("Tab");
       expect(await focused(page)).toBe(href);
@@ -238,7 +238,7 @@ describe("the Family bar's switcher in a browser", () => {
           look();
         }),
     );
-    expect(atFirstSight).toEqual([true, true, true]);
+    expect(atFirstSight).toEqual([true, true, true, true]);
   });
 
   test("with motion allowed, opening and closing both animate, and the fan follows", async () => {

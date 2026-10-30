@@ -1,0 +1,601 @@
+/*
+ * drawer.deck.cool: the home page and the docs layout, on the brand kit
+ * (brand.css's dark palette, type and curve, family-bar.css's bar). Every
+ * motion is under prefers-reduced-motion: no-preference, and times itself
+ * with --ease.
+ */
+
+:root {
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --tile: var(--ground-tile);
+  --radius-pill: 999px;
+  --section-padding: 112px;
+  --gutter: 22px;
+  --measure: 980px;
+}
+
+html {
+  scroll-padding-top: 68px;
+}
+
+/* A column, so the footer sits at the bottom of a short page. */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  font-size: 17px;
+  line-height: 1.47;
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  flex: 1;
+}
+
+main h1,
+main h2,
+main h3 {
+  font-weight: 600;
+  line-height: 1.08;
+}
+
+main a {
+  color: var(--text-link);
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+}
+
+main :focus-visible,
+.site-footer :focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+}
+
+.site-page {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--section-padding) var(--gutter);
+}
+
+.site-footer {
+  border-top: 1px solid var(--rule);
+}
+
+.site-footer > div {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--gutter);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+@media (max-width: 400px) {
+  :root {
+    --gutter: 16px;
+  }
+}
+
+/* The home page. */
+
+.home-intro {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--section-padding) var(--gutter) 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  text-align: center;
+}
+
+.home-intro > * {
+  margin: 0;
+}
+
+.home-intro img {
+  display: block;
+}
+
+.home-intro h1 {
+  font-size: clamp(32px, 9vw, 80px);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+}
+
+.home-intro h1 span,
+.home-intro p {
+  color: var(--text-secondary);
+}
+
+.home-intro p {
+  max-width: 640px;
+  font-size: 21px;
+  line-height: 1.38;
+}
+
+.home-intro__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* No Copy button, which would need an island of its own: one click selects
+   the whole command instead. */
+.home-install {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 11px 22px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--ground-tile);
+}
+
+.home-install code {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
+main .home-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 26px;
+  border-radius: var(--radius-pill);
+  background-color: var(--drawerdeck-fill);
+  color: var(--fill-text);
+  text-decoration: none;
+}
+
+main .home-more {
+  color: var(--drawerdeck-text);
+  font-size: 17px;
+  text-decoration: none;
+}
+
+main .home-more:hover {
+  color: var(--text);
+}
+
+.home-band {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 96px max(var(--gutter), calc((100% - var(--measure)) / 2));
+  background: #0b0b0c;
+  border-top: 1px solid #1d1d1f;
+}
+
+.home-band__text {
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.home-band h2,
+.home-band__text p {
+  margin: 0;
+}
+
+.home-band h2 {
+  font-size: 40px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.home-band__text p {
+  color: var(--text-secondary);
+  font-size: 19px;
+  line-height: 1.42;
+}
+
+.home-family {
+  padding: 56px var(--gutter);
+  border-top: 1px solid #1d1d1f;
+  text-align: center;
+}
+
+.home-family p {
+  max-width: 640px;
+  margin: 0 auto;
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1.47;
+}
+
+main .home-family .home-more {
+  text-decoration: underline;
+}
+
+@media (max-width: 734px) {
+  .home-intro {
+    padding: 72px var(--gutter) 64px;
+  }
+
+  .home-intro p {
+    font-size: 19px;
+  }
+
+  .home-band {
+    padding-block: 64px;
+  }
+
+  .home-band h2 {
+    font-size: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  main .home-more,
+  main .home-button {
+    transition:
+      color 0.2s var(--ease),
+      background-color 0.2s var(--ease);
+  }
+}
+
+/* The live drawer demo (components/demos/example-quickstart.tsx), on the home
+   page and the Quickstart docs page. The engine (@drawerdeck/core) sets the
+   popup's, the viewport's and the backdrop's structural styles inline; this
+   is only the look of the panel and its parts. */
+
+.drawer-demo {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 160px;
+}
+
+.drawer-demo__trigger {
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background-color: var(--drawerdeck-fill);
+  color: var(--fill-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* The dim: the engine only exposes the scroll timeline and its range
+   (--drawer-first-snap); this is the look, same recipe as the "Style the
+   backdrop" guide. Chromium and Safari drive it natively, with no JS per
+   scroll frame; Firefox falls back to --drawer-progress. The scroll
+   timeline animates background-color's alpha, not opacity: the entrance
+   and the exit, below, animate opacity instead, so the two compose by
+   multiplying rather than one replacing the other. */
+@supports (animation-timeline: scroll()) {
+  @keyframes drawer-demo-dim {
+    from {
+      background-color: rgb(0 0 0 / 0);
+    }
+    to {
+      background-color: rgb(0 0 0 / 0.5);
+    }
+  }
+
+  .drawer-demo__backdrop {
+    background-color: rgb(0 0 0 / 0);
+    animation: drawer-demo-dim 1s linear;
+    animation-timeline: --drawer;
+    animation-range: 0 var(--drawer-first-snap);
+    animation-fill-mode: both;
+  }
+}
+
+@supports not (animation-timeline: scroll()) {
+  .drawer-demo__backdrop {
+    background: rgb(0 0 0 / calc(var(--drawer-progress, 0) * 0.5));
+  }
+}
+
+.drawer-demo__panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px 20px 24px;
+  border-radius: 16px 16px 0 0;
+  background-color: var(--ground-raised);
+  text-align: center;
+  transform: translateY(0);
+}
+
+/* The entrance and the exit: data-starting-style and data-ending-style,
+   the engine's own attributes, same recipe as the "Animate the drawer"
+   guide, on the Panel and the Backdrop both. No scroll animation drives
+   this: the panel's transform and the backdrop's opacity are purely
+   visual, on the compositor. */
+@media (prefers-reduced-motion: no-preference) {
+  .drawer-demo__panel {
+    transition: transform 300ms var(--ease);
+  }
+
+  .drawer-demo__panel[data-starting-style],
+  .drawer-demo__panel[data-ending-style] {
+    transform: translateY(100%);
+  }
+
+  .drawer-demo__backdrop {
+    transition: opacity 300ms var(--ease);
+  }
+
+  .drawer-demo__backdrop[data-starting-style],
+  .drawer-demo__backdrop[data-ending-style] {
+    opacity: 0;
+  }
+}
+
+.drawer-demo__handle {
+  width: 36px;
+  height: 4px;
+  margin: 0 auto 16px;
+  border-radius: var(--radius-pill);
+  background-color: var(--rule);
+  flex-shrink: 0;
+}
+
+.drawer-demo__title {
+  margin: 0 0 8px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.drawer-demo__content {
+  flex: 1;
+  min-height: 0;
+}
+
+.drawer-demo__list {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.drawer-demo__list li {
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--text-secondary);
+}
+
+.drawer-demo__close {
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background-color: var(--tile);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* The docs layout (components/docs-page.tsx): a sidebar, then the article. */
+
+.docs {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 64px;
+  box-sizing: border-box;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 64px var(--gutter) var(--section-padding);
+}
+
+.docs-sidebar {
+  font-size: 14px;
+}
+
+.docs-sidebar section + section {
+  margin-top: 28px;
+}
+
+.docs-sidebar h2 {
+  margin: 0 0 8px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.docs-sidebar ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+main .docs-sidebar a {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--text);
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.docs-sidebar a:hover {
+  text-decoration: underline;
+}
+
+.docs-sidebar a[aria-current="page"] {
+  background-color: var(--tile);
+  font-weight: 600;
+}
+
+.docs-article {
+  min-width: 0;
+  max-width: 760px;
+}
+
+.docs-article h1 {
+  margin: 0 0 32px;
+  font-size: clamp(36px, 5vw, 48px);
+}
+
+.docs-prose {
+  line-height: 1.6;
+}
+
+.docs-prose > :first-child {
+  margin-top: 0;
+}
+
+.docs-prose h2 {
+  margin: 64px 0 16px;
+  font-size: 28px;
+  letter-spacing: -0.01em;
+}
+
+.docs-prose h3 {
+  margin: 40px 0 12px;
+  font-size: 21px;
+}
+
+.docs-prose p,
+.docs-prose ul,
+.docs-prose ol {
+  margin: 0 0 20px;
+}
+
+.docs-prose li + li {
+  margin-top: 6px;
+}
+
+.docs-prose :not(pre) > code {
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  background-color: var(--tile);
+  font-size: 0.88em;
+}
+
+.docs-prose pre {
+  box-sizing: border-box;
+  margin: 0 0 24px;
+  padding: 24px 28px;
+  overflow-x: auto;
+  border-radius: 18px;
+  background-color: var(--tile) !important;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.docs-prose table {
+  display: block;
+  margin: 0 0 24px;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.docs-prose th,
+.docs-prose td {
+  padding: 10px 14px 10px 0;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+}
+
+.docs-pager {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 72px;
+  padding-top: 32px;
+  border-top: 1px solid var(--rule);
+}
+
+.docs-pager a {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 17px;
+  text-decoration: none;
+}
+
+.docs-pager a:hover {
+  text-decoration: underline;
+}
+
+.docs-pager a[rel="next"] {
+  margin-left: auto;
+  text-align: right;
+}
+
+.docs-pager span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.docs-demo {
+  margin: 8px 0 40px;
+  padding: 28px;
+  border: 1px solid var(--rule);
+  border-radius: 28px;
+}
+
+@media (max-width: 900px) {
+  .docs {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    padding-top: 32px;
+  }
+
+  .docs-sidebar {
+    columns: 2;
+    column-gap: 16px;
+    padding: 16px 6px;
+    border-radius: 18px;
+    background-color: var(--tile);
+  }
+
+  .docs-sidebar section {
+    break-inside: avoid;
+    margin-bottom: 16px;
+  }
+
+  .docs-sidebar section + section {
+    margin-top: 0;
+  }
+
+  .docs-sidebar a[aria-current="page"] {
+    background-color: var(--ground-page);
+  }
+}
+
+@media (max-width: 400px) {
+  .docs-prose pre {
+    padding: 20px;
+  }
+
+  .docs-demo {
+    padding: 20px 16px;
+  }
+}

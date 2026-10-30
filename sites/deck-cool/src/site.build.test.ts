@@ -174,9 +174,9 @@ test("the hero shows the fanned cards, the headline, the line under it and a lin
   const hero = present(home().querySelector("main > section:first-of-type"), "the hero");
   expect(hero?.querySelector("img")?.getAttribute("src")).toBe(umbrella.icons.animated);
   expect(hero?.querySelector("img")?.getAttribute("alt")).toBe("");
-  expect(text(hero?.querySelector("h1"))).toBe("It looks like you. It works like the browser.");
+  expect(text(hero?.querySelector("h1"))).toBe("Built on native elements. Works with the browser, not against it.");
   expect(text(hero?.querySelector("p"))).toBe(
-    "Unstyled React packages for carousels, video and sites. Bring your tokens, your CSS, or your agent. The hard parts are already done.",
+    "React packages for carousels, video, drawers and sites, built on the browser's own scroll snap, <video> and <dialog>. The browser does the heavy lifting, so each deck ships little JavaScript, and none on a page with nothing interactive. No styles ship either: bring your tokens, your CSS, or your agent.",
   );
   expect(links(hero)).toEqual([["Browse the decks", "#decks"]]);
   expect(home().getElementById("decks")).not.toBeNull();

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.tsbuildinfo
+# Written by vitest browser mode when a test fails.
+.vitest-attachments/
+__screenshots__/

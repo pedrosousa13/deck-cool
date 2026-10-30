@@ -1,0 +1,16 @@
+[
+  {
+    "label": "Getting started",
+    "pages": ["index.md", "install.md", "quickstart.md"]
+  },
+  { "label": "Reference", "pages": ["reference/parts.md"] },
+  {
+    "label": "Guides",
+    "pages": [
+      "guides/why-native-scrolling.md",
+      "guides/style-the-backdrop.md",
+      "guides/animate-the-drawer.md"
+    ]
+  },
+  { "label": "Compare", "pages": ["compare.md"] }
+]

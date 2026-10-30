@@ -95,7 +95,7 @@ describe("the umbrella site in a browser", () => {
       const page = await still.newPage({ viewport: { width: 1280, height: 900 } });
       await page.goto(`${site.origin}/`, { waitUntil: "load" });
       const icons = await page.locator("main img").all();
-      expect(icons).toHaveLength(4);
+      expect(icons).toHaveLength(5);
       const pictures = async () => {
         const shots: string[] = [];
         for (const icon of icons) shots.push((await icon.screenshot()).toString("base64"));

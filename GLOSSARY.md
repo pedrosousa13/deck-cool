@@ -4,8 +4,8 @@ deck.cool is the umbrella for a family of small, unstyled React packages, each n
 
 ## Vocabulary
 
-- **Deck**: one package in the family (carouseldeck, playdeck, pagedeck). Its site lives here, and its source lives either here or in its own repo.
-- **In-repo deck**: a deck whose source lives in this repo, under `decks/<deck>/`. slidedeck is the first, renamed carouseldeck as it moves in. See ADR 0002.
+- **Deck**: one package in the family (carouseldeck, playdeck, pagedeck, drawerdeck). Its site lives here, and its source lives either here or in its own repo.
+- **In-repo deck**: a deck whose source lives in this repo, under `decks/<deck>/`. slidedeck is the first, renamed carouseldeck as it moves in; drawerdeck is the second, set up directly here (#231). See ADR 0002.
   _Avoid_: internal deck, monorepo deck
 - **Outside deck**: a deck whose source still lives in its own repo. Its site follows its releases through a bump PR (ADR 0001).
   _Avoid_: external deck, remote deck
@@ -238,14 +238,15 @@ Made by the maintainer on 2026-10-08.
 - **The packages ship no CSS, and the sites say so.** No site shows off shared tokens or a type scale.
 - **Favicons are round 2**: one card shape, arranged a different way per deck, on a dark `#1c1c1e` tile. Files in `design/favicons/`.
 
-  | Deck         | Arrangement                                             | Accent                  |
-  | ------------ | ------------------------------------------------------- | ----------------------- |
-  | deck.cool    | three cards, fanned                                     | the three accents below |
-  | carouseldeck | three cards in a row, the middle one in front           | `#2997ff`               |
-  | playdeck     | three cards stepping down: the outline reads as play    | `#ff5c86`               |
-  | pagedeck     | three stacked sections, the middle one lit (the island) | `#3ddc97`               |
+  | Deck         | Arrangement                                                                    | Accent                  |
+  | ------------ | ------------------------------------------------------------------------------ | ----------------------- |
+  | deck.cool    | three cards, fanned                                                            | the three accents below |
+  | carouseldeck | three cards in a row, the middle one in front                                  | `#2997ff`               |
+  | playdeck     | three cards stepping down: the outline reads as play                           | `#ff5c86`               |
+  | pagedeck     | three stacked sections, the middle one lit (the island)                        | `#3ddc97`               |
+  | drawerdeck   | three sheets stacked from the back, the front one lit, rising: a nested drawer | `#40c8e0`               |
 
-  Accepted risks: at 16px pagedeck's bars can read as a hamburger menu, and carouseldeck's arrangement is close to the stock "view carousel" icon.
+  Accepted risks: at 16px pagedeck's bars can read as a hamburger menu, carouseldeck's arrangement is close to the stock "view carousel" icon, and drawerdeck's teal sits near carouseldeck's blue.
 
 - **Motion.** One easing curve, `cubic-bezier(.32,.72,0,1)`. Every animation holds still under `prefers-reduced-motion`. Only Firefox animates an SVG favicon, so sites ship the still icon as the favicon and animate the icon only inside a page (the Family bar, the umbrella site's cards). pagedeck never animates its favicon by script, because that would cost JavaScript on pages that otherwise ship none.
 - **formdeck is parked.** It is not ready, and stays out of every site and design until the maintainer says it is. Its design is kept in `design/favicons/parked/` and on the canvas: two cards meeting in a check mark, amber `#ffb020` with dark text on amber fills. When it is ready it gets `form.deck.cool`.
@@ -262,7 +263,7 @@ Made by the maintainer on 2026-10-08.
 Made by the maintainer on 2026-10-09, in the #33 grilling. It covers deck.cool's home page and each package site's home page.
 
 - **Three audiences, equally.** Developers who install a deck, designers who decide how it looks, and AI coders: people building with coding agents, and the agents themselves. The hero speaks to all three in one sentence, with no line or tab per audience.
-- **The family line:** "It looks like you. It works like the browser." The sentence under it: "Unstyled React packages for carousels, video and sites. Bring your tokens, your CSS, or your agent. The hard parts are already done."
+- **The family line:** "Built on native elements. Works with the browser, not against it." The sentence under it: "React packages for carousels, video, drawers and sites, built on the browser's own scroll snap, <video> and <dialog>. The browser does the heavy lifting, so each deck ships little JavaScript, and none on a page with nothing interactive. No styles ship either: bring your tokens, your CSS, or your agent." The maintainer replaced the 2026-10-09 line ("It looks like you. It works like the browser.") on 2026-10-28, to say plainly that the decks are fast, built on native elements and unstyled.
 - **Voice.** Warmer marketing copy on the landing pages. The docs stay plain.
 - **Sections by quality, not by audience.** Every home page has four: unstyled, your look; small, leans on the browser; built for agents; accessible by default.
 - **Accessibility claims need a test.** Each claim points to a test in that deck's repo. A claim with no test stays off the page, and the gap is filed in the deck's repo.

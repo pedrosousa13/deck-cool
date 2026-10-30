@@ -113,4 +113,17 @@ export const pagedeck: Deck<LiteralFigure> = {
   icons: icons("pagedeck"),
 };
 
-export const decks: readonly Deck[] = [carouseldeck, playdeck, pagedeck];
+export const drawerdeck: Deck<LiteralFigure> = {
+  name: "drawerdeck",
+  kind: "Drawer",
+  claim: "A drawer that lets the browser do the dragging.",
+  description:
+    "Native scroll snap drives the drag, momentum and snap points, and <dialog> gives the top layer, focus trap and Escape for free.",
+  install: "pnpm add @drawerdeck/react",
+  figure: { value: "0", label: "third-party libraries driving the drag" },
+  url: "https://drawer.deck.cool",
+  accent: { fill: "#0e7490", text: "#40c8e0" },
+  icons: icons("drawerdeck"),
+};
+
+export const decks: readonly Deck[] = [carouseldeck, playdeck, pagedeck, drawerdeck];

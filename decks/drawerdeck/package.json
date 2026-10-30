@@ -1,0 +1,40 @@
+{
+  "name": "drawerdeck",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore",
+    "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore",
+    "lint": "eslint .",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:react-18": "pnpm --filter @drawerdeck/react-18... build && tsc -p packages/react-18/tsconfig.test.json && vitest run -c vitest.react-18.config.ts",
+    "test:react-19": "pnpm --filter @drawerdeck/react-18... build && tsc -p packages/react-18/tsconfig.test-react-19.json && vitest run -c vitest.react-19.config.ts",
+    "build": "pnpm --filter \"./**\" --filter \"!drawerdeck\" --filter \"!@drawerdeck/bench\" build",
+    "test:packages": "node scripts/verify-packaging.mjs",
+    "verify": "node scripts/verify.mjs"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "26.6.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitest/browser": "4.1.11",
+    "@vitest/browser-playwright": "4.1.11",
+    "eslint": "10.11.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "playwright": "1.63.0",
+    "prettier": "3.9.9",
+    "publint": "0.3.24",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1",
+    "vite": "8.3.1",
+    "vitest": "4.1.11"
+  }
+}

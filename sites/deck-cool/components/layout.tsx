@@ -86,13 +86,15 @@ export default function Layout({ title }: Props) {
       <section className="hero">
         <img src={umbrella.icons.animated} alt="" width="96" height="96" />
         <h1>
-          It looks like you.{" "}
+          Built on native elements.{" "}
           <br />
-          <span>It works like the browser.</span>
+          <span>Works with the browser, not against it.</span>
         </h1>
         <p>
-          Unstyled React packages for carousels, video and sites. Bring your tokens, your CSS, or your agent. The hard parts
-          are already done.
+          React packages for carousels, video, drawers and sites, built on the browser&apos;s own scroll snap,{" "}
+          <code>&lt;video&gt;</code> and <code>&lt;dialog&gt;</code>. The browser does the heavy lifting, so each deck ships
+          little JavaScript, and none on a page with nothing interactive. No styles ship either: bring your tokens, your
+          CSS, or your agent.
         </p>
         <div className="hero__links">
           <a href="#decks" className="hero__browse">
