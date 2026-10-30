@@ -361,6 +361,14 @@ export function createDrawer(
   }
 
   function finishClose(reason: OpenChangeReason) {
+    // Idempotent: the CSS exit's own path (`settleExit`) and the Panel
+    // leaving view (`panelVisibilityObserver`, below) can both reach here
+    // for the same close, with `scrollend` closely behind either. Only
+    // the first call does anything -- a later one lands on an
+    // already-`closed` phase and is a no-op, rather than a second
+    // `onOpenChange`.
+    if (phase === 'closed') return;
+    panelVisibilityObserver.unobserve(panel);
     viewport.style.scrollSnapType = 'y mandatory';
     // `close()` itself restores focus to whatever had it before `open()`
     // called `showModal()` -- closed first, so a consumer's own focus
@@ -477,6 +485,10 @@ export function createDrawer(
     enterTransitionCleanup?.();
     enterTransitionCleanup = undefined;
     detachInterruptListeners();
+    // Arms the leave-view close (#296) only now: the entrance has actually
+    // settled, so the Panel's own position reflects where it rests open,
+    // not wherever a consumer's CSS transform still had it mid-flight.
+    panelVisibilityObserver.observe(panel);
     setPhase('open');
     updateContentLock();
   }
@@ -492,6 +504,8 @@ export function createDrawer(
     cancelEnter();
     finishTransition(panel);
     if (parts.backdrop) finishTransition(parts.backdrop);
+    // Arms the leave-view close (#296): see `settleEnter`, above.
+    panelVisibilityObserver.observe(panel);
     setPhase('open');
     updateContentLock();
   }
@@ -590,6 +604,32 @@ export function createDrawer(
     if (parts.backdrop) finishTransition(parts.backdrop);
     settleExit(reason);
   }
+
+  // ---------- closing as soon as the Panel leaves view (#296) ----------
+  // `scrollend` only fires once the browser's own momentum and snap
+  // animation fully finish, so a flick's close used to wait for the whole
+  // gesture to settle rather than for the Panel to actually be gone. An
+  // IntersectionObserver on the Panel, rooted on the Viewport, reports the
+  // moment it has no overlap with the Viewport's own (scrolled) visible
+  // area left at all -- compositor-driven, nothing here running per
+  // scroll frame, the same approach React Aria's Sheet uses
+  // (react-aria.adobe.com/blog/sheet). `settleEnter`/`finishEnter`, above,
+  // are the only places that arm it (`observe`): the Panel starts out of
+  // view before the entrance, under a consumer's own CSS transform, and
+  // this must never read that as a close. `scrollend` (and its debounce
+  // fallback, below) stays as the fallback for whatever this misses.
+  const panelVisibilityObserver = new IntersectionObserver((entries) => {
+    const entry = entries[entries.length - 1];
+    if (!entry || entry.isIntersecting) return;
+    // The CSS exit already has its own close path (`beginExit` then
+    // `settleExit`): left to that instead, rather than racing it to
+    // settle the reason. `finishClose`'s own idempotency is the backstop
+    // if this still fires around when that path settles.
+    if (cssExiting || (phase !== 'open' && phase !== 'closing')) return;
+    const reason = pendingCloseReason ?? 'drag';
+    pendingCloseReason = null;
+    finishClose(reason);
+  }, { root: viewport });
 
   function onScrollEnd() {
     if (destroyed) return;
@@ -953,6 +993,7 @@ export function createDrawer(
     releaseBackdropReset();
     cancelEnter();
     teardownExit();
+    panelVisibilityObserver.disconnect();
     clearTimeout(scrollEndDebounce);
     cancelAnimationFrame(throwFrame);
     cancelAnimationFrame(progressFrame);
