@@ -157,8 +157,10 @@ scored rep isn't the one paying for a cold parse/compile.
   animation audit" above): every deck's panel must move across several
   real frames on open, not snap.
 - `closes.spec.ts` -- the dismiss-closes guard (#311, "Did not close"
-  above): every deck must report `window.__bench.isOpen() === false`
-  within 2s of the `touch-flick-dismiss` gesture.
+  above): drawerdeck, vaul and Base UI must report
+  `window.__bench.isOpen() === false` within 2s of the
+  `touch-flick-dismiss` gesture; React Aria's Sheet is a documented
+  exception, asserted the other way (see "Did not close", "Guard" above).
 - `versions.json` -- each rival's pinned version and npm release date
   (#266 rule 5; see "Versions" below), checked in so `aggregate.py` never
   has to call npm.
@@ -283,17 +285,16 @@ reader can see the old, unfair gap directly.
   be checked and recorded here. Because of this, React Aria reports "not
   supported" for `mouse-drag-throw` rather than a winning settle time --
   see "Not supported" below (#294, #266 rule 11).
-- **A flick never closed it (#311, fairness rule 12).** `SheetOverlay`'s
-  own swipe-to-dismiss detection -- an `IntersectionObserver` on
-  `[data-sheet-content]`, in the package's own `dist/private/Sheet.mjs` --
-  never re-fired after its first, mount-time notification once a native
-  scroll (not a `scrollTo()` call) carried the sheet off-screen, so
-  `state.close()`/`onOpenChange(false)` never ran for a swipe dismiss.
-  `src/reactaria-app.tsx` now drives `SheetTrigger` as controlled
-  (`isOpen`/`onOpenChange`) and supplements that detection with its own
-  poll of the same public `[data-sheet-content]` marker. See "React
-  Aria's Sheet never closed on a flick" below for the full root cause and
-  fix.
+- **A flick never closed it, in this bench's environment (#311, fairness
+  rule 12).** `SheetOverlay`'s own swipe-to-dismiss detection -- an
+  `IntersectionObserver` on `[data-sheet-content]`, in the package's own
+  `dist/private/Sheet.mjs` -- never re-fired after its first, mount-time
+  notification once a native scroll (not a `scrollTo()` call) carried the
+  sheet off-screen, so `state.close()`/`onOpenChange(false)` never ran for
+  a swipe dismiss here. `src/reactaria-app.tsx` drives `SheetTrigger` as
+  controlled (`isOpen`/`onOpenChange`, both documented props) only to read
+  that state back out; nothing in this bench closes the sheet itself. See
+  "React Aria's Sheet never closed on a flick" below for the full finding.
 
 ## React Aria's Sheet never closed on a flick (#311, #266 rule 12)
 
@@ -335,26 +336,36 @@ endpoints (ratio 0, then ratio 1) both register, and even then a
 following flick-dismiss got only one more notification before going
 silent again.
 
-**Fix.** `src/reactaria-app.tsx` drives `SheetTrigger` as a controlled
-component (`isOpen`/`onOpenChange`, both documented `SheetTriggerProps`,
-inherited from `DialogTriggerProps`) and adds
-`useCloseSheetWhenOffscreen`: a `requestAnimationFrame` poll of the same
-public `[data-sheet-content]` marker's `getBoundingClientRect()` --
-the same forced-layout read `src/harness.ts`'s own per-frame probe
-already uses, and which _does_ stay correct every frame in the same
-probe, unlike the library's own `IntersectionObserver` -- that calls the
-controlled `onOpenChange(false)` once the content has entered view and
-then left it. This exercises the same public `onOpenChange`/unmount path
-Escape or an outside press already close the sheet through; it does not
-reach into the library's internals or route around its own state.
+**This is not treated as a React Aria bug, and is not patched around.**
+Rule 3 (fairness) sets up every rival the way its own docs say; React
+Aria's docs describe no poll of the sheet's own DOM position to detect a
+swipe close, so adding one here would be this bench patching a rival with
+its own code, not reviewing React Aria "as documented." An earlier version
+of `src/reactaria-app.tsx` did add such a poll (a `requestAnimationFrame`
+loop reading `[data-sheet-content]`'s `getBoundingClientRect()` every
+frame and calling the controlled `onOpenChange(false)` once the content
+had entered view and then left it) -- reverted, both for rule 3 above and
+because it ran JS on every frame inside React Aria's page, inflating React
+Aria's own dropped-frame numbers on every drag scenario, not just the
+dismiss one.
 
-**Confirmed with a local probe** (a throwaway Playwright script driving
-the built `bench-reactaria.html` directly, the same shape as
-`closes.spec.ts` below): before the fix, `onOpenChange(false)` never
-fires and `#panel` never leaves the DOM after a flick; after it,
-`onOpenChange(false)` fires and `#panel` is removed within ~100-200ms.
-`closes.spec.ts` (below) is the checked-in version of that same proof,
-for every deck, not just React Aria.
+**Left as-is.** `src/reactaria-app.tsx` drives `SheetTrigger` as a
+controlled component (`isOpen`/`onOpenChange`, both documented
+`SheetTriggerProps`, inherited from `DialogTriggerProps`) so it can report
+that state to `window.__bench.isOpen()`; nothing in this adapter calls
+`setIsOpen(false)` itself. A flick dismiss on React Aria's Sheet is scored
+as "did not close" (rule 12, "Did not close" below) -- excluded from
+`touch-flick-dismiss`'s winners and ties rather than given a fast settle
+time on scroll motion alone.
+
+**This may be specific to this bench's environment.** Headless Chromium,
+CDP's synthetic touch and a native (not `scrollTo()`-driven) scroll are
+not how every real user dismisses a sheet; this finding has not been
+checked against a real device or a real touchscreen, and a different
+environment may give React Aria's `IntersectionObserver` the notification
+it needs. `closes.spec.ts` (below) keeps a documented, checked-in
+assertion that React Aria still does not report closed here, so this
+write-up and the guard both go stale together if that ever changes.
 
 **Sources.** `react-aria-components@1.22.1`'s own
 `dist/private/Sheet.mjs`/`dist/types/src/Sheet.d.ts` (shipped source, read
@@ -485,13 +496,19 @@ unit-tests the majority rule and the winner exclusion, including both
 rules combining on the same cell, against a tiny synthetic jsonl.
 
 **Guard.** `closes.spec.ts` drives `scenarios.ts`'s own
-`touch-flick-dismiss` gesture against every deck and asserts
-`window.__bench.isOpen() === false` within `CLOSE_WAIT_MS` (2s).
-Reverting the React Aria fix below locally and re-running it reproduces
-the bug this was written for: `[reactaria]` times out waiting for
-`isOpen()`, where every other deck clears it in a couple of seconds.
-`pnpm --dir decks/drawerdeck/bench exec playwright test -c
-playwright.config.ts closes.spec.ts` runs it (not part of
+`touch-flick-dismiss` gesture against every deck. For drawerdeck, vaul and
+Base UI it asserts `window.__bench.isOpen() === false` within
+`CLOSE_WAIT_MS` (2s) -- reverting any one of their `onOpenChange` wiring
+locally and re-running it reproduces the bug this was written for: that
+deck times out waiting for `isOpen()`, where the others clear it in a
+couple of seconds. For React Aria, `KNOWN_NEVER_CLOSES` (the spec file's
+own constant, linking back to "React Aria's Sheet never closed on a
+flick" above) asserts the opposite, documented outcome instead:
+`isOpen()` is still `true` after the same wait. A future React Aria
+release that starts reporting closed for this gesture flips that
+assertion red, which is the point where this exception needs revisiting,
+not a silent pass. `pnpm --dir decks/drawerdeck/bench exec playwright test
+-c playwright.config.ts closes.spec.ts` runs it (not part of
 `pnpm --dir decks/drawerdeck verify`, the same as `smoke.spec.ts`,
 `animates.spec.ts` and `bench.spec.ts`; see this deck's own `AGENTS.md`).
 

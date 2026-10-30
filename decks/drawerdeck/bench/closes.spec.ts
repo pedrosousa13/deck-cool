@@ -8,6 +8,17 @@
 // never ran, so it stayed mounted and open underneath while the bench
 // scored a fast "settle" on scroll motion alone.
 //
+// React Aria's Sheet is a known, documented exception (`RESULTS.md`'s
+// "React Aria's Sheet never closed on a flick"): its own swipe-to-dismiss
+// `IntersectionObserver` never re-fires after a native scroll carries the
+// sheet off-screen in this bench's environment, so it never reports
+// closed for this gesture, and rule 12 scores it "did not close" rather
+// than this guard patching the library's close detection. The assertion
+// below for `reactaria` is the mirror of every other deck's: it expects
+// `isOpen()` to still be `true` after the same wait, so a future React
+// Aria release that starts closing on its own flips this test red too --
+// the point where someone revisits this exception, not a silent pass.
+//
 // Chromium only, the same as `bench.spec.ts`: the flick needs CDP's
 // trusted touch (`scenarios.ts`'s own header comment).
 
@@ -21,13 +32,19 @@ import type {} from './src/harness';
 // deck that never closes doesn't meaningfully lengthen the run.
 const CLOSE_WAIT_MS = 2_000;
 
+// Decks documented as never reporting closed for `touch-flick-dismiss`
+// (rule 12's "did not close" treatment) -- see the header comment above.
+const KNOWN_NEVER_CLOSES = new Set(['reactaria']);
+
 const flickDismiss = scenarios.find((s) => s.name === 'touch-flick-dismiss');
 if (!flickDismiss) {
   throw new Error('touch-flick-dismiss scenario not found in scenarios.ts');
 }
 
 for (const deck of DECKS) {
-  test(`[${deck.key}] touch-flick-dismiss leads to isOpen() === false within ${CLOSE_WAIT_MS}ms`, async ({
+  const expectClose = !KNOWN_NEVER_CLOSES.has(deck.key);
+
+  test(`[${deck.key}] touch-flick-dismiss leads to isOpen() === ${expectClose ? 'false' : 'true (known exception)'} within ${CLOSE_WAIT_MS}ms`, async ({
     page
   }) => {
     await page.goto(deck.url);
@@ -41,8 +58,13 @@ for (const deck of DECKS) {
     const g = await geometry(page);
     await flickDismiss.run(page, g);
 
-    await page.waitForFunction(() => window.__bench.isOpen() === false, null, {
-      timeout: CLOSE_WAIT_MS
-    });
+    if (expectClose) {
+      await page.waitForFunction(() => window.__bench.isOpen() === false, null, {
+        timeout: CLOSE_WAIT_MS
+      });
+    } else {
+      await page.waitForTimeout(CLOSE_WAIT_MS);
+      expect(await page.evaluate(() => window.__bench.isOpen())).toBe(true);
+    }
   });
 }
