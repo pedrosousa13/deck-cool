@@ -447,7 +447,7 @@ main .home-family .home-more {
 
 .drawer-demo__panel--sides[data-side="left"],
 .drawer-demo__panel--sides[data-side="right"] {
-  width: 280px;
+  width: 100%;
   height: 100%;
 }
 
