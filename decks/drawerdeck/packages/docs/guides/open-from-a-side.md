@@ -39,8 +39,8 @@ axis: height for `bottom`/`top`, width for `left`/`right`. Give the Panel a
 width for `left`/`right` (the recipes give it a `height` instead, for
 `bottom`/`top`): an unstyled `<div>` takes its height from its own content
 for free, but not its width. That width has to cover the largest snap
-point -- for `snapPoints={[0.5, 1]}`, the full Viewport width, e.g.
-`width: 100%` -- or use `px` snap points, or none at all. A narrower,
+point (the full Viewport width for `snapPoints={[0.5, 1]}`, e.g.
+`width: 100%`), or use `px` snap points, or none at all. A narrower,
 fixed width clamps every snap point past its own extent to the same rest
 position: a `280px` Panel reaches the same scroll offset at `0.5` and `1`
 of a wider Viewport, so there is no reachable half snap, and the
