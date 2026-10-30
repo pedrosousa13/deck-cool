@@ -40,26 +40,39 @@ def cell(rows, deck, scenario, load_, pick):
     return fmt([pick(r) for r in g])
 
 
-def not_supported(rows, deck, scenario):
+def not_supported(rows, deck, scenario, load_):
     # #294, #266 rule 11: a deck that never responded to a scenario's own
     # gesture (`responded`, false in more than half of its reps for that
-    # scenario) cannot win or tie it.
-    vals = [r.get('responded') for r in rows if r['deck'] == deck and r['scenario'] == scenario]
+    # scenario at that load) cannot win or tie it there. Scoped per load,
+    # like every other cell here (`cell`): a deck can respond at one load
+    # and not another.
+    vals = [
+        r.get('responded')
+        for r in rows
+        if r['deck'] == deck and r['scenario'] == scenario and r['load'] == load_
+    ]
     vals = [v for v in vals if v is not None]
     if not vals:
         return False
     return sum(1 for v in vals if v is False) > len(vals) / 2
 
 
-def did_not_close(rows, deck, scenario):
+def did_not_close(rows, deck, scenario, load_):
     # #311, #266 rule 12: a dismiss only counts once the library itself
     # reports closed (`closed`, from `window.__bench.isOpen()`, never this
     # bench's own reading of the drawer's on-screen position). A deck that
     # never reports closed in more than half of its reps for a `dismiss`
-    # scenario cannot win or tie it either -- the same majority rule as
-    # rule 11's "not supported". `closed` is `None` for every scenario
-    # that isn't `dismiss`.
-    vals = [r.get('closed') for r in rows if r['deck'] == deck and r['scenario'] == scenario]
+    # scenario at that load cannot win or tie it there -- the same
+    # majority rule as rule 11's "not supported", scoped per load for the
+    # same reason: a deck can close reliably at one load and not another
+    # (Base UI's Drawer, in CI run 40999514750: closed at load=0, not at
+    # load=100/200). `closed` is `None` for every scenario that isn't
+    # `dismiss`.
+    vals = [
+        r.get('closed')
+        for r in rows
+        if r['deck'] == deck and r['scenario'] == scenario and r['load'] == load_
+    ]
     vals = [v for v in vals if v is not None]
     if not vals:
         return False
@@ -75,34 +88,47 @@ def table(rows, scenario, pick, digits=0, legacy_pick=None):
     if legacy_pick is not None:
         load_cols += [f'load={load_} unscoped (legacy)' for load_ in LOADS]
     lines = ['| Deck | ' + ' | '.join(load_cols) + ' |', '| --- | ' + ' | '.join('---' for _ in load_cols) + ' |']
-    unsupported = []
-    not_closed = []
+    # Per (deck, load), not once per row: a deck can be "not supported" or
+    # "did not close" at one load and fine at another.
+    unsupported_loads = {}
+    not_closed_loads = {}
     for deck in DECKS:
-        if not_supported(rows, deck, scenario):
-            unsupported.append(deck)
-            cells = ['not supported'] * len(load_cols)
-            lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
-            continue
-        if did_not_close(rows, deck, scenario):
-            not_closed.append(deck)
-            cells = ['did not close'] * len(load_cols)
-            lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
-            continue
-        cells = [cell(rows, deck, scenario, load_, pick) for load_ in LOADS]
+        cells = []
+        for load_ in LOADS:
+            if not_supported(rows, deck, scenario, load_):
+                unsupported_loads.setdefault(deck, []).append(load_)
+                cells.append('not supported')
+            elif did_not_close(rows, deck, scenario, load_):
+                not_closed_loads.setdefault(deck, []).append(load_)
+                cells.append('did not close')
+            else:
+                cells.append(cell(rows, deck, scenario, load_, pick))
         if legacy_pick is not None:
-            cells += [cell(rows, deck, scenario, load_, legacy_pick) for load_ in LOADS]
+            for load_ in LOADS:
+                if load_ in unsupported_loads.get(deck, []) or load_ in not_closed_loads.get(deck, []):
+                    cells.append('n/a')
+                else:
+                    cells.append(cell(rows, deck, scenario, load_, legacy_pick))
         lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
-    if unsupported:
-        lines.append('')
-        lines.append(
-            f"Not supported: {', '.join(unsupported)} did not respond to this "
-            'gesture in most of its reps (#294, #266 rule 11).'
+    if unsupported_loads:
+        parts = ', '.join(
+            f"{deck} (load {', '.join(str(l) for l in loads_)})"
+            for deck, loads_ in sorted(unsupported_loads.items())
         )
-    if not_closed:
         lines.append('')
         lines.append(
-            f"Did not close: {', '.join(not_closed)} never reported itself "
-            'closed in most of its reps (#311, #266 rule 12).'
+            f"Not supported: {parts} did not respond to this gesture in most "
+            'of its reps at that load (#294, #266 rule 11).'
+        )
+    if not_closed_loads:
+        parts = ', '.join(
+            f"{deck} (load {', '.join(str(l) for l in loads_)})"
+            for deck, loads_ in sorted(not_closed_loads.items())
+        )
+        lines.append('')
+        lines.append(
+            f"Did not close: {parts} never reported itself closed in most of "
+            'its reps at that load (#311, #266 rule 12).'
         )
     return '\n'.join(lines)
 

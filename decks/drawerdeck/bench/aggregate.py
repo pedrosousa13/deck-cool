@@ -102,16 +102,20 @@ def shards_of(rows):
     return sorted({str(r.get('shard', 'local')) for r in rows})
 
 
-def not_supported(rows, deck, scenario):
+def not_supported(rows, deck, scenario, load_):
     # #294, #266 rule 11: a deck that never responded to a scenario's own
     # gesture -- bench.spec.ts's `responded`, false in most (more than
-    # half) of its scored reps for that scenario, across every load --
-    # cannot win or tie it. One rep timing out never flips this; a deck
-    # that consistently ignores the gesture does.
+    # half) of its scored reps for that scenario at that load -- cannot
+    # win or tie it there. Scoped per load, the same as every other cell
+    # here (`medians`, `cell_winner`): a deck can respond at one load and
+    # not another (jank itself can be the reason it stops responding), so
+    # pooling across loads would let one load's majority decide another
+    # load's cell. One rep timing out never flips this; a deck that
+    # consistently ignores the gesture does.
     vals = [
         r.get('responded')
         for r in rows
-        if r['deck'] == deck and r['scenario'] == scenario
+        if r['deck'] == deck and r['scenario'] == scenario and r['load'] == load_
     ]
     vals = [v for v in vals if v is not None]
     if not vals:
@@ -120,23 +124,26 @@ def not_supported(rows, deck, scenario):
     return not_responded > len(vals) / 2
 
 
-def unsupported_decks(rows, scenario):
-    return {deck for deck in DECKS if not_supported(rows, deck, scenario)}
+def unsupported_decks(rows, scenario, load_):
+    return {deck for deck in DECKS if not_supported(rows, deck, scenario, load_)}
 
 
-def did_not_close(rows, deck, scenario):
+def did_not_close(rows, deck, scenario, load_):
     # #311, #266 rule 12: a dismiss only counts once the library itself
     # reports closed (`closed` on the row, from `window.__bench.isOpen()`,
     # never this bench's own reading of the drawer's on-screen position).
     # A deck that never reports closed in most (more than half) of its
-    # scored reps for a `dismiss` scenario cannot win or tie it either --
-    # the same majority rule as rule 11's "not supported". `closed` is
-    # `None` for every scenario that isn't `dismiss` (nothing to report),
-    # so this is always `False` for those.
+    # scored reps for a `dismiss` scenario at that load cannot win or tie
+    # it there -- the same majority rule as rule 11's "not supported",
+    # scoped per load for the same reason: a deck (Base UI's Drawer, in
+    # CI run 40999514750) can close reliably at one load and not another,
+    # and pooling across loads would mislabel the load where it did
+    # close. `closed` is `None` for every scenario that isn't `dismiss`
+    # (nothing to report), so this is always `False` for those.
     vals = [
         r.get('closed')
         for r in rows
-        if r['deck'] == deck and r['scenario'] == scenario
+        if r['deck'] == deck and r['scenario'] == scenario and r['load'] == load_
     ]
     vals = [v for v in vals if v is not None]
     if not vals:
@@ -145,14 +152,17 @@ def did_not_close(rows, deck, scenario):
     return not_closed > len(vals) / 2
 
 
-def did_not_close_decks(rows, scenario):
-    return {deck for deck in DECKS if did_not_close(rows, deck, scenario)}
+def did_not_close_decks(rows, scenario, load_):
+    return {deck for deck in DECKS if did_not_close(rows, deck, scenario, load_)}
 
 
-def excluded_decks(rows, scenario):
-    # The decks a scenario's winner/tie computation never sees: rule 11's
-    # "not supported" and rule 12's "did not close" exclude the same way.
-    return unsupported_decks(rows, scenario) | did_not_close_decks(rows, scenario)
+def excluded_decks(rows, scenario, load_):
+    # The decks a scenario's winner/tie computation never sees at this
+    # load: rule 11's "not supported" and rule 12's "did not close"
+    # exclude the same way.
+    return unsupported_decks(rows, scenario, load_) | did_not_close_decks(
+        rows, scenario, load_
+    )
 
 
 def medians(rows, scenario, load_, pick):
@@ -226,17 +236,14 @@ def render_tables(rows):
             load_cols += [f'load={load_} unscoped (legacy)' for load_ in LOADS]
         lines.append('| Deck | ' + ' | '.join(load_cols) + ' |')
         lines.append('| --- | ' + ' | '.join('---' for _ in load_cols) + ' |')
-        unsupported = unsupported_decks(rows, scenario)
-        not_closed = did_not_close_decks(rows, scenario) - unsupported
+        # Per (deck, load): a deck can be "not supported" or "did not
+        # close" at one load and perfectly fine at another (#311, CI run
+        # 40999514750: Base UI's Drawer closed at load=0 but not at
+        # load=100/200), so the exclusion -- and the cell it produces --
+        # is decided per load, never once for the whole row.
+        unsupported_loads = defaultdict(list)
+        not_closed_loads = defaultdict(list)
         for deck in DECKS:
-            if deck in unsupported:
-                cells = ['not supported'] * len(load_cols)
-                lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
-                continue
-            if deck in not_closed:
-                cells = ['did not close'] * len(load_cols)
-                lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
-                continue
 
             def vals_for(pick_fn, load_):
                 vs = [
@@ -246,23 +253,49 @@ def render_tables(rows):
                 ]
                 return [v for v in vs if v is not None]
 
-            cells = [fmt_cell(vals_for(pick, load_)) for load_ in LOADS]
+            def cell_for(load_):
+                if not_supported(rows, deck, scenario, load_):
+                    unsupported_loads[deck].append(load_)
+                    return 'not supported'
+                if did_not_close(rows, deck, scenario, load_):
+                    not_closed_loads[deck].append(load_)
+                    return 'did not close'
+                return fmt_cell(vals_for(pick, load_))
+
+            def legacy_cell_for(load_):
+                # `.get`, not `[deck]`: a plain lookup on the defaultdicts
+                # above would plant an empty list for every deck legacy
+                # columns check, making the footnotes below fire for
+                # decks that were never actually excluded.
+                if load_ in unsupported_loads.get(deck, []) or load_ in not_closed_loads.get(
+                    deck, []
+                ):
+                    return 'n/a'
+                return fmt_cell(vals_for(legacy_pick, load_))
+
+            cells = [cell_for(load_) for load_ in LOADS]
             if legacy_pick is not None:
-                cells += [fmt_cell(vals_for(legacy_pick, load_)) for load_ in LOADS]
+                cells += [legacy_cell_for(load_) for load_ in LOADS]
             lines.append(f'| {deck} | ' + ' | '.join(cells) + ' |')
-        if unsupported:
-            names = ', '.join(sorted(unsupported))
-            lines.append(
-                f'\n**Not supported:** {names} did not respond to this gesture in '
-                'most of its reps (#294, #266 rule 11); excluded from its winners '
-                'and ties.\n'
+        if unsupported_loads:
+            parts = ', '.join(
+                f"{deck} (load {', '.join(str(l) for l in loads_)})"
+                for deck, loads_ in sorted(unsupported_loads.items())
             )
-        if not_closed:
-            names = ', '.join(sorted(not_closed))
             lines.append(
-                f'\n**Did not close:** {names} never reported itself closed in '
-                'most of its reps (#311, #266 rule 12); excluded from its winners '
-                'and ties.\n'
+                f'\n**Not supported:** {parts} did not respond to this gesture in '
+                'most of its reps at that load (#294, #266 rule 11); excluded from '
+                'its winners and ties there.\n'
+            )
+        if not_closed_loads:
+            parts = ', '.join(
+                f"{deck} (load {', '.join(str(l) for l in loads_)})"
+                for deck, loads_ in sorted(not_closed_loads.items())
+            )
+            lines.append(
+                f'\n**Did not close:** {parts} never reported itself closed in '
+                'most of its reps at that load (#311, #266 rule 12); excluded '
+                'from its winners and ties there.\n'
             )
     return '\n'.join(lines)
 
@@ -278,8 +311,8 @@ def render_winner_table(rows):
         '| --- | --- | ' + ' | '.join('---' for _ in shard_ids) + ' | --- |',
     ]
     for scenario, _metric, label, lower, pick, _legacy_pick in METRICS:
-        excluded = excluded_decks(rows, scenario)
         for load_ in LOADS:
+            excluded = excluded_decks(rows, scenario, load_)
             overall, per_shard = cell_winner(rows, scenario, load_, pick, lower, excluded)
             shard_cells = [str(per_shard.get(s, 'n/a')) for s in shard_ids]
             lines.append(
@@ -291,8 +324,8 @@ def render_winner_table(rows):
 def render_summary(rows, bundle_rows):
     lines = ['| Scenario / metric | load | Winner |', '| --- | --- | --- |']
     for scenario, _metric, label, lower, pick, _legacy_pick in METRICS:
-        excluded = excluded_decks(rows, scenario)
         for load_ in LOADS:
+            excluded = excluded_decks(rows, scenario, load_)
             overall, _ = cell_winner(rows, scenario, load_, pick, lower, excluded)
             lines.append(f'| {label} | {load_} | {overall} |')
     if bundle_rows:
