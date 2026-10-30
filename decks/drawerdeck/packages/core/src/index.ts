@@ -25,8 +25,9 @@
  * until the drawer reaches its top snap point.
  */
 
-/** A snap point: a fraction of the Panel's extent along its own axis (0 to
- * 1), or a fixed length such as `'320px'`. */
+/** A snap point: a fraction of the Viewport's extent along the side's axis
+ * (height for `bottom`/`top`, width for `left`/`right`), 0 to 1, or a fixed
+ * length such as `'320px'`. */
 export type SnapPoint = number | `${number}px`;
 
 export type Phase = 'closed' | 'opening' | 'open' | 'closing';
@@ -67,9 +68,10 @@ export interface DrawerParts {
 export interface DrawerOptions {
   /** Which edge the drawer opens from. Defaults to `'bottom'`. */
   side?: Side;
-  /** Fractions of the Panel's extent along its own axis, or fixed lengths,
-   * the panel can rest open at, nearest first. Without it, the drawer has
-   * one open point: the panel's own content extent, capped by its own CSS
+  /** Fractions of the Viewport's extent along the side's axis (height for
+   * `bottom`/`top`, width for `left`/`right`), or fixed lengths, the panel
+   * can rest open at, nearest first. Without it, the drawer has one open
+   * point: the panel's own content extent, capped by its own CSS
    * `max-height`/`max-width`. */
   snapPoints?: readonly SnapPoint[];
   /** Whether Escape, an outside press and a drag to closed can close the

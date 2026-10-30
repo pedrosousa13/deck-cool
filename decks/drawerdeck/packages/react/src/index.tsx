@@ -184,10 +184,11 @@ export type RootProps = (OpenControlledProps | OpenUncontrolledProps) &
      * itself renders (`'top'`/`'left'` reverse it to `[Panel][gap]`; see
      * the "Open from a side" guide). */
     side?: Side;
-    /** Fractions of the viewport height, or fixed heights (e.g. `'320px'`),
-     * the drawer can rest open at, nearest first. Without it, the drawer
-     * has one open point: the panel's own content height, capped by its
-     * own CSS `max-height`. */
+    /** Fractions of the Viewport's extent along the side's axis (height for
+     * `bottom`/`top`, width for `left`/`right`), or fixed lengths (e.g.
+     * `'320px'`), the drawer can rest open at, nearest first. Without it,
+     * the drawer has one open point: the panel's own content extent,
+     * capped by its own CSS `max-height`/`max-width`. */
     snapPoints?: readonly SnapPoint[];
     /** Whether Escape, an outside press and a drag to closed can close the
      * drawer. `Drawer.Close` always can. Defaults to true. An outside

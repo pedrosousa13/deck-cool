@@ -34,7 +34,7 @@ Your own markup needs no change: `side` only changes which axis
 `Drawer.Viewport`'s native scroll-snap container scrolls along (vertical
 for `bottom`/`top`, horizontal for `left`/`right`), and, for `top`/`left`,
 the order the engine expects its children in, both handled for you.
-`snapPoints` are still fractions of the Panel's own extent along that
+`snapPoints` are still fractions of the Viewport's own extent along that
 axis: height for `bottom`/`top`, width for `left`/`right`. Give the Panel
 an explicit width for `left`/`right` (the recipes give it a `height`
 instead, for `bottom`/`top`): an unstyled `<div>` takes its height from its
@@ -56,7 +56,7 @@ instead of `bottom`/`right`'s `[gap][Panel]`) so that open always sits at
 scroll offset 0 and closed at the scroll end, with every
 `scrollTop`/`scrollLeft` this engine reads or writes staying a plain,
 positive number. `flex-direction: row-reverse` or `direction: rtl` would
-have kept the DOM order the same and flipped the *visual* order instead,
+have kept the DOM order the same and flipped the _visual_ order instead,
 reading `scrollLeft` as negative for the same visual scroll position in
 some browsers, an extra case this engine's own math, and every consumer
 reading `scrollLeft` directly, would have had to carry. Reversing the DOM
