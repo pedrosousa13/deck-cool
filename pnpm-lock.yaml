@@ -121,8 +121,8 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@playdeck/react':
-        specifier: 1.3.0
-        version: 1.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 1.4.0
+        version: 1.4.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@storybook/react-vite':
         specifier: 10.6.0
         version: 10.6.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(storybook@10.6.0(@types/react@19.3.0)(prettier@3.9.9)(react@19.3.0))(supports-color@10.2.2)(typescript@6.0.3)(vite@8.3.1(@types/node@24.19.1)(esbuild@0.28.2)(yaml@2.9.1))
@@ -692,29 +692,29 @@ importers:
         specifier: 0.3.1
         version: 0.3.1(@babel/core@7.29.7(supports-color@10.2.2))(@babel/template@7.29.7)(@types/node@24.19.1)(@types/react@19.3.0)(esbuild@0.28.2)(supports-color@10.2.2)(yaml@2.9.1)
       '@playdeck/core':
-        specifier: 1.3.0
-        version: 1.3.0
+        specifier: 1.4.0
+        version: 1.4.0
       '@playdeck/docs':
-        specifier: 1.3.0
-        version: 1.3.0
+        specifier: 1.4.0
+        version: 1.4.0
       '@playdeck/provider-hls':
-        specifier: 1.3.0
-        version: 1.3.0
+        specifier: 1.4.0
+        version: 1.4.0
       '@playdeck/provider-native':
-        specifier: 1.3.0
-        version: 1.3.0
+        specifier: 1.4.0
+        version: 1.4.0
       '@playdeck/provider-vimeo':
-        specifier: 1.3.0
-        version: 1.3.0
+        specifier: 1.4.0
+        version: 1.4.0
       '@playdeck/provider-wistia':
-        specifier: 1.3.0
-        version: 1.3.0
+        specifier: 1.4.0
+        version: 1.4.0
       '@playdeck/provider-youtube':
-        specifier: 1.3.0
-        version: 1.3.0
+        specifier: 1.4.0
+        version: 1.4.0
       '@playdeck/react':
-        specifier: 1.3.0
-        version: 1.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 1.4.0
+        version: 1.4.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -1751,29 +1751,29 @@ packages:
     resolution: {integrity: sha512-DLEwHmgxCG89gf74y3k8dcATaaFZBnxjeTRfN/6nbyE9Tp1l7Np8mavpedbOjzTeMibTc/DiO8BF+pQWgfaqFQ==}
     engines: {node: ^22.18.0 || >=23.7.0}
 
-  '@playdeck/core@1.3.0':
-    resolution: {integrity: sha512-04ijf00dijaWLeAr/PUqA+tag4ZhlhZoSADLyW681ROaBAoEaumsyc1SvM4d5TAV0eIwpXeSwKfkc8M6ydsygQ==}
+  '@playdeck/core@1.4.0':
+    resolution: {integrity: sha512-oQssSHnC3e8xMQJFdGdoa6rc8tEH2Z5G7+9WruJaG14bq8pO5sHFok0vOQpqW1IefMTUmx1k3NLd6/gsZH/IkQ==}
 
-  '@playdeck/docs@1.3.0':
-    resolution: {integrity: sha512-Wargz/7uvFiK15Y6GYRkSJTLfU6KpFJmGqLHgED6WC1mnkJT8mpxAQovciODuWvfUvVs9K1t0piLk+u59oZqnQ==}
+  '@playdeck/docs@1.4.0':
+    resolution: {integrity: sha512-22MCdK41C7z3PkeFwJ+wMbqE+67Ds/e/g7zxk2nYnNqr1Av9LlU5WNIkQk25JmujWPeG2CCIKSAMzkgoOC+yuQ==}
 
-  '@playdeck/provider-hls@1.3.0':
-    resolution: {integrity: sha512-9Z3tAoiTXahQYb2sEpE4hzJW3ZnpvFKUUsd1nGOIf0ahLX7OpPIeDVCz52viM7VHp6VAMazc390Obyr8FeyN6w==}
+  '@playdeck/provider-hls@1.4.0':
+    resolution: {integrity: sha512-/EATzK1t9WFqOVWd9rv6kRv2yG4jf4NP0f/f24upBRROMFveoI3Vc+Hiop25vwrJFIy9zDUEbEv8usby3R3KkQ==}
 
-  '@playdeck/provider-native@1.3.0':
-    resolution: {integrity: sha512-YGyJAe+dRNhu5nkF6WC4KTRcNFLFBiTpUOgzhI59LGIrWIRm8ia7y6+OgMoUGXD/YfvACLM9qOQNdir3NTqDiA==}
+  '@playdeck/provider-native@1.4.0':
+    resolution: {integrity: sha512-1aoz0N+kcXCkrdTocLv1dYb8MdH56GlnPTYoipPmvHbRvl4Kx6L5lIpLdfqhYXfXQcjL3mhLVy8g1iWs04JpMQ==}
 
-  '@playdeck/provider-vimeo@1.3.0':
-    resolution: {integrity: sha512-AioffUgfQoppV1hE19TPK1PyyzAc09Q4fUhC9bc/Q6uQDIYWG7emsDAcLp1zOf2ocAUa/4WrxtrKcOQUURNU9g==}
+  '@playdeck/provider-vimeo@1.4.0':
+    resolution: {integrity: sha512-9rQZ5NjuYGfqtCYlPIxXVZW0vie1liN2c2Y1AHSq4RbMIaGcDBQ5f1j7Sz4OfjmXhoXzpAig+2788Mvy9kDB5w==}
 
-  '@playdeck/provider-wistia@1.3.0':
-    resolution: {integrity: sha512-PA2qgxys+aRbH2v7ImLTq1tkPlvnJF0FGowfcwRyMh9MYj5XQJKNnvHwC252Wi4Rfb0RSFZ8uB7i15IDrImH2A==}
+  '@playdeck/provider-wistia@1.4.0':
+    resolution: {integrity: sha512-ZZsuH/GEjgWfb7rKUaQOfQhqDxaGFQcwARuhqpjmpNPtelf+A0r1zQvRxaEpkNdkq9fCDC7YfXJCvXxer8Cs0Q==}
 
-  '@playdeck/provider-youtube@1.3.0':
-    resolution: {integrity: sha512-MDZ4/mbICHYyYBeq7VsGcrJZv4I+wSAO10wgquXgD1Yj3a1Rrm5Svam1Isrtf0witpeEqZy90AYq6fgEyAlnaQ==}
+  '@playdeck/provider-youtube@1.4.0':
+    resolution: {integrity: sha512-/664gnL/OCFLkXWLmYUDN9runUH/ikqpk7/ae3AUAcp1VgAlmQQI82WF1QghiLsNz7/KlsHzS1/c4z8loTkywQ==}
 
-  '@playdeck/react@1.3.0':
-    resolution: {integrity: sha512-q3iKE9c7voNmP7E+rtyOtbnTAOOmatWu0DJYYyzPtt0dAhu8wjhm7W4KB99G2czWoVJ0jxTjA54YJOtdudWNzA==}
+  '@playdeck/react@1.4.0':
+    resolution: {integrity: sha512-xsjPalScDcuowoSaljEoQVRkt1eGeD1dSKEQfxkZTBsXg+npdOP7TB+MRz9G/6BwQsurxe2ZIUXYVrx7wygtHg==}
     peerDependencies:
       react: '>=19 <20'
       react-dom: '>=19 <20'
@@ -5259,41 +5259,41 @@ snapshots:
       - tsx
       - yaml
 
-  '@playdeck/core@1.3.0': {}
+  '@playdeck/core@1.4.0': {}
 
-  '@playdeck/docs@1.3.0': {}
+  '@playdeck/docs@1.4.0': {}
 
-  '@playdeck/provider-hls@1.3.0':
+  '@playdeck/provider-hls@1.4.0':
     dependencies:
-      '@playdeck/core': 1.3.0
-      '@playdeck/provider-native': 1.3.0
+      '@playdeck/core': 1.4.0
+      '@playdeck/provider-native': 1.4.0
       hls.js: 1.7.3
 
-  '@playdeck/provider-native@1.3.0':
+  '@playdeck/provider-native@1.4.0':
     dependencies:
-      '@playdeck/core': 1.3.0
+      '@playdeck/core': 1.4.0
 
-  '@playdeck/provider-vimeo@1.3.0':
+  '@playdeck/provider-vimeo@1.4.0':
     dependencies:
-      '@playdeck/core': 1.3.0
+      '@playdeck/core': 1.4.0
       '@vimeo/player': 2.30.4
 
-  '@playdeck/provider-wistia@1.3.0':
+  '@playdeck/provider-wistia@1.4.0':
     dependencies:
-      '@playdeck/core': 1.3.0
+      '@playdeck/core': 1.4.0
 
-  '@playdeck/provider-youtube@1.3.0':
+  '@playdeck/provider-youtube@1.4.0':
     dependencies:
-      '@playdeck/core': 1.3.0
+      '@playdeck/core': 1.4.0
 
-  '@playdeck/react@1.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@playdeck/react@1.4.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@playdeck/core': 1.3.0
-      '@playdeck/provider-hls': 1.3.0
-      '@playdeck/provider-native': 1.3.0
-      '@playdeck/provider-vimeo': 1.3.0
-      '@playdeck/provider-wistia': 1.3.0
-      '@playdeck/provider-youtube': 1.3.0
+      '@playdeck/core': 1.4.0
+      '@playdeck/provider-hls': 1.4.0
+      '@playdeck/provider-native': 1.4.0
+      '@playdeck/provider-vimeo': 1.4.0
+      '@playdeck/provider-wistia': 1.4.0
+      '@playdeck/provider-youtube': 1.4.0
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
 
