@@ -76,17 +76,17 @@ describe("the package", () => {
     }
   });
 
-  test("takes @playdeck/react, every provider and the docs from npm at 1.3.0, and Pagedeck at 0.3.1", () => {
+  test("takes @playdeck/react, every provider and the docs from npm at 1.4.0, and Pagedeck at 0.3.1", () => {
     const playdeckPackages = Object.entries(all).filter(([name]) => name.startsWith("@playdeck/"));
     expect(Object.fromEntries(playdeckPackages)).toEqual({
-      "@playdeck/core": "1.3.0",
-      "@playdeck/docs": "1.3.0",
-      "@playdeck/provider-hls": "1.3.0",
-      "@playdeck/provider-native": "1.3.0",
-      "@playdeck/provider-vimeo": "1.3.0",
-      "@playdeck/provider-wistia": "1.3.0",
-      "@playdeck/provider-youtube": "1.3.0",
-      "@playdeck/react": "1.3.0",
+      "@playdeck/core": "1.4.0",
+      "@playdeck/docs": "1.4.0",
+      "@playdeck/provider-hls": "1.4.0",
+      "@playdeck/provider-native": "1.4.0",
+      "@playdeck/provider-vimeo": "1.4.0",
+      "@playdeck/provider-wistia": "1.4.0",
+      "@playdeck/provider-youtube": "1.4.0",
+      "@playdeck/react": "1.4.0",
     });
     for (const [name, version] of Object.entries(all)) if (name.startsWith("@pagedeck/")) expect(version, name).toBe("0.3.1");
   });
@@ -366,7 +366,7 @@ describe("the home page", () => {
     expect([...main().querySelectorAll("h1")].map(text)).toEqual([playdeck.claim]);
     expect(text(hero?.querySelector("h1"))).toBe("A video player you compose, not one you configure.");
     expect([...(hero?.querySelectorAll("p") ?? [])].map(text)).toEqual([
-      "playdeck 1.3.0",
+      "playdeck 1.4.0",
       "Compose it from React parts, style each one with your own CSS, or hand it to your agent.",
     ]);
     expect(text(hero?.querySelector("code.pd-install__command"))).toBe("pnpm add @playdeck/react");
