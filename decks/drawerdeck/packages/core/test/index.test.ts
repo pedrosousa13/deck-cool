@@ -1,13 +1,40 @@
+import { userEvent } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   expectSettledTo,
   mockReducedMotion,
   mount,
   mouseDrag,
+  nextFrame,
+  realMouseDrag,
   sleep,
   unmount,
   type Fixture
 } from './fixtures';
+
+/** Gives `el` a real CSS transition on `transform`, the way the "Animate
+ * the drawer" guide's own recipe does: `data-starting-style` (and
+ * `data-ending-style`) slide it to `translateY(100%)`, its resting state
+ * `translateY(0)` (`css-transition.test.ts`'s own copy of this). A
+ * `<style>` scoped to a unique marker attribute, so one test's transition
+ * never leaks into another's. Returns the cleanup. */
+function withTransformTransition(
+  el: HTMLElement,
+  { durationMs }: { durationMs: number }
+): () => void {
+  const marker = `data-test-${Math.random().toString(36).slice(2)}`;
+  el.setAttribute(marker, '');
+  const style = document.createElement('style');
+  style.textContent = `
+    [${marker}] { transform: translateY(0); transition: transform ${durationMs}ms linear; }
+    [${marker}][data-starting-style], [${marker}][data-ending-style] { transform: translateY(100%); }
+  `;
+  document.head.append(style);
+  return () => {
+    style.remove();
+    el.removeAttribute(marker);
+  };
+}
 
 let fixture: Fixture | undefined;
 afterEach(() => {
@@ -691,5 +718,404 @@ describe('destroy()', () => {
 
     await sleep(100);
     expect(dialog.open).toBe(false);
+  });
+});
+
+describe('non-modal (#271)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  /** A page `<input>` outside the dialog entirely, positioned over the
+   * drawer's own gap area, so a real click (`userEvent.click`) proves
+   * whether the drawer or the page itself is actually reachable there:
+   * real hit-testing, a real focus move, not a handler dispatched straight
+   * at a target, which skips hit-testing altogether. An `<input>`, not a
+   * button: a button does not reliably take focus from a real click in
+   * every engine, but a text input always does. */
+  function appendBehindInput() {
+    const input = document.createElement('input');
+    Object.assign(input.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '50px',
+      height: '50px'
+    });
+    document.body.append(input);
+    return input;
+  }
+
+  it('opens with show(), not showModal(): dialog.matches(":modal") is false', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { dialog, drawer } = fixture;
+
+    drawer.open();
+
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(dialog.open).toBe(true);
+    expect(dialog.matches(':modal')).toBe(false);
+  });
+
+  it('modal (the default) still opens with showModal(): dialog.matches(":modal") is true', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { dialog, drawer } = fixture;
+
+    drawer.open();
+
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(dialog.matches(':modal')).toBe(true);
+  });
+
+  it('a real click on a page input outside the Panel reaches and focuses it', async () => {
+    const behind = appendBehindInput();
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { drawer, panel } = fixture;
+    // A real transform entrance, the guide's own recipe: proves the hit
+    // area is right once the Panel actually rests open, not just when the
+    // fixture jumps it open with nothing to measure wrong (#312).
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    await nextFrame();
+
+    // Above the Panel's own visible top edge: the hit area clips the
+    // Viewport out of this point entirely (#312), so the real hit test
+    // lands on the page input directly, not on the Viewport.
+    expect(document.elementFromPoint(25, 25)).toBe(behind);
+    await userEvent.click(behind);
+    expect(document.activeElement).toBe(behind);
+    behind.remove();
+    removeTransition();
+  });
+
+  it('a modal drawer (the default) covers the same point and refuses it focus', async () => {
+    const behind = appendBehindInput();
+    fixture = mount({ snapPoints: [0.5] });
+    const { drawer, viewport } = fixture;
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    expect(document.elementFromPoint(25, 25)).not.toBe(behind);
+    expect(viewport.contains(document.elementFromPoint(25, 25))).toBe(true);
+    // A modal `<dialog>`'s own inert page refuses even a programmatic
+    // focus move, not just a real click, so this checks the stronger claim.
+    behind.focus();
+    expect(document.activeElement).not.toBe(behind);
+    behind.remove();
+  });
+
+  it('the hit area follows the Panel across snap points: above its top edge is the page, below is the Viewport', async () => {
+    fixture = mount({ snapPoints: [0.5, 0.9], modal: false });
+    const { viewport, panel, drawer } = fixture;
+    // A real transform entrance (#312): see the click test's own comment.
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    await nextFrame();
+    let edge = viewport.clientHeight - viewport.scrollTop;
+    expect(viewport.contains(document.elementFromPoint(50, edge - 10))).toBe(
+      false
+    );
+    expect(viewport.contains(document.elementFromPoint(50, edge + 10))).toBe(
+      true
+    );
+
+    drawer.snapTo(1);
+    await expectSettledTo(() => drawer.snapIndex, 1);
+    await nextFrame();
+    edge = viewport.clientHeight - viewport.scrollTop;
+    expect(viewport.contains(document.elementFromPoint(50, edge - 10))).toBe(
+      false
+    );
+    expect(viewport.contains(document.elementFromPoint(50, edge + 10))).toBe(
+      true
+    );
+    removeTransition();
+  });
+
+  it('closes on Escape (document-level, since focus need not be inside it), reason "escape"', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { drawer } = fixture;
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    await userEvent.keyboard('{Escape}');
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'escape');
+  });
+
+  it('closes on Escape with focus on a page input: the engine itself leaves focus there, unlike React’s Trigger-restoring Root', async () => {
+    const behind = appendBehindInput();
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    behind.focus();
+    expect(document.activeElement).toBe(behind);
+
+    await userEvent.keyboard('{Escape}');
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(document.activeElement).toBe(behind);
+    behind.remove();
+  });
+
+  it('does not close on Escape when not dismissible', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false, dismissible: false });
+    const { drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    await userEvent.keyboard('{Escape}');
+
+    await sleep(300);
+    expect(drawer.phase).toBe('open');
+  });
+
+  it('does not close on an outside press (the gap) by default, unlike a modal drawer', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    const gap = viewport.querySelector('[data-drawer-gap]')!;
+    gap.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    await sleep(300);
+    expect(drawer.phase).toBe('open');
+  });
+
+  // Two tests, not one: a real WebKit press-move-release session that
+  // follows an earlier one in the same test never gets past its own first
+  // move (confirmed by instrumenting every step: `scrollTop` simply stops
+  // responding, well before `maxSteps`), so each of these drags a freshly
+  // opened drawer instead of chaining a second gesture onto the first's end
+  // position. The modal `describe('a mouse drag (#235)', …)` above already
+  // keeps its own "settles on a snap point" and "closes" cases separate for
+  // the same reason, just with `mouseDrag`'s hand-dispatched events, which
+  // carry no such limit.
+
+  it('still drags and throws onto a snap point, the way a modal drawer does', async () => {
+    fixture = mount({ snapPoints: [0.5, 1], modal: false });
+    const { viewport, panel, drawer } = fixture;
+    const onSnapPointChange = vi.fn();
+    drawer.setOptions({ onSnapPointChange });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    // A real drag (Playwright's own `page.mouse`, via `realMouseDrag`), not
+    // `mouseDrag`'s hand-dispatched `PointerEvent`s: up to the second snap
+    // point, same as "a mouse drag (#235)"'s own throw-to-a-snap-point test.
+    // A closed loop, nudging the pointer up and re-reading `scrollTop` after
+    // each nudge, rather than one jump to a precomputed target: see
+    // `realMouseDrag`'s own comment for why.
+    const target = Math.round(viewport.clientHeight);
+    await realMouseDrag(
+      panel,
+      viewport,
+      { x: 10, y: 10 },
+      (scrollTop) => scrollTop >= target,
+      { step: -12 }
+    );
+
+    await expectSettledTo(() => drawer.snapIndex, 1);
+    expect(onSnapPointChange).toHaveBeenCalledWith(1);
+  });
+
+  it('still closes on a drag to closed, the way a modal drawer does', async () => {
+    fixture = mount({ snapPoints: [0.5, 1], modal: false });
+    const { viewport, panel, drawer } = fixture;
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+    drawer.open(1);
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    // A real drag to closed, not `viewport.scrollTo({ top: 0 })`: that
+    // settles at the same place a drag does, but through `onScrollEnd`'s own
+    // spontaneous-settle path, which defaults an unset `pendingCloseReason`
+    // to `'drag'` regardless of what actually moved `scrollTop`, so it
+    // passed even with no gesture at all. Only `onPointerUp`'s own close
+    // path, which this now actually drives, proves the reason.
+    await realMouseDrag(
+      panel,
+      viewport,
+      { x: 10, y: 10 },
+      (scrollTop) => scrollTop <= 0,
+      { step: 12 }
+    );
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+  });
+
+  it('still exposes the scroll-timeline dim (#249)', async () => {
+    fixture = mount({ snapPoints: [0.5, 1], modal: false });
+    const { dialog, viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    expect(viewport.style.getPropertyValue('scroll-timeline')).toBe(
+      '--drawer y'
+    );
+    expect(dialog.style.getPropertyValue('timeline-scope')).toBe('--drawer');
+  });
+
+  it('still runs the Panel’s CSS entrance and exit', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { panel, drawer } = fixture;
+    // A real transition (#268's exit waits for one to actually finish, or
+    // its own computed duration, not an instant settle like a fixture with
+    // none at all): mirrors `withTransition` in the React package's tests.
+    panel.style.transition = 'opacity 50ms linear';
+
+    expect(panel.hasAttribute('data-starting-style')).toBe(false);
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(panel.hasAttribute('data-starting-style')).toBe(false);
+
+    drawer.close('programmatic');
+    expect(panel.hasAttribute('data-ending-style')).toBe(true);
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(panel.hasAttribute('data-ending-style')).toBe(false);
+  });
+
+  it('scrolls with a real wheel over the Panel, confirmed in WebKit (#312)', async () => {
+    // A real, trusted wheel over the Panel, not a dispatched WheelEvent (an
+    // untrusted one never drives native scrolling at all): what Safari
+    // measured never moving `viewport.scrollTop` while the Viewport had
+    // `pointer-events: none` -- WebKit refuses to wheel- or trackpad-scroll
+    // an overflow element with that set at all, even where the point under
+    // the cursor resolves to a descendant (the Panel) that overrides it
+    // back to `auto`. Chromium never had this bug; this guards WebKit from
+    // a regression back to it. A marker right at the Panel's own top edge,
+    // not the Panel itself: the Panel here is much taller than the
+    // viewport, and hovering a point inside it that is not yet on screen
+    // would scroll the Viewport to reach it before the wheel ticks even
+    // start, defeating the point of measuring the wheel's own effect.
+    fixture = mount({ snapPoints: [0.5, 1], modal: false });
+    const { viewport, panel, drawer } = fixture;
+    const marker = document.createElement('div');
+    Object.assign(marker.style, { width: '20px', height: '20px' });
+    panel.prepend(marker);
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    const before = viewport.scrollTop;
+
+    await userEvent.wheel(marker, { delta: { y: 100 }, times: 4 });
+
+    await expect.poll(() => viewport.scrollTop).toBeGreaterThan(before);
+  });
+
+  it('scrolls the page, not the drawer, with a real wheel over the page area (#312)', async () => {
+    // The regression this guards: before the clip-path hit area, the
+    // Viewport covered the whole screen (`pointer-events: auto`
+    // everywhere), so a real wheel out here, over the page, well above the
+    // Panel's own visible top edge, still landed on the Viewport and moved
+    // the drawer instead of the page, in both Chromium and WebKit.
+    // The marker sits at the same point the bug report measured (200, 100).
+    document.body.style.minHeight = '3000px';
+    fixture = mount({ snapPoints: [0.5, 1], modal: false });
+    const { viewport, panel, drawer } = fixture;
+    // A real transform entrance (#312): see the click test's own comment.
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+    const marker = document.createElement('div');
+    Object.assign(marker.style, {
+      position: 'fixed',
+      left: '190px',
+      top: '90px',
+      width: '20px',
+      height: '20px'
+    });
+    document.body.append(marker);
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    await nextFrame();
+    const before = viewport.scrollTop;
+
+    await userEvent.wheel(marker, { delta: { y: 100 }, times: 4 });
+
+    await expect.poll(() => window.scrollY).toBeGreaterThan(0);
+    expect(viewport.scrollTop).toBe(before);
+    marker.remove();
+    removeTransition();
+  });
+
+  // The JS fallback (Firefox, or forced here the same way "the dim (#249)"'s
+  // own `--drawer-progress, the fallback` describe above does): no browser
+  // this repo tests natively lacks `animation-timeline` (`pnpm exec
+  // playwright install firefox` adds the binary, but launching it here still
+  // needs root to install its system libraries, which this sandbox has no
+  // password for, and running the whole suite a third time, in a browser
+  // nothing else here touches, is a lot of added CI time for one code path
+  // that already has its own precedent), so this stubs `CSS.supports`
+  // instead, the same way the scroll-timeline dim's own Firefox fallback is
+  // covered a few describes up, with real input in Chromium and WebKit,
+  // same as every other hit-area test in this file.
+  describe('the hit area fallback (Firefox, or forced here via a stubbed CSS.supports, #312)', () => {
+    beforeEach(() => {
+      vi.spyOn(CSS, 'supports').mockReturnValue(false);
+    });
+
+    // Reads the fallback's own inline `clip-path`, not `elementFromPoint`
+    // (the way "the hit area follows the Panel across snap points" does for
+    // the native path, above): how far a real wheel tick actually moves
+    // `scrollTop` is not exact pixel-for-pixel here, so a hit-tested point
+    // placed a fixed 10px from the computed edge is not a reliable check
+    // once a real gesture, not a snap index, is what moved it. The fallback
+    // writes this property directly (`updateHitArea`'s own `else` branch),
+    // so reading it back proves the fallback ran, pixel-exact, regardless.
+    const clipFor = (scrollTop: number) =>
+      `inset(calc(100% - ${scrollTop}px) 0px 0px)`;
+
+    it('clips the Viewport to the Panel at snap 0.5, at snap 1, and after a real wheel', async () => {
+      fixture = mount({ snapPoints: [0.5, 1], modal: false });
+      const { viewport, panel, drawer } = fixture;
+      drawer.open(0);
+      await expectSettledTo(() => drawer.phase, 'open');
+      await nextFrame();
+
+      expect(viewport.style.clipPath).toBe(clipFor(viewport.scrollTop));
+
+      drawer.snapTo(1);
+      await expectSettledTo(() => drawer.snapIndex, 1);
+      await nextFrame();
+      expect(viewport.style.clipPath).toBe(clipFor(viewport.scrollTop));
+
+      drawer.snapTo(0);
+      await expectSettledTo(() => drawer.snapIndex, 0);
+      await nextFrame();
+      const marker = document.createElement('div');
+      Object.assign(marker.style, { width: '20px', height: '20px' });
+      panel.prepend(marker);
+      const before = viewport.scrollTop;
+
+      await userEvent.wheel(marker, { delta: { y: 100 }, times: 4 });
+
+      await expect.poll(() => viewport.scrollTop).toBeGreaterThan(before);
+      // The wheel's own momentum keeps moving `scrollTop` a while after the
+      // ticks above: polls the fallback's own write against it, rather than
+      // one `nextFrame()` and a single compare, so this settles once that
+      // momentum actually has, not on whichever frame the assertion lands.
+      // Both sides read live on every poll, not just the left: `scrollTop`
+      // itself is still moving while this polls.
+      await expect
+        .poll(() => viewport.style.clipPath === clipFor(viewport.scrollTop))
+        .toBe(true);
+      await sleep(200);
+      expect(viewport.style.clipPath).toBe(clipFor(viewport.scrollTop));
+    });
   });
 });

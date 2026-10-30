@@ -7,7 +7,7 @@ already scrolls a page. `@drawerdeck/react` builds its React primitives on
 this engine; use this package directly for another framework, or to drive
 the drawer by hand.
 
-This is a beta: bottom sheets only, with a single modal layer.
+This is a beta: bottom sheets only, modal or non-modal (`modal`).
 
 The guides, the reference and the recipes, each with a live demo, are at
 [drawer.deck.cool/docs](https://drawer.deck.cool/docs/).

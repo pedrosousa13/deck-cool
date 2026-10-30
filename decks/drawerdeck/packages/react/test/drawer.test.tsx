@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { act, render, screen } from '@testing-library/react';
+import { userEvent } from 'vitest/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Drawer from '@drawerdeck/react';
 import {
   contentOf,
   expectSettledTo,
   mockReducedMotion,
+  nextFrame,
   panelOf,
   popupOf,
   sleep,
@@ -384,6 +386,222 @@ describe('a render prop', () => {
     expect(trigger.tagName).toBe('A');
     expect(trigger.getAttribute('href')).toBe('#open');
     expect(trigger.getAttribute('data-drawerdeck-trigger')).toBe('');
+  });
+});
+
+describe('non-modal (modal={false}, #271)', () => {
+  it('opens with show(), not showModal(): dialog.matches(":modal") is false', async () => {
+    mockReducedMotion();
+    render(<TestDrawer modal={false} />);
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+
+    expect(popup.matches(':modal')).toBe(false);
+  });
+
+  it('modal (the default) still opens with showModal(): dialog.matches(":modal") is true', async () => {
+    mockReducedMotion();
+    render(<TestDrawer />);
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+
+    expect(popup.matches(':modal')).toBe(true);
+  });
+
+  it('a real click on a page input outside the Panel reaches and focuses it, unlike a modal drawer', async () => {
+    mockReducedMotion();
+    // An `<input>`, not a button: a button does not reliably take focus
+    // from a real click in every engine, but a text input always does.
+    const behind = document.createElement('input');
+    Object.assign(behind.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '50px',
+      height: '50px'
+    });
+    document.body.append(behind);
+
+    const { rerender } = render(
+      <TestDrawer modal={false} snapPoints={[0.5]} />
+    );
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    await nextFrame();
+
+    // Above the Panel's own visible top edge: the hit area clips the
+    // Viewport out of this point entirely (#312), so the real hit test
+    // lands on the page input directly, not on the Viewport.
+    expect(document.elementFromPoint(25, 25)).toBe(behind);
+    await userEvent.click(behind);
+    expect(document.activeElement).toBe(behind);
+
+    act(() => screen.getByText('Close').click());
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
+
+    // Contrast: the default, modal drawer covers the same point and
+    // refuses it even a programmatic focus move.
+    rerender(<TestDrawer snapPoints={[0.5]} />);
+    act(() => screen.getByText('Open').click());
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    expect(document.elementFromPoint(25, 25)).not.toBe(behind);
+    behind.focus();
+    expect(document.activeElement).not.toBe(behind);
+
+    behind.remove();
+  });
+
+  it('the hit area follows the Panel across snap points: above its top edge is the page, below is the Viewport', async () => {
+    mockReducedMotion();
+    render(<TestDrawer modal={false} snapPoints={[0.5, 0.9]} />);
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    await nextFrame();
+    const viewport = viewportOf(document.body);
+
+    let edge = viewport.clientHeight - viewport.scrollTop;
+    expect(viewport.contains(document.elementFromPoint(50, edge - 10))).toBe(
+      false
+    );
+    expect(viewport.contains(document.elementFromPoint(50, edge + 10))).toBe(
+      true
+    );
+
+    viewport.scrollTo({
+      top: viewport.clientHeight * 0.9,
+      behavior: 'instant'
+    });
+    await expectSettledTo(() => popup.getAttribute('data-snap-index'), '1');
+    await nextFrame();
+    edge = viewport.clientHeight - viewport.scrollTop;
+    expect(viewport.contains(document.elementFromPoint(50, edge - 10))).toBe(
+      false
+    );
+    expect(viewport.contains(document.elementFromPoint(50, edge + 10))).toBe(
+      true
+    );
+  });
+
+  it('closes on Escape, reason "escape", and returns focus to the trigger', async () => {
+    mockReducedMotion();
+    const onOpenChange = vi.fn();
+    render(<TestDrawer modal={false} onOpenChange={onOpenChange} />);
+    const trigger = screen.getByText('Open');
+    act(() => trigger.click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+
+    await userEvent.keyboard('{Escape}');
+
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
+    expect(onOpenChange).toHaveBeenCalledWith(false, { reason: 'escape' });
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('closes on Escape with focus on a page input, still moving focus to the trigger: Root restores it on every close, not only one starting inside the dialog', async () => {
+    mockReducedMotion();
+    const behind = document.createElement('input');
+    document.body.append(behind);
+    render(<TestDrawer modal={false} />);
+    const trigger = screen.getByText('Open');
+    act(() => trigger.click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    behind.focus();
+    expect(document.activeElement).toBe(behind);
+
+    await userEvent.keyboard('{Escape}');
+
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
+    expect(document.activeElement).toBe(trigger);
+    behind.remove();
+  });
+
+  it('does not close on an outside press by default, unlike a modal drawer', async () => {
+    mockReducedMotion();
+    render(<TestDrawer modal={false} />);
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+
+    const gap = viewportOf(document.body).querySelector('[data-drawer-gap]')!;
+    act(() => gap.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+    await sleep(300);
+    expect(popup.getAttribute('data-phase')).toBe('open');
+  });
+
+  it('scrolls with a real wheel over the Panel, confirmed in WebKit (#312)', async () => {
+    mockReducedMotion();
+    // A small marker right at the Panel's own top edge, not the Panel
+    // itself: the real Panel content is much taller than the viewport, and
+    // hovering a point inside it that is not yet on screen would scroll
+    // the Viewport to reach it before the wheel ticks even start.
+    render(
+      <TestDrawer
+        modal={false}
+        snapPoints={[0.5, 1]}
+        content={
+          <>
+            <div data-testid="wheel-target" style={{ width: 20, height: 20 }} />
+            <div style={{ height: 2000 }} />
+          </>
+        }
+      />
+    );
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+
+    const viewport = viewportOf(document.body);
+    const before = viewport.scrollTop;
+
+    await userEvent.wheel(screen.getByTestId('wheel-target'), {
+      delta: { y: 100 },
+      times: 4
+    });
+
+    await expect.poll(() => viewport.scrollTop).toBeGreaterThan(before);
+  });
+
+  it('scrolls the page, not the drawer, with a real wheel over the page area (#312)', async () => {
+    mockReducedMotion();
+    // The regression this guards: before the clip-path hit area, the
+    // Viewport covered the whole screen, so a real wheel out here, over
+    // the page, well above the Panel's own visible top edge, still landed
+    // on the Viewport and moved the drawer instead of the page, in both
+    // Chromium and WebKit. The marker sits at the same point the bug
+    // report measured (200, 100).
+    document.body.style.minHeight = '3000px';
+    const marker = document.createElement('div');
+    Object.assign(marker.style, {
+      position: 'fixed',
+      left: '190px',
+      top: '90px',
+      width: '20px',
+      height: '20px'
+    });
+    document.body.append(marker);
+    render(<TestDrawer modal={false} snapPoints={[0.5, 1]} />);
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    await nextFrame();
+
+    const viewport = viewportOf(document.body);
+    const before = viewport.scrollTop;
+
+    await userEvent.wheel(marker, { delta: { y: 100 }, times: 4 });
+
+    await expect.poll(() => window.scrollY).toBeGreaterThan(0);
+    expect(viewport.scrollTop).toBe(before);
+    marker.remove();
+    document.body.style.minHeight = '';
+    window.scrollTo(0, 0);
   });
 });
 
