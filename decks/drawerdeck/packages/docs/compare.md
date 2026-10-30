@@ -87,7 +87,7 @@ linked below.
 Answers [#266](https://github.com/pedrosousa13/deck-cool/issues/266) and
 [#283](https://github.com/pedrosousa13/deck-cool/issues/283), part of the
 drawerdeck map ([#230](https://github.com/pedrosousa13/deck-cool/issues/230)).
-Full write-up, including all 11 fairness rules in full, at
+Full write-up, including all 12 fairness rules in full, at
 [`decks/drawerdeck/bench/RESULTS.md`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/bench/RESULTS.md).
 
 **Method, in brief.** A Chromium trace scores each run's longest visual
