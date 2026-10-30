@@ -8,6 +8,7 @@
     "label": "Guides",
     "pages": [
       "guides/why-native-scrolling.md",
+      "guides/open-from-a-side.md",
       "guides/style-the-backdrop.md",
       "guides/animate-the-drawer.md",
       "guides/non-modal-drawers.md"

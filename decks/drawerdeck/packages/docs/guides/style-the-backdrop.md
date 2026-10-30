@@ -56,6 +56,27 @@ animation the same way it already scrolls the page.
 Chromium and Safari ship `animation-timeline`, `scroll-timeline` and
 `timeline-scope` together; Firefox stable does not yet (#236).
 
+## Per side
+
+The range above is `side="bottom"`/`side="right"` (a forward scroll axis:
+closed sits at scroll offset 0, open further along it, "Open from a
+side"). `side="top"`/`side="left"` reverse that: open sits at 0, closed at
+the scroll end, so the same `@keyframes` need the opposite end of the
+range, played in reverse:
+
+```css
+.backdrop[data-side="top"],
+.backdrop[data-side="left"] {
+  animation-range: var(--drawer-first-snap) 100%;
+  animation-direction: reverse;
+}
+```
+
+`data-side` is not set on `Drawer.Backdrop` itself: style it from
+`Drawer.Popup`'s own `data-side` instead (`dialog[data-side="top"]
+.backdrop`), or give the Backdrop the same `data-side` your own markup
+already reads off `Drawer.Root`'s `side` prop.
+
 ## The fallback
 
 Where `animation-timeline: scroll()` is unsupported, the engine instead

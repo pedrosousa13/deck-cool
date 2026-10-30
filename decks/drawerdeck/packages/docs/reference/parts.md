@@ -33,6 +33,7 @@ as carouseldeck's primitives do, besides the props below.
 | `onSnapPointChange`              | `(index: number) => void`                     |         | Called when the drawer settles on a new snap point.                                                                                                                                          |
 | `dismissible`                    | `boolean`                                     | `true`  | Whether dragging past the lowest snap point, Escape or an outside press can close the drawer. An outside press never closes a non-modal drawer, regardless of this option.                   |
 | `modal`                          | `boolean`                                     | `true`  | Whether `Drawer.Popup` opens with `showModal()` (the top layer, a focus trap, an inert page) or `show()`: the page behind stays interactive. See "Non-modal drawers".                        |
+| `side`                           | `'bottom' \| 'top' \| 'left' \| 'right'`      | `'bottom'` | Which edge the drawer opens from. Read once, on mount: changing it later does not move an already-mounted drawer to the new edge. See "Open from a side".                                |
 
 `reason` is one of `'trigger' | 'drag' | 'escape' | 'outside-press' | 'close-button' | 'programmatic'`.
 
@@ -40,6 +41,8 @@ as carouseldeck's primitives do, besides the props below.
 
 `data-open`, `data-phase` (`opening | open | closing | closed`), `data-snap-index`
 and `data-dragging` are set on the parts the beta's state applies to.
+`data-side` (`Drawer.Root`'s own `side`) is set on `Drawer.Popup` and
+`Drawer.Panel`, for styling a drawer differently per side.
 
 `Drawer.Panel` and `Drawer.Backdrop` both carry `data-starting-style` on
 open, and `data-ending-style` for the whole of a programmatic close (never
@@ -58,5 +61,4 @@ viewport scrolls.
 
 ## Not in the beta
 
-Sides other than the bottom and nested drawers (#237), and a background
-indent.
+Nested drawers (#237) and a background indent.

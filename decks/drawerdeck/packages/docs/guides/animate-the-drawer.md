@@ -73,6 +73,39 @@ The Backdrop's own dim (`animation-timeline: --drawer`, "Style the
 backdrop") drives `background-color`, not `opacity`, so the two compose by
 multiplying rather than one replacing the other.
 
+## Per side
+
+The recipe above is `side="bottom"` (the default): the Panel slides up
+from fully below the viewport. Each other side (`side="top" | "left" |
+"right"`, "Open from a side") slides in from its own edge instead --
+`data-side`, which `Drawer.Popup` and `Drawer.Panel` both carry, selects
+the right transform:
+
+```css
+.panel[data-starting-style],
+.panel[data-ending-style] {
+  transform: translateY(100%); /* bottom (the default) */
+}
+
+.panel[data-side="top"][data-starting-style],
+.panel[data-side="top"][data-ending-style] {
+  transform: translateY(-100%);
+}
+
+.panel[data-side="right"][data-starting-style],
+.panel[data-side="right"][data-ending-style] {
+  transform: translateX(100%);
+}
+
+.panel[data-side="left"][data-starting-style],
+.panel[data-side="left"][data-ending-style] {
+  transform: translateX(-100%);
+}
+```
+
+The Backdrop's own fade (`opacity`, above) does not change: it is the
+same `data-starting-style`/`data-ending-style` recipe on every side.
+
 `prefers-reduced-motion: reduce` holds every animation still (GLOSSARY,
 Motion) by leaving `transition` undeclared there. Its computed duration is
 then `0s`, which the engine reads the same way it reads any other

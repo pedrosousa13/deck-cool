@@ -39,9 +39,9 @@ check in.
 
 `@drawerdeck/core` is the framework-neutral drawer engine, and
 `@drawerdeck/react` the React 19 primitives built on it (#240): the beta,
-bottom and modal only. `@drawerdeck/react-18` builds the same source for
-React 18 too (#275), the way `decks/carouseldeck/packages/react-18` does for
-carouseldeck.
+every side, modal or non-modal. `@drawerdeck/react-18` builds the same
+source for React 18 too (#275), the way
+`decks/carouseldeck/packages/react-18` does for carouseldeck.
 
 Formatting is checked, never written by the gate. Run
 `pnpm exec prettier --write <files>` on the files you changed.

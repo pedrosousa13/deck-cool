@@ -10,7 +10,7 @@ the top layer, focus and Escape.
 | [`@drawerdeck/react-18`](packages/react-18) | The same primitives, built for React 18 (#275). |
 | [`@drawerdeck/core`](packages/core)         | The framework-neutral engine `react` builds on. |
 
-The beta (#240): bottom, modal only. Not released yet
+The beta (#240): every side, modal or non-modal. Not released yet
 (#242), and both packages stay `private` at `0.0.0` until then. The map is
 pedrosousa13/deck-cool#230.
 
