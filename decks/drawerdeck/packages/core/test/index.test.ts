@@ -693,3 +693,208 @@ describe('destroy()', () => {
     expect(dialog.open).toBe(false);
   });
 });
+
+describe('non-modal (#271)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  /** A page element outside the dialog entirely, positioned over the
+   * drawer's own gap area, so a point-based hit test (`elementFromPoint`)
+   * proves whether the drawer or the page itself is actually reachable
+   * there, not just whether a listener fires once an event is dispatched
+   * straight at a target, which skips hit-testing altogether. */
+  function appendBehindButton() {
+    const button = document.createElement('button');
+    button.textContent = 'Behind';
+    Object.assign(button.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '50px',
+      height: '50px'
+    });
+    document.body.append(button);
+    return button;
+  }
+
+  it('opens with show(), not showModal(): dialog.matches(":modal") is false', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { dialog, drawer } = fixture;
+
+    drawer.open();
+
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(dialog.open).toBe(true);
+    expect(dialog.matches(':modal')).toBe(false);
+  });
+
+  it('modal (the default) still opens with showModal(): dialog.matches(":modal") is true', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { dialog, drawer } = fixture;
+
+    drawer.open();
+
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(dialog.matches(':modal')).toBe(true);
+  });
+
+  it('lets a point over the drawer resolve to the page behind it, not the viewport', async () => {
+    const behind = appendBehindButton();
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { drawer } = fixture;
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    expect(document.elementFromPoint(25, 25)).toBe(behind);
+    const onClick = vi.fn();
+    behind.addEventListener('click', onClick);
+    document
+      .elementFromPoint(25, 25)
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    behind.remove();
+  });
+
+  it('a modal drawer (the default) covers the same point instead', async () => {
+    const behind = appendBehindButton();
+    fixture = mount({ snapPoints: [0.5] });
+    const { drawer, viewport } = fixture;
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    expect(document.elementFromPoint(25, 25)).not.toBe(behind);
+    expect(viewport.contains(document.elementFromPoint(25, 25))).toBe(true);
+    behind.remove();
+  });
+
+  it('lets the page behind it take focus', async () => {
+    const behind = appendBehindButton();
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { drawer } = fixture;
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    behind.focus();
+    expect(document.activeElement).toBe(behind);
+    behind.remove();
+  });
+
+  it('a modal drawer (the default) refuses to let the page behind it take focus', async () => {
+    const behind = appendBehindButton();
+    fixture = mount({ snapPoints: [0.5] });
+    const { drawer } = fixture;
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    behind.focus();
+    expect(document.activeElement).not.toBe(behind);
+    behind.remove();
+  });
+
+  it('lets the page itself scroll while it is open', async () => {
+    document.body.style.minHeight = '3000px';
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { drawer } = fixture;
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    window.scrollTo(0, 500);
+    await expect.poll(() => window.scrollY).toBe(500);
+  });
+
+  it('closes on Escape (document-level, since focus need not be inside it), reason "escape"', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { drawer } = fixture;
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'escape');
+  });
+
+  it('does not close on Escape when not dismissible', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false, dismissible: false });
+    const { drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+
+    await sleep(300);
+    expect(drawer.phase).toBe('open');
+  });
+
+  it('does not close on an outside press (the gap) by default, unlike a modal drawer', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    const gap = viewport.querySelector('[data-drawer-gap]')!;
+    gap.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    await sleep(300);
+    expect(drawer.phase).toBe('open');
+  });
+
+  it('still drags, snaps and closes on a drag to closed, the way a modal drawer does', async () => {
+    fixture = mount({ snapPoints: [0.5, 1], modal: false });
+    const { viewport, panel, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    const box = panel.getBoundingClientRect();
+    const target = Math.round(viewport.clientHeight * 1 - viewport.scrollTop);
+    await mouseDrag(panel, { x: box.left + 10, y: box.top + 10 }, [
+      { dy: -target }
+    ]);
+
+    await expectSettledTo(() => drawer.snapIndex, 1);
+
+    viewport.scrollTo({ top: 0, behavior: 'instant' });
+    await expectSettledTo(() => drawer.phase, 'closed');
+  });
+
+  it('still exposes the scroll-timeline dim (#249)', async () => {
+    fixture = mount({ snapPoints: [0.5, 1], modal: false });
+    const { dialog, viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    expect(viewport.style.getPropertyValue('scroll-timeline')).toBe(
+      '--drawer y'
+    );
+    expect(dialog.style.getPropertyValue('timeline-scope')).toBe('--drawer');
+  });
+
+  it('still runs the Panel’s CSS entrance and exit', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { panel, drawer } = fixture;
+    // A real transition (#268's exit waits for one to actually finish, or
+    // its own computed duration, not an instant settle like a fixture with
+    // none at all): mirrors `withTransition` in the React package's tests.
+    panel.style.transition = 'opacity 50ms linear';
+
+    expect(panel.hasAttribute('data-starting-style')).toBe(false);
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(panel.hasAttribute('data-starting-style')).toBe(false);
+
+    drawer.close('programmatic');
+    expect(panel.hasAttribute('data-ending-style')).toBe(true);
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(panel.hasAttribute('data-ending-style')).toBe(false);
+  });
+});

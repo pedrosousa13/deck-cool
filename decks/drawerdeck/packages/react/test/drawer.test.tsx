@@ -387,6 +387,106 @@ describe('a render prop', () => {
   });
 });
 
+describe('non-modal (modal={false}, #271)', () => {
+  it('opens with show(), not showModal(): dialog.matches(":modal") is false', async () => {
+    mockReducedMotion();
+    render(<TestDrawer modal={false} />);
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+
+    expect(popup.matches(':modal')).toBe(false);
+  });
+
+  it('modal (the default) still opens with showModal(): dialog.matches(":modal") is true', async () => {
+    mockReducedMotion();
+    render(<TestDrawer />);
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+
+    expect(popup.matches(':modal')).toBe(true);
+  });
+
+  it('lets the page behind it take a click and focus, unlike a modal drawer', async () => {
+    mockReducedMotion();
+    const behind = document.createElement('button');
+    behind.textContent = 'Behind';
+    Object.assign(behind.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '50px',
+      height: '50px'
+    });
+    document.body.append(behind);
+    const onClick = vi.fn();
+    behind.addEventListener('click', onClick);
+
+    const { rerender } = render(
+      <TestDrawer modal={false} snapPoints={[0.5]} />
+    );
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+
+    expect(document.elementFromPoint(25, 25)).toBe(behind);
+    document
+      .elementFromPoint(25, 25)
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    behind.focus();
+    expect(document.activeElement).toBe(behind);
+
+    act(() => screen.getByText('Close').click());
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
+
+    // Contrast: the default, modal drawer covers the same point instead.
+    rerender(<TestDrawer snapPoints={[0.5]} />);
+    act(() => screen.getByText('Open').click());
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+    expect(document.elementFromPoint(25, 25)).not.toBe(behind);
+    behind.focus();
+    expect(document.activeElement).not.toBe(behind);
+
+    behind.remove();
+  });
+
+  it('closes on Escape, reason "escape", and returns focus to the trigger', async () => {
+    mockReducedMotion();
+    const onOpenChange = vi.fn();
+    render(<TestDrawer modal={false} onOpenChange={onOpenChange} />);
+    const trigger = screen.getByText('Open');
+    act(() => trigger.click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+
+    act(() =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+      )
+    );
+
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
+    expect(onOpenChange).toHaveBeenCalledWith(false, { reason: 'escape' });
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('does not close on an outside press by default, unlike a modal drawer', async () => {
+    mockReducedMotion();
+    render(<TestDrawer modal={false} />);
+    act(() => screen.getByText('Open').click());
+    const popup = popupOf(document.body);
+    await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+
+    const gap = viewportOf(document.body).querySelector('[data-drawer-gap]')!;
+    act(() => gap.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+    await sleep(300);
+    expect(popup.getAttribute('data-phase')).toBe('open');
+  });
+});
+
 describe('snap points', () => {
   it('reports settling on a different one, not the initial open', async () => {
     mockReducedMotion();

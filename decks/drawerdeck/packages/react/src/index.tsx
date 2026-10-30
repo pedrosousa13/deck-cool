@@ -179,8 +179,17 @@ export type RootProps = (OpenControlledProps | OpenUncontrolledProps) &
      * own CSS `max-height`. */
     snapPoints?: readonly SnapPoint[];
     /** Whether Escape, an outside press and a drag to closed can close the
-     * drawer. `Drawer.Close` always can. Defaults to true. */
+     * drawer. `Drawer.Close` always can. Defaults to true. An outside
+     * press never closes a non-modal drawer (`modal={false}`), regardless
+     * of this option, matching vaul's and Base UI's own non-modal
+     * behaviour. */
     dismissible?: boolean;
+    /** Whether `Drawer.Popup` opens as a modal dialog (the top layer, a
+     * focus trap, an inert page, and Escape for free) or a non-modal one:
+     * the page behind stays interactive, nothing is trapped, and the
+     * Backdrop is optional. Escape and focus-on-close still behave the
+     * same either way. Defaults to true. */
+    modal?: boolean;
     onOpenChange?(open: boolean, info: { reason: OpenChangeReason }): void;
     onSnapPointChange?(index: number): void;
   };
@@ -197,6 +206,7 @@ export function Root({
   onSnapPointChange,
   snapPoints,
   dismissible = true,
+  modal = true,
   children
 }: RootProps) {
   const [initialOpen] = useState(() => open ?? defaultOpen ?? false);
@@ -222,6 +232,7 @@ export function Root({
   const onSnapPointChangeRef = useRef(onSnapPointChange);
   const snapPointsRef = useRef(snapPoints);
   const dismissibleRef = useRef(dismissible);
+  const modalRef = useRef(modal);
   useLayoutEffect(() => {
     openRef.current = open;
     snapPointRef.current = snapPoint;
@@ -229,6 +240,7 @@ export function Root({
     onSnapPointChangeRef.current = onSnapPointChange;
     snapPointsRef.current = snapPoints;
     dismissibleRef.current = dismissible;
+    modalRef.current = modal;
   });
 
   // Created once: the dialog, viewport and panel are always mounted (a
@@ -254,6 +266,7 @@ export function Root({
       {
         snapPoints: snapPointsRef.current,
         dismissible: dismissibleRef.current,
+        modal: modalRef.current,
         onPhaseChange(phase) {
           setState((s) => ({ ...s, phase }));
           if (phase === 'closed')
@@ -286,8 +299,8 @@ export function Root({
   }, [initialOpen]);
 
   useLayoutEffect(() => {
-    drawerRef.current?.setOptions({ snapPoints, dismissible });
-  }, [snapPoints, dismissible]);
+    drawerRef.current?.setOptions({ snapPoints, dismissible, modal });
+  }, [snapPoints, dismissible, modal]);
 
   // Controlled `open`: follows a new value, and returns to it after a close
   // the parent's `onOpenChange` did not take (the parent kept `open` true).
@@ -385,7 +398,11 @@ export interface PopupProps extends ComponentProps<'dialog'> {
   render?: RenderProp;
 }
 
-/** The `<dialog>`: the top layer, so no portal is needed. Labelled by
+/** The `<dialog>`: the top layer, so no portal is needed, when modal
+ * (`Drawer.Root`'s default), opened with `showModal()`. `modal={false}`
+ * opens it with `show()` instead, trading the top layer away for an
+ * interactive page behind it: no focus trap, no inert page (see the
+ * "Non-modal drawers" guide for why). Labelled by
  * `Drawer.Title` and described by `Drawer.Description`. Carries `timeline-scope`
  * for the Backdrop's native scroll-driven dim, `--drawer-first-snap` (the
  * dim's range, set once per layout), and, only where a scroll timeline is

@@ -11,8 +11,8 @@ as carouseldeck's primitives do, besides the props below.
 | -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
 | `Drawer.Root`        | nothing    | Holds the drawer's state: whether it is open, its snap point and whether it dismisses. Holds the props below. |
 | `Drawer.Trigger`     | `<button>` | Opens the drawer.                                                                                             |
-| `Drawer.Popup`       | `<dialog>` | The top layer: no portal needed.                                                                              |
-| `Drawer.Backdrop`    | `<div>`    | Dims the page, driven by the scroll position.                                                                 |
+| `Drawer.Popup`       | `<dialog>` | The top layer when modal; no portal needed either way.                                                        |
+| `Drawer.Backdrop`    | `<div>`    | Dims the page, driven by the scroll position. Optional, especially non-modal.                                 |
 | `Drawer.Viewport`    | `<div>`    | The native scroll-snap container.                                                                             |
 | `Drawer.Panel`       | `<div>`    | The visible sheet. You style this.                                                                            |
 | `Drawer.Handle`      | `<div>`    | The drag handle.                                                                                              |
@@ -31,7 +31,8 @@ as carouseldeck's primitives do, besides the props below.
 | `snapPoints`                     | an array of numbers or pixel strings          |         | Fractions of the viewport height the panel shows, such as `[0.5, 1]`. A string such as `'320px'` is also allowed. With none, the drawer has one open point: the panel at its content height. |
 | `snapPoint` / `defaultSnapPoint` | `number`                                      |         | The snap point to rest at, controlled or initial.                                                                                                                                            |
 | `onSnapPointChange`              | `(index: number) => void`                     |         | Called when the drawer settles on a new snap point.                                                                                                                                          |
-| `dismissible`                    | `boolean`                                     | `true`  | Whether dragging past the lowest snap point, Escape or an outside press can close the drawer.                                                                                                |
+| `dismissible`                    | `boolean`                                     | `true`  | Whether dragging past the lowest snap point, Escape or an outside press can close the drawer. An outside press never closes a non-modal drawer, regardless of this option.                   |
+| `modal`                          | `boolean`                                     | `true`  | Whether `Drawer.Popup` opens with `showModal()` (the top layer, a focus trap, an inert page) or `show()`: the page behind stays interactive. See "Non-modal drawers".                        |
 
 `reason` is one of `'trigger' | 'drag' | 'escape' | 'outside-press' | 'close-button' | 'programmatic'`.
 
@@ -57,5 +58,5 @@ viewport scrolls.
 
 ## Not in the beta
 
-Sides other than the bottom, non-modal drawers and nested drawers (#237),
-and a background indent.
+Sides other than the bottom and nested drawers (#237), and a background
+indent.

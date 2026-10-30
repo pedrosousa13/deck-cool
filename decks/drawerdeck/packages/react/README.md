@@ -3,12 +3,13 @@
 A headless drawer (a bottom sheet) for React 19, built on native scrolling.
 The sheet sits in a scroll-snap container: the browser drags, flings and
 settles it at its snap points, the way it already scrolls a page.
-`Drawer.Popup` renders a `<dialog>`, which gives the top layer, focus
-trapping, an inert page behind it and Escape, with no portal to manage. You
+`Drawer.Popup` renders a `<dialog>`, modal by default (the top layer, focus
+trapping, an inert page behind it and Escape, with no portal to manage), or
+non-modal with `modal={false}`. You
 compose the drawer from parts that need no stylesheet, and style it with
 plain CSS.
 
-This is a beta: bottom sheets only, with a single modal layer.
+This is a beta: bottom sheets only, modal or non-modal (`modal`).
 
 The guides, the reference and the recipes, each with a live demo, are at
 [drawer.deck.cool/docs](https://drawer.deck.cool/docs/).

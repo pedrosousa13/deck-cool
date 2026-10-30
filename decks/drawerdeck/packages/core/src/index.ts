@@ -50,6 +50,15 @@ export interface DrawerOptions {
   /** Whether Escape, an outside press and a drag to closed can close the
    * drawer. `close()` and a close button still can. Defaults to true. */
   dismissible?: boolean;
+  /** Whether the dialog opens with `showModal()` (the top layer, a focus
+   * trap, an inert page, and Escape for free) or `show()` (none of that:
+   * the page behind stays interactive). Defaults to true. An outside press
+   * never closes a non-modal drawer, matching vaul's and Base UI's own
+   * non-modal behaviour. Escape is read from `document`, not the dialog's
+   * own `cancel` event, which a non-modal dialog does not fire (#271; see
+   * the "Non-modal drawers" guide for why `show()`, not the Popover
+   * API). */
+  modal?: boolean;
   onOpenChange?(open: boolean, reason: OpenChangeReason): void;
   onSnapPointChange?(index: number): void;
   onPhaseChange?(phase: Phase): void;
@@ -174,7 +183,7 @@ export function createDrawer(
   options: DrawerOptions = {}
 ): Drawer {
   const { dialog, viewport, panel } = parts;
-  let opts: DrawerOptions = { dismissible: true, ...options };
+  let opts: DrawerOptions = { dismissible: true, modal: true, ...options };
   let phase: Phase = 'closed';
   let snapIndex = 0;
   /** The configured snap points' pixel offsets, nearest first; excludes
@@ -254,6 +263,24 @@ export function createDrawer(
     });
   }
   if (gap) gap.style.height = '100%';
+
+  // Non-modal (#271): `showModal()`'s own top layer, focus trap and inert
+  // page are what stop a click, a scroll or a focus move from reaching the
+  // page behind a modal drawer, not anything here. `show()` opts out of
+  // all three, but the dialog and the viewport still physically cover the
+  // whole screen (`position: fixed; inset: 0`, above), so without this they
+  // would still be the topmost hit-test target everywhere outside the
+  // Panel, defeating the point. `pointer-events: none` on both lets a real
+  // click, touch or wheel fall through to the page; the Panel opts back in
+  // so dragging and its own interactive parts (`Drawer.Close`, inputs...)
+  // keep working. Modal leaves both at their default (`auto`).
+  function applyModalStyle() {
+    const nonModal = opts.modal === false;
+    dialog.style.pointerEvents = nonModal ? 'none' : '';
+    viewport.style.pointerEvents = nonModal ? 'none' : '';
+    panel.style.pointerEvents = 'auto';
+  }
+  applyModalStyle();
 
   // The timeline plumbing only: a consumer's own `@keyframes` and
   // `animation-timeline: --drawer` on `Drawer.Backdrop` (or any other
@@ -618,18 +645,21 @@ export function createDrawer(
   // view before the entrance, under a consumer's own CSS transform, and
   // this must never read that as a close. `scrollend` (and its debounce
   // fallback, below) stays as the fallback for whatever this misses.
-  const panelVisibilityObserver = new IntersectionObserver((entries) => {
-    const entry = entries[entries.length - 1];
-    if (!entry || entry.isIntersecting) return;
-    // The CSS exit already has its own close path (`beginExit` then
-    // `settleExit`): left to that instead, rather than racing it to
-    // settle the reason. `finishClose`'s own idempotency is the backstop
-    // if this still fires around when that path settles.
-    if (cssExiting || (phase !== 'open' && phase !== 'closing')) return;
-    const reason = pendingCloseReason ?? 'drag';
-    pendingCloseReason = null;
-    finishClose(reason);
-  }, { root: viewport });
+  const panelVisibilityObserver = new IntersectionObserver(
+    (entries) => {
+      const entry = entries[entries.length - 1];
+      if (!entry || entry.isIntersecting) return;
+      // The CSS exit already has its own close path (`beginExit` then
+      // `settleExit`): left to that instead, rather than racing it to
+      // settle the reason. `finishClose`'s own idempotency is the backstop
+      // if this still fires around when that path settles.
+      if (cssExiting || (phase !== 'open' && phase !== 'closing')) return;
+      const reason = pendingCloseReason ?? 'drag';
+      pendingCloseReason = null;
+      finishClose(reason);
+    },
+    { root: viewport }
+  );
 
   function onScrollEnd() {
     if (destroyed) return;
@@ -726,10 +756,32 @@ export function createDrawer(
   dialog.addEventListener('cancel', onCancel);
 
   function onGapClick() {
-    if (!opts.dismissible || phase !== 'open') return;
+    // An outside press never closes a non-modal drawer by default (#271),
+    // matching vaul's and Base UI's own non-modal behaviour: real-world
+    // clicks there already fall through to the page (`applyModalStyle`'s
+    // `pointer-events: none`) and never reach the gap at all, but a test
+    // (or a consumer) dispatching one straight at it should see the same
+    // no-op.
+    if (opts.modal === false || !opts.dismissible || phase !== 'open') return;
     beginExit('outside-press');
   }
   gap?.addEventListener('click', onGapClick);
+
+  // ---------- non-modal Escape (#271) ----------
+  // A non-modal dialog (opened with `show()`) does not dismiss on Escape,
+  // and never fires `cancel`, so this engine reads it itself instead. Read
+  // from `document`, not the dialog: the page behind a non-modal drawer can
+  // hold focus (that is the point of it), so the dialog's own `cancel`
+  // event, which only fires for a key press while focus is inside it, is
+  // not enough.
+  function onDocumentKeyDown(event: KeyboardEvent) {
+    if (opts.modal !== false || event.key !== 'Escape') return;
+    if (!opts.dismissible) return;
+    if (phase !== 'opening' && phase !== 'open') return;
+    event.preventDefault();
+    beginExit('escape');
+  }
+  document.addEventListener('keydown', onDocumentKeyDown);
 
   function onResize() {
     // `opening` reconciles too: `open()` no longer animates `scrollTop` (it
@@ -899,7 +951,8 @@ export function createDrawer(
     // computed value, and the entrance never moves.
     panel.setAttribute(STARTING_STYLE_ATTR, '');
     parts.backdrop?.setAttribute(STARTING_STYLE_ATTR, '');
-    dialog.showModal();
+    if (opts.modal === false) dialog.show();
+    else dialog.showModal();
     dialog.focus({ preventScroll: true });
     // Forces the recalc the attribute above needs to land as a real,
     // committed value -- not folded into whatever recalc `measure` or the
@@ -985,6 +1038,7 @@ export function createDrawer(
     measure();
     positionMarkers();
     updateContentLock();
+    applyModalStyle();
   }
 
   function destroy() {
@@ -1002,6 +1056,7 @@ export function createDrawer(
     viewport.removeEventListener('scroll', onScroll);
     dialog.removeEventListener('cancel', onCancel);
     dialog.removeEventListener('close', onNativeClose);
+    document.removeEventListener('keydown', onDocumentKeyDown);
     gap?.removeEventListener('click', onGapClick);
     panel.removeEventListener('pointerdown', onPointerDown);
     panel.removeEventListener('pointermove', onPointerMove);
