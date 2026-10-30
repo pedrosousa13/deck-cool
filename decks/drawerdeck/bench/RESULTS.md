@@ -450,16 +450,21 @@ down to where it started, so a drawer that genuinely moved still nets
 close to 0 `travel`, while its `maxStep` still shows the drag's own
 per-frame motion.
 
-`aggregate.py` and `report.py` mark a deck "not supported" for a scenario
-when `responded` is `false` in most (more than half) of its scored reps for
-that scenario, pooled across every load: one rep timing out for an
-unrelated reason never flips this, but a deck that consistently ignores the
-gesture does. A "not supported" deck's row in that scenario's tables reads
-"not supported" instead of a number, it never enters `winner_of`'s
-candidates (so it can neither win nor force a tie), and a "Not supported"
-note under the table lists it. `aggregate_test.py` unit-tests the majority
-rule and the winner exclusion against a tiny synthetic jsonl
-(`python3 aggregate_test.py`).
+`aggregate.py` and `report.py` mark a deck "not supported" for a
+(scenario, load) cell when `responded` is `false` in most (more than half)
+of its scored reps for that scenario at that load: one rep timing out for
+an unrelated reason never flips this, but a deck that consistently ignores
+the gesture does. Scoped per load, not pooled across every load a
+scenario runs at (#314 fixed this: a deck can respond at one load and not
+another, and pooling let one load's majority mislabel a different load's
+own result -- see "Did not close" below, where this was found for Base
+UI's Drawer). A "not supported" deck's cell in that scenario's tables
+reads "not supported" instead of a number, it never enters `winner_of`'s
+candidates for that load (so it can neither win nor force a tie there),
+and a "Not supported" note under the table names it together with the
+load(s) it applies to. `aggregate_test.py` unit-tests the majority rule,
+its per-load scoping and the winner exclusion against a tiny synthetic
+jsonl (`python3 aggregate_test.py`).
 
 ## Did not close (#311, #266 rule 12)
 
@@ -484,16 +489,43 @@ the row. `settleMs` for a `dismiss` scenario is the _later_ of motion
 settling and the library reporting closed -- a deck that closes slowly but
 for real should not look faster than one that never closes at all.
 
-`aggregate.py` and `report.py` mark a deck "did not close" for a dismiss
-scenario when `closed` is `false` in most (more than half) of its scored
-reps for that scenario, pooled across every load -- the same majority rule
-"not supported" uses. A "did not close" deck's row reads "did not close"
-instead of a number, it never enters `winner_of`'s candidates, and a "Did
-not close" note under the table lists it; `excluded_decks` unions this
-with "not supported" wherever a cell's winner is computed, so a deck
-caught by either rule is excluded the same way. `aggregate_test.py`
-unit-tests the majority rule and the winner exclusion, including both
-rules combining on the same cell, against a tiny synthetic jsonl.
+`aggregate.py` and `report.py` mark a deck "did not close" for a
+(dismiss scenario, load) cell when `closed` is `false` in most (more than
+half) of its scored reps for that scenario at that load -- the same
+majority rule "not supported" uses, scoped the same way (#314). A "did
+not close" deck's cell reads "did not close" instead of a number, it
+never enters `winner_of`'s candidates for that load, and a "Did not
+close" note under the table names it together with the load(s) it
+applies to; `excluded_decks` unions this with "not supported" per load
+wherever a cell's winner is computed, so a deck caught by either rule is
+excluded the same way, at that load only. `aggregate_test.py` unit-tests
+the majority rule, its per-load scoping and the winner exclusion,
+including both rules combining on the same cell, against a tiny
+synthetic jsonl.
+
+**Found pooled across loads, not scoped (#314).** CI run 40999514750
+published Base UI's Drawer as "did not close" at every load, when its own
+raw rows showed it closing in every single rep at load=0 and failing
+only at load=100/200: `did_not_close` (and `not_supported`) originally
+pooled a deck's rows across every load a scenario runs at, so a majority
+from the loads where a deck fails could mislabel a load where it
+succeeds (and the reverse: vaul closes at load=0/100 but never at
+load=200, and the pooled majority there left its load=200 cell showing a
+plain settle time instead of "did not close", wrongly eligible to
+win/tie that cell). Traced to Base UI's own release-velocity staleness
+window (`@base-ui/react`'s `useSwipeDismiss.mjs`,
+`MAX_RELEASE_VELOCITY_AGE_MS = 80`ms): a touchend arriving more than
+~80ms after the last touchmove makes Base UI treat the flick as a held
+drag rather than a fast swipe, which main-thread jank (load=100/200)
+reliably causes and a quiet load=0 run does not -- confirmed locally,
+isolated to that one gap, with drawerdeck and vaul both unaffected by
+the same added delay. Not a wiring bug: `baseui-app.tsx`'s
+`onOpenChange`, `harness.ts`'s `reportOpen`/`isOpen()` and
+`closes.spec.ts`'s gesture (the same `scenarios.ts` function `bench.spec.ts`
+runs, with no jank injected -- i.e. load=0, where Base UI genuinely
+closes) were all already correct. Fixed by scoping `not_supported`/
+`did_not_close` to `(deck, scenario, load)`, the same grain as every
+other cell here.
 
 **Guard.** `closes.spec.ts` drives `scenarios.ts`'s own
 `touch-flick-dismiss` gesture against every deck. For drawerdeck, vaul and
