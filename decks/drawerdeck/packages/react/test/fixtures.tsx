@@ -3,18 +3,23 @@ import { expect, vi } from 'vitest';
 import * as Drawer from '@drawerdeck/react';
 
 /** A drawer with no stylesheet, following #234's beta API sketch exactly:
- * every part, in order. */
+ * every part, in order. `side="left"`/`"right"` (#270) gives the Panel an
+ * explicit width: unlike `height`, which an unstyled Panel gets for free
+ * from its own content (80 rows), nothing here gives it one along the
+ * horizontal axis, and a snap point at fraction 1 needs the Panel at least
+ * as wide as the Viewport to be reachable. */
 export function TestDrawer({
   content,
   ...props
 }: ComponentProps<typeof Drawer.Root> & { content?: ReactNode }) {
+  const horizontal = props.side === 'left' || props.side === 'right';
   return (
     <Drawer.Root {...props}>
       <Drawer.Trigger>Open</Drawer.Trigger>
       <Drawer.Popup>
         <Drawer.Backdrop />
         <Drawer.Viewport>
-          <Drawer.Panel>
+          <Drawer.Panel style={horizontal ? { width: 2000 } : undefined}>
             <Drawer.Handle />
             <Drawer.Title>Test drawer</Drawer.Title>
             <Drawer.Description>A drawer for testing.</Drawer.Description>
