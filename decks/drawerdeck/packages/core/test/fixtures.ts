@@ -14,12 +14,15 @@ export interface Fixture {
 /** Builds the DOM `createDrawer` expects (`decks/drawerdeck/docs/adr/0001`):
  * a dialog holding a backdrop and a viewport, the viewport holding the gap
  * spacer, one `[data-drawer-snap]` marker per snap point plus one for
- * closed, and the panel (with its own inner content scroller), then creates
- * the drawer over it and appends the dialog to the document. */
+ * closed, and the panel (with its own inner content scroller) -- in
+ * `[gap][markers][panel]` order for `'bottom'`/`'right'` (the default),
+ * reversed to `[panel][markers][gap]` for `'top'`/`'left'` (#270) -- then
+ * creates the drawer over it and appends the dialog to the document. */
 export function mount(
   options: DrawerOptions = {},
-  // Tall enough to show every configured snap point in full (a fraction of
-  // 1 needs the panel at least as tall as the viewport): comfortably more
+  // Tall enough (or wide enough, for 'left'/'right') to show every
+  // configured snap point in full (a fraction of 1 needs the panel at
+  // least as large as the viewport along its own axis): comfortably more
   // than any real viewport this runs in.
   { panelHeight = '2000px' }: { panelHeight?: string } = {}
 ): Fixture {
@@ -35,11 +38,15 @@ export function mount(
     return marker;
   });
   const panel = document.createElement('div');
-  panel.style.height = panelHeight;
+  const horizontal = options.side === 'left' || options.side === 'right';
+  if (horizontal) panel.style.width = panelHeight;
+  else panel.style.height = panelHeight;
   const content = document.createElement('div');
   content.style.height = '100%';
   panel.append(content);
-  viewport.append(gap, ...markers, panel);
+  const reversed = options.side === 'top' || options.side === 'left';
+  if (reversed) viewport.append(panel, ...markers, gap);
+  else viewport.append(gap, ...markers, panel);
   dialog.append(backdrop, viewport);
   document.body.append(dialog);
   const drawer = createDrawer(
@@ -138,30 +145,40 @@ export async function mouseDrag(
  * `dragPointerUp` commands in `vitest.config.ts`), not `mouseDrag`'s
  * hand-dispatched `PointerEvent`s: presses `{x, y}` away from `panel`'s own
  * top-left corner, then nudges the pointer by `step` CSS pixels at a time
- * (negative moves it up), re-reading `viewport.scrollTop` after each nudge,
- * until `until(…)` is true or `maxSteps` is reached, then releases. A
- * closed loop, not a single multi-step move to a precomputed target: how
- * far a given `page.mouse` delta actually moves the pointer is not 1:1 with
- * the CSS pixels asked for in this environment, so this drives the real,
- * resulting scroll position back into the loop instead of trusting the
- * math. `panel` needs a unique attribute to reach it from the command's
- * own, Node-side `Locator`, set here and cleared after. */
+ * along `axis` (negative moves it up/left), re-reading the Viewport's own
+ * scroll position on that axis after each nudge, until `until(…)` is true
+ * or `maxSteps` is reached, then releases. `axis` defaults to `'y'`
+ * (`scrollTop`, every `bottom`/`top` drawer); pass `'x'` for `scrollLeft`
+ * (`left`/`right`, #270). A closed loop, not a single multi-step move to a
+ * precomputed target: how far a given `page.mouse` delta actually moves the
+ * pointer is not 1:1 with the CSS pixels asked for in this environment, so
+ * this drives the real, resulting scroll position back into the loop
+ * instead of trusting the math. `panel` needs a unique attribute to reach
+ * it from the command's own, Node-side `Locator`, set here and cleared
+ * after. */
 export async function realMouseDrag(
   panel: HTMLElement,
   viewport: HTMLElement,
   { x, y }: { x: number; y: number },
-  until: (scrollTop: number) => boolean,
-  { step = 12, maxSteps = 400 }: { step?: number; maxSteps?: number } = {}
+  until: (scrollPos: number) => boolean,
+  {
+    step = 12,
+    maxSteps = 400,
+    axis = 'y'
+  }: { step?: number; maxSteps?: number; axis?: 'x' | 'y' } = {}
 ) {
+  const scrollProp = axis === 'x' ? 'scrollLeft' : 'scrollTop';
   const marker = `data-test-drag-${Math.random().toString(36).slice(2)}`;
   panel.setAttribute(marker, '');
   try {
     const start = await commands.dragPointerDown(`[${marker}]`, x, y);
+    let cursorX = start.x;
     let cursorY = start.y;
     let steps = 0;
-    while (!until(viewport.scrollTop) && steps < maxSteps) {
-      cursorY += step;
-      await commands.dragPointerMoveTo(start.x, cursorY);
+    while (!until(viewport[scrollProp]) && steps < maxSteps) {
+      if (axis === 'x') cursorX += step;
+      else cursorY += step;
+      await commands.dragPointerMoveTo(cursorX, cursorY);
       await nextFrame();
       steps += 1;
     }

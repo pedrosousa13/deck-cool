@@ -1,9 +1,20 @@
 /**
- * The framework-neutral drawer engine. A bottom sheet built on native
- * scrolling (ADR 0001): the viewport is a scroll-snap container, closed and
- * every snap point are places it can rest, and the browser drags, flings and
+ * The framework-neutral drawer engine. A sheet built on native scrolling
+ * (ADR 0001): the viewport is a scroll-snap container, closed and every
+ * snap point are places it can rest, and the browser drags, flings and
  * settles it the way it already does for a page. `<dialog>` gives the top
  * layer, focus trapping, an inert page and Escape.
+ *
+ * Opens from any of the four sides (#270): `bottom` and `right` keep the
+ * Viewport's own children in `[gap][panel]` order, a plain scroll-snap
+ * container along the vertical or the horizontal axis. `top` and `left`
+ * reverse that DOM order to `[panel][gap]` instead of using
+ * `flex-direction: *-reverse` or `direction: rtl` (both give negative
+ * scroll offsets, and carry their own WebKit bugs): every `scrollTop` or
+ * `scrollLeft` this engine reads or writes stays a plain, positive number,
+ * with `open` at 0 and `closed` at the scroll end, and the snap-point and
+ * close math mirrored (`scrollForSnap`, below) against the Viewport's own
+ * maximum scroll position for those two sides.
  *
  * The caller (`@drawerdeck/react`) owns every DOM node, including the
  * viewport's `[data-drawer-gap]` spacer and `[data-drawer-snap]` markers:
@@ -14,8 +25,8 @@
  * until the drawer reaches its top snap point.
  */
 
-/** A snap point: a fraction of the viewport's height the panel shows (0 to
- * 1), or a fixed height such as `'320px'`. */
+/** A snap point: a fraction of the Panel's extent along its own axis (0 to
+ * 1), or a fixed length such as `'320px'`. */
 export type SnapPoint = number | `${number}px`;
 
 export type Phase = 'closed' | 'opening' | 'open' | 'closing';
@@ -28,11 +39,23 @@ export type OpenChangeReason =
   | 'close-button'
   | 'programmatic';
 
+/** Which edge the drawer opens from. `bottom` and `right` scroll a plain
+ * forward axis (closed at 0, open points further along it); `top` and
+ * `left` reverse the Viewport's own DOM order instead of its scroll
+ * direction, so open and closed mirror onto the same, always-positive
+ * scroll range (see this file's own top comment). Read once, at
+ * `createDrawer`: like `parts`, a consumer changing it recreates the
+ * drawer rather than calling `setOptions`, since it is what decides the
+ * DOM order the caller renders, not something this engine can repaint on
+ * its own. */
+export type Side = 'bottom' | 'top' | 'left' | 'right';
+
 export interface DrawerParts {
   dialog: HTMLDialogElement;
   /** The native scroll-snap container: contains a `[data-drawer-gap]`
    * spacer, one `[data-drawer-snap]` marker per snap point plus one for
-   * closed, and the panel, in that order. */
+   * closed, and the panel -- in `[gap][panel]` order for `bottom`/`right`,
+   * `[panel][gap]` for `top`/`left` (`Side`'s own comment). */
   viewport: HTMLElement;
   panel: HTMLElement;
   /** The inner scroller, locked (no `overflow-y: auto` of its own) below
@@ -42,10 +65,12 @@ export interface DrawerParts {
 }
 
 export interface DrawerOptions {
-  /** Fractions of the viewport height, or fixed heights, the panel can
-   * rest open at, nearest first. Without it, the drawer has one open
-   * point: the panel's own content height, capped by its own CSS
-   * `max-height`. */
+  /** Which edge the drawer opens from. Defaults to `'bottom'`. */
+  side?: Side;
+  /** Fractions of the Panel's extent along its own axis, or fixed lengths,
+   * the panel can rest open at, nearest first. Without it, the drawer has
+   * one open point: the panel's own content extent, capped by its own CSS
+   * `max-height`/`max-width`. */
   snapPoints?: readonly SnapPoint[];
   /** Whether Escape, an outside press and a drag to closed can close the
    * drawer. `close()` and a close button still can. Defaults to true. */
@@ -114,31 +139,66 @@ const RESET_CLASS = 'drawerdeck-reset';
  * drawers on the same page never see each other's `--drawer`. */
 const SCROLL_TIMELINE_NAME = '--drawer';
 
+/** Every side: the shared stylesheet (`ensureBackdropReset`, below) builds
+ * one hit-area `@keyframes`/class pair per side, since two drawers on the
+ * same page can open from different sides at once. */
+const SIDES: readonly Side[] = ['bottom', 'top', 'left', 'right'];
+
 /** Added to the Viewport, non-modal only, while the hit area should track
  * the scroll position (`updateHitArea`, below): drives `clip-path` natively
  * from the same `--drawer` scroll timeline, so the Viewport's hit-testable
- * region follows the Panel with no JS per scroll frame (#271, #312). */
-const HIT_AREA_CLASS = 'drawerdeck-hit-area-tracking';
-const HIT_AREA_KEYFRAMES = 'drawerdeck-hit-area';
+ * region follows the Panel with no JS per scroll frame (#271, #312). One
+ * class/`@keyframes` pair per side (`hitAreaClass`/`hitAreaKeyframes`,
+ * below): `left` and `top` need their "from"/"to" clip swapped against
+ * `bottom`/`right`'s, since open and closed sit at opposite ends of the
+ * scroll range for those two sides (this file's own top comment). */
+function hitAreaClass(side: Side): string {
+  return `drawerdeck-hit-area-${side}`;
+}
+function hitAreaKeyframes(side: Side): string {
+  return `drawerdeck-hit-area-${side}`;
+}
 /** The pixel offset of the Viewport's own maximum scroll position (its
- * `scrollHeight - clientHeight`), set once per layout (`measure`, below) so
- * the hit area's own scroll-driven animation (`HIT_AREA_CLASS`) has a fixed
- * "fully open" value to animate to: the scroll timeline's progress alone
- * only ever gives a 0-to-1 fraction, not a pixel value `clip-path` needs. */
+ * `scrollHeight - clientHeight`, or the `scrollWidth`/`clientWidth`
+ * equivalent for `left`/`right`), set once per layout (`measure`, below) so
+ * the hit area's own scroll-driven animation has a fixed "fully open" value
+ * to animate to: the scroll timeline's progress alone only ever gives a
+ * 0-to-1 fraction, not a pixel value `clip-path` needs. Also what the
+ * mirrored sides' snap-point and close math (`scrollForSnap`) measures
+ * against. */
 const MAX_SCROLL_VAR = '--drawer-max-scroll';
+
+/** The `clip-path: inset()` argument that leaves exactly the Panel's own
+ * visible region -- `v` long, flush against `side`'s own edge -- hit
+ * testable (`updateHitArea`, below). `v` is a CSS length: `'0px'` (nothing
+ * visible, fully clipped) or `var(--drawer-max-scroll,0px)` (the Viewport's
+ * own full scroll range) in the shared stylesheet's `@keyframes`, or a
+ * literal pixel value in the non-modal hit area's JS fallback. */
+function hitAreaInset(side: Side, v: string): string {
+  switch (side) {
+    case 'bottom':
+      return `calc(100% - ${v}) 0 0 0`;
+    case 'top':
+      return `0 0 calc(100% - ${v}) 0`;
+    case 'right':
+      return `0 0 0 calc(100% - ${v})`;
+    case 'left':
+      return `0 calc(100% - ${v}) 0 0`;
+  }
+}
 
 /** The shared rules' sheet, once constructed, kept alive while any drawer is
  * mounted (ref-counted by `mountedDrawers`, below) and dropped from
  * `document.adoptedStyleSheets` when the last one is destroyed. A
  * constructed sheet, not a `<style>` element: `style-src` governs an
  * injected tag, but not `CSSStyleSheet.replaceSync` (#252). Carries the
- * `::backdrop` reset and the non-modal hit area's `@keyframes`: both are
+ * `::backdrop` reset and every side's non-modal hit area `@keyframes`: all
  * the same kind of shared, instance-independent rule.
  *
  * The maximum scroll's own fraction cannot be read inside `@keyframes`:
  * a scroll timeline's progress is implicit there, not a value in scope,
- * so the "to" keyframe reads `--drawer-max-scroll` instead, an ordinary
- * custom property each Viewport sets on itself (`measure`). */
+ * so each "from"/"to" keyframe reads `--drawer-max-scroll` instead, an
+ * ordinary custom property each Viewport sets on itself (`measure`). */
 let resetSheet: CSSStyleSheet | undefined;
 let mountedDrawers = 0;
 
@@ -146,13 +206,25 @@ function ensureBackdropReset() {
   mountedDrawers += 1;
   if (resetSheet) return;
   resetSheet = new CSSStyleSheet();
-  resetSheet.replaceSync(
-    `.${RESET_CLASS}::backdrop{background:transparent}` +
-      `@keyframes ${HIT_AREA_KEYFRAMES}{from{clip-path:inset(100% 0 0 0)}` +
-      `to{clip-path:inset(calc(100% - var(${MAX_SCROLL_VAR},0px)) 0 0 0)}}` +
-      `.${HIT_AREA_CLASS}{animation:${HIT_AREA_KEYFRAMES} 1s linear both;` +
-      `animation-timeline:${SCROLL_TIMELINE_NAME}}`
-  );
+  let css = `.${RESET_CLASS}::backdrop{background:transparent}`;
+  for (const side of SIDES) {
+    const reversed = side === 'top' || side === 'left';
+    const openInset = hitAreaInset(side, `var(${MAX_SCROLL_VAR},0px)`);
+    const closedInset = hitAreaInset(side, '0px');
+    // A scroll timeline's own progress always runs 0% (scrollTop/Left 0) to
+    // 100% (the scroll end): `bottom`/`right` want 0% clipped away entirely
+    // (closed) and 100% at the full hit area (open), `top`/`left` the exact
+    // opposite, since open sits at 0 for them (this file's own top
+    // comment).
+    const from = reversed ? openInset : closedInset;
+    const to = reversed ? closedInset : openInset;
+    css +=
+      `@keyframes ${hitAreaKeyframes(side)}{from{clip-path:inset(${from})}` +
+      `to{clip-path:inset(${to})}}` +
+      `.${hitAreaClass(side)}{animation:${hitAreaKeyframes(side)} 1s linear both;` +
+      `animation-timeline:${SCROLL_TIMELINE_NAME}}`;
+  }
+  resetSheet.replaceSync(css);
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, resetSheet];
 }
 
@@ -210,15 +282,69 @@ export function createDrawer(
   options: DrawerOptions = {}
 ): Drawer {
   const { dialog, viewport, panel } = parts;
+  const side: Side = options.side ?? 'bottom';
+  const horizontal = side === 'left' || side === 'right';
+  /** `top` and `left` reverse the Viewport's own DOM order
+   * (`[panel][gap]`), so open sits at scroll offset 0 and closed at the
+   * scroll end -- the opposite of `bottom`/`right`'s `[gap][panel]`. Every
+   * function that turns a snap point's "forward" pixel offset into the
+   * actual `scrollTop`/`scrollLeft` to write or compare against
+   * (`scrollForSnap`, below) reads this; nothing else needs to. */
+  const reversed = side === 'top' || side === 'left';
+  const axis = horizontal
+    ? ({
+        scroll: 'scrollLeft',
+        client: 'clientWidth',
+        extent: 'scrollWidth',
+        scrollToKey: 'left'
+      } as const)
+    : ({
+        scroll: 'scrollTop',
+        client: 'clientHeight',
+        extent: 'scrollHeight',
+        scrollToKey: 'top'
+      } as const);
   let opts: DrawerOptions = { dismissible: true, modal: true, ...options };
   let phase: Phase = 'closed';
   let snapIndex = 0;
-  /** The configured snap points' pixel offsets, nearest first; excludes
-   * closed (always 0). */
+  /** The configured snap points' "forward" pixel offsets, nearest first:
+   * the distance from the Panel's own start along its axis, independent of
+   * `side` -- `scrollForSnap`, below, is what turns one of these into the
+   * real `scrollTop`/`scrollLeft` to use. Excludes closed. */
   let snapPx: number[] = [];
+  /** The Viewport's own maximum scroll position along its axis (its
+   * `scrollHeight - clientHeight`, or the `scrollWidth`/`clientWidth`
+   * equivalent), recomputed every `measure()`. What `scrollForSnap` mirrors
+   * a `top`/`left` snap point's offset against, and what the non-modal hit
+   * area's JS fallback and `--drawer-max-scroll` both read. */
+  let maxScroll = 0;
   let pendingCloseReason: OpenChangeReason | null = null;
   let scrollEndDebounce: ReturnType<typeof setTimeout> | undefined;
   let destroyed = false;
+
+  /** Turns a snap candidate's index (-1 for closed, else an index into
+   * `snapPxArr`) into the actual `scrollTop`/`scrollLeft` value that
+   * candidate rests at, given a snapshot of `snapPx` and `maxScroll`:
+   * `bottom`/`right` read the forward offset as-is (closed at 0); `top`/
+   * `left` mirror it against `maxScrollArg` instead (closed at the scroll
+   * end), per this file's own top comment. Takes explicit snapshots, not
+   * the live `snapPx`/`maxScroll`, so `onResize` can also use it to place
+   * the *old* layout's targets before a fresh `measure()` overwrites
+   * them. */
+  function scrollTargetFor(
+    index: number,
+    snapPxArr: number[],
+    maxScrollArg: number
+  ): number {
+    const forwardPx = index === -1 ? 0 : (snapPxArr[index] ?? 0);
+    return reversed ? maxScrollArg - forwardPx : forwardPx;
+  }
+
+  /** `scrollTargetFor` against the live `snapPx`/`maxScroll`: every call
+   * site but `onResize`'s own old-layout lookup uses this. */
+  function scrollForSnap(index: number): number {
+    return scrollTargetFor(index, snapPx, maxScroll);
+  }
 
   // ---------- the CSS entrance and exit (#268) ----------
   // `data-starting-style` and `data-ending-style` are the only moving parts:
@@ -276,12 +402,29 @@ export function createDrawer(
   Object.assign(viewport.style, {
     position: 'relative',
     height: '100%',
-    overflowY: 'auto',
-    scrollSnapType: 'y mandatory',
     overscrollBehavior: 'contain',
     scrollbarWidth: 'none',
     willChange: 'scroll-position'
   });
+  if (horizontal) {
+    // `left`/`right` need the Viewport's own children laid out in a row --
+    // the default block layout vertical sides use stacks them instead,
+    // with no horizontal overflow at all -- `row`, never `row-reverse`:
+    // `top`/`left`'s mirrored scroll math (this file's own top comment)
+    // reverses the actual DOM order the caller renders, not the CSS
+    // direction children flow in.
+    Object.assign(viewport.style, {
+      width: '100%',
+      display: 'flex',
+      overflowX: 'auto',
+      scrollSnapType: 'x mandatory'
+    });
+  } else {
+    Object.assign(viewport.style, {
+      overflowY: 'auto',
+      scrollSnapType: 'y mandatory'
+    });
+  }
   if (parts.backdrop) {
     Object.assign(parts.backdrop.style, {
       position: 'fixed',
@@ -289,7 +432,25 @@ export function createDrawer(
       pointerEvents: 'none'
     });
   }
-  if (gap) gap.style.height = '100%';
+  if (gap) {
+    if (horizontal) {
+      gap.style.width = '100%';
+      // Flex's own default (`flex-shrink: 1`) would otherwise let the row
+      // squeeze the gap (and the Panel, just below) below its own set
+      // size once their combined width overflows the Viewport -- exactly
+      // the condition that makes the Viewport scrollable at all.
+      gap.style.flex = '0 0 auto';
+    } else {
+      gap.style.height = '100%';
+    }
+  }
+  if (horizontal) {
+    // Same reasoning as the gap's own `flex`, just above: an unstyled
+    // Panel keeps its own natural width this way, the same as the default
+    // block layout already gives it its own natural height for `bottom`/
+    // `top`.
+    panel.style.flex = '0 0 auto';
+  }
 
   // Non-modal (#271): `showModal()`'s own top layer, focus trap and inert
   // page are what stop a click, a scroll, a hover, a text selection or a
@@ -320,53 +481,58 @@ export function createDrawer(
   }
 
   /** The Viewport's own hit-testable region, non-modal only (see
-   * `applyModalStyle`, above, for why it needs one at all): clipped to
-   * exactly the portion of the Panel currently scrolled into view, so a
-   * point outside it falls through to the page. The gap is always `100%`
-   * of the Viewport's own height, so the Panel's visible height, measured
-   * up from the Viewport's own bottom edge, is simply `viewport.scrollTop`:
-   * `inset(calc(100% - scrollTop) 0 0 0)`. Driven by the `--drawer` scroll
-   * timeline (`HIT_AREA_CLASS`, set up in `ensureBackdropReset`) wherever
-   * it resolves, so nothing here runs per scroll frame; written directly
-   * here only as the Firefox fallback (`onScroll`, below), the same split
-   * `updateProgress` already makes for the dim.
+   * `applyModalStyle`, above, for why it needs one at all): clipped
+   * (`hitAreaInset`) to exactly the portion of the Panel currently
+   * scrolled into view, flush against `side`'s own edge, so a point
+   * outside it falls through to the page. Driven by the `--drawer` scroll
+   * timeline (`hitAreaClass(side)`, set up in `ensureBackdropReset`)
+   * wherever it resolves, so nothing here runs per scroll frame; written
+   * directly here only as the Firefox fallback (`onScroll`, below), the
+   * same split `updateProgress` already makes for the dim.
    *
    * Suppressed entirely (the Viewport given up everywhere, to the page)
    * during the Panel's own CSS entrance and exit (`phase === 'opening'`, or
    * a programmatic close's `cssExiting`): both move the Panel with a
-   * `transform`, never `scrollTop`, so the scroll-position-derived region
-   * above would already sit at the Panel's final, resting place from their
-   * very first frame, ahead of the Panel's own, still-animating position,
-   * and block real clicks on the page there until the transition catches
-   * up. A drag-driven close keeps tracking throughout instead: it moves
-   * `scrollTop` itself, the same native scroll the open already is, so the
-   * region above stays accurate all the way down to 0. */
+   * `transform`, never `scrollTop`/`scrollLeft`, so the scroll-position-
+   * derived region above would already sit at the Panel's final, resting
+   * place from their very first frame, ahead of the Panel's own, still-
+   * animating position, and block real clicks on the page there until the
+   * transition catches up. A drag-driven close keeps tracking throughout
+   * instead: it moves the real scroll position itself, the same native
+   * scroll the open already is, so the region above stays accurate all the
+   * way down to closed. */
   function updateHitArea() {
     if (opts.modal !== false) {
-      viewport.classList.remove(HIT_AREA_CLASS);
+      viewport.classList.remove(hitAreaClass(side));
       viewport.style.clipPath = '';
       return;
     }
     const tracking = !cssExiting && phase !== 'opening' && phase !== 'closed';
     if (!tracking) {
-      viewport.classList.remove(HIT_AREA_CLASS);
-      viewport.style.clipPath = 'inset(100% 0 0 0)';
+      viewport.classList.remove(hitAreaClass(side));
+      viewport.style.clipPath = `inset(${hitAreaInset(side, '0px')})`;
     } else if (supportsScrollTimeline) {
       viewport.style.clipPath = '';
-      viewport.classList.add(HIT_AREA_CLASS);
+      viewport.classList.add(hitAreaClass(side));
     } else {
-      viewport.classList.remove(HIT_AREA_CLASS);
-      viewport.style.clipPath = `inset(calc(100% - ${viewport.scrollTop}px) 0 0 0)`;
+      viewport.classList.remove(hitAreaClass(side));
+      const raw = viewport[axis.scroll];
+      const v = reversed ? maxScroll - raw : raw;
+      viewport.style.clipPath = `inset(${hitAreaInset(side, `${v}px`)})`;
     }
   }
   applyModalStyle();
 
   // The timeline plumbing only: a consumer's own `@keyframes` and
   // `animation-timeline: --drawer` on `Drawer.Backdrop` (or any other
-  // descendant of the dialog) is what actually dims it (#249). `y`: the
-  // viewport only ever scrolls vertically.
+  // descendant of the dialog) is what actually dims it (#249). `x` for
+  // `left`/`right`, `y` for `bottom`/`top`: the viewport only ever scrolls
+  // along its own axis.
   if (supportsScrollTimeline) {
-    viewport.style.setProperty('scroll-timeline', `${SCROLL_TIMELINE_NAME} y`);
+    viewport.style.setProperty(
+      'scroll-timeline',
+      `${SCROLL_TIMELINE_NAME} ${horizontal ? 'x' : 'y'}`
+    );
     dialog.style.setProperty('timeline-scope', SCROLL_TIMELINE_NAME);
   }
 
@@ -380,55 +546,69 @@ export function createDrawer(
     opts.onPhaseChange?.(next);
   }
 
-  /** Reads the viewport's height and the panel's natural height, and
-   * recomputes each snap point's pixel offset from them. */
+  /** Reads the Viewport's extent along its own axis and the panel's
+   * natural extent along the same axis, and recomputes each snap point's
+   * "forward" pixel offset from them, plus the Viewport's own maximum
+   * scroll position (`maxScroll`). */
   function measure() {
-    const viewportHeight = viewport.clientHeight;
+    const viewportExtent = viewport[axis.client];
     const points = opts.snapPoints;
     snapPx = points
       ? points.map((point) => {
-          if (typeof point === 'number') return viewportHeight * point;
+          if (typeof point === 'number') return viewportExtent * point;
           const px = Number.parseFloat(point);
           return Number.isFinite(px) ? px : 0;
         })
-      : [Math.min(panel.getBoundingClientRect().height, viewportHeight)];
+      : [
+          Math.min(
+            panel.getBoundingClientRect()[horizontal ? 'width' : 'height'],
+            viewportExtent
+          )
+        ];
+    maxScroll = viewport[axis.extent] - viewportExtent;
+    // The hit area's own "fully open" target (#271, #312), and what
+    // `top`/`left`'s mirrored math (`scrollForSnap`) measures against.
+    viewport.style.setProperty(MAX_SCROLL_VAR, `${maxScroll}px`);
     // The scroll range a native dim's `animation-range` covers (closed to
     // the first snap point), once per layout -- never per frame (#249).
-    dialog.style.setProperty('--drawer-first-snap', `${snapPx[0] ?? 0}px`);
-    // The hit area's own "fully open" target (#271, #312): see
-    // `MAX_SCROLL_VAR`'s own comment for why `@keyframes` needs this as a
-    // value instead of reading the scroll timeline's progress directly.
-    viewport.style.setProperty(
-      MAX_SCROLL_VAR,
-      `${viewport.scrollHeight - viewportHeight}px`
-    );
+    dialog.style.setProperty('--drawer-first-snap', `${scrollForSnap(0)}px`);
   }
 
-  /** Positions every `[data-drawer-snap]` marker at its snap point's
-   * offset: index 0 at 0 (closed), each configured point after. Closed is
-   * not itself a snap target while the drawer is not dismissible, so a
-   * drag or fling toward it settles on the nearest open point instead. */
+  /** Positions every `[data-drawer-snap]` marker at its snap point's real
+   * scroll offset (`scrollForSnap`): index 0 at closed, each configured
+   * point after. Closed is not itself a snap target while the drawer is
+   * not dismissible, so a drag or fling toward it settles on the nearest
+   * open point instead. */
   function positionMarkers() {
     const markers =
       viewport.querySelectorAll<HTMLElement>('[data-drawer-snap]');
     markers.forEach((marker, i) => {
-      const px = i === 0 ? 0 : (snapPx[i - 1] ?? 0);
-      Object.assign(marker.style, {
-        position: 'absolute',
-        insetInlineStart: '0',
-        width: '100%',
-        height: '0',
-        pointerEvents: 'none',
-        scrollSnapAlign: i === 0 && !opts.dismissible ? 'none' : 'start',
-        top: `${px}px`
-      });
+      const target = i === 0 ? scrollForSnap(-1) : scrollForSnap(i - 1);
+      marker.style.position = 'absolute';
+      marker.style.pointerEvents = 'none';
+      marker.style.scrollSnapAlign =
+        i === 0 && !opts.dismissible ? 'none' : 'start';
+      if (horizontal) {
+        marker.style.insetBlockStart = '0';
+        marker.style.height = '100%';
+        marker.style.width = '0';
+        marker.style.left = `${target}px`;
+      } else {
+        marker.style.insetInlineStart = '0';
+        marker.style.width = '100%';
+        marker.style.height = '0';
+        marker.style.top = `${target}px`;
+      }
     });
   }
 
   let lastProgress: string | undefined;
   function updateProgress() {
-    const first = snapPx[0] || 1;
-    const progress = clamp(viewport.scrollTop / first, 0, 1).toFixed(4);
+    const st = viewport[axis.scroll];
+    const closedPos = scrollForSnap(-1);
+    const firstOpenPos = scrollForSnap(0);
+    const denom = firstOpenPos - closedPos || (reversed ? -1 : 1);
+    const progress = clamp((st - closedPos) / denom, 0, 1).toFixed(4);
     // `setProperty` on a custom property, unlike a standard one, does not
     // itself skip the write (and the style/commit work it schedules on the
     // main thread) when the value is unchanged (#267): clamped at 0 or 1,
@@ -440,19 +620,30 @@ export function createDrawer(
   }
 
   /** Locks the content below the top (last configured) snap point: vaul's
-   * rule, ruled on in #232 (variant B). */
+   * rule, ruled on in #232 (variant B). Always `overflow-y`: the Content
+   * part's own scroll is independent of which edge the drawer itself opens
+   * from. */
   function updateContentLock() {
     if (!parts.content) return;
-    const top = snapPx[snapPx.length - 1] ?? 0;
-    const atTop = viewport.scrollTop >= top - SETTLE_TOLERANCE;
+    const target = scrollForSnap(snapPx.length - 1);
+    const st = viewport[axis.scroll];
+    const atTop = reversed
+      ? st <= target + SETTLE_TOLERANCE
+      : st >= target - SETTLE_TOLERANCE;
     parts.content.style.overflowY = atTop ? 'auto' : 'hidden';
   }
 
-  /** The snap points a drag or fling may land on: closed (index -1) only
-   * while dismissible, then each configured point. */
+  /** The snap points a drag or fling may land on, as real scroll offsets:
+   * closed (index -1) only while dismissible, then each configured
+   * point. */
   function candidates(): SnapCandidate[] {
-    const open = snapPx.map((px, index) => ({ index, px }));
-    return opts.dismissible ? [{ index: -1, px: 0 }, ...open] : open;
+    const open = snapPx.map((_, index) => ({
+      index,
+      px: scrollForSnap(index)
+    }));
+    return opts.dismissible
+      ? [{ index: -1, px: scrollForSnap(-1) }, ...open]
+      : open;
   }
 
   function nearest(px: number, from: SnapCandidate[]): SnapCandidate {
@@ -467,8 +658,8 @@ export function createDrawer(
 
   function settleOpenAt(index: number) {
     // A closing scroll this interrupted (the user grabbed it, or it never
-    // reached 0): back to normal, snapping, open interaction.
-    viewport.style.scrollSnapType = 'y mandatory';
+    // reached closed): back to normal, snapping, open interaction.
+    viewport.style.scrollSnapType = `${horizontal ? 'x' : 'y'} mandatory`;
     if (index !== snapIndex) {
       snapIndex = index;
       opts.onSnapPointChange?.(index);
@@ -486,7 +677,7 @@ export function createDrawer(
     // `onOpenChange`.
     if (phase === 'closed') return;
     panelVisibilityObserver.unobserve(panel);
-    viewport.style.scrollSnapType = 'y mandatory';
+    viewport.style.scrollSnapType = `${horizontal ? 'x' : 'y'} mandatory`;
     // `close()` itself restores focus to whatever had it before `open()`
     // called `showModal()` -- closed first, so a consumer's own focus
     // handling (`onPhaseChange`, below) has the last word, not the
@@ -604,10 +795,11 @@ export function createDrawer(
     detachInterruptListeners();
     // Re-measures now that the entrance's own transform is gone (#312): the
     // `measure()` call in `open()` ran while the Panel still carried the
-    // entrance's starting style (a `translateY` recipe, say), which the
-    // scrollable-overflow spec folds into the Viewport's `scrollHeight`, so
-    // `--drawer-max-scroll` came out inflated. The Panel now rests at its
-    // real, untransformed position, so this is the first accurate reading.
+    // entrance's starting style (a `translate` recipe, say), which the
+    // scrollable-overflow spec folds into the Viewport's `scrollHeight`/
+    // `scrollWidth`, so `--drawer-max-scroll` came out inflated. The Panel
+    // now rests at its real, untransformed position, so this is the first
+    // accurate reading.
     measure();
     // Arms the leave-view close (#296) only now: the entrance has actually
     // settled, so the Panel's own position reflects where it rests open,
@@ -744,7 +936,9 @@ export function createDrawer(
   // are the only places that arm it (`observe`): the Panel starts out of
   // view before the entrance, under a consumer's own CSS transform, and
   // this must never read that as a close. `scrollend` (and its debounce
-  // fallback, below) stays as the fallback for whatever this misses.
+  // fallback, below) stays as the fallback for whatever this misses. Axis-
+  // independent: an IntersectionObserver reads overlap, not which edge it
+  // is measured from.
   const panelVisibilityObserver = new IntersectionObserver(
     (entries) => {
       const entry = entries[entries.length - 1];
@@ -763,25 +957,28 @@ export function createDrawer(
 
   function onScrollEnd() {
     if (destroyed) return;
-    // A mouse drag drives the native scrollTop itself (with scroll-snap
-    // off): the browser still eventually fires a `scrollend` for that, but
-    // the drag is not over, and `settleOpenAt`/`finishClose` turning
-    // snapping back on now, while it rests off every snap point, would
-    // fight the drag that owns it until release. The eased throw back to a
-    // snap point (`throwTo`) drives `scrollTop` the same way, off every
+    // A mouse drag drives the native scroll position itself (with
+    // scroll-snap off): the browser still eventually fires a `scrollend`
+    // for that, but the drag is not over, and `settleOpenAt`/`finishClose`
+    // turning snapping back on now, while it rests off every snap point,
+    // would fight the drag that owns it until release. The eased throw
+    // back to a snap point (`throwTo`) drives it the same way, off every
     // snap point until its last frame: a `scrollend` the browser fires
     // mid-ease (it does, well before the ease is done) would turn snapping
     // back on at that in-between position too, and the resulting re-snap
     // can land on a different point than the one the throw was easing
     // toward -- the flash (#279).
     if (dragging || throwing || cssExiting) return;
-    const st = viewport.scrollTop;
+    const st = viewport[axis.scroll];
+    const closedPos = scrollForSnap(-1);
+    const atClosed = Math.abs(st - closedPos) <= SETTLE_TOLERANCE;
 
     if (
-      st <= SETTLE_TOLERANCE &&
+      atClosed &&
       // `closing` already passed its own dismissible check, at whichever
       // call site started it (`close()`, Escape, the outside press): only
-      // a spontaneous native settle at 0 from `open` needs it checked here.
+      // a spontaneous native settle at closed from `open` needs it checked
+      // here.
       (phase === 'closing' || (phase === 'open' && opts.dismissible))
     ) {
       const reason = pendingCloseReason ?? 'drag';
@@ -793,7 +990,7 @@ export function createDrawer(
     if (phase === 'open' || phase === 'closing') {
       const landed = nearest(
         st,
-        snapPx.map((px, index) => ({ index, px }))
+        snapPx.map((_, index) => ({ index, px: scrollForSnap(index) }))
       );
       settleOpenAt(landed.index);
     }
@@ -825,12 +1022,12 @@ export function createDrawer(
   }
   // The native dim needs no scroll listener at all: nothing here runs per
   // scroll frame (#249). The content lock still only needs to be right at
-  // a settle point (`settleOpenAt`, `open`'s own call once `scrollTop` is
-  // set, `onResize`, `setOptions`), all of which call `updateContentLock`
-  // directly, so dropping its live update here costs it nothing -- a drag
-  // or fling already has the viewport's whole gesture captured natively,
-  // so content's own `overflow-y` cannot take effect until the gesture
-  // (and so a settle) ends anyway.
+  // a settle point (`settleOpenAt`, `open`'s own call once the scroll
+  // position is set, `onResize`, `setOptions`), all of which call
+  // `updateContentLock` directly, so dropping its live update here costs
+  // it nothing -- a drag or fling already has the viewport's whole gesture
+  // captured natively, so content's own `overflow-y` cannot take effect
+  // until the gesture (and so a settle) ends anyway.
   if (!supportsScrollTimeline) {
     viewport.addEventListener('scroll', onScroll);
   }
@@ -888,23 +1085,33 @@ export function createDrawer(
   document.addEventListener('keydown', onDocumentKeyDown);
 
   function onResize() {
-    // `opening` reconciles too: `open()` no longer animates `scrollTop` (it
-    // is already at its snap point, synchronously, before the entrance's
-    // own CSS transition on `transform` even starts), so there is nothing
-    // left here for a resize mid-entrance to race.
+    // `opening` reconciles too: `open()` no longer animates the scroll
+    // position (it is already at its snap point, synchronously, before
+    // the entrance's own CSS transition on `transform` even starts), so
+    // there is nothing left here for a resize mid-entrance to race.
     if (phase === 'closed') return;
     const oldSnapPx = snapPx;
-    const st = viewport.scrollTop;
+    const oldMaxScroll = maxScroll;
+    const st = viewport[axis.scroll];
     measure();
     positionMarkers();
     if (!dialog.open) return;
     // Never resize onto closed: only reposition onto an open point
-    // (ADR 0001).
+    // (ADR 0001). Finds the nearest point in the *old* layout's own real
+    // scroll offsets (`scrollTargetFor` against the snapshots taken
+    // above, not the just-recomputed `snapPx`/`maxScroll`), then scrolls
+    // to that same index's new offset.
     const landed = nearest(
       st,
-      oldSnapPx.map((px, index) => ({ index, px }))
+      oldSnapPx.map((_, index) => ({
+        index,
+        px: scrollTargetFor(index, oldSnapPx, oldMaxScroll)
+      }))
     );
-    viewport.scrollTo({ top: snapPx[landed.index] ?? 0, behavior: 'instant' });
+    viewport.scrollTo({
+      [axis.scrollToKey]: scrollForSnap(landed.index),
+      behavior: 'instant'
+    });
     updateContentLock();
   }
   window.addEventListener('resize', onResize);
@@ -912,17 +1119,21 @@ export function createDrawer(
 
   // ---------- mouse drag (#235) ----------
   // A mouse cannot drag a scroll container: it gets its own pointer
-  // handler, a projected throw and a 240ms ease. Touch, wheel and
-  // trackpad stay purely native.
+  // handler, a projected throw and a 240ms ease, along whichever axis
+  // `side` scrolls. Touch, wheel and trackpad stay purely native.
   let dragging = false;
-  let dragStartY = 0;
-  let dragStartTop = 0;
-  let dragMaxTop = 0;
+  let dragStartMain = 0;
+  let dragStartScroll = 0;
+  let dragMaxScroll = 0;
   let dragHistory: { t: number; st: number }[] = [];
   let throwFrame = 0;
   /** Set for `throwTo`'s whole run, including its final, synchronous
    * frame: guards `onScrollEnd` the way `dragging` does, below. */
   let throwing = false;
+
+  function pointerMain(event: PointerEvent): number {
+    return horizontal ? event.clientX : event.clientY;
+  }
 
   function onPointerDown(event: PointerEvent) {
     if (
@@ -937,10 +1148,10 @@ export function createDrawer(
       return;
     }
     dragging = true;
-    dragStartY = event.clientY;
-    dragStartTop = viewport.scrollTop;
-    dragMaxTop = viewport.scrollHeight - viewport.clientHeight;
-    dragHistory = [{ t: event.timeStamp, st: dragStartTop }];
+    dragStartMain = pointerMain(event);
+    dragStartScroll = viewport[axis.scroll];
+    dragMaxScroll = viewport[axis.extent] - viewport[axis.client];
+    dragHistory = [{ t: event.timeStamp, st: dragStartScroll }];
     cancelAnimationFrame(throwFrame);
     throwing = false;
     try {
@@ -955,9 +1166,14 @@ export function createDrawer(
 
   function onPointerMove(event: PointerEvent) {
     if (!dragging || event.pointerType !== 'mouse') return;
-    const dy = event.clientY - dragStartY;
-    viewport.scrollTop = clamp(dragStartTop - dy, 0, dragMaxTop);
-    dragHistory.push({ t: event.timeStamp, st: viewport.scrollTop });
+    const d = pointerMain(event) - dragStartMain;
+    // Moving the pointer toward `side`'s own anchor edge (down for
+    // `bottom`, up for `top`, right for `right`, left for `left`) always
+    // decreases the scroll position: whether that opens or closes the
+    // drawer follows from where the snap targets actually sit
+    // (`scrollForSnap`), not from anything branched on here.
+    viewport[axis.scroll] = clamp(dragStartScroll - d, 0, dragMaxScroll);
+    dragHistory.push({ t: event.timeStamp, st: viewport[axis.scroll] });
     while (
       dragHistory.length > 1 &&
       dragHistory[dragHistory.length - 1].t - dragHistory[0].t > DRAG_HISTORY_MS
@@ -973,10 +1189,10 @@ export function createDrawer(
       throwing = false;
       onDone();
     };
-    const start = viewport.scrollTop;
+    const start = viewport[axis.scroll];
     const delta = target - start;
     if (delta === 0 || reducedMotion()) {
-      viewport.scrollTop = target;
+      viewport[axis.scroll] = target;
       finish();
       return;
     }
@@ -984,11 +1200,11 @@ export function createDrawer(
     const tick = (now: number) => {
       const t = Math.min(1, Math.max(0, (now - startTime) / THROW_DURATION_MS));
       const eased = 1 - Math.pow(1 - t, 3);
-      viewport.scrollTop = start + delta * eased;
+      viewport[axis.scroll] = start + delta * eased;
       if (t < 1) {
         throwFrame = requestAnimationFrame(tick);
       } else {
-        viewport.scrollTop = target;
+        viewport[axis.scroll] = target;
         finish();
       }
     };
@@ -1009,7 +1225,7 @@ export function createDrawer(
     const last = dragHistory[dragHistory.length - 1];
     const dt = last.t - first.t;
     const velocity = dt > 0 ? (last.st - first.st) / dt : 0;
-    const projected = viewport.scrollTop + velocity * THROW_VELOCITY_SCALE;
+    const projected = viewport[axis.scroll] + velocity * THROW_VELOCITY_SCALE;
     const target = nearest(projected, candidates());
     const closing = target.index === -1;
     if (closing) {
@@ -1045,14 +1261,15 @@ export function createDrawer(
       // the reason that exit already carries, the same way a touch, a
       // wheel or a pointer down would, then falls through to open fresh
       // below -- `finishExit` has already closed the dialog by then, so
-      // `showModal()` does not throw on one that is still open.
+      // `showModal()`/`show()` does not throw on one that is still open.
       finishExit();
     }
-    // Before `showModal()`, and before the layout reads below (`measure`,
-    // the `scrollTop` write): a style recalc that sees this attribute only
-    // after the dialog is already open and laid out has nothing left to
-    // transition from -- the removal a frame later just lands on the same
-    // computed value, and the entrance never moves.
+    // Before `showModal()`/`show()`, and before the layout reads below
+    // (`measure`, the scroll-position write): a style recalc that sees
+    // this attribute only after the dialog is already open and laid out
+    // has nothing left to transition from -- the removal a frame later
+    // just lands on the same computed value, and the entrance never
+    // moves.
     panel.setAttribute(STARTING_STYLE_ATTR, '');
     parts.backdrop?.setAttribute(STARTING_STYLE_ATTR, '');
     if (opts.modal === false) dialog.show();
@@ -1060,14 +1277,14 @@ export function createDrawer(
     dialog.focus({ preventScroll: true });
     // Forces the recalc the attribute above needs to land as a real,
     // committed value -- not folded into whatever recalc `measure` or the
-    // `scrollTop` write below triggers next.
+    // scroll-position write below triggers next.
     void getComputedStyle(panel).transform;
     measure();
     positionMarkers();
     // Straight to the snap point, before this task yields to a paint: no
     // scroll animation, so nothing here can race a resize or a drag the
     // way the old scrollTo-driven open did.
-    viewport.scrollTop = snapPx[index] ?? 0;
+    viewport[axis.scroll] = scrollForSnap(index);
     snapIndex = index;
     updateContentLock();
     setPhase('opening');
@@ -1106,7 +1323,7 @@ export function createDrawer(
   }
 
   /** `open`'s own index needs `snapPx` measured first, since it is read
-   * before the dialog (and so the panel's natural height) has any layout
+   * before the dialog (and so the panel's natural extent) has any layout
    * on the very first call. */
   function clampIndexWithMeasure(index: number) {
     if (snapPx.length === 0) {
@@ -1132,7 +1349,7 @@ export function createDrawer(
     if (phase !== 'open') return;
     const clamped = clampIndex(index);
     viewport.scrollTo({
-      top: snapPx[clamped] ?? 0,
+      [axis.scrollToKey]: scrollForSnap(clamped),
       behavior: motionBehavior()
     });
   }
