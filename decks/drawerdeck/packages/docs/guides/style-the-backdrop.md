@@ -65,8 +65,8 @@ the scroll end, so the same `@keyframes` need the opposite end of the
 range, played in reverse:
 
 ```css
-.backdrop[data-side="top"],
-.backdrop[data-side="left"] {
+dialog[data-side='top'] .backdrop,
+dialog[data-side='left'] .backdrop {
   animation-range: var(--drawer-first-snap) 100%;
   animation-direction: reverse;
 }
