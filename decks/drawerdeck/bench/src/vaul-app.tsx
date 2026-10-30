@@ -34,9 +34,16 @@
 // `Drawer.Content` is this bench's own marker (the same convention as the
 // other decks' `#panel`), not vaul's; vaul's own marker is the
 // `[data-vaul-drawer]` attribute it puts on the same element.
+//
+// `onOpenChange` (fairness rule 12, #311): reports vaul's own open
+// state to `window.__bench.isOpen()`, left otherwise uncontrolled (no
+// `open` prop) -- a pure listener, the same convention every deck's
+// adapter here now uses, so a dismiss only counts once the library itself,
+// not this bench's reading of `#panel`'s position, says so.
 
 import { Drawer } from 'vaul';
 import { FULL_FRACTION, HALF_FRACTION, RowsReact } from './content';
+import type {} from './harness';
 
 const rows = RowsReact(50);
 
@@ -45,6 +52,7 @@ export function VaulApp() {
     <Drawer.Root
       snapPoints={[HALF_FRACTION, FULL_FRACTION]}
       shouldScaleBackground={false}
+      onOpenChange={(open) => window.__bench.reportOpen(open)}
     >
       <Drawer.Trigger id="trigger">Open</Drawer.Trigger>
       <Drawer.Portal>

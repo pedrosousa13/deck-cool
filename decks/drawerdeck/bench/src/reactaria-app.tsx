@@ -70,6 +70,7 @@
 // uses, so the two libraries dim the same way here.
 
 import type { ForwardRefExoticComponent, RefAttributes } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from 'react-aria-components';
 import {
   Sheet as UnsafeSheet,
@@ -80,9 +81,29 @@ import {
   type SheetProps
 } from 'react-aria-components/Sheet';
 import { FULL_FRACTION_PCT, HALF_FRACTION_PCT, RowsReact } from './content';
+import type {} from './harness';
 
 const rows = RowsReact(50);
 
+// `SheetOverlay`'s own swipe-to-dismiss detection (fairness rule 3) is an
+// `IntersectionObserver` on `[data-sheet-content]` (`dist/private/
+// Sheet.mjs`'s own `ref` callback): it sets a `hasEntered` flag once the
+// content's intersection ratio is >0, then calls `state.close()` once the
+// ratio drops back to <=0. In this bench (headless Chromium, CDP touch,
+// native scroll), that observer's callback fires exactly once -- the
+// initial, synchronous notification every `IntersectionObserver.observe()`
+// call delivers -- and never again, so `state.close()`/`onOpenChange(false)`
+// never run for a swipe dismiss here (#311; full writeup in
+// `RESULTS.md`'s "React Aria's Sheet never closed on a flick"). This may be
+// specific to this bench's environment -- it has not been checked on a
+// real device -- and is not a React Aria bug: nothing in React Aria's own
+// docs promises a swipe-close detector that survives a bench like this
+// one, so this adapter does not patch around it (#311, fairness rule 3: a
+// rival is set up the way its own docs say, never patched by this bench's
+// own code). The `touch-flick-dismiss` scenario instead records React
+// Aria as "did not close" (fairness rule 12, below) -- excluded from that
+// scenario's winners and ties rather than scored on scroll motion alone.
+//
 // `SheetProps` doesn't type `id` (unlike `SheetBackdropProps`, it has no
 // `GlobalDOMAttributes`), though the component forwards unknown DOM props
 // through at runtime the same as every other react-aria-components
@@ -94,8 +115,25 @@ const Sheet = UnsafeSheet as ForwardRefExoticComponent<
 >;
 
 export function ReactAriaApp() {
+  // Controlled `isOpen`/`onOpenChange`, both documented `SheetTriggerProps`
+  // (inherited from `DialogTriggerProps`' `OverlayTriggerProps`) -- used
+  // only to read the library's own open state back out, never to close the
+  // sheet: nothing here calls `setIsOpen(false)` except `SheetTrigger`
+  // itself, through its own `onOpenChange` (Escape, an outside press).
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Fairness rule 12 (#311): reports this controlled `isOpen` to
+  // `window.__bench.isOpen()` on every change, from whichever path
+  // `SheetTrigger` set it through. A swipe dismiss never reaches this --
+  // see the header comment above -- so `touch-flick-dismiss` reports React
+  // Aria as "did not close" (rule 12's own treatment), rather than this
+  // adapter inventing a second way to close the sheet.
+  useEffect(() => {
+    window.__bench.reportOpen(isOpen);
+  }, [isOpen]);
+
   return (
-    <SheetTrigger>
+    <SheetTrigger isOpen={isOpen} onOpenChange={setIsOpen}>
       <Button id="trigger">Open</Button>
       <SheetOverlay snapPoints={[HALF_FRACTION_PCT, FULL_FRACTION_PCT]}>
         <SheetBackdrop
