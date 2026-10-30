@@ -4,7 +4,8 @@
 // Doc followed: https://vaul.emilkowal.ski/snap-points (snap points), with
 // https://vaul.emilkowal.ski/api (defaults) and
 // https://vaul.emilkowal.ski/getting-started (the quickstart's own
-// `Drawer.Content` positioning, carried into src/vaul.css) checked too.
+// `Drawer.Overlay`/`Drawer.Content` structure and positioning, carried
+// into src/vaul.css) checked too.
 //
 // Options set, non-default:
 // - `snapPoints`: to match the shared half/full snap points every deck
@@ -15,6 +16,18 @@
 // none of the other three decks animate a background scale, so leaving
 // vaul's own opt-in flourish off keeps the comparison on the shared task,
 // not vaul's extra visual effect.
+//
+// `Drawer.Overlay` (#304, fairness rule 3): the getting-started quickstart
+// puts it in `Drawer.Portal`, before `Drawer.Content` --
+// `<Drawer.Overlay className="fixed inset-0 bg-black/40" />` -- and it was
+// missing here. vaul's own shipped CSS (vaul-vendor.css) already drives its
+// fade through `[data-vaul-overlay]`/`[data-vaul-snap-points-overlay]`
+// (with `snapPoints` set, fading in only once the drawer passes
+// `fadeFromIndex`, which defaults to the last snap point -- vaul's own
+// default, left alone); without the element itself, none of that CSS had
+// anything to apply to. Added with no options; position and dim color are
+// its own CSS, in src/vaul.css, the same as `Drawer.Content` already
+// needed.
 //
 // `Drawer.Root` with `snapPoints`, driven through its own public API -- the
 // bench never reaches into vaul's internals. `id="panel"` on
@@ -35,6 +48,7 @@ export function VaulApp() {
     >
       <Drawer.Trigger id="trigger">Open</Drawer.Trigger>
       <Drawer.Portal>
+        <Drawer.Overlay className="backdrop" />
         <Drawer.Content id="panel" className="panel">
           <div className="handle" />
           <div className="inner-list">

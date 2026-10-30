@@ -21,3 +21,24 @@
   flex-direction: column;
   overflow: hidden;
 }
+
+/* `SheetBackdrop` paints nothing on its own (#304, fairness rule 3): the
+   dim color and the fade-in/out keyframes are the package's own starter
+   example's `Sheet.css` (react-spectrum repo, `starters/docs/src/
+   Sheet.css`), the CSS react-aria.adobe.com/Sheet's own "Example" is built
+   from -- its `swipeAnimation` prop (src/reactaria-app.tsx) only names a
+   `@keyframes`; it does not provide one. */
+
+.backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+@keyframes sheet-backdrop {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

@@ -2,7 +2,40 @@
    quickstart (base-ui.com/react/components/drawer) gives for the popup --
    height and transform driven by the CSS custom properties the component
    sets (`--drawer-height`, `--drawer-snap-point-offset`,
-   `--drawer-swipe-movement-y`). */
+   `--drawer-swipe-movement-y`).
+
+   The entrance/exit and the backdrop's dim are also the documented recipe
+   (#304, fairness rule 3): this bench had neither, so Base UI snapped
+   open and settled instantly while drawerdeck ran its own 300ms entrance.
+   Copied from the packaged doc, `node_modules/@base-ui/react/docs/react/
+   components/drawer.md`'s "Snap points" CSS Modules recipe (its `.Popup`
+   and `.Backdrop`), the one that matches this bench's own `snapPoints`
+   usage -- every recipe in that doc agrees on the shape:
+
+     transition: transform 450ms cubic-bezier(0.32, 0.72, 0, 1);
+     ...
+     &[data-starting-style],
+     &[data-ending-style] {
+       transform: translateY(calc(100% + 2px));
+     }
+     &[data-ending-style] {
+       transition-duration: calc(var(--drawer-swipe-strength) * 400ms);
+     }
+
+   and, for the Backdrop:
+
+     opacity: calc(var(--backdrop-opacity) * (1 - var(--drawer-swipe-progress)));
+     transition-duration: 450ms;
+     transition-property: opacity;
+     transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+     &[data-starting-style],
+     &[data-ending-style] { opacity: 0; }
+     &[data-swiping] { transition-duration: 0ms; }
+     &[data-ending-style] { transition-duration: calc(var(--drawer-swipe-strength) * 400ms); }
+
+   Flattened to plain selectors (no CSS nesting) to match this file's own
+   style, and with the doc's unused `--bleed` var dropped from `.Backdrop`
+   -- this bench does no bleed trick, on this deck or any other. */
 
 .viewport {
   position: fixed;
@@ -28,4 +61,45 @@
   );
   display: flex;
   flex-direction: column;
+  transition: transform 450ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.panel[data-starting-style],
+.panel[data-ending-style] {
+  transform: translateY(calc(100% + 2px));
+}
+
+.panel[data-ending-style] {
+  transition-duration: calc(var(--drawer-swipe-strength) * 400ms);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  min-height: 100dvh;
+  background-color: black;
+  --backdrop-opacity: 0.2;
+  opacity: calc(var(--backdrop-opacity) * (1 - var(--drawer-swipe-progress)));
+  transition-duration: 450ms;
+  transition-property: opacity;
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .backdrop {
+    --backdrop-opacity: 0.7;
+  }
+}
+
+.backdrop[data-starting-style],
+.backdrop[data-ending-style] {
+  opacity: 0;
+}
+
+.backdrop[data-swiping] {
+  transition-duration: 0ms;
+}
+
+.backdrop[data-ending-style] {
+  transition-duration: calc(var(--drawer-swipe-strength) * 400ms);
 }

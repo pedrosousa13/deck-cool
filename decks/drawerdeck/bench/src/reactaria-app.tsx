@@ -49,6 +49,25 @@
 // trackpad's two-finger pan does, so this bench's `mouse-drag-throw`
 // scenario is not expected to move it; RESULTS.md records what the smoke
 // run actually showed.
+//
+// `SheetBackdrop`'s `swipeAnimation`/`swipeAnimationRange` (#304, fairness
+// rule 3): `SheetBackdrop` on its own paints nothing -- no background, no
+// entrance/exit -- so it was invisible here. The package's own starter
+// example (the "Example" on react-aria.adobe.com/Sheet, and
+// `starters/docs/src/Sheet.tsx` in the react-spectrum repo it ships from)
+// gives it exactly this:
+//
+//   <SheetBackdrop
+//     swipeAnimation="sheet-backdrop"
+//     swipeAnimationRange={snapPoints ? {start: snapPoints.length - 1} : undefined}
+//   />
+//
+// with the dim color and the keyframes as the starter's own `Sheet.css`:
+// `.react-aria-SheetBackdrop { background: rgb(0 0 0 / 0.4); }` and
+// `@keyframes sheet-backdrop { from { opacity: 0 } to { opacity: 1 } }`
+// (src/reactaria.css). `start: snapPoints.length - 1` is the same
+// "fade in only past the last snap point" default vaul's `fadeFromIndex`
+// uses, so the two libraries dim the same way here.
 
 import type { ForwardRefExoticComponent, RefAttributes } from 'react';
 import { Button } from 'react-aria-components';
@@ -79,7 +98,11 @@ export function ReactAriaApp() {
     <SheetTrigger>
       <Button id="trigger">Open</Button>
       <SheetOverlay snapPoints={[HALF_FRACTION_PCT, FULL_FRACTION_PCT]}>
-        <SheetBackdrop />
+        <SheetBackdrop
+          className="backdrop"
+          swipeAnimation="sheet-backdrop"
+          swipeAnimationRange={{ start: 1 }}
+        />
         <Sheet id="panel" className="panel">
           <SheetContent className="content">
             <div className="handle" />
