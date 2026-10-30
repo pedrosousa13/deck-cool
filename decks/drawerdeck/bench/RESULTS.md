@@ -39,7 +39,9 @@ comparison page:
    links the doc page it follows at its own top, and lists every option it
    sets that isn't that library's own default, with why. "Method notes" and
    "React Aria's Sheet" below cover the positioning CSS each one's own
-   quickstart requires.
+   quickstart requires; "Entrance animation audit" below covers each one's
+   documented entrance/exit CSS and backdrop setup, and the guard that now
+   checks for it (#304).
 4. **The same task.** `src/content.ts`'s 50 rows and `[0.5, 0.92]` snap
    fractions, passed to every deck in the convention its own `snapPoints`
    expects (see each adapter); React Aria's Sheet is the one exception
@@ -144,6 +146,9 @@ scored rep isn't the one paying for a cold parse/compile.
   same shape as the original prototype's. `aggregate.py` is the multi-shard
   version the GitHub Actions `report` job runs; see its own header.
 - `smoke.spec.ts` -- the local smoke check: every deck opens to ~half.
+- `animates.spec.ts` -- the entrance-animation guard (#304, "Entrance
+  animation audit" above): every deck's panel must move across several
+  real frames on open, not snap.
 - `versions.json` -- each rival's pinned version and npm release date
   (#266 rule 5; see "Versions" below), checked in so `aggregate.py` never
   has to call npm.
@@ -269,6 +274,58 @@ reader can see the old, unfair gap directly.
   supported" for `mouse-drag-throw` rather than a winning settle time --
   see "Not supported" below (#294, #266 rule 11).
 
+## Entrance animation audit (#304, #266 rule 3)
+
+A trace found `src/baseui.css` gave Base UI's Drawer no `transition` and no
+`[data-starting-style]`/`[data-ending-style]` rules at all, so it snapped
+open and settled instantly while drawerdeck ran its own documented 300ms
+entrance -- unfair on the `open-to-half` and mouse-throw comparisons. Fixed,
+and the other two rivals' own docs re-audited the same way (rule 3):
+
+- **Base UI.** Missing a `transition` on the popup, the
+  `[data-starting-style]`/`[data-ending-style]` transforms, the release
+  duration scaled by `--drawer-swipe-strength`, and the whole backdrop --
+  `Drawer.Backdrop` was never rendered, so the dim CSS its docs give it had
+  nothing to apply to. All copied from the packaged doc's "Snap points" CSS
+  Modules recipe (`node_modules/@base-ui/react/docs/react/components/
+  drawer.md`, the one matching this bench's own `snapPoints` usage); see
+  `src/baseui.css`'s own header comment for the exact lines.
+- **vaul.** Missing `Drawer.Overlay` entirely (the getting-started
+  quickstart's own anatomy: `<Drawer.Overlay className="fixed inset-0
+  bg-black/40" />`, before `Drawer.Content`), so vaul's own shipped fade
+  CSS (`vaul-vendor.css`'s `[data-vaul-overlay]` rules, already vendored
+  and untouched) had no element to drive. Added the element
+  (`src/vaul-app.tsx`) and its required position/dim CSS (`src/vaul.css`),
+  the same category of fix `Drawer.Content` already needed.
+- **React Aria's Sheet.** The panel itself needed no CSS fix -- its
+  entrance is a native smooth scroll the engine drives, not a CSS
+  transition (`src/reactaria-app.tsx`'s own header comment) -- but
+  `SheetBackdrop` was rendered with no `swipeAnimation`, so it painted
+  nothing: no background, no fade. Given the package's own starter
+  example's props and CSS (react-aria.adobe.com/Sheet's "Example", built
+  from the react-spectrum repo's `starters/docs/src/Sheet.tsx`/`Sheet.css`):
+  `swipeAnimation="sheet-backdrop"`, `swipeAnimationRange={{start: 1}}`
+  (fade in only past the last snap point, the same default vaul's
+  `fadeFromIndex` uses), a `rgb(0 0 0 / 0.4)` background and the
+  `sheet-backdrop` keyframes (`src/reactaria.css`).
+- **drawerdeck.** Checked against its own guides
+  (`decks/drawerdeck/packages/docs/guides/animate-the-drawer.md` and
+  "Style the backdrop") line for line: `src/drawerdeck.css` already matches
+  the documented recipe exactly, and already explains (its own header
+  comment) why it renders no `Drawer.Backdrop` -- no scenario here exercises
+  one.
+
+**Guard.** `animates.spec.ts` loads each bench page, clicks `#trigger`, and
+samples `window.__bench.openness()` every frame for 900ms right after, in
+one `page.evaluate` call so the click and the first sampled frame land in
+the same task. It asserts the panel's position changes (>0.5px) across at
+least 3 of those frames, for every deck -- a real multi-frame entrance,
+not a snap. Reverting the Base UI fix locally and re-running it reproduces
+the bug this was written for: 0 changed frames, where every other deck
+clears the bar comfortably. `pnpm --dir decks/drawerdeck/bench animates`
+runs it (not part of `pnpm --dir decks/drawerdeck verify`, the same as
+`smoke.spec.ts` and `bench.spec.ts`; see this deck's own `AGENTS.md`).
+
 ## Not supported (#294, #266 rule 11)
 
 A drawer that never responds to a scenario's own gesture still finishes
@@ -315,7 +372,8 @@ left: 0; right: 0; bottom: 0` from the consumer; without it every snap
 - **Base UI's Drawer needed its own positioning CSS too** (`src/baseui.css`),
   from its own quickstart: `height`/`transform` driven by the CSS custom
   properties it sets, and `position: fixed; inset: 0; pointer-events: none`
-  on the viewport.
+  on the viewport. Its entrance/exit CSS and `Drawer.Backdrop` were missing
+  until #304 -- see "Entrance animation audit" above.
 - **`geometry()` on a closed vaul, Base UI or React Aria drawer would poll
   for ~30s per rep** if called: none of the three render `#panel` while
   closed (drawerdeck always renders it, hidden inside a closed
