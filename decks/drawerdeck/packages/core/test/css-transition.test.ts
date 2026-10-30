@@ -276,6 +276,41 @@ describe('the CSS exit', () => {
     removeBackdropTransition();
   });
 
+  it('a transform exit that carries the Panel out of view early still waits for its own close path, closing exactly once (#296)', async () => {
+    // The leave-view observer (`index.ts`'s `panelVisibilityObserver`)
+    // would otherwise read this exact moment -- the Panel's visible
+    // sliver long gone, well before the transition's own 300ms are up --
+    // as a close to act on itself. A CSS exit already owns this close,
+    // so it must not: `dialog.open` stays true until the exit's own
+    // transitionend, and `onOpenChange` fires once, not twice.
+    fixture = mount({ snapPoints: [0.5] });
+    const { panel, dialog, drawer } = fixture;
+    const removeTransition = withTransformTransition(panel, {
+      durationMs: 300
+    });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+
+    drawer.close('close-button');
+    await sleep(100);
+
+    // Well under a third of the way into the transition, but already far
+    // more than enough to have carried the Panel's small visible sliver
+    // (half the viewport, against a panel comfortably taller than it)
+    // fully out of view.
+    expect(translateY(getComputedStyle(panel).transform)).toBeGreaterThan(0);
+    expect(drawer.phase).toBe('closing');
+    expect(dialog.open).toBe(true);
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(dialog.open).toBe(false);
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'close-button');
+    removeTransition();
+  });
+
   it('closes immediately, synchronously, when no transition is defined', async () => {
     fixture = mount({ snapPoints: [0.5] });
     const { dialog, drawer } = fixture;

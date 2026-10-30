@@ -351,6 +351,144 @@ describe('a mouse drag (#235)', () => {
   });
 });
 
+describe('closing as soon as the Panel leaves view (#296)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  it('closes through the Panel leaving view, exactly once, even once scrollend also fires for the same native settle', async () => {
+    // A real flick's own momentum and snap settle can take the better
+    // part of a second before `scrollend` confirms it (the issue's own
+    // bench measured ~1000ms): comfortably longer than a scripted scroll
+    // settles in Chromium or WebKit here, so racing the two down to the
+    // millisecond is not something this harness can reproduce reliably.
+    // What it does prove: the close lands with the right reason, and
+    // `scrollend` firing for the very same gesture right behind it is
+    // not a second one (`finishClose`'s own idempotency).
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+
+    let scrollEndFired = false;
+    viewport.addEventListener(
+      'scrollend',
+      () => {
+        scrollEndFired = true;
+      },
+      { once: true }
+    );
+
+    viewport.scrollTo({ top: 0, behavior: 'smooth' });
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(scrollEndFired).toBe(true);
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+  });
+
+  it('closes once the Panel is carried out of view with no scroll, and so no scrollend, involved at all', async () => {
+    // Isolates the leave-view observer itself from the scroll machinery
+    // around it: nothing here writes `scrollTop`, so `scrollend` (and its
+    // debounce fallback) never has anything to fire for. Before this
+    // observer existed, nothing closed the drawer here at all.
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { panel, dialog, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+
+    panel.style.transform = 'translateY(100%)';
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(dialog.open).toBe(false);
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+    panel.style.transform = '';
+  });
+
+  it('never closes while opening, even though the Panel starts out of view', async () => {
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { drawer } = fixture;
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+
+    drawer.open();
+
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('a drag that stops short of fully hidden does not close', async () => {
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { viewport, panel, drawer } = fixture;
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const startTop = viewport.scrollTop;
+
+    const box = panel.getBoundingClientRect();
+    const letGo = await mouseDrag(
+      panel,
+      { x: box.left + 10, y: box.top + 10 },
+      [{ dy: startTop - 10 }],
+      { release: false }
+    );
+
+    expect(viewport.scrollTop).toBe(10);
+    expect(drawer.phase).toBe('open');
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    letGo();
+    await expectSettledTo(() => drawer.phase, 'closed');
+  });
+
+  it('a flick that closes the drawer through the leave-view observer can be reopened', async () => {
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { viewport, panel, dialog, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    const box = panel.getBoundingClientRect();
+    await mouseDrag(panel, { x: box.left + 10, y: box.top + 10 }, [
+      { dy: viewport.scrollTop + 50 }
+    ]);
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(dialog.open).toBe(false);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(dialog.open).toBe(true);
+  });
+
+  it('ten fast open-flick-close cycles leave no stuck state or duplicate onOpenChange calls', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { viewport, dialog, drawer } = fixture;
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+
+    for (let i = 0; i < 10; i++) {
+      drawer.open();
+      await expectSettledTo(() => drawer.phase, 'open');
+      viewport.scrollTo({ top: 0, behavior: 'instant' });
+      await expectSettledTo(() => drawer.phase, 'closed');
+    }
+
+    expect(dialog.open).toBe(false);
+    expect(onOpenChange).toHaveBeenCalledTimes(10);
+    expect(
+      onOpenChange.mock.calls.every(
+        ([open, reason]) => open === false && reason === 'drag'
+      )
+    ).toBe(true);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+  });
+});
+
 describe('a mouse drag released partway, slowly (#279)', () => {
   // No mockReducedMotion here: the bug is in the eased throw itself
   // (`motionBehavior`'s real, non-reduced path), so forcing an instant
