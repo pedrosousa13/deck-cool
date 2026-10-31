@@ -357,9 +357,8 @@ export function createDrawer(
    * `bottom`/`right` read the forward offset as-is (closed at 0); `top`/
    * `left` mirror it against `maxScrollArg` instead (closed at the scroll
    * end), per this file's own top comment. Takes explicit snapshots, not
-   * the live `snapPx`/`maxScroll`, so `onResize` can also use it to place
-   * the *old* layout's targets before a fresh `measure()` overwrites
-   * them. */
+   * the live `snapPx`/`maxScroll`, so `scrollForSnap`, just below, can
+   * pass them in by name. */
   function scrollTargetFor(
     index: number,
     snapPxArr: number[],
@@ -370,7 +369,7 @@ export function createDrawer(
   }
 
   /** `scrollTargetFor` against the live `snapPx`/`maxScroll`: every call
-   * site but `onResize`'s own old-layout lookup uses this. */
+   * site, including `onResize`, goes through this. */
   function scrollForSnap(index: number): number {
     return scrollTargetFor(index, snapPx, maxScroll);
   }
@@ -1196,10 +1195,10 @@ export function createDrawer(
     dialog.style.setProperty('--drawer-keyboard-inset', `${next}px`);
     viewport.style.height = next > 0 ? `calc(100% - ${next}px)` : '100%';
     // The existing resize-mid-open path: measures the now-smaller (or
-    // restored) Viewport once, keeps the current snap index (it finds the
-    // nearest point in the *old* layout, which the drawer is already
-    // resting on), and never animates or closes (this file's own `onResize`
-    // doc, just below).
+    // restored) Viewport once, keeps the current snap index (it scrolls
+    // straight to that index's own offset in the freshly measured layout,
+    // not wherever a shrink's clamp already left `scrollTop`), and never
+    // animates or closes (this file's own `onResize` doc, just below).
     onResize();
     // Non-modal only: keeps the JS-fallback hit area (`updateHitArea`'s own
     // doc) correct for a browser without a scroll timeline, since

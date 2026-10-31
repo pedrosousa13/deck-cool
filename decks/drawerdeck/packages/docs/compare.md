@@ -21,7 +21,7 @@ description: 'How drawerdeck compares with vaul, Base UI''s Drawer and React Ari
 | Mouse throw: settle time, no load | 873.0 ms | 962.5 ms | 977.0 ms | not supported | **drawerdeck** |
 | Open to half: settle time, no load | 883.5 ms | 1021.5 ms | 985.5 ms | 934.0 ms | Tie |
 | Maintained? | Beta | No, last release Dec 2024 | Yes | Yes (Adobe) | **Base UI**, **React Aria** |
-| Features: all sides, non-modal, nesting, background indent, keyboard | All sides, modal or non-modal | All | All | Most (no non-modal option; only a nested sheet's own backdrop and parent scale back, not the page behind a single sheet) | **Base UI**, **vaul** |
+| Features: all sides, non-modal, nesting, background indent, keyboard | All sides, modal or non-modal, keyboard handling | All | All | Most (no non-modal option; only a nested sheet's own backdrop and parent scale back, not the page behind a single sheet) | **Base UI**, **vaul** |
 | Built on native `<dialog>` and native scrolling | Yes | No | No | No (a scrollable overlay driven by CSS scroll-snap, not `<dialog>`) | **drawerdeck** |
 | React versions | 18 to 19 | 16.8 to 19 | 17 to 19 | 16.8 to 19 | **vaul**, **React Aria** |
 

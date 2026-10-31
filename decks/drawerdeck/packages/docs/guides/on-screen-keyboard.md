@@ -1,6 +1,6 @@
 ---
 title: On-screen keyboard
-description: 'Focusing an input inside the drawer lifts it above the on-screen keyboard by default (#273): the CSS variable it sets, both keyboard models, and the one engine it supports neither of.'
+description: 'Focusing an input inside the drawer lifts it above the on-screen keyboard by default (#273): the CSS variable it sets, both keyboard models, and why iOS Safari supports neither the interactive-widget viewport meta tag nor the VirtualKeyboard API.'
 ---
 
 Focusing a text field inside the drawer, on a touch device, opens the
@@ -27,9 +27,11 @@ This is on by default, with no prop to turn it on. It costs two passive
 ## The CSS variable
 
 `Drawer.Popup` carries `--drawer-keyboard-inset`, in pixels, the height of
-the keyboard as far as `visualViewport` reports it. It is `0px` with no
-keyboard open. Read it for your own layout, for example to reserve space
-for a footer input below the scrollable content:
+the keyboard as far as `visualViewport` reports it. It stays unset until
+the first keyboard open, drops back to `0px` if the keyboard closes while
+the drawer stays open, and is removed again when the drawer itself closes.
+Read it for your own layout, for example to reserve space for a footer
+input below the scrollable content:
 
 ```css
 .footer {
