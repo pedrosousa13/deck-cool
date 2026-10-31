@@ -23,10 +23,11 @@ import {
   type Drawer,
   type OpenChangeReason,
   type Phase,
+  type Side,
   type SnapPoint
 } from '@drawerdeck/core';
 
-export type { OpenChangeReason, Phase, SnapPoint };
+export type { OpenChangeReason, Phase, Side, SnapPoint };
 
 /**
  * A part's `render` prop (Base UI's and vaul's convention, carried over for
@@ -119,6 +120,10 @@ interface DrawerState {
 interface DrawerContextValue extends DrawerState {
   open: boolean;
   dismissible: boolean;
+  /** Which edge the drawer opens from: read once, like the DOM nodes
+   * themselves (`Side`'s own comment in `@drawerdeck/core`), never
+   * reactive. */
+  side: Side;
   /** How many `[data-drawer-snap]` markers `Viewport` renders: one per
    * configured snap point, plus one for closed. */
   snapCount: number;
@@ -173,10 +178,17 @@ interface SnapUncontrolledProps {
 export type RootProps = (OpenControlledProps | OpenUncontrolledProps) &
   (SnapControlledProps | SnapUncontrolledProps) & {
     children?: ReactNode;
-    /** Fractions of the viewport height, or fixed heights (e.g. `'320px'`),
-     * the drawer can rest open at, nearest first. Without it, the drawer
-     * has one open point: the panel's own content height, capped by its
-     * own CSS `max-height`. */
+    /** Which edge the drawer opens from. Defaults to `'bottom'`. Read once,
+     * on mount, like the DOM nodes themselves: changing it later recreates
+     * nothing on its own, since it decides the DOM order `Drawer.Viewport`
+     * itself renders (`'top'`/`'left'` reverse it to `[Panel][gap]`; see
+     * the "Open from a side" guide). */
+    side?: Side;
+    /** Fractions of the Viewport's extent along the side's axis (height for
+     * `bottom`/`top`, width for `left`/`right`), or fixed lengths (e.g.
+     * `'320px'`), the drawer can rest open at, nearest first. Without it,
+     * the drawer has one open point: the panel's own content extent,
+     * capped by its own CSS `max-height`/`max-width`. */
     snapPoints?: readonly SnapPoint[];
     /** Whether Escape, an outside press and a drag to closed can close the
      * drawer. `Drawer.Close` always can. Defaults to true. An outside
@@ -207,9 +219,17 @@ export function Root({
   snapPoints,
   dismissible = true,
   modal = true,
+  side = 'bottom',
   children
 }: RootProps) {
   const [initialOpen] = useState(() => open ?? defaultOpen ?? false);
+  // Locked at mount, like `initialOpen`: `Viewport`'s own DOM order
+  // (`[gap][Panel]` or `[Panel][gap]`) and the engine's internal axis math
+  // both read this once, so a `side` prop that changes later would
+  // otherwise desync the two -- the DOM order a later render produces from
+  // a live `side` would no longer match what the already-created engine
+  // was built for.
+  const [initialSide] = useState(() => side ?? 'bottom');
   const initialSnapIndex = snapPoint ?? defaultSnapPoint ?? 0;
   const initialSnapIndexRef = useRef(initialSnapIndex);
   const [state, setState] = useState<DrawerState>({
@@ -264,6 +284,7 @@ export function Root({
         backdrop: backdropRef.current
       },
       {
+        side: initialSide,
         snapPoints: snapPointsRef.current,
         dismissible: dismissibleRef.current,
         modal: modalRef.current,
@@ -296,7 +317,7 @@ export function Root({
       drawer.destroy();
       drawerRef.current = null;
     };
-  }, [initialOpen]);
+  }, [initialOpen, initialSide]);
 
   useLayoutEffect(() => {
     drawerRef.current?.setOptions({ snapPoints, dismissible, modal });
@@ -344,6 +365,7 @@ export function Root({
       ...state,
       open: isOpen,
       dismissible,
+      side: initialSide,
       snapCount,
       titleId,
       descriptionId,
@@ -361,6 +383,7 @@ export function Root({
       state,
       isOpen,
       dismissible,
+      initialSide,
       snapCount,
       titleId,
       descriptionId,
@@ -405,15 +428,17 @@ export interface PopupProps extends ComponentProps<'dialog'> {
  * "Non-modal drawers" guide for why). Labelled by
  * `Drawer.Title` and described by `Drawer.Description`. Carries `timeline-scope`
  * for the Backdrop's native scroll-driven dim, `--drawer-first-snap` (the
- * dim's range, set once per layout), and, only where a scroll timeline is
- * unsupported (Firefox, #249), the `--drawer-progress` fallback, written as
- * the viewport scrolls. */
+ * dim's range, set once per layout), `data-side` (`Drawer.Root`'s `side`,
+ * for styling per side -- see "Open from a side"), and, only where a
+ * scroll timeline is unsupported (Firefox, #249), the `--drawer-progress`
+ * fallback, written as the viewport scrolls. */
 export function Popup({ render, ref, ...rest }: PopupProps) {
   const ctx = useDrawerContext('Popup');
   return useRenderPart('dialog', render, {
     ...rest,
     ...dataAttrs(ctx),
     'data-drawerdeck-popup': '',
+    'data-side': ctx.side,
     'aria-labelledby': ctx.titleId,
     'aria-describedby': ctx.descriptionId,
     ref: useComposedRefs(ctx.dialogRef, ref)
@@ -441,22 +466,37 @@ export function Backdrop({ render, ref, ...rest }: PartProps) {
   });
 }
 
-/** The native scroll-snap container. Renders the gap spacer and the snap
- * markers the engine positions ahead of `children` (the panel): React owns
- * every node here, the engine only measures and positions them. */
+/** The native scroll-snap container. Renders the gap spacer, the snap
+ * markers the engine positions, and `children` (the panel) -- in
+ * `[gap][markers][Panel]` order for `'bottom'`/`'right'`, reversed to
+ * `[Panel][markers][gap]` for `'top'`/`'left'` (`Side`'s own comment in
+ * `@drawerdeck/core`: open sits at scroll offset 0 for those two, closed at
+ * the scroll end). The markers' own position in that order never matters --
+ * the engine places them with `position: absolute` -- only the gap and the
+ * Panel's. React owns every node here, the engine only measures and
+ * positions the markers. */
 export function Viewport({ render, ref, children, ...rest }: PartProps) {
   const ctx = useDrawerContext('Viewport');
+  const reversed = ctx.side === 'top' || ctx.side === 'left';
+  const gap = <div data-drawer-gap="" aria-hidden="true" />;
+  const markers = Array.from({ length: ctx.snapCount }, (_, i) => (
+    <div key={i} data-drawer-snap="" aria-hidden="true" />
+  ));
   return useRenderPart('div', render, {
     ...rest,
     ...dataAttrs(ctx),
     'data-drawerdeck-viewport': '',
     ref: useComposedRefs(ctx.viewportRef, ref),
-    children: (
+    children: reversed ? (
       <>
-        <div data-drawer-gap="" aria-hidden="true" />
-        {Array.from({ length: ctx.snapCount }, (_, i) => (
-          <div key={i} data-drawer-snap="" aria-hidden="true" />
-        ))}
+        {children}
+        {markers}
+        {gap}
+      </>
+    ) : (
+      <>
+        {gap}
+        {markers}
         {children}
       </>
     )
@@ -464,13 +504,15 @@ export function Viewport({ render, ref, children, ...rest }: PartProps) {
 }
 
 /** The visible sheet: the consumer styles this. A mouse drag (#235) is
- * read from here. */
+ * read from here. `data-side` mirrors `Drawer.Popup`'s own, for styling the
+ * Panel's own entrance and exit per side (see "Open from a side"). */
 export function Panel({ render, ref, ...rest }: PartProps) {
   const ctx = useDrawerContext('Panel');
   return useRenderPart('div', render, {
     ...rest,
     ...dataAttrs(ctx),
     'data-drawerdeck-panel': '',
+    'data-side': ctx.side,
     ref: useComposedRefs(ctx.panelRef, ref)
   });
 }

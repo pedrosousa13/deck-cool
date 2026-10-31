@@ -203,6 +203,18 @@ main .home-more:hover {
   letter-spacing: -0.02em;
 }
 
+.home-band h3 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.home-band__text--secondary {
+  padding-top: 40px;
+  border-top: 1px solid #1d1d1f;
+}
+
 .home-band__text p {
   color: var(--text-secondary);
   font-size: 19px;
@@ -390,6 +402,106 @@ main .home-family .home-more {
   font: inherit;
   cursor: pointer;
   flex-shrink: 0;
+}
+
+/* The every-side demo (components/demos/example-sides.tsx), on the home page
+   and the "Open from a side" guide: the same drawer-demo__* parts as the
+   Quickstart demo above, plus a side picker and the per-side sizing,
+   border-radius and entrance/exit the Quickstart demo (bottom only) never
+   needs. */
+
+.drawer-demo--sides {
+  flex-direction: column;
+  gap: 20px;
+}
+
+.drawer-demo__side-picker {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.drawer-demo__side-button {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.drawer-demo__side-button[aria-pressed="true"] {
+  border-color: var(--drawerdeck-fill);
+  background-color: var(--drawerdeck-fill);
+  color: var(--fill-text);
+}
+
+.drawer-demo__panel--sides[data-side="bottom"],
+.drawer-demo__panel--sides[data-side="top"] {
+  height: 100%;
+}
+
+.drawer-demo__panel--sides[data-side="left"],
+.drawer-demo__panel--sides[data-side="right"] {
+  width: 100%;
+  height: 100%;
+}
+
+.drawer-demo__panel--sides[data-side="bottom"] {
+  border-radius: 16px 16px 0 0;
+}
+
+.drawer-demo__panel--sides[data-side="top"] {
+  border-radius: 0 0 16px 16px;
+}
+
+.drawer-demo__panel--sides[data-side="left"] {
+  border-radius: 0 16px 16px 0;
+}
+
+.drawer-demo__panel--sides[data-side="right"] {
+  border-radius: 16px 0 0 16px;
+}
+
+/* The entrance and the exit, per side ("Animate the drawer", "Per side"):
+   the Panel slides in from, and back out to, the edge it opens from. */
+@media (prefers-reduced-motion: no-preference) {
+  .drawer-demo__panel--sides[data-side="bottom"][data-starting-style],
+  .drawer-demo__panel--sides[data-side="bottom"][data-ending-style] {
+    transform: translateY(100%);
+  }
+
+  .drawer-demo__panel--sides[data-side="top"][data-starting-style],
+  .drawer-demo__panel--sides[data-side="top"][data-ending-style] {
+    transform: translateY(-100%);
+  }
+
+  .drawer-demo__panel--sides[data-side="right"][data-starting-style],
+  .drawer-demo__panel--sides[data-side="right"][data-ending-style] {
+    transform: translateX(100%);
+  }
+
+  .drawer-demo__panel--sides[data-side="left"][data-starting-style],
+  .drawer-demo__panel--sides[data-side="left"][data-ending-style] {
+    transform: translateX(-100%);
+  }
+}
+
+/* The dim's own scroll range and direction, per side ("Style the backdrop",
+   "Per side"): top/left reverse the scroll axis, so the same @keyframes
+   (set on .drawer-demo__backdrop, above) need the opposite end of the
+   range, played in reverse. Scoped from the dialog's own data-side, since
+   the Backdrop carries none of its own. */
+@supports (animation-timeline: scroll()) {
+  dialog[data-side="top"] .drawer-demo__backdrop,
+  dialog[data-side="left"] .drawer-demo__backdrop {
+    animation-range: var(--drawer-first-snap) 100%;
+    animation-direction: reverse;
+  }
 }
 
 /* The docs layout (components/docs-page.tsx): a sidebar, then the article. */

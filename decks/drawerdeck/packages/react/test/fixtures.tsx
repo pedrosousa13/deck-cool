@@ -3,18 +3,32 @@ import { expect, vi } from 'vitest';
 import * as Drawer from '@drawerdeck/react';
 
 /** A drawer with no stylesheet, following #234's beta API sketch exactly:
- * every part, in order. */
+ * every part, in order. `side="left"`/`"right"` (#270) gives the Panel an
+ * explicit width: unlike `height`, which an unstyled Panel gets for free
+ * from its own content (80 rows), nothing here gives it one along the
+ * horizontal axis, and a snap point at fraction 1 needs the Panel at least
+ * as wide as the Viewport to be reachable. `panelWidth` defaults to `2000`
+ * (deliberately wider than any real test viewport, for the multi-snap and
+ * DOM-order checks); `sides.test.tsx`'s own close-button test overrides it
+ * to `'100%'` ("Open from a side": give the Panel a width that covers the
+ * largest snap point), the only width that puts `Drawer.Close` itself,
+ * inside that width, back on screen at a real snap offset. */
 export function TestDrawer({
   content,
+  panelWidth = 2000,
   ...props
-}: ComponentProps<typeof Drawer.Root> & { content?: ReactNode }) {
+}: ComponentProps<typeof Drawer.Root> & {
+  content?: ReactNode;
+  panelWidth?: number | string;
+}) {
+  const horizontal = props.side === 'left' || props.side === 'right';
   return (
     <Drawer.Root {...props}>
       <Drawer.Trigger>Open</Drawer.Trigger>
       <Drawer.Popup>
         <Drawer.Backdrop />
         <Drawer.Viewport>
-          <Drawer.Panel>
+          <Drawer.Panel style={horizontal ? { width: panelWidth } : undefined}>
             <Drawer.Handle />
             <Drawer.Title>Test drawer</Drawer.Title>
             <Drawer.Description>A drawer for testing.</Drawer.Description>

@@ -74,7 +74,7 @@ describe("the live drawer in a browser", () => {
   // 'opening'): wait for that, not just the <dialog>'s own open attribute,
   // which the engine sets as soon as the opening scroll starts.
   const openDrawer = async (page: Page) => {
-    const drawer = page.locator(".drawer-demo");
+    const drawer = page.locator(".drawer-demo--quickstart");
     const panel = drawer.locator("[data-drawerdeck-panel]");
     await drawer.getByRole("button", { name: "Open" }).click();
     await expect.poll(() => panel.getAttribute("data-phase"), SETTLE).toBe("open");
@@ -84,7 +84,7 @@ describe("the live drawer in a browser", () => {
   test.each(LIVE_DRAWER_PAGES)("%s: Open shows the drawer, open at its first snap point, under the CSP", async (path) => {
     const { page, violations } = await visit(path, { width: 1280, reducedMotion: "reduce" });
     await islandsHydrated(page);
-    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    const popup = page.locator(".drawer-demo--quickstart [data-drawerdeck-popup]");
     expect(await popup.getAttribute("open")).toBeNull();
     const drawer = await openDrawer(page);
     expect(await popup.getAttribute("open")).not.toBeNull();
@@ -95,7 +95,7 @@ describe("the live drawer in a browser", () => {
   test.each(LIVE_DRAWER_PAGES)("%s: Escape closes the drawer", async (path) => {
     const { page } = await visit(path, { width: 1280, reducedMotion: "reduce" });
     await islandsHydrated(page);
-    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    const popup = page.locator(".drawer-demo--quickstart [data-drawerdeck-popup]");
     await openDrawer(page);
     await page.keyboard.press("Escape");
     await expect.poll(() => popup.getAttribute("open"), SETTLE).toBeNull();
@@ -104,7 +104,7 @@ describe("the live drawer in a browser", () => {
   test("Done closes the drawer", async () => {
     const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     await islandsHydrated(page);
-    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    const popup = page.locator(".drawer-demo--quickstart [data-drawerdeck-popup]");
     const drawer = await openDrawer(page);
     await drawer.getByRole("button", { name: "Done" }).click();
     await expect.poll(() => popup.getAttribute("open"), SETTLE).toBeNull();
@@ -129,7 +129,7 @@ describe("the live drawer in a browser", () => {
   test("dragging the handle down past the lowest snap point closes the drawer", async () => {
     const { page } = await visit("/", { width: 1280, reducedMotion: "reduce" });
     await islandsHydrated(page);
-    const popup = page.locator(".drawer-demo [data-drawerdeck-popup]");
+    const popup = page.locator(".drawer-demo--quickstart [data-drawerdeck-popup]");
     const drawer = await openDrawer(page);
     const handle = await drawer.locator("[data-drawerdeck-handle]").boundingBox();
     if (!handle) throw new Error("the handle has no box");
@@ -140,6 +140,48 @@ describe("the live drawer in a browser", () => {
     await page.mouse.move(x, y + 500, { steps: 10 });
     await page.mouse.up();
     await expect.poll(() => popup.getAttribute("open"), SETTLE).toBeNull();
+  });
+});
+
+// The every-side drawer (components/demos/example-sides.tsx) on the home
+// page: a left/right Panel needs an explicit width (the "Open from a side"
+// guide), sized to the Viewport so its [0.5, 1] snapPoints (fractions of
+// the Viewport's own extent) land on two different rests, not the same one.
+describe("the every-side drawer demo in a browser", () => {
+  const SETTLE = { timeout: 5000 };
+
+  const openSide = async (page: Page, side: "left" | "right") => {
+    const drawer = page.locator(".drawer-demo--sides");
+    const panel = drawer.locator("[data-drawerdeck-panel]");
+    const viewport = drawer.locator(".drawer-demo__viewport");
+    await drawer.getByRole("group", { name: "Side" }).getByRole("button", { name: side, exact: true }).click();
+    await drawer.getByRole("button", { name: `Open ${side}` }).click();
+    await expect.poll(() => panel.getAttribute("data-phase"), SETTLE).toBe("open");
+    await expect.poll(() => panel.getAttribute("data-snap-index"), SETTLE).toBe("0");
+    return { panel, viewport };
+  };
+
+  // `left` mirrors its scroll axis (open at 0, closed at the end), so a
+  // wheel toward the open end scrolls backward there and forward for
+  // `right` (this file's own top comment, and the "Open from a side" guide,
+  // "Why not flex-direction: row-reverse or direction: rtl").
+  test.each([
+    { side: "left", direction: -1, width: 1280 },
+    { side: "left", direction: -1, width: 390 },
+    { side: "right", direction: 1, width: 1280 },
+    { side: "right", direction: 1, width: 390 },
+  ] as const)("$side at $widthpx: a wheel reaches a full snap point distinct from the half one", async ({ side, direction, width }) => {
+    const { page } = await visit("/", { width, reducedMotion: "reduce" });
+    await islandsHydrated(page);
+    const { panel, viewport } = await openSide(page, side);
+    const halfScrollLeft = await viewport.evaluate((el) => el.scrollLeft);
+    const box = await viewport.boundingBox();
+    if (!box) throw new Error("the viewport has no box");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(direction * 2000, 0);
+    await expect.poll(() => panel.getAttribute("data-snap-index"), SETTLE).toBe("1");
+    const fullScrollLeft = await viewport.evaluate((el) => el.scrollLeft);
+    expect(Math.abs(fullScrollLeft - halfScrollLeft)).toBeGreaterThan(width * 0.3);
   });
 });
 

@@ -4,6 +4,7 @@
 import { umbrella } from "@deck-cool/brand/decks";
 import { drawerdeck } from "./drawerdeck.ts";
 import Quickstart from "./demos/example-quickstart.tsx";
+import Sides from "./demos/example-sides.tsx";
 
 export default function Landing() {
   return (
@@ -39,6 +40,16 @@ export default function Landing() {
           </p>
         </div>
         <Quickstart />
+        <div className="home-band__text home-band__text--secondary">
+          <h3>Any side</h3>
+          <p>
+            A bottom sheet by default, or pick a side below. Read{" "}
+            <a className="home-more" href="/docs/guides/open-from-a-side/">
+              Open from a side ›
+            </a>
+          </p>
+        </div>
+        <Sides />
       </section>
 
       <section className="home-band" aria-labelledby="why">
