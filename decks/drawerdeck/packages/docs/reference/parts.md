@@ -59,6 +59,10 @@ layout). Where it does not (Firefox), `--drawer-progress` (`0` closed to `1`
 at the first snap point) is written on `Drawer.Popup` instead, as the
 viewport scrolls.
 
+`--drawer-keyboard-inset`, also on `Drawer.Popup`, is the on-screen
+keyboard's own height in pixels, `0px` with no keyboard open. On by
+default, no prop: see "On-screen keyboard".
+
 ## Not in the beta
 
 Nested drawers (#237) and a background indent.

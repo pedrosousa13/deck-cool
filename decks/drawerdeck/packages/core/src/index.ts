@@ -679,6 +679,7 @@ export function createDrawer(
     // `onOpenChange`.
     if (phase === 'closed') return;
     panelVisibilityObserver.unobserve(panel);
+    detachKeyboardListeners();
     viewport.style.scrollSnapType = `${horizontal ? 'x' : 'y'} mandatory`;
     // `close()` itself restores focus to whatever had it before `open()`
     // called `showModal()` -- closed first, so a consumer's own focus
@@ -1102,6 +1103,120 @@ export function createDrawer(
   }
   document.addEventListener('keydown', onDocumentKeyDown);
 
+  // ---------- the on-screen keyboard (#273) ----------
+  // Lifts the drawer above the keyboard instead of letting it cover the
+  // focused input: the Viewport's own bottom edge moves up to the top of
+  // the keyboard (the visual viewport's own bottom edge), re-measured
+  // through the existing resize-mid-open path above, which already keeps
+  // the snap index and never animates or closes. On by default, no new
+  // option: the cost is two passive listeners, both only while open.
+  //
+  // Two keyboard models, both already covered: the overlay model (iOS
+  // Safari always; Android Chrome's default,
+  // `interactive-widget=resizes-visual`) shrinks `visualViewport` under an
+  // unchanged `innerHeight`, so `keyboardInset` goes positive and this is
+  // what moves the Viewport. `interactive-widget=resizes-content` shrinks
+  // `innerHeight` itself instead, so `keyboardInset` stays 0 here, but the
+  // dialog's own `100dvh` already shrinks with it, which `onResize`'s
+  // existing, always-attached `visualViewport`/`window` 'resize' listeners
+  // (above) already reconcile -- nothing new needed for that model.
+  let keyboardInset = 0;
+  let keyboardListenersAttached = false;
+
+  /** All iOS browsers (Safari, Chrome, Firefox) render on WebKit, which
+   * only fires `visualViewport`'s own 'resize' once the keyboard's closing
+   * animation finishes -- React Aria's `useViewportSize` hits the same lag
+   * and works around it by reading a `blur` early instead
+   * (`packages/react-aria/src/utils/useViewportSize.ts`,
+   * github.com/adobe/react-spectrum): `onKeyboardFocusOut`, below, does the
+   * same, simplified to drop the inset immediately rather than wait out
+   * the close animation. A plain user-agent check, not react-spectrum's own
+   * `isIPad` (which also treats a touch-capable `Mac` platform as iPadOS
+   * 13+): this engine's own test suite runs both Chromium and WebKit with
+   * `hasTouch: true` (`vitest.config.ts`), which that extra check would
+   * misread as an iPad. */
+  function isIOS(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    return /iPad|iPhone|iPod/.test(navigator.userAgent);
+  }
+
+  /** Reads `visualViewport` and writes `keyboardInset` (and, through it,
+   * the CSS var and the Viewport's own height) only when the value
+   * actually changed -- one read and at most one set of writes per
+   * 'resize'/'scroll' event, never per frame. Ignored entirely while
+   * pinch-zoomed (`scale > 1`): a zoomed page's `visualViewport.height`
+   * shrinks for a reason that has nothing to do with the keyboard. */
+  function updateKeyboardInset() {
+    const vv = window.visualViewport;
+    if (!vv || vv.scale > 1) return;
+    const raw = window.innerHeight - (vv.height + vv.offsetTop);
+    applyKeyboardInset(Math.round(Math.max(0, raw)));
+  }
+
+  /** The one place that writes the inset: the CSS var (`--drawer-keyboard-
+   * inset`, on the Popup, for a consumer's own CSS) and the Viewport's own
+   * height (engine-applied, so lifting the drawer needs no consumer CSS at
+   * all) both skip the write when `next` already matches. Every side reads
+   * this the same way: the keyboard is always a vertical inset from the
+   * bottom of the screen, regardless of which edge the drawer itself opens
+   * from, so shrinking the Viewport's own height is what makes a `bottom`
+   * drawer lift, a `left`/`right` one get shorter (its panel typically
+   * fills the Viewport's own height), and a `top` one keep its own top
+   * edge exactly where it was. */
+  function applyKeyboardInset(next: number) {
+    if (next === keyboardInset) return;
+    keyboardInset = next;
+    dialog.style.setProperty('--drawer-keyboard-inset', `${next}px`);
+    viewport.style.height = next > 0 ? `calc(100% - ${next}px)` : '100%';
+    // The existing resize-mid-open path: measures the now-smaller (or
+    // restored) Viewport once, keeps the current snap index (it finds the
+    // nearest point in the *old* layout, which the drawer is already
+    // resting on), and never animates or closes (this file's own `onResize`
+    // doc, just below).
+    onResize();
+    // Non-modal only: keeps the JS-fallback hit area (`updateHitArea`'s own
+    // doc) correct for a browser without a scroll timeline, since
+    // `onResize` itself does not call it. Where the scroll timeline
+    // resolves, this is a no-op -- the clip-path already tracks the scroll
+    // position natively.
+    updateHitArea();
+  }
+
+  /** iOS WebKit only (`isIOS`'s own doc): drops the inset the moment the
+   * focused field loses focus, rather than waiting for `visualViewport`'s
+   * own laggy 'resize'. `focusout` bubbles (unlike `blur`), so this reads
+   * it straight off the Viewport with no capture phase and no need to
+   * check `event.target` against it. */
+  function onKeyboardFocusOut() {
+    if (keyboardInset !== 0) applyKeyboardInset(0);
+  }
+
+  function attachKeyboardListeners() {
+    if (keyboardListenersAttached || !window.visualViewport) return;
+    keyboardListenersAttached = true;
+    window.visualViewport.addEventListener('resize', updateKeyboardInset);
+    window.visualViewport.addEventListener('scroll', updateKeyboardInset);
+    if (isIOS()) {
+      viewport.addEventListener('focusout', onKeyboardFocusOut);
+    }
+  }
+
+  /** Removed on close and on `destroy()`: an open drawer is the only thing
+   * that ever needs to know about the keyboard. Also resets the inset
+   * (style and CSS var) straight to neutral -- no `onResize` call, unlike
+   * `applyKeyboardInset`: the dialog is already closing or gone, so there
+   * is nothing left to reflow. */
+  function detachKeyboardListeners() {
+    if (!keyboardListenersAttached) return;
+    keyboardListenersAttached = false;
+    window.visualViewport?.removeEventListener('resize', updateKeyboardInset);
+    window.visualViewport?.removeEventListener('scroll', updateKeyboardInset);
+    viewport.removeEventListener('focusout', onKeyboardFocusOut);
+    keyboardInset = 0;
+    dialog.style.removeProperty('--drawer-keyboard-inset');
+    viewport.style.height = '100%';
+  }
+
   function onResize() {
     // `opening` reconciles too: `open()` no longer animates the scroll
     // position (it is already at its snap point, synchronously, before
@@ -1308,6 +1423,7 @@ export function createDrawer(
     updateContentLock();
     setPhase('opening');
     attachInterruptListeners();
+    attachKeyboardListeners();
     // One frame lets the browser actually paint the starting style; only
     // the frame after that removes it, which is what starts a consumer's
     // CSS transition sliding the Panel (and fading the Backdrop) in --
@@ -1388,6 +1504,7 @@ export function createDrawer(
     cancelEnter();
     teardownExit();
     panelVisibilityObserver.disconnect();
+    detachKeyboardListeners();
     clearTimeout(scrollEndDebounce);
     cancelAnimationFrame(throwFrame);
     cancelAnimationFrame(progressFrame);
