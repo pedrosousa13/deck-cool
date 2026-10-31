@@ -252,6 +252,33 @@ function motionBehavior(): ScrollBehavior {
   return reducedMotion() ? 'instant' : 'smooth';
 }
 
+/** `<input>` types that do not bring up a text keyboard: checked by
+ * `opensKeyboard`, just below, against everything else an `<input>` can be,
+ * which does. */
+const NON_TEXT_INPUT_TYPES = new Set([
+  'checkbox',
+  'radio',
+  'range',
+  'color',
+  'file',
+  'hidden',
+  'button',
+  'submit',
+  'reset',
+  'image'
+]);
+
+/** Whether focusing `el` would itself open the on-screen keyboard: a
+ * `<textarea>`, or an `<input>` of a text-like type. `onKeyboardFocusOut`,
+ * below, checks `event.relatedTarget` against this, so a focus move
+ * between two such fields, with the keyboard staying up the whole time,
+ * never drops the inset early on iOS. */
+function opensKeyboard(el: EventTarget | null): boolean {
+  if (el instanceof HTMLTextAreaElement) return true;
+  if (!(el instanceof HTMLInputElement)) return false;
+  return !NON_TEXT_INPUT_TYPES.has(el.type);
+}
+
 /** The longest `transition-duration` a consumer declared on `el`, in
  * milliseconds; 0 when none is declared (so the caller waits for
  * `transitionend` where there is a transition to end, and not at all where
@@ -1186,8 +1213,14 @@ export function createDrawer(
    * focused field loses focus, rather than waiting for `visualViewport`'s
    * own laggy 'resize'. `focusout` bubbles (unlike `blur`), so this reads
    * it straight off the Viewport with no capture phase and no need to
-   * check `event.target` against it. */
-  function onKeyboardFocusOut() {
+   * check `event.target` against it. Skipped when `event.relatedTarget`
+   * (the element about to gain focus) itself opens a keyboard
+   * (`opensKeyboard`): the keyboard stays up the whole time focus moves
+   * from one field to another inside the drawer, and no `visualViewport`
+   * resize follows that move at all, so dropping the inset here would
+   * run the Viewport back under a keyboard that never left. */
+  function onKeyboardFocusOut(event: FocusEvent) {
+    if (opensKeyboard(event.relatedTarget)) return;
     if (keyboardInset !== 0) applyKeyboardInset(0);
   }
 
@@ -1223,26 +1256,24 @@ export function createDrawer(
     // the entrance's own CSS transition on `transform` even starts), so
     // there is nothing left here for a resize mid-entrance to race.
     if (phase === 'closed') return;
-    const oldSnapPx = snapPx;
-    const oldMaxScroll = maxScroll;
-    const st = viewport[axis.scroll];
     measure();
     positionMarkers();
     if (!dialog.open) return;
     // Never resize onto closed: only reposition onto an open point
-    // (ADR 0001). Finds the nearest point in the *old* layout's own real
-    // scroll offsets (`scrollTargetFor` against the snapshots taken
-    // above, not the just-recomputed `snapPx`/`maxScroll`), then scrolls
-    // to that same index's new offset.
-    const landed = nearest(
-      st,
-      oldSnapPx.map((_, index) => ({
-        index,
-        px: scrollTargetFor(index, oldSnapPx, oldMaxScroll)
-      }))
-    );
+    // (ADR 0001). Scrolls to the *resting* snap index's own offset in the
+    // freshly measured layout, not to whichever point now sits nearest
+    // whatever `viewport[axis.scroll]` reads, which a shrink can already
+    // have clamped by the time this runs: a real window resize already
+    // resizes the layout, and so clamps `scrollTop` to the new, smaller
+    // `scrollHeight`, before the 'resize' event this handles even fires;
+    // `applyKeyboardInset`'s own `viewport.style.height` write does the
+    // same, synchronously, a line ahead of its own call here. Either way,
+    // reading the scroll position after the clamp would land on the
+    // wrong, now-nearest point instead of the one the drawer actually
+    // rests on. `snapIndex`, this engine's own record of it, is what
+    // "keeps the snap index" (the design ruling, #273) means.
     viewport.scrollTo({
-      [axis.scrollToKey]: scrollForSnap(landed.index),
+      [axis.scrollToKey]: scrollForSnap(snapIndex),
       behavior: 'instant'
     });
     updateContentLock();

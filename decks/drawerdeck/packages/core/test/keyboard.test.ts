@@ -224,7 +224,7 @@ describe('the overlay model (iOS Safari always; Android Chrome default)', () => 
     expect(insetWrites[0][1]).toBe('180px');
   });
 
-  it('drops the inset at once on iOS WebKit when the field loses focus, ahead of the laggy resize', async () => {
+  it('keeps the inset on iOS WebKit when focus moves to another field that also opens a keyboard', async () => {
     mockUserAgent(IPHONE_SAFARI_UA);
     const vv = installFakeViewport();
     fixture = mount({ snapPoints: [0.5] });
@@ -232,10 +232,43 @@ describe('the overlay model (iOS Safari always; Android Chrome default)', () => 
     const input = appendFieldTo(content);
     // A second field inside the Panel, not a page element outside it: the
     // drawer is modal here, so the inert page behind it is unreachable by
-    // a real click either way -- the same as a real device, where leaving
-    // the keyboard up means moving focus to another field in the sheet, or
-    // tapping the keyboard's own dismiss control (never covered here).
-    const other = appendFieldTo(content);
+    // a real click either way, the same as a real device, where moving
+    // between two fields in the sheet keeps the keyboard up the whole
+    // time, with no `visualViewport` resize firing in between at all.
+    const other = document.createElement('textarea');
+    content.append(other);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    await userEvent.click(input);
+    vv.height = window.innerHeight - 300;
+    vv.resize();
+    await nextFrame();
+    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+      '300px'
+    );
+
+    // `event.relatedTarget` is a field that opens a keyboard of its own:
+    // the keyboard never actually closed, so the early iOS drop (React
+    // Aria's own `useViewportSize` waits on the same thing) must not run
+    // the Viewport back under it.
+    await userEvent.click(other);
+
+    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+      '300px'
+    );
+    expect(viewport.style.height).toBe('calc(100% - 300px)');
+  });
+
+  it('drops the inset at once on iOS WebKit when focus leaves to something that does not open a keyboard', async () => {
+    mockUserAgent(IPHONE_SAFARI_UA);
+    const vv = installFakeViewport();
+    fixture = mount({ snapPoints: [0.5] });
+    const { dialog, viewport, content, drawer } = fixture;
+    const input = appendFieldTo(content);
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    content.append(checkbox);
 
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
@@ -249,8 +282,9 @@ describe('the overlay model (iOS Safari always; Android Chrome default)', () => 
 
     // WebKit's own 'resize' for the keyboard's close animation has not
     // fired yet (`vv.height` still reflects it open): the blur alone must
-    // still drop the inset.
-    await userEvent.click(other);
+    // still drop the inset, since a checkbox never opens a keyboard of its
+    // own.
+    await userEvent.click(checkbox);
 
     expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
       '0px'
@@ -364,6 +398,84 @@ describe('every side (#270)', () => {
       expect(drawer.phase).toBe('open');
     });
   }
+});
+
+// A Panel whose own CSS gives it `height: 100%` (the site's own
+// `.drawer-demo__panel`), not the fixed, overlong one every other test here
+// mounts with: it tracks the Viewport's own height, so the instant
+// `applyKeyboardInset` (or a plain window resize, `resizes-content`)
+// shrinks that, the Panel shrinks with it and the browser clamps
+// `scrollTop` to the new, smaller `scrollHeight`, synchronously, ahead of
+// any JS here. A drawer resting at its *last* snap point (full open, the
+// Viewport's own old maximum scroll position) is exactly where that clamp
+// bites hardest.
+describe('a Panel that tracks the Viewport (height: 100%)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  it('keeps the snap index through the overlay keyboard opening and closing, with no spurious onSnapPointChange', async () => {
+    const vv = installFakeViewport();
+    const onSnapPointChange = vi.fn();
+    fixture = mount(
+      { snapPoints: [0.5, 1], onSnapPointChange },
+      { panelHeight: '100%' }
+    );
+    const { dialog, viewport, drawer } = fixture;
+
+    drawer.open(1);
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    const keyboardPx = 300;
+    vv.height = window.innerHeight - keyboardPx;
+    vv.resize();
+    // `scrollend` (or its debounce fallback) lands after `onResize`'s own
+    // synchronous work: only once the scroll position actually settles
+    // does the bug this guards show up, re-indexing onto whatever point
+    // the clamp happened to land nearest.
+    await expectSettledTo(() => drawer.snapIndex, 1);
+    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+      `${keyboardPx}px`
+    );
+    expect(drawer.phase).toBe('open');
+
+    vv.height = window.innerHeight;
+    vv.resize();
+    await expectSettledTo(() => drawer.snapIndex, 1);
+    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+      '0px'
+    );
+    expect(viewport.style.height).toBe('100%');
+    expect(drawer.phase).toBe('open');
+
+    expect(onSnapPointChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the snap index through a plain window resize (resizes-content), with no spurious onSnapPointChange', async () => {
+    mockInnerHeight(800);
+    installFakeViewport();
+    const onSnapPointChange = vi.fn();
+    fixture = mount(
+      { snapPoints: [0.5, 1], onSnapPointChange },
+      { panelHeight: '100%' }
+    );
+    const { dialog, drawer } = fixture;
+    dialog.style.height = '800px';
+
+    drawer.open(1);
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    // The layout viewport itself shrinks: no visual/layout gap, so the
+    // inset stays 0 and the existing resize path alone has to keep the
+    // snap index.
+    mockInnerHeight(500);
+    dialog.style.height = '500px';
+    window.dispatchEvent(new Event('resize'));
+
+    await expectSettledTo(() => drawer.snapIndex, 1);
+    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
+    expect(drawer.phase).toBe('open');
+    expect(onSnapPointChange).not.toHaveBeenCalled();
+    dialog.style.height = '';
+  });
 });
 
 describe('non-modal (#271)', () => {
