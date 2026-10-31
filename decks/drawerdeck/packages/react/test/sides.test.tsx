@@ -141,16 +141,15 @@ function addPressMarker(
  * true or `maxSteps` is reached, then releases -- the same loop
  * `@drawerdeck/core`'s own `realMouseDrag` (`packages/core/test/fixtures.ts`)
  * drives, reading the real, resulting scroll position back after each nudge
- * instead of trusting the math. `until` has to read a scroll threshold, not
- * the Popup's own `data-phase`: the Panel leaving the Viewport's visible
- * area closes the drawer on its own, mid-drag, through an
+ * instead of trusting the math. Releases right at the closed offset, not
+ * short of it (#322): the Panel leaving the Viewport's visible area no
+ * longer closes the drawer on its own mid-drag -- the leave-view
  * `IntersectionObserver` (`@drawerdeck/core`'s own `index.ts`, "closing as
- * soon as the Panel leaves view", #296), *before* this releases the
- * pointer; releasing afterward still runs the engine's own
- * drag-release settle, which read a stale, already-reset scroll position
- * and reopened the drawer in an earlier revision of this test. Stopping at
- * the same scroll target `@drawerdeck/core`'s own test releases at avoids
- * the race instead of relying on it. */
+ * soon as the Panel leaves view", #296) now defers to an active drag the
+ * same way `onScrollEnd` already did -- and `onPointerDown`'s own
+ * `event.preventDefault()` stops a stray native text selection from ever
+ * starting on the Panel, so there is nothing left to race the release at
+ * the closed offset itself. */
 async function realMouseDrag(
   marker: HTMLElement,
   until: () => boolean,
@@ -277,19 +276,7 @@ describe('a non-bottom side still opens and closes through Drawer.Root', () => {
         const reversed = side === 'top' || side === 'left';
         const { axis, scrollProp, clientProp, extentProp } = AXIS_PROPS[side];
         const maxScroll = viewport[extentProp] - viewport[clientProp];
-        // Short of the exact closed offset, not at it: the Panel fully
-        // leaving the Viewport's visible area closes the drawer on its own
-        // (`realMouseDrag`'s own comment, above, #296) slightly before
-        // `maxScroll` in practice, and letting this loop's own pointer
-        // moves cross that point first -- still "dragging" by the
-        // engine's own bookkeeping -- is what let a stale release reopen
-        // it. Stopping (and releasing) comfortably short of it instead
-        // leaves `@drawerdeck/core`'s own release-triggered settle (not
-        // the Panel-visibility shortcut) to finish the close, the same
-        // nearest-candidate path a real drag that let go a little early
-        // would take.
-        const margin = 100;
-        const closedTarget = reversed ? maxScroll - margin : margin;
+        const closedTarget = reversed ? maxScroll : 0;
         const reachedClosedTarget = reversed
           ? () => viewport[scrollProp] >= closedTarget
           : () => viewport[scrollProp] <= closedTarget;

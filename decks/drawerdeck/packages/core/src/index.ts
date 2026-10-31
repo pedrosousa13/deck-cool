@@ -948,8 +948,24 @@ export function createDrawer(
       // The CSS exit already has its own close path (`beginExit` then
       // `settleExit`): left to that instead, rather than racing it to
       // settle the reason. `finishClose`'s own idempotency is the backstop
-      // if this still fires around when that path settles.
-      if (cssExiting || (phase !== 'open' && phase !== 'closing')) return;
+      // if this still fires around when that path settles. A mouse drag or
+      // throw still owns the scroll position itself (`onScrollEnd`'s own
+      // guard, above, for the same reason): the Panel leaving view
+      // mid-drag is not the user letting go, and closing here anyway, with
+      // `dragging` left true, does not stop the drag's own later
+      // `onPointerUp` from running its own settle right on top of it,
+      // landing `phase` on a snap point while the dialog this already
+      // closed stays closed underneath it (#322). Left alone, the drag's
+      // own release (or the throw's own end) still reaches `finishClose`
+      // the moment it actually settles at closed.
+      if (
+        cssExiting ||
+        dragging ||
+        throwing ||
+        (phase !== 'open' && phase !== 'closing')
+      ) {
+        return;
+      }
       const reason = pendingCloseReason ?? 'drag';
       pendingCloseReason = null;
       finishClose(reason);
@@ -1149,6 +1165,7 @@ export function createDrawer(
     if (target?.closest('input, button, a, textarea, select')) {
       return;
     }
+    event.preventDefault();
     dragging = true;
     dragStartMain = pointerMain(event);
     dragStartScroll = viewport[axis.scroll];

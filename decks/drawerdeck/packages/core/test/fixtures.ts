@@ -1,6 +1,11 @@
 import { commands } from 'vitest/browser';
 import { expect, vi } from 'vitest';
-import { createDrawer, type Drawer, type DrawerOptions } from '../src/index';
+import {
+  createDrawer,
+  type Drawer,
+  type DrawerOptions,
+  type Side
+} from '../src/index';
 
 export interface Fixture {
   dialog: HTMLDialogElement;
@@ -185,5 +190,99 @@ export async function realMouseDrag(
   } finally {
     await commands.dragPointerUp();
     panel.removeAttribute(marker);
+  }
+}
+
+/** `side`'s own scroll axis: the real `scrollTop`/`scrollLeft` property
+ * name, the Viewport's own extent along that axis, and whether `side`
+ * reverses the DOM order (`top`/`left`: closed sits at the scroll end, open
+ * toward 0 -- `@drawerdeck/core`'s own module doc). */
+function axisFor(side: Side) {
+  const horizontal = side === 'left' || side === 'right';
+  return {
+    horizontal,
+    reversed: side === 'top' || side === 'left',
+    scrollProp: (horizontal ? 'scrollLeft' : 'scrollTop') as
+      'scrollLeft' | 'scrollTop',
+    clientProp: (horizontal ? 'clientWidth' : 'clientHeight') as
+      'clientWidth' | 'clientHeight',
+    extentProp: (horizontal ? 'scrollWidth' : 'scrollHeight') as
+      'scrollWidth' | 'scrollHeight'
+  };
+}
+
+/** A mouse drag, with real OS-level input, that carries `side`'s own Panel
+ * well past its closed offset and releases with the pointer outside the
+ * Viewport's own screen bounds -- the exact shape #322 found could reopen
+ * the drawer: once the drag point sits outside the Viewport, the browser's
+ * own native text-selection auto-scroll can fight the engine's own
+ * scroll-position writes right up to release (`onPointerDown`'s own
+ * `event.preventDefault()` is the fix: it stops that selection from ever
+ * starting, so this never has anything to race). Presses a point on the
+ * Panel's own content that is currently scrolled into the Viewport's
+ * visible window (never a button, link or input -- the engine ignores a
+ * press there anyway), the same way `addPressMarker` in `sides.test.ts`/
+ * `sides.test.tsx` locates one, then nudges the pointer `step` CSS pixels
+ * at a time, `side`'s own closing direction, comfortably past the
+ * Viewport's own screen edge, `stepDelayMs` apart (#322's own repro: 30
+ * steps, 16ms apart), then releases. */
+export async function realMouseDragPastClosed(
+  side: Side,
+  panel: HTMLElement,
+  viewport: HTMLElement,
+  {
+    steps = 30,
+    stepDelayMs = 16
+  }: { steps?: number; stepDelayMs?: number } = {}
+) {
+  const { horizontal, reversed, scrollProp, clientProp, extentProp } =
+    axisFor(side);
+  const client = viewport[clientProp];
+  const scroll = viewport[scrollProp];
+  const panelExtent = horizontal ? panel.offsetWidth : panel.offsetHeight;
+  const panelAbsStart = reversed ? 0 : client;
+  const visibleStart = Math.max(0, scroll - panelAbsStart);
+  const visibleEnd = Math.min(panelExtent, scroll + client - panelAbsStart);
+  const main = Math.round((visibleStart + visibleEnd) / 2);
+
+  const previousPosition = panel.style.position;
+  panel.style.position = 'relative';
+  const marker = document.createElement('div');
+  const markerAttr = `data-test-drag-${Math.random().toString(36).slice(2)}`;
+  marker.setAttribute(markerAttr, '');
+  Object.assign(marker.style, {
+    position: 'absolute',
+    width: '4px',
+    height: '4px',
+    left: horizontal ? `${main}px` : '10px',
+    top: horizontal ? '10px' : `${main}px`
+  });
+  panel.append(marker);
+
+  // Comfortably more than the Viewport's own full scroll range
+  // (`maxScroll`) plus the window's own extent along this axis: reaches
+  // closed well before the loop ends, then keeps going, carrying the
+  // pointer itself (not just the scroll position, clamped by then) past
+  // the window's own edge -- the dialog covers it entirely
+  // (`position: fixed; inset: 0`), so the window's edge is the Viewport's
+  // own. Direction follows the same sign `sides.test.ts`/`sides.test.tsx`
+  // already use to close: negative (up/left) for a reversed side, positive
+  // (down/right) otherwise.
+  const maxScroll = viewport[extentProp] - client;
+  const windowExtent = horizontal ? window.innerWidth : window.innerHeight;
+  const distance = (maxScroll + windowExtent + 300) * (reversed ? -1 : 1);
+
+  try {
+    const start = await commands.dragPointerDown(`[${markerAttr}]`, 1, 1);
+    for (let i = 1; i <= steps; i++) {
+      const x = horizontal ? start.x + (distance * i) / steps : start.x;
+      const y = horizontal ? start.y : start.y + (distance * i) / steps;
+      await commands.dragPointerMoveTo(x, y);
+      await sleep(stepDelayMs);
+    }
+  } finally {
+    await commands.dragPointerUp();
+    marker.remove();
+    panel.style.position = previousPosition;
   }
 }
