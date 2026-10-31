@@ -6,10 +6,15 @@ description: 'Focusing an input inside the drawer lifts it above the on-screen k
 Focusing a text field inside the drawer, on a touch device, opens the
 on-screen keyboard. By default, the drawer lifts itself above it: the
 Viewport's own bottom edge moves up to sit right at the keyboard's top
-edge, the drawer keeps whatever snap point it was already resting on, and
-the focused field stays visible. Nothing animates, and nothing closes.
-Closing the keyboard puts the drawer back to its full height, on the same
-snap point.
+edge, and the drawer keeps whatever snap point it was already resting on.
+Nothing animates, and nothing closes. Closing the keyboard puts the drawer
+back to its full height, on the same snap point.
+
+The lift shrinks the Viewport; it does not scroll the focused field into
+the smaller space on its own. A field low enough in the panel, at a short
+enough snap point, can still end up under the keyboard. Scroll it into
+view yourself, or open to a taller snap point, if your own content needs
+that.
 
 <!-- demo:example-keyboard -->
 
