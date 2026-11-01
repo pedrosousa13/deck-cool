@@ -504,6 +504,38 @@ main .home-family .home-more {
   }
 }
 
+/* The on-screen keyboard demo (components/demos/example-keyboard.tsx), on
+   the "On-screen keyboard" guide: a text input and a textarea, so a
+   phone's own keyboard has something to open. The keyboard handling itself
+   needs none of this -- the engine applies it to Drawer.Popup and
+   Drawer.Content inline. */
+
+.drawer-demo__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.drawer-demo__label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.drawer-demo__input,
+.drawer-demo__textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background-color: var(--tile);
+  color: var(--text);
+  font: inherit;
+}
+
+.drawer-demo__textarea {
+  resize: vertical;
+}
+
 /* The docs layout (components/docs-page.tsx): a sidebar, then the article. */
 
 .docs {

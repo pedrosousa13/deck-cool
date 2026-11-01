@@ -59,6 +59,22 @@ layout). Where it does not (Firefox), `--drawer-progress` (`0` closed to `1`
 at the first snap point) is written on `Drawer.Popup` instead, as the
 viewport scrolls.
 
+`--drawer-keyboard-inset`, also on `Drawer.Popup`, is the part of the layout
+viewport a keyboard covers at its own bottom edge, in pixels --
+`visualViewport`'s own numbers, not the keyboard's own full height, which a
+browser that pans the page can already have moved part of out of this
+inset's way. It stays unset while nothing covers the Viewport, is set once
+a keyboard covers part of it, drops back to `0px` if the keyboard closes
+while the drawer stays open, and is removed again when the drawer itself
+closes. On by default, no prop: the Viewport keeps its full size and
+position for as long as a keyboard is open or closing, and the drawer
+always expands to its largest snap point when the keyboard opens while a
+field inside it has focus, scrolling it clear of the keyboard with an
+explicit `Drawer.Content` scroll (`Drawer.Content`'s own `padding-bottom`,
+set to `--drawer-keyboard-inset`, gives it room to scroll into). While
+typing, the drawer's own top edge may move up with Safari's own page pan --
+see "On-screen keyboard".
+
 ## Not in the beta
 
 Nested drawers (#237) and a background indent.
