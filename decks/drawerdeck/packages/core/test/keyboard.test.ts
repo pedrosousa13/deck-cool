@@ -3,10 +3,18 @@
 // step with it (Safari panning the layout viewport instead of shrinking it,
 // a WKWebView wrapper -- Brave -- shrinking the layout viewport itself over
 // many `window` 'resize' events, and a fit frozen mid-exit dropping the
-// Panel out of view before its own CSS transition had finished). The
-// Viewport now stays put: every test below checks that first, against a
-// real `getBoundingClientRect()`, before checking anything about the
-// keyboard it replays.
+// Panel out of view before its own CSS transition had finished). The engine
+// itself now never writes the Viewport's `top`, `height` or `position`: the
+// Safari replay below proves the Viewport's own painted rect never changes
+// for a fake `visualViewport` pan; the Brave replay proves the opposite
+// case on purpose, with a *real* window resize -- the Viewport's own
+// `height: 100dvh` genuinely does shrink with the real layout viewport, the
+// browser's own doing, while the engine's own inline style stays exactly
+// what it was at open. A pan also pushes the Popup's own top edge off the
+// real, visible window without moving the Viewport itself (`position:
+// fixed` is unaffected by `visualViewport.offsetTop`); the Safari replay
+// also proves the Panel's own top edge stays on screen through that, not
+// only once a pan settles.
 //
 // A desktop browser has no on-screen keyboard at all, so every test here
 // emulates one with a stand-in for `window.visualViewport`: a plain
@@ -15,10 +23,14 @@
 // `visualViewport.addEventListener('resize', …)` call -- wired for a plain
 // resize, not this feature -- attaches to it too), then driven by
 // dispatching 'resize' and 'scroll' on it by hand, the same two events the
-// real interface fires, plus plain `window` 'resize' events for a layout-
-// viewport shrink. Real focus throughout comes from a real click
-// (`userEvent.click`), never a handler called directly, and a real tap on
-// Done is a real click too.
+// real interface fires. A layout-viewport shrink (Brave) is a real resize
+// of the test's own iframe (`page.viewport`), which fires a real `window`
+// 'resize' on its own; a mocked `window.innerHeight` getter
+// (`mockInnerHeight`, below) stands in only where a test needs a shrink
+// without caring whether it is real, such as the "expanding to the largest
+// snap point" describe block further down. Real focus throughout comes
+// from a real click (`userEvent.click`), never a handler called directly,
+// and a real tap on Done is a real click too.
 //
 // The "Safari's pan" and "Brave's shrinking layout viewport" describe
 // blocks below replay sequences logged from a real iPhone (iOS 18.7)
@@ -30,7 +42,7 @@
 // first, `vvH` 363/`offsetTop` 263, then `innerHeight` stepping down from
 // 595 to 363 over the run's own ~15 `window` 'resize' events, with no
 // further `visualViewport` event at all).
-import { userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Side } from '../src/index';
 import {
@@ -134,6 +146,26 @@ function snapshotRect(el: HTMLElement) {
   };
 }
 
+/** The inline geometry properties the old, removed keyboard fit used to
+ * write (`top`, `height` and `position`, plus the sibling properties
+ * `createDrawer`'s own one-time setup also sets): what the Brave replay's
+ * own "the engine never writes to it" assertions check instead of the whole
+ * `style` attribute, since `--drawer-keyboard-inset` and
+ * `--drawer-first-snap` legitimately change on it for reasons that replay
+ * is not about. */
+function geometryStyle(el: HTMLElement) {
+  return {
+    position: el.style.position,
+    top: el.style.top,
+    left: el.style.left,
+    right: el.style.right,
+    bottom: el.style.bottom,
+    inset: el.style.inset,
+    width: el.style.width,
+    height: el.style.height
+  };
+}
+
 function expectUnmoved(
   el: HTMLElement,
   baseline: ReturnType<typeof snapshotRect>
@@ -150,12 +182,13 @@ describe("the Viewport stays put (Safari's pan, real iPhone replay: run 4, iOS 1
     mockInnerHeight(iH);
     vv.height = iH;
     fixture = mount({ snapPoints: [1] });
-    const { dialog, viewport, content, drawer } = fixture;
+    const { dialog, viewport, panel, content, drawer } = fixture;
     const field = appendFieldTo(content);
 
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
     const baseline = snapshotRect(viewport);
+    const panelBaseline = snapshotRect(panel);
     // The design ruling this section exists to prove: the drawer's own top
     // edge is already on screen at rest, and nothing below ever moves it.
     expect(baseline.top).toBeGreaterThanOrEqual(0);
@@ -170,21 +203,37 @@ describe("the Viewport stays put (Safari's pan, real iPhone replay: run 4, iOS 1
     vv.resize();
     await nextFrame();
     expectUnmoved(viewport, baseline);
+    // The Panel's own top edge, converted to the same visual-viewport
+    // coordinates `offsetTop` is in, must stay on screen through the pan
+    // itself, not just once it settles: `updatePanOffset` shifts the Panel
+    // down by `offsetTop` to prove it, without moving the Viewport the
+    // assertion just above already checked. Two of the real device logs
+    // this file's own callers cite held a pan exactly this long (eleven
+    // seconds, and through a whole close) rather than settling at once, so
+    // this checks it while still panned, not only after.
+    expect(
+      panel.getBoundingClientRect().top - vv.offsetTop
+    ).toBeGreaterThanOrEqual(0);
     // `320 + 293 === 613`: the pan alone already reveals the full layout
     // viewport through the visible window, so nothing is left covered yet --
     // the inset never left neutral, so it stays unset, the same as before
     // the keyboard ever opened (the guide's own "stays unset" wording).
     expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
 
-    // Log #40 ("vv.scroll"): the pan settles back toward `offsetTop: 0` on
-    // its own, the way a real iPhone's own pan usually does, while `vvH`
-    // stays at 293 -- the keyboard itself is still up. `613 - 0 - 293 ===
-    // 320`, the real device's own recorded `--drawer-keyboard-inset` value
-    // at this exact step (its own debug overlay logged `var 320px`).
+    // Log #40 ("vv.scroll"): the pan settles back toward `offsetTop: 0`,
+    // while `vvH` stays at 293 -- the keyboard itself is still up. `613 - 0
+    // - 293 === 320`, the real device's own recorded `--drawer-keyboard-inset`
+    // value at this exact step (its own debug overlay logged `var 320px`).
     vv.offsetTop = 0;
     vv.scroll();
     await nextFrame();
     expectUnmoved(viewport, baseline);
+    // The pan offset clears with it: the Panel's own top edge is back at
+    // its un-shifted rest position, not left translated down.
+    expect(panel.getBoundingClientRect().top - vv.offsetTop).toBeCloseTo(
+      panelBaseline.top,
+      0
+    );
     expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
       '320px'
     );
@@ -213,74 +262,101 @@ describe("the Viewport stays put (Safari's pan, real iPhone replay: run 4, iOS 1
 describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', () => {
   beforeEach(() => mockReducedMotion());
 
-  it('converges on every window resize step instead of freezing mid-animation, with the Viewport still never moving', async () => {
-    const iH0 = 626;
-    mockInnerHeight(iH0);
-    const vv = installFakeViewport();
-    fixture = mount({ snapPoints: [1] });
-    const { dialog, viewport, content, drawer } = fixture;
-    const input = appendFieldTo(content);
+  it('lets the browser resize the Viewport with the real layout viewport while the engine never writes to it, converging on every window resize step instead of freezing mid-animation', async () => {
+    // A *real* resize (`page.viewport`), not a mock: on a real WKWebView
+    // the layout viewport itself shrinks, and so does this engine's own
+    // `height: 100dvh` Viewport, the browser's own doing. A mocked
+    // `window.innerHeight` getter proves nothing about that -- it never
+    // touches layout, so a Viewport that did nothing and one whose own CSS
+    // correctly tracked a real resize would read identically. Restored in
+    // `finally`, since this changes the real iframe every other test in
+    // this file (and run after it, in this same browser) renders in.
+    const width = window.innerWidth;
+    const iH0 = window.innerHeight;
+    try {
+      const vv = installFakeViewport();
+      fixture = mount({ snapPoints: [1] });
+      const { dialog, viewport, content, drawer } = fixture;
+      const input = appendFieldTo(content);
 
-    drawer.open();
-    await expectSettledTo(() => drawer.phase, 'open');
-    const baseline = snapshotRect(viewport);
-    await userEvent.click(input);
+      drawer.open();
+      await expectSettledTo(() => drawer.phase, 'open');
+      // The geometry properties the old, removed fit used to write,
+      // snapshotted right after open: every assertion below re-checks
+      // these stay exactly what `createDrawer`'s own one-time setup left
+      // them at, proving a real shrink that follows is the browser's own
+      // `100dvh` alone, never a line of this file's own code reacting to
+      // the keyboard. Not the whole `style` attribute: `--drawer-keyboard-inset`
+      // and `--drawer-first-snap` legitimately change on it, for reasons
+      // this describe block is not about.
+      const dialogGeometry = geometryStyle(dialog);
+      const viewportGeometry = geometryStyle(viewport);
+      await userEvent.click(input);
 
-    // Log #13 ("vv.resize"): like Safari, Brave pans first -- `vvH` 363,
-    // `offsetTop` 263 -- before the layout viewport itself starts
-    // shrinking.
-    vv.height = 363;
-    vv.offsetTop = 263;
-    vv.resize();
-    await nextFrame();
-    expectUnmoved(viewport, baseline);
-
-    // Log #16 ("win.resize"): the layout viewport's own shrink animation
-    // starts, un-panning in the same step -- `offsetTop` back to 0,
-    // `innerHeight` already down to 558. `visualViewport` itself stays put
-    // at 363 for the rest of the animation: only `window` 'resize' fires
-    // from here on.
-    vv.offsetTop = 0;
-    mockInnerHeight(558);
-    window.dispatchEvent(new Event('resize'));
-    await nextFrame();
-    expectUnmoved(viewport, baseline);
-    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
-      `${558 - 363}px`
-    );
-
-    // Log #18-#33 (a representative subset of the real run's own ~15
-    // steps): `innerHeight` keeps falling toward 363 (`vvH`'s own value)
-    // with no further `visualViewport` event at all -- only `window`
-    // 'resize'. Each step must re-read: the Viewport never had a fitted
-    // rect to freeze in the first place, but the inset this still exposes
-    // must keep tracking `innerHeight`, proving the read itself converges
-    // rather than sticking at whatever it computed first.
-    for (const iH of [
-      520, 486, 457, 434, 416, 402, 391, 384, 378, 374, 371, 368, 367, 366, 365,
-      364
-    ]) {
-      mockInnerHeight(iH);
-      window.dispatchEvent(new Event('resize'));
+      // Log #13 ("vv.resize"): like Safari, Brave pans first -- `vvH` 363,
+      // `offsetTop` 263 -- a fake `visualViewport` pan only, before the
+      // real layout viewport itself starts shrinking.
+      vv.height = 363;
+      vv.offsetTop = 263;
+      vv.resize();
       await nextFrame();
-      expectUnmoved(viewport, baseline);
-      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
-        `${iH - 363}px`
-      );
-    }
+      expect(geometryStyle(dialog)).toEqual(dialogGeometry);
+      expect(geometryStyle(viewport)).toEqual(viewportGeometry);
 
-    // Log #34 ("win.resize"): the layout viewport finishes shrinking to
-    // exactly `visualViewport`'s own height -- the
-    // `interactive-widget=resizes-content` end state. The inset reverts to
-    // neutral; the Viewport, never touched, needs nothing reverted.
-    mockInnerHeight(363);
-    window.dispatchEvent(new Event('resize'));
-    await nextFrame();
-    expectUnmoved(viewport, baseline);
-    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
-      '0px'
-    );
-    expect(drawer.phase).toBe('open');
+      // Log #16 ("win.resize"): the layout viewport's own shrink animation
+      // starts, un-panning in the same step -- `offsetTop` back to 0, the
+      // real `window.innerHeight` already down to 558. `visualViewport`
+      // itself stays put at 363 for the rest of the animation: only
+      // `window` 'resize' fires from here on.
+      vv.offsetTop = 0;
+      await page.viewport(width, 558);
+      await nextFrame();
+      expect(geometryStyle(dialog)).toEqual(dialogGeometry);
+      expect(geometryStyle(viewport)).toEqual(viewportGeometry);
+      // The Viewport's own real, painted height tracks the resize exactly
+      // -- the browser's `100dvh`, with nothing here overriding it.
+      expect(Math.round(dialog.getBoundingClientRect().height)).toBe(558);
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+        `${558 - 363}px`
+      );
+
+      // Log #18-#33 (a representative subset of the real run's own ~15
+      // steps): `innerHeight` keeps falling toward 363 (`vvH`'s own value)
+      // with no further `visualViewport` event at all -- only `window`
+      // 'resize'. Each step must re-read: the Viewport's own `100dvh`
+      // tracks every real step on its own, but the inset this still
+      // exposes must keep tracking it too, proving the read itself
+      // converges rather than sticking at whatever it computed first.
+      for (const iH of [
+        520, 486, 457, 434, 416, 402, 391, 384, 378, 374, 371, 368, 367, 366,
+        365, 364
+      ]) {
+        await page.viewport(width, iH);
+        await nextFrame();
+        expect(geometryStyle(dialog)).toEqual(dialogGeometry);
+        expect(geometryStyle(viewport)).toEqual(viewportGeometry);
+        expect(Math.round(dialog.getBoundingClientRect().height)).toBe(iH);
+        expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+          `${iH - 363}px`
+        );
+      }
+
+      // Log #34 ("win.resize"): the layout viewport finishes shrinking to
+      // exactly `visualViewport`'s own height -- the
+      // `interactive-widget=resizes-content` end state. The inset reverts
+      // to neutral; the Viewport's own real height already matches it.
+      await page.viewport(width, 363);
+      await nextFrame();
+      expect(geometryStyle(dialog)).toEqual(dialogGeometry);
+      expect(geometryStyle(viewport)).toEqual(viewportGeometry);
+      expect(Math.round(dialog.getBoundingClientRect().height)).toBe(363);
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+        '0px'
+      );
+      expect(drawer.phase).toBe('open');
+    } finally {
+      await page.viewport(width, iH0);
+    }
   });
 });
 

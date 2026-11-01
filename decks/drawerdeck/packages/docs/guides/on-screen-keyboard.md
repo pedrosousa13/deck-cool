@@ -86,33 +86,44 @@ closes -- the drawer stays at whatever snap point it expanded to.
 iOS Safari's own response to a focus inside a scrollable area is to scroll
 the _whole page_ so the focused field sits centered in the visible window --
 which, since `Drawer.Popup` is `position: fixed`, can push its own top edge
-above that window for as long as the pan lasts. React Aria's
-`usePreventScroll` (whose own source credits the file vaul vendors a copy
-of, `vaul/dist/index.js`'s `onFocus` handler) stops this at the source: a
-momentary `transform: translateY(-2000px)` on the focused field itself,
-convincing Safari the field is already off the top of the page, so it has
-nothing left to pan the page to reveal. The engine does the same, on
-`focusin`, for the smallest piece of that trick this needs -- one
-transform, one frame, on the field alone, never the touch-event
-interception or the body-margin trick the rest of `usePreventScroll` also
-carries, both there to stop a user's own touch scroll from moving the page,
-a problem this engine does not have.
+above that window for as long as the pan lasts. Current React Aria
+(`react-aria` 3.53.1) no longer stops this with a field transform: its own
+`usePreventScroll` sets `overflow: hidden` on the root element, overrides
+`HTMLElement.prototype.focus` to add `preventScroll: true`, and does its own
+`scrollIntoView` once the keyboard is up. The momentary
+`transform: translateY(-2000px)`-on-focus trick survives in two places
+only: vaul 1.1.2's own vendored copy of an older React Aria
+(`vaul/dist/index.js`'s `onFocus` handler), and Base UI's
+`DrawerVirtualKeyboardProvider`, which applies the same transform from a
+`touchend` handler that focuses the field itself, before the browser's own
+focus ever fires -- exactly what vaul's own comment on its `onFocus`
+handler says a tap needs: "when tapping an input, it must be done before
+the focus event, so we have to focus the element ourselves."
 
-The trick's own race (React Aria's own issue #10485, on its
-`react-spectrum` repository): the field
-sits transformed for a whole animation frame, and a real `visualViewport`
-event can land inside that same frame. The engine closes this itself,
-restoring the field to its real position synchronously the moment anything
-here needs to read it, rather than waiting for the trick's own scheduled
-frame.
+The engine keeps a momentary transform on `focusin` as a cheap, best-effort
+first line (it still helps a focus a consumer's own code triggers directly,
+never through `touchend` at all), but does not rely on it alone: it also
+undoes whatever pan has already happened, every time it reads
+`visualViewport`, by shifting `Drawer.Panel` down by that same `offsetTop`
+with a standalone CSS `translate` (never `transform`, which a CSS entrance
+or exit already animates). This keeps the Panel's own top edge on screen
+for as long as the pan lasts, proven against two real iPhone logs that held
+a pan at a non-zero `offsetTop` for several seconds -- eleven, in one -- and
+through an entire close in another, disproving the premise that a pan
+"usually" settles back to `offsetTop: 0` on its own quickly enough to leave
+alone.
 
-Where a pan still happens anyway -- Safari starting one from somewhere this
-trick does not reach, such as the keyboard's own next/previous field
-buttons -- the Viewport never having moved in the first place (above) is
-what keeps its own top edge from _staying_ off screen, not a second,
-reactive undo on top of this. A pan Safari starts anyway still settles back
-to `offsetTop: 0` on its own, the same way a real iPhone's own log of this
-showed it doing.
+A transform-frame race this surfaced while building it (not React Aria's
+issue [#10485](https://github.com/adobe/react-spectrum/issues/10485), which
+describes a different race, between `useViewportSize`'s own `setState` and
+a reveal that runs before React re-renders the CSS variable it writes): the
+field sits transformed for a whole animation frame after `onFocusIn`, and a
+real `visualViewport` event can land inside that same frame. The engine
+closes this itself, restoring the field to its real position synchronously
+the moment anything here needs to read it, rather than waiting for the
+trick's own scheduled frame. `updateKeyboardInset` writes the inset's own
+padding synchronously too, before `ensureFieldVisible` scrolls, so
+drawerdeck never hits #10485's own race either.
 
 ## Two keyboard models
 

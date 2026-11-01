@@ -1177,61 +1177,104 @@ export function createDrawer(
   // field sits centered in the visible window -- which, since the Popup is
   // `position: fixed`, can push its own top edge above that window for as
   // long as the pan lasts (the real device logs this file's own callers
-  // cite show it: `offsetTop` jumping to 320-370px on focus, then usually
-  // settling back to 0 on its own). React Aria's `usePreventScroll` (whose
-  // own file credits the same source vaul vendors a copy of,
-  // `vaul/dist/index.js`'s `onFocus` handler) stops this at the source: a
-  // `transform: translateY(-2000px)` on the field itself, for one frame
-  // around the `focus` event, convinces Safari the field is already off
-  // the top of the page, so it has nothing left to pan the page to reveal.
-  // `onFocusIn`, below, is the smallest piece of that trick this needs --
-  // one transform, one frame, on the field alone, never the touch-event
-  // interception or the body-margin trick the rest of `usePreventScroll`
-  // also carries, which exist to stop a *user's own touch scroll* from
-  // moving the page, a problem this engine does not have (the Viewport is
-  // its own native scroll container; nothing here relies on the page itself
-  // staying still). Where it still is not enough -- a pan Safari starts
-  // from somewhere this trick does not reach, such as the keyboard's own
-  // next/previous field buttons -- the Viewport never having moved in the
-  // first place is what keeps its own top edge from *staying* off screen:
-  // the design this file's own module doc opens with, not a second,
-  // reactive undo on top of it. A pan Safari starts anyway still settles
-  // back to `offsetTop: 0` on its own, same as the real device logs showed,
-  // landing the Popup back where it always was.
+  // cite show it: `offsetTop` jumping to 320-370px on focus). Current React
+  // Aria (3.53.1) no longer stops this with a field transform at all: its
+  // own `usePreventScroll` now sets `overflow: hidden` on the root element,
+  // overrides `HTMLElement.prototype.focus` to add `preventScroll: true`
+  // and does its own `scrollIntoView` once the keyboard is up. The
+  // `translateY(-2000px)`-on-focus trick survives only in two places this
+  // file's own callers found: vaul 1.1.2's own vendored copy of an older
+  // React Aria (`vaul/dist/index.js`'s `onFocus` handler, credited there to
+  // React Aria), and Base UI's `DrawerVirtualKeyboardProvider`, which sets
+  // the same transform (`focusKeyboardInputWithoutPageScroll`, its own
+  // `overrideGeometryDuringFocus`) but, critically, does it from a
+  // `touchend` handler that calls `preventDefault()` and focuses the field
+  // itself, *before* the browser's own focus ever fires. `onFocusIn`, below,
+  // only ever sees a focus after the browser has already decided whether to
+  // pan, which is exactly what vaul's own comment on its `onFocus` handler
+  // warns about: "when tapping an input, it must be done before the focus
+  // event, so we have to focus the element ourselves" -- a transform on
+  // `focusin` alone is not that, and is not relied on alone here either.
   //
-  // The trick's own race (React Aria's open issue #10485, cited by this
-  // file's own callers for exactly this): the field sits at
-  // `translateY(-2000px)` for a whole animation frame, and a real
-  // `visualViewport` event -- the pan this is trying to stop, arriving
-  // anyway, or an unrelated one -- can land inside that same frame. Reading
-  // the field's own `getBoundingClientRect()` then, in
-  // `maybeExpandForKeyboard` or `ensureFieldVisible`, would measure the
-  // trick's own fake, off-screen position, not the field's real one, and
-  // `ensureFieldVisible`'s own `scrollIntoView` would scroll this engine's
-  // own Viewport -- a real, native scroll-snap container whose position
-  // *is* the drawer's own open/snap state -- toward wherever the fake
-  // position asked for, as far as fully closed. `restorePendingUnpan`,
-  // below, closes this: every path that measures a field's own position
-  // calls it first, landing the field back at its real, untransformed spot
-  // synchronously, before anything here reads it.
+  // `onFocusIn`'s momentary transform stays as a cheap, best-effort first
+  // line (free when it works, such as a focus a consumer's own code
+  // triggers programmatically, which never goes through `touchend` at
+  // all), but the Viewport design this file's own module doc opens with
+  // does not depend on it: `updatePanOffset`, below, undoes whatever pan
+  // already happened instead, every time `updateKeyboardInset` runs,
+  // rather than assuming one in progress is "usually" temporary. The real
+  // device logs this file's own callers cite disprove that premise
+  // directly: one held `offsetTop` at 336 for eleven seconds before
+  // settling, another held it at 45 for the rest of the session, through a
+  // whole close. `updatePanOffset` shifts the Panel by that same
+  // `offsetTop`, with a standalone `translate` (never `transform`, which a
+  // CSS entrance or exit already animates -- the "CSS entrance and exit"
+  // section, above), so the Panel's own top edge tracks wherever the pan
+  // moved the visible window to, for as long as it stays moved, without
+  // writing anything to the Viewport itself (a child's own `translate`
+  // never changes its parent's `getBoundingClientRect()`).
+  //
+  // The transform-frame race this file's own callers found while building
+  // this (not React Aria's issue #10485, which describes a different race,
+  // between `useViewportSize`'s own `setState` and a reveal that runs
+  // before React has re-rendered the CSS variable it writes): the field
+  // sits at `translateY(-2000px)` for a whole animation frame after
+  // `onFocusIn`, and a real `visualViewport` event -- the pan this is
+  // trying to stop, arriving anyway, or an unrelated one -- can land inside
+  // that same frame. Reading the field's own `getBoundingClientRect()`
+  // then, in `maybeExpandForKeyboard` or `ensureFieldVisible`, would
+  // measure the trick's own fake, off-screen position, not the field's
+  // real one, and `ensureFieldVisible`'s own `scrollIntoView` would scroll
+  // this engine's own Viewport -- a real, native scroll-snap container
+  // whose position *is* the drawer's own open/snap state -- toward
+  // wherever the fake position asked for, as far as fully closed.
+  // `restorePendingUnpan`, below, closes this: every path that measures a
+  // field's own position calls it first, landing the field back at its
+  // real, untransformed spot synchronously, before anything here reads it.
+  // drawerdeck avoids #10485's own race a different way: `updateKeyboardInset`
+  // writes the inset's own padding synchronously, before `ensureFieldVisible`
+  // ever runs, rather than waiting on a later render to pick it up.
   let keyboardInset = 0;
   let keyboardListenersAttached = false;
   let pendingUnpanField: HTMLElement | null = null;
   let pendingUnpanTransform = '';
   let pendingUnpanFrame = 0;
+  let panOffset = 0;
 
   /** Restores a field still sitting at the pan-prevention trick's own
    * `translateY(-2000px)` (`onFocusIn`, below) immediately, instead of
    * waiting for its own scheduled frame: called first by every function in
    * this section that reads a field's own `getBoundingClientRect()`, so
    * none of them ever measures the trick's own fake position (this
-   * section's own module doc: React Aria's issue #10485). A no-op once the
-   * field's own frame has already restored it, or when nothing is pending. */
+   * section's own module doc: the transform-frame race this file's own
+   * callers found). A no-op once the field's own frame has already
+   * restored it, or when nothing is pending. */
   function restorePendingUnpan() {
     if (!pendingUnpanField) return;
     cancelAnimationFrame(pendingUnpanFrame);
     pendingUnpanField.style.transform = pendingUnpanTransform;
     pendingUnpanField = null;
+  }
+
+  /** Undoes a Safari page pan still in effect (this section's own module
+   * doc, "Stopping Safari's own pan"): `visualViewport.offsetTop` moves the
+   * real, visible window without moving a `position: fixed` Popup at all,
+   * so the Popup's own top edge can sit above the visible window for as
+   * long as the pan lasts. Shifting the Panel down by that same
+   * `offsetTop`, with a standalone `translate` (never `transform`, which a
+   * CSS entrance or exit already animates), re-aligns its own top edge
+   * with wherever the pan moved the visible window to, without writing
+   * anything to the Viewport itself -- a child's own `translate` never
+   * changes its parent's `getBoundingClientRect()`. Settles back to
+   * neutral the moment `offsetTop` does, but never assumes that already
+   * happened: reads the real, current value every time `updateKeyboardInset`
+   * runs, since the real device logs this file's own callers cite show a
+   * pan held at a non-zero `offsetTop` for several seconds, sometimes
+   * through a whole close. A no-op once already at this same offset. */
+  function updatePanOffset(offsetTop: number) {
+    if (offsetTop === panOffset) return;
+    panOffset = offsetTop;
+    panel.style.translate = offsetTop > 0 ? `0 ${offsetTop}px` : '';
   }
 
   /** The focused element, if it is inside the Panel and would itself keep
@@ -1335,6 +1378,11 @@ export function createDrawer(
   function updateKeyboardInset() {
     const vv = window.visualViewport;
     if (!vv || vv.scale > 1) return;
+    // Undoes whatever pan is in effect right now, before anything below
+    // reads a field's own position against it (`updatePanOffset`'s own
+    // doc): must run even on a step that leaves the inset itself
+    // unchanged, since a pan and the inset are two different numbers.
+    updatePanOffset(vv.offsetTop);
     const inset = Math.max(
       0,
       Math.round(window.innerHeight - vv.offsetTop - vv.height)
@@ -1415,9 +1463,9 @@ export function createDrawer(
 
   /** Removed on close and on `destroy()`: an open drawer is the only thing
    * that ever needs to know about the keyboard. Also resets the inset
-   * (the CSS var and Content's own `scroll-padding-bottom`) straight to
-   * neutral; the Viewport itself needs no reset, since nothing here ever
-   * wrote to it. */
+   * (the CSS var and Content's own `scroll-padding-bottom`) and any pan
+   * offset still applied to the Panel straight to neutral; the Viewport
+   * itself needs no reset, since nothing here ever wrote to it. */
   function detachKeyboardListeners() {
     if (!keyboardListenersAttached) return;
     keyboardListenersAttached = false;
@@ -1427,6 +1475,7 @@ export function createDrawer(
     document.removeEventListener('focusin', onFocusIn);
     restorePendingUnpan();
     keyboardInset = 0;
+    updatePanOffset(0);
     dialog.style.removeProperty('--drawer-keyboard-inset');
     if (parts.content) {
       parts.content.style.paddingBottom = '';
