@@ -72,14 +72,10 @@ again when the drawer itself closes. On by default, no prop: the fit keeps
 tracking the visible area through a resize or a pan while the drawer is on
 its way out too, and the drawer expands to its largest snap point when the
 keyboard would otherwise hide the focused field -- see "On-screen
-keyboard". `Drawer.Popup` itself also sizes to `window.innerHeight` while
-the fit is active, instead of its own usual `100dvh`, so `Drawer.Backdrop`
-(a `position: fixed; inset: 0` child `Drawer.Popup`'s own `overflow: hidden`
-still clips to its box) keeps covering the full layout viewport. Extend
-`Drawer.Backdrop` by `--drawer-keyboard-inset`, flush against its own
-bottom edge, to continue the drawer's own surface behind the keyboard the
-way a native iOS sheet does -- see "On-screen keyboard"'s own "The gap
-behind the keyboard".
+keyboard". Extend `Drawer.Backdrop` by `--drawer-keyboard-inset`, flush
+against its own bottom edge, to continue the drawer's own surface behind
+the keyboard the way a native iOS sheet does -- see "On-screen keyboard"'s
+own "The gap behind the keyboard".
 
 ## Not in the beta
 

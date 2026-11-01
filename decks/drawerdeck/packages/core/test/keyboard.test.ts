@@ -110,6 +110,20 @@ function visibleRect(viewport: HTMLElement) {
   return { top: rect.top, bottom: rect.bottom, height: rect.height };
 }
 
+/** How much of the Panel's own painted box -- real `getBoundingClientRect()`s,
+ * reflecting a running CSS `transform` the same way a real device paints
+ * it -- actually falls inside the Viewport's own visible rect, in pixels.
+ * What "the exit runs its own duration" means on screen: the phase and
+ * `data-ending-style` can both still read `closing` while a stale
+ * `scrollTop` has already moved the Viewport's own visible window out from
+ * under the Panel, dropping it off screen well before either one changes
+ * (#327's own finding 4b, this round). */
+function panelVisiblePx(panel: HTMLElement, viewport: HTMLElement): number {
+  const p = panel.getBoundingClientRect();
+  const v = viewport.getBoundingClientRect();
+  return Math.max(0, Math.min(p.bottom, v.bottom) - Math.max(p.top, v.top));
+}
+
 describe("Safari's pan model (real iPhone replay, iOS 18.7)", () => {
   beforeEach(() => mockReducedMotion());
 
@@ -420,38 +434,6 @@ describe('a real tap on Close with the keyboard open (#327 finding 3)', () => {
 describe('the gap behind the keyboard (#327 finding 4c, a real iPhone screenshot)', () => {
   beforeEach(() => mockReducedMotion());
 
-  it('sizes the Popup to window.innerHeight instead of 100dvh while the fit is active, and restores 100dvh once the keyboard closes', async () => {
-    const vv = installFakeViewport();
-    fixture = mount({ snapPoints: [0.5] });
-    const { dialog, content, drawer } = fixture;
-    const input = appendFieldTo(content);
-
-    expect(dialog.style.height).toBe('100dvh');
-    drawer.open();
-    await expectSettledTo(() => drawer.phase, 'open');
-    expect(dialog.style.height).toBe('100dvh');
-
-    await userEvent.click(input);
-    vv.height = 331;
-    vv.offsetTop = 45;
-    vv.resize();
-    await nextFrame();
-
-    // `100dvh` fell short of `window.innerHeight` on a real iPhone once the
-    // keyboard panned the page (the screenshot in #327's own final finding):
-    // read straight from the same `window.innerHeight` the fit already
-    // reads for `--drawer-keyboard-inset`, rather than trusting `100dvh` to
-    // agree with it.
-    expect(dialog.style.height).toBe(`${window.innerHeight}px`);
-
-    vv.height = window.innerHeight;
-    vv.offsetTop = 0;
-    vv.resize();
-    await nextFrame();
-
-    expect(dialog.style.height).toBe('100dvh');
-  });
-
   it("keeps the drawer's own painted surface reaching the layout bottom behind the keyboard, while Close stays inside the visible window", async () => {
     const vv = installFakeViewport();
     fixture = mount({ snapPoints: [0.5] });
@@ -477,12 +459,11 @@ describe('the gap behind the keyboard (#327 finding 4c, a real iPhone screenshot
     expect(closeRect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
 
     // Just below the fitted Viewport's own bottom edge -- the real gap a
-    // screenshot caught (#327 finding 4c). Resolving this against a
-    // `100dvh`-sized Popup proves nothing in a browser this replay never
-    // actually shrinks `dvh` in (only `dialog.style.height` itself, above,
-    // can fail before the fix here); kept as the behavioral check the
-    // design calls for, and as a regression guard if the Popup's own sizing
-    // ever stops tracking `window.innerHeight`.
+    // screenshot caught (#327 finding 4c). `Drawer.Popup` already reaches
+    // `window.innerHeight` on its own (`100dvh`, which does not shrink for
+    // the keyboard), so this checks that it still does once a keyboard fit
+    // is active, not a dedicated height write: a regression guard if the
+    // Popup's own sizing ever does stop reaching that far.
     const x = Math.round((visible.left + visible.right) / 2);
     const y = Math.min(window.innerHeight - 1, Math.round(visible.bottom + 5));
     const atGap = document.elementFromPoint(x, y);
@@ -609,7 +590,12 @@ describe('closing Done while the keyboard closes in the same tick (#327 finding 
   it('runs the exit for its full 300ms, with the close-button reason, when the keyboard finishes closing (vv.resize to the full layout height) in the same tick as Done (log 12:04:50-51, run 3)', async () => {
     const vv = installFakeViewport();
     const iH = window.innerHeight;
-    fixture = mount({ snapPoints: [0.5, 1] });
+    // `panelHeight: '100%'` matches the site's own recipe
+    // (`.drawer-demo__panel { height: 100% }`): the Panel's `translateY`
+    // percentage then resolves against the Viewport's own current height,
+    // the same box the keyboard's fit resizes, not an arbitrary fixed
+    // height unrelated to it.
+    fixture = mount({ snapPoints: [0.5, 1] }, { panelHeight: '100%' });
     const { dialog, panel, content, viewport, drawer } = fixture;
     const onOpenChange = vi.fn();
     drawer.setOptions({ onOpenChange });
@@ -664,29 +650,38 @@ describe('closing Done while the keyboard closes in the same tick (#327 finding 
     // both at 12:04:51 -- `vvH` back to the full 701, `offsetTop` back to
     // 0: the fit reverts the Viewport (and, through its own `height: 100%`,
     // the Panel) all the way back to neutral while the exit's own 300ms
-    // transition has barely started. Two separate things the fit still
-    // does on its own here, both of them scroll writes, neither one with
-    // anything left to accomplish while the exit's own `transform` is what
-    // actually moves the Panel: `onResize`'s own `viewport.scrollTo` (the
-    // maintainer's own trace target), and, more surprisingly, the browser's
-    // own native CSS Scroll Snap resnap, triggered by nothing more than
-    // `positionMarkers()` moving the configured snap points' markers under
-    // a Viewport whose `scroll-snap-type` is still `mandatory` -- traced by
-    // disabling each in turn: with only `onResize`'s own write skipped,
-    // `scrollTop` still jumped to the same target the browser resnapped it
-    // to on its own.
-    const scrollTopBeforeKeyboardCloses = viewport.scrollTop;
+    // transition has barely started. The phase and `data-ending-style`
+    // both hold through this and the sleeps below either way -- what a
+    // prior cut of this fix got wrong was the Panel's own painted
+    // position, not either of those: it left `scrollTop` at the smaller,
+    // fitted Viewport's own value, so the Viewport's visible window moved
+    // out from under the Panel the moment its scrollable range grew back
+    // to the full layout height, dropping the Panel off screen well
+    // before 300ms while `closing`/`data-ending-style` kept reading as if
+    // nothing had happened.
     vv.height = iH;
     vv.offsetTop = 0;
     vv.resize();
 
-    expect(viewport.scrollTop).toBe(scrollTopBeforeKeyboardCloses);
+    // Right when the keyboard finishes closing, the Panel is still
+    // painted flush with the Viewport's own top -- not already partway
+    // down it from a stale scroll position.
+    const viewportRect = viewport.getBoundingClientRect();
+    expect(panelVisiblePx(panel, viewport)).toBeGreaterThan(
+      viewportRect.height - 5
+    );
 
     await sleep(150);
     // Well past half the declared duration: still mid-exit, not cut short
-    // by the keyboard finishing its own close above.
+    // by the keyboard finishing its own close above, and the Panel is
+    // still substantially on screen -- a stale scroll position moving the
+    // Viewport's own visible window would already have dropped it off
+    // screen by now.
     expect(drawer.phase).toBe('closing');
     expect(panel.hasAttribute('data-ending-style')).toBe(true);
+    expect(panelVisiblePx(panel, viewport)).toBeGreaterThan(
+      viewport.getBoundingClientRect().height * 0.3
+    );
 
     await sleep(110);
     // 260ms since the close: still short of the declared 300ms.

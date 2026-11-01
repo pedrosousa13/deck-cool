@@ -68,13 +68,18 @@ own bottom edge on purpose: the Panel's own content, and a Close button,
 stay above the keyboard rather than being pulled down behind it. A real
 device still showed a real gap there, though -- a strip of the page itself,
 undimmed, between the fitted Viewport's own bottom edge and the keyboard
-(#327's own screenshot). The engine now keeps `Drawer.Popup` itself sized
-to `window.innerHeight` while a keyboard fit is active, read straight from
-the same value `--drawer-keyboard-inset` already uses, rather than trusting
-`100dvh` to agree with it: `Drawer.Popup`'s own `overflow: hidden` clips
-every descendant to its own box, `Drawer.Backdrop` included, so a Popup
-that falls short leaves the Backdrop short too, and the real page shows
-through underneath, exactly where a real iPhone's own screenshot caught it.
+(#327's own screenshot). `Drawer.Popup` already reaches `window.innerHeight`
+on its own (`100dvh`, which does not shrink for the keyboard), so that is
+not the gap's cause, and `Drawer.Popup`'s `overflow: hidden` does not clip
+`Drawer.Backdrop` either: `Drawer.Backdrop` is `position: fixed`, and an
+ancestor's `overflow` only clips a fixed-position descendant when that
+ancestor itself establishes the containing block for it (a transform, a
+filter, and a few other properties do; a plain `overflow: hidden` does
+not). What actually leaves that strip undimmed on a real device is still
+unconfirmed -- plausibly Safari not painting a fixed-position element
+behind its own floating address pill and keyboard toolbar at all, which a
+future real-device check, with the debug overlay logging millisecond
+timestamps, still needs to settle.
 
 The Backdrop is not clipped to the visible area the way the Viewport is, so
 it is what continues the drawer's own surface down behind the keyboard,
@@ -138,15 +143,16 @@ outside press, `Drawer.Close` or `close()`) still keeps the fit tracking
 the visible area, exactly as it would with the keyboard closed: a CSS
 transition runs for its own declared duration regardless of how the box it
 animates changes size, so keeping the Panel inside the visible area for the
-whole exit never cuts that transition short. The fit's own bookkeeping
-stops short of moving the scroll position while the exit is running, and
-the Viewport's own `scroll-snap-type` turns off for the same stretch (a
-real iPhone's own keyboard finishing a close in the same tick as a tap on
-`Drawer.Close` -- #327's own final finding -- otherwise read as the browser
-re-snapping to the configured snap points' own markers, which the fit's own
-`measure()` keeps repositioning through the exit, as if a user had grabbed
-the Viewport mid-exit): a real touch, wheel or pointer down there still
-ends the exit at once, the same as it always has.
+whole exit never cuts that transition short. The fit still writes the
+Viewport's scroll position, too, the same as it does while the drawer
+rests open: a fit change mid-exit (the keyboard finishing a close in the
+same tick as a tap on `Drawer.Close`, say -- #327's own final finding) can
+still change the Viewport's own scrollable range, and leaving the old
+scroll position in place would drop the Panel out of the visible window
+well before the transition's own declared duration -- a visual jump, not
+the phase closing early, but indistinguishable from one on a real device.
+A real touch, wheel or pointer down there still ends the exit at once, the
+same as it always has.
 
 ## Every side
 
