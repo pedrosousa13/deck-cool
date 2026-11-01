@@ -888,6 +888,16 @@ export function createDrawer(
     setPhase('closing');
     panel.setAttribute(ENDING_STYLE_ATTR, '');
     parts.backdrop?.setAttribute(ENDING_STYLE_ATTR, '');
+    // Same reason a mouse drag turns this off (`onPointerDown`, below): the
+    // keyboard fit's own `positionMarkers()` keeps moving the configured
+    // snap points' markers for the Panel's own sizing correctness through
+    // the whole exit (this section's own module doc), and with
+    // `scroll-snap-type` still mandatory, the browser's own native resnap
+    // -- not a line of JS here -- re-settles the Viewport onto whichever
+    // marker just moved under it. `finishClose` and `settleOpenAt` already
+    // restore `mandatory`, for an exit that finishes and one an
+    // interruption sends back to open.
+    viewport.style.scrollSnapType = 'none';
     attachInterruptListeners();
     // Forces the flush that starts this exit's own transition -- the same
     // flush `open()` forces for the entrance's -- so `getAnimations()`
@@ -1307,8 +1317,26 @@ export function createDrawer(
           top: '',
           height: '100%'
         });
+        // Back to the CSS recipe (`100dvh`) once there is no keyboard to
+        // compensate for: that already tracks the browser's own chrome
+        // (an address bar showing or hiding) with no JS of its own.
+        dialog.style.height = '100dvh';
       }
     }
+    // #327 finding 4c (the real gap a screenshot showed): the Popup's own
+    // `100dvh` fell short of `window.innerHeight` on a real iPhone once the
+    // keyboard panned the page, clipping the Backdrop (a
+    // `position: fixed; inset: 0` child the Popup's own `overflow: hidden`
+    // still clips, whatever escapes its containing block) short of the
+    // layout viewport's own bottom -- a strip of the real page showing
+    // through, undimmed, between the fitted Viewport's own bottom edge and
+    // the keyboard. Read every time this far, from the same
+    // `window.innerHeight` this fit already reads for `inset`, instead of
+    // trusting `100dvh` to agree with it while a keyboard is open: Brave's
+    // own multi-step shrink (this section's own module doc) moves
+    // `innerHeight` on its own, across steps where `top`/`height` (and so
+    // `fitChanged`) do not, so this cannot live inside that `if` above.
+    if (active) dialog.style.height = `${window.innerHeight}px`;
 
     // The existing resize-mid-open path: measures the now-fitted (or
     // restored) Viewport once, keeps the current snap index -- or the one
@@ -1359,6 +1387,7 @@ export function createDrawer(
     fitTop = 0;
     fitHeight = 0;
     dialog.style.removeProperty('--drawer-keyboard-inset');
+    dialog.style.height = '100dvh';
     Object.assign(viewport.style, {
       position: 'relative',
       left: '',
@@ -1376,7 +1405,22 @@ export function createDrawer(
     if (phase === 'closed') return;
     measure();
     positionMarkers();
-    if (!dialog.open) return;
+    // Never writes a scroll position during the Panel's own CSS exit
+    // (#327 finding 4b, a real iPhone replay): the exit moves the Panel
+    // with a `transform`, never `scrollTop`/`scrollLeft`, so there is
+    // nothing here for a resize mid-exit to accomplish. `measure()` and
+    // `positionMarkers()`, just above, stay unconditional: the fit's own
+    // size and position tracking (this section's own module doc) keeps the
+    // Viewport, and so the Panel inside it, painted in the right place
+    // through the whole exit -- only the scroll bookkeeping for a *resting*
+    // open drawer is moot while one is on its way out. `beginExit`'s own
+    // `scrollSnapType = 'none'` is the other half of this: left mandatory,
+    // the browser's own native resnap reacts to `positionMarkers()` moving
+    // the configured snap points' markers right above, settling the
+    // Viewport onto whichever one just moved under it -- a real scroll a
+    // real device's own `<dialog>` closed behind, with nothing here ever
+    // asking it to.
+    if (!dialog.open || cssExiting) return;
     // Never resize onto closed: only reposition onto an open point
     // (ADR 0001). Scrolls to the *resting* snap index's own offset in the
     // freshly measured layout, not to whichever point now sits nearest

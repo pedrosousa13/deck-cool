@@ -417,6 +417,80 @@ describe('a real tap on Close with the keyboard open (#327 finding 3)', () => {
   });
 });
 
+describe('the gap behind the keyboard (#327 finding 4c, a real iPhone screenshot)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  it('sizes the Popup to window.innerHeight instead of 100dvh while the fit is active, and restores 100dvh once the keyboard closes', async () => {
+    const vv = installFakeViewport();
+    fixture = mount({ snapPoints: [0.5] });
+    const { dialog, content, drawer } = fixture;
+    const input = appendFieldTo(content);
+
+    expect(dialog.style.height).toBe('100dvh');
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(dialog.style.height).toBe('100dvh');
+
+    await userEvent.click(input);
+    vv.height = 331;
+    vv.offsetTop = 45;
+    vv.resize();
+    await nextFrame();
+
+    // `100dvh` fell short of `window.innerHeight` on a real iPhone once the
+    // keyboard panned the page (the screenshot in #327's own final finding):
+    // read straight from the same `window.innerHeight` the fit already
+    // reads for `--drawer-keyboard-inset`, rather than trusting `100dvh` to
+    // agree with it.
+    expect(dialog.style.height).toBe(`${window.innerHeight}px`);
+
+    vv.height = window.innerHeight;
+    vv.offsetTop = 0;
+    vv.resize();
+    await nextFrame();
+
+    expect(dialog.style.height).toBe('100dvh');
+  });
+
+  it("keeps the drawer's own painted surface reaching the layout bottom behind the keyboard, while Close stays inside the visible window", async () => {
+    const vv = installFakeViewport();
+    fixture = mount({ snapPoints: [0.5] });
+    const { dialog, viewport, content, drawer } = fixture;
+    const input = appendFieldTo(content);
+    const closeButton = document.createElement('button');
+    content.append(closeButton);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    await userEvent.click(input);
+
+    vv.height = 331;
+    vv.offsetTop = 45;
+    vv.resize();
+    await nextFrame();
+
+    const visible = viewport.getBoundingClientRect();
+    // Close stays inside the fitted, visible window -- the content and the
+    // button never move down behind the keyboard.
+    const closeRect = closeButton.getBoundingClientRect();
+    expect(closeRect.top).toBeGreaterThanOrEqual(visible.top - 1);
+    expect(closeRect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+
+    // Just below the fitted Viewport's own bottom edge -- the real gap a
+    // screenshot caught (#327 finding 4c). Resolving this against a
+    // `100dvh`-sized Popup proves nothing in a browser this replay never
+    // actually shrinks `dvh` in (only `dialog.style.height` itself, above,
+    // can fail before the fix here); kept as the behavioral check the
+    // design calls for, and as a regression guard if the Popup's own sizing
+    // ever stops tracking `window.innerHeight`.
+    const x = Math.round((visible.left + visible.right) / 2);
+    const y = Math.min(window.innerHeight - 1, Math.round(visible.bottom + 5));
+    const atGap = document.elementFromPoint(x, y);
+    expect(atGap).not.toBeNull();
+    expect(dialog.contains(atGap)).toBe(true);
+  });
+});
+
 describe('the exit runs its full declared duration even when the browser un-pans mid-exit (#327 finding 4)', () => {
   beforeEach(() => mockReducedMotion());
 
@@ -489,9 +563,7 @@ describe('the exit runs its full declared duration even when the browser un-pans
     await nextFrame();
     const rect = visibleRect(viewport);
     expect(Math.abs(rect.top - 0)).toBeLessThan(2);
-    expect(Math.abs(rect.bottom - (window.innerHeight - 336))).toBeLessThan(
-      2
-    );
+    expect(Math.abs(rect.bottom - (window.innerHeight - 336))).toBeLessThan(2);
 
     await sleep(150);
     // Well past half the declared duration: still mid-exit, not cut short
@@ -506,6 +578,174 @@ describe('the exit runs its full declared duration even when the browser un-pans
     expect(panel.hasAttribute('data-ending-style')).toBe(true);
 
     await expectSettledTo(() => drawer.phase, 'closed');
+    removeTransition();
+  });
+});
+
+describe('closing Done while the keyboard closes in the same tick (#327 finding 4b, a real iPhone replay)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  /** Same recipe as `withTransformExitTransition` above: a real CSS
+   * transition on `transform`, tied to `data-ending-style`. Duplicated
+   * rather than hoisted, so this describe block stays self-contained. */
+  function withTransformExitTransition(
+    el: HTMLElement,
+    { durationMs }: { durationMs: number }
+  ): () => void {
+    const marker = `data-test-${Math.random().toString(36).slice(2)}`;
+    el.setAttribute(marker, '');
+    const style = document.createElement('style');
+    style.textContent = `
+      [${marker}] { transform: translateY(0); transition: transform ${durationMs}ms linear; }
+      [${marker}][data-ending-style] { transform: translateY(100%); }
+    `;
+    document.head.append(style);
+    return () => {
+      style.remove();
+      el.removeAttribute(marker);
+    };
+  }
+
+  it('runs the exit for its full 300ms, with the close-button reason, when the keyboard finishes closing (vv.resize to the full layout height) in the same tick as Done (log 12:04:50-51, run 3)', async () => {
+    const vv = installFakeViewport();
+    const iH = window.innerHeight;
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { dialog, panel, content, viewport, drawer } = fixture;
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+    const removeTransition = withTransformExitTransition(panel, {
+      durationMs: 300
+    });
+    // A real tap, with a real `pointerdown`/`touchstart`/`pointerup`/`click`
+    // sequence (log #56-62's own shape): pinned outside the fitted,
+    // scrolled Viewport (`dialog`'s own direct child, never clipped or
+    // scrolled away), so it stays a reliable, always-on-screen target
+    // regardless of the snap index or the keyboard's own fit -- the real
+    // click target itself is "a real tap on Close with the keyboard open",
+    // above; this checks what a real tap's full event sequence does to the
+    // exit, not whether the tap lands.
+    const closeButton = document.createElement('button');
+    dialog.append(closeButton);
+    closeButton.addEventListener('click', () => drawer.close('close-button'));
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    // Positioned past the 0.5 snap's own reveal but inside the 1.0 snap's
+    // (the same technique the "expanding to the largest snap point"
+    // describe block above uses), so focusing it, with the keyboard's own
+    // 331px visible window layered on top, expands the drawer to 1 --
+    // log #53/#54's own "snap 1".
+    const extent = viewport.clientHeight;
+    const message = document.createElement('input');
+    message.type = 'text';
+    message.style.marginTop = `${extent * 0.3}px`;
+    content.append(message);
+
+    // Log #53/#54: the Message field focuses and the keyboard pans the
+    // page, shrinking the visible window to 331px, offset 45px down --
+    // past what the drawer's own 0.5 snap leaves visible, so this expands
+    // it to 1 (the largest point).
+    await userEvent.click(message);
+    vv.height = 331;
+    vv.offsetTop = 45;
+    vv.resize();
+    await nextFrame();
+    expect(drawer.snapIndex).toBe(1);
+
+    // Log #56-67: a real tap lands on Done.
+    await userEvent.click(closeButton);
+    expect(drawer.phase).toBe('closing');
+    expect(panel.hasAttribute('data-ending-style')).toBe(true);
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    // Log #68: the keyboard finishes closing in the very same tick as the
+    // click above -- no frame in between, the way the real device logged
+    // both at 12:04:51 -- `vvH` back to the full 701, `offsetTop` back to
+    // 0: the fit reverts the Viewport (and, through its own `height: 100%`,
+    // the Panel) all the way back to neutral while the exit's own 300ms
+    // transition has barely started. Two separate things the fit still
+    // does on its own here, both of them scroll writes, neither one with
+    // anything left to accomplish while the exit's own `transform` is what
+    // actually moves the Panel: `onResize`'s own `viewport.scrollTo` (the
+    // maintainer's own trace target), and, more surprisingly, the browser's
+    // own native CSS Scroll Snap resnap, triggered by nothing more than
+    // `positionMarkers()` moving the configured snap points' markers under
+    // a Viewport whose `scroll-snap-type` is still `mandatory` -- traced by
+    // disabling each in turn: with only `onResize`'s own write skipped,
+    // `scrollTop` still jumped to the same target the browser resnapped it
+    // to on its own.
+    const scrollTopBeforeKeyboardCloses = viewport.scrollTop;
+    vv.height = iH;
+    vv.offsetTop = 0;
+    vv.resize();
+
+    expect(viewport.scrollTop).toBe(scrollTopBeforeKeyboardCloses);
+
+    await sleep(150);
+    // Well past half the declared duration: still mid-exit, not cut short
+    // by the keyboard finishing its own close above.
+    expect(drawer.phase).toBe('closing');
+    expect(panel.hasAttribute('data-ending-style')).toBe(true);
+
+    await sleep(110);
+    // 260ms since the close: still short of the declared 300ms.
+    expect(drawer.phase).toBe('closing');
+    expect(panel.hasAttribute('data-ending-style')).toBe(true);
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'close-button');
+    removeTransition();
+  });
+
+  it('still lets a real user scroll mid-exit finish it at once, same as #268 always has, even right after the keyboard’s own fit change', async () => {
+    const vv = installFakeViewport();
+    const iH = window.innerHeight;
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { panel, content, viewport, drawer } = fixture;
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+    const removeTransition = withTransformExitTransition(panel, {
+      durationMs: 300
+    });
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    const extent = viewport.clientHeight;
+    const message = document.createElement('input');
+    message.type = 'text';
+    message.style.marginTop = `${extent * 0.3}px`;
+    content.append(message);
+
+    await userEvent.click(message);
+    vv.height = 331;
+    vv.offsetTop = 45;
+    vv.resize();
+    await nextFrame();
+    expect(drawer.snapIndex).toBe(1);
+
+    drawer.close('close-button');
+    expect(drawer.phase).toBe('closing');
+
+    // The keyboard's own fit change, same as the test above -- never an
+    // interruption on its own.
+    vv.height = iH;
+    vv.offsetTop = 0;
+    vv.resize();
+    expect(drawer.phase).toBe('closing');
+
+    // A real touch grabbing the viewport, the same gesture
+    // `css-transition.test.ts` already proves ends an exit at once
+    // (#268's design ruling: an interruption never cancels a close, it
+    // just stops waiting for the transition). This must still work
+    // exactly as before, immediately behind the engine's own fit change
+    // above.
+    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+
+    expect(drawer.phase).toBe('closed');
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'close-button');
     removeTransition();
   });
 });

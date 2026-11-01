@@ -61,6 +61,40 @@ example to reserve space for a footer input below the scrollable content:
 }
 ```
 
+## The gap behind the keyboard
+
+The fitted Viewport, and the Panel inside it, stop at the visible window's
+own bottom edge on purpose: the Panel's own content, and a Close button,
+stay above the keyboard rather than being pulled down behind it. A real
+device still showed a real gap there, though -- a strip of the page itself,
+undimmed, between the fitted Viewport's own bottom edge and the keyboard
+(#327's own screenshot). The engine now keeps `Drawer.Popup` itself sized
+to `window.innerHeight` while a keyboard fit is active, read straight from
+the same value `--drawer-keyboard-inset` already uses, rather than trusting
+`100dvh` to agree with it: `Drawer.Popup`'s own `overflow: hidden` clips
+every descendant to its own box, `Drawer.Backdrop` included, so a Popup
+that falls short leaves the Backdrop short too, and the real page shows
+through underneath, exactly where a real iPhone's own screenshot caught it.
+
+The Backdrop is not clipped to the visible area the way the Viewport is, so
+it is what continues the drawer's own surface down behind the keyboard,
+like a native iOS sheet: extend it, flush against its own bottom edge, by
+`--drawer-keyboard-inset`, in the Panel's own surface color (the "Style the
+backdrop" guide covers `Drawer.Backdrop`'s own stacking):
+
+```css
+.backdrop::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: var(--drawer-keyboard-inset, 0px);
+  background-color: var(--panel-surface-color);
+}
+```
+
+Zero height, and so invisible, whenever there is no keyboard open: the same
+`0px` fallback the variable itself always needs.
+
 Always keep the `0px` fallback: the variable is only present while the
 drawer is open, so a bare `var(--drawer-keyboard-inset)` is invalid before
 the first keyboard open and after the drawer closes.
@@ -104,7 +138,15 @@ outside press, `Drawer.Close` or `close()`) still keeps the fit tracking
 the visible area, exactly as it would with the keyboard closed: a CSS
 transition runs for its own declared duration regardless of how the box it
 animates changes size, so keeping the Panel inside the visible area for the
-whole exit never cuts that transition short.
+whole exit never cuts that transition short. The fit's own bookkeeping
+stops short of moving the scroll position while the exit is running, and
+the Viewport's own `scroll-snap-type` turns off for the same stretch (a
+real iPhone's own keyboard finishing a close in the same tick as a tap on
+`Drawer.Close` -- #327's own final finding -- otherwise read as the browser
+re-snapping to the configured snap points' own markers, which the fit's own
+`measure()` keeps repositioning through the exit, as if a user had grabbed
+the Viewport mid-exit): a real touch, wheel or pointer down there still
+ends the exit at once, the same as it always has.
 
 ## Every side
 

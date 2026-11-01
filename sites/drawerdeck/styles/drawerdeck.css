@@ -322,6 +322,26 @@ main .home-family .home-more {
   }
 }
 
+/* The on-screen keyboard (#273, the real gap #327 found): the fitted
+   Viewport's own bottom edge, and the Panel inside it, stop short of the
+   keyboard by --drawer-keyboard-inset -- the part of the page a pan alone
+   does not already pull the Viewport down to meet. Like a native iOS
+   sheet, the drawer's own surface should still reach that far, even though
+   the Panel itself cannot: it is inside the fitted Viewport, clipped to
+   the visible area on purpose, so its own content and Close button stay
+   above the keyboard (the "On-screen keyboard" guide). The Backdrop is not
+   clipped that way, so this extends it instead, flush against its own
+   bottom edge, in the Panel's own surface color: visually the sheet keeps
+   going, even though only the Backdrop is actually there. Zero height,
+   and so invisible, whenever there is no keyboard open. */
+.drawer-demo__backdrop::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: var(--drawer-keyboard-inset, 0px);
+  background-color: var(--ground-raised);
+}
+
 .drawer-demo__panel {
   box-sizing: border-box;
   display: flex;
