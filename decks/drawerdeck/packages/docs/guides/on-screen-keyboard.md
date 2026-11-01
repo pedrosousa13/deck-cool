@@ -13,9 +13,10 @@ it.
 If the focused field would not be visible above the keyboard at the current
 snap point, the drawer expands to its largest one -- the same thing a
 native iOS sheet does, so the content unlocks -- and the engine then
-scrolls the field clear of the keyboard itself, with
-`field.scrollIntoView({ block: 'nearest' })`. It stays there once the
-keyboard closes; a field already visible never moves the drawer at all.
+scrolls `Drawer.Content` itself, by an explicit `scrollTop` delta measured
+against the real visible window, to bring the field clear of the keyboard.
+It stays there once the keyboard closes; a field already visible never
+moves the drawer at all.
 
 <!-- demo:example-keyboard -->
 
@@ -47,8 +48,8 @@ input below the scrollable content:
 The engine also applies it to `Drawer.Content` itself, as both a real
 `padding-bottom` and a `scroll-padding-bottom`: see "Keeping the field clear
 of the keyboard", below, for why it needs both. This needs no CSS of your
-own; it is there so `scrollIntoView` keeps a field clear of the keyboard
-without your own layout doing anything.
+own; it is there so the engine's own explicit scroll keeps a field clear of
+the keyboard without your own layout doing anything.
 
 Always keep the `0px` fallback: the variable is only present while the
 drawer is open, so a bare `var(--drawer-keyboard-inset)` is invalid before
@@ -58,17 +59,17 @@ the first keyboard open and after the drawer closes.
 
 `Drawer.Content`'s own `clientHeight` never shrinks for a keyboard -- the
 Viewport above it never does either -- so a field sitting at Content's own
-natural end has nothing below it for a plain `scroll-padding-bottom` alone
-to scroll into: the browser clamps at Content's own maximum scroll position,
-short of the padded target, landing the field flush with Content's own
-unpadded bottom, exactly where the keyboard still covers it. The engine
-gives `Drawer.Content` a real `padding-bottom` too, equal to
-`--drawer-keyboard-inset`: genuine scrollable room past the last field,
-which `scrollIntoView` can actually reach. `scroll-padding-bottom`, kept
-alongside it, is what then stops `scrollIntoView`'s own `'nearest'` right at
-that padding's edge for a field that already has real content below it,
-rather than scrolling past the natural stopping point into the empty
-padding for no reason.
+natural end has nothing below it to scroll into without the engine's own
+`padding-bottom`, equal to `--drawer-keyboard-inset`: genuine scrollable
+room past the last field. The engine then checks the focused field's own
+`getBoundingClientRect()` against the real visible window directly, and
+writes `Drawer.Content`'s own `scrollTop` by the exact delta needed to bring
+the field back inside it -- never `Drawer.Viewport`'s own scroll position,
+which stays untouched by this. `scroll-padding-bottom`, kept alongside the
+padding, is for a browser's own native scrolling inside Content, such as
+`Tab` moving focus, so that still stops right at the padding's own edge for
+a field that already has real content below it, rather than scrolling past
+the natural stopping point into the empty padding for no reason.
 
 ## Expanding to the largest snap point
 
@@ -76,10 +77,16 @@ A field the current snap point does not reveal above the keyboard moves the
 drawer to its largest snap point first, the same thing a native iOS sheet
 does: the content unlocks there (see "Why native scrolling" for why the top
 snap point is what unlocks it), giving the engine room to scroll the field
-itself. A drawer already at its largest snap point, with nothing left to
-expand to, skips straight to scrolling the field in. Neither one moves a
-field that is already visible, and neither one reverts once the keyboard
-closes -- the drawer stays at whatever snap point it expanded to.
+itself. But only when expanding would actually help: the engine computes
+where the field would land at the largest snap point first, and skips the
+move when that would push the field's own top above the visible window
+instead -- a drawer held mid-pan, where the visible window's own top has
+already moved down the layout viewport, is the case that matters here.
+Either way, the engine still scrolls the field in afterward (see "Keeping
+the field clear of the keyboard"). A drawer already at its largest snap
+point, with nothing left to expand to, skips straight to that. Neither one
+moves a field that is already visible, and neither one reverts once the
+keyboard closes -- the drawer stays at whatever snap point it expanded to.
 
 This only happens for `bottom` and `top` drawers. The keyboard covers the
 bottom of the layout viewport, a vertical concern whichever edge the drawer

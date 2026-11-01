@@ -118,6 +118,10 @@ const THROW_VELOCITY_SCALE = 200;
  * resting there. */
 const SETTLE_TOLERANCE = 4;
 const SCROLLEND_DEBOUNCE_MS = 120;
+/** Clearance `ensureFieldVisible` keeps between a focused keyboard field's
+ * own bottom edge and the real visible window's bottom: stops the field
+ * from landing flush against the keyboard's own edge. */
+const KEYBOARD_FIELD_MARGIN = 4;
 /** The Panel's CSS entrance/exit (#268): `data-starting-style` and
  * `data-ending-style`, Base UI's own attribute names, carried over so
  * migrating from it is easy. */
@@ -1167,9 +1171,14 @@ export function createDrawer(
   // the Panel's own Content as both a real `padding-bottom` and
   // `scroll-padding-bottom` (`updateKeyboardInset`'s own comment explains
   // why both): genuine scrollable room past Content's own last field, which
-  // `scrollIntoView({block:'nearest'})` (`ensureFieldVisible`, below) can
-  // actually scroll into, instead of clamping short of the keyboard-covered
-  // strip at Content's own otherwise-unpadded bottom.
+  // `ensureFieldVisible`, below, can actually scroll Content into with an
+  // explicit `scrollTop` write against the real visible window, instead of
+  // clamping short of the keyboard-covered strip at Content's own
+  // otherwise-unpadded bottom. `scroll-padding-bottom` itself is for a
+  // browser's own, unrelated native scrolling inside Content, such as `Tab`
+  // moving focus; `ensureFieldVisible` checks the field's own rect against
+  // the real visible window directly; it never reads Content's padding or
+  // relies on a native `scrollIntoView` to honor it.
   //
   // Safari's own pan, left alone. iOS Safari's native response to a focus
   // inside a scrollable area is to scroll the *whole page* so the focused
@@ -1245,22 +1254,38 @@ export function createDrawer(
 
   /** Moves to the largest snap point when the focused field would not be
    * fully visible, inside the real visible window (`visibleWindow`), at the
-   * snap point the drawer currently rests on: the same thing iOS's own
+   * snap point the drawer currently rests on *and* the move itself would not
+   * make the field's own top edge worse off: the same thing iOS's own
    * sheets do, since the content unlocks at the top snap point
-   * (`updateContentLock`). Unlocking it is not enough on its own to reveal
-   * the field: focus already happened, before the keyboard event that
-   * triggered this, so there is no fresh focus for a browser's own native
-   * scroll-into-view to act on -- `ensureFieldVisible`, called right after
-   * this in `updateKeyboardInset`, is what actually scrolls it in. A no-op
-   * once already at the largest point, or when the field is already visible
-   * there: never moves a drawer that does not need it, and never reverts on
-   * its own once the keyboard closes (the design ruling: a drawer stays at
-   * the snap point it expanded to). Scrolls the Viewport straight to the
-   * new snap point's own offset itself, same as `snapTo` without the
-   * animation (nothing here moves while the keyboard opens or closes, the
-   * design ruling in this section's own module doc) -- there is no resize
-   * for an `onResize` call to react to any more, since the Viewport's own
-   * extent never changes for a keyboard.
+   * (`updateContentLock`). Checks where the field's own rect would really
+   * land at that snap point before committing to it -- scrolling there,
+   * re-measuring the field, and scrolling straight back if that left the
+   * field's own top both above the visible window *and* higher up than it
+   * already was (a drawer held mid-pan, `offsetTop > 0`: the window's own
+   * top has moved down the layout viewport, and expanding slides the field
+   * up past it, the opposite of what this is for). Comparing against the
+   * field's own previous top, not just checking the new one against the
+   * window, is what tells this apart from a field that was already above
+   * the window before expanding even started -- expanding still helps that
+   * one along, even short of fully revealing it, so this never blocks a
+   * move that only keeps an existing problem exactly as bad, only one that
+   * makes it worse. `scrollTo` with `behavior: 'instant'` is synchronous,
+   * so trying the move and reverting it costs one extra reflow, nothing the
+   * user ever sees, in exchange for checking the real layout instead of
+   * predicting it. `ensureFieldVisible`, called right after this in
+   * `updateKeyboardInset` regardless of whether this moved anything, is
+   * what actually scrolls Content to bring the field in -- unlocking the
+   * content is not enough on its own, and neither is a snap-point move that
+   * only shifts the Viewport. A no-op once already at the largest point, or
+   * when the field is already visible there: never moves a drawer that
+   * does not need it, and never reverts on its own once the keyboard
+   * closes (the design ruling: a drawer stays at the snap point it
+   * expanded to). Scrolls the Viewport straight to the new snap point's own
+   * offset itself, same as `snapTo` without the animation (nothing here
+   * moves while the keyboard opens or closes, the design ruling in this
+   * section's own module doc) -- there is no resize for an `onResize` call
+   * to react to any more, since the Viewport's own extent never changes for
+   * a keyboard.
    *
    * Never for `left`/`right`: the keyboard covers the bottom of the layout
    * viewport, a vertical concern regardless of which edge the drawer opens
@@ -1282,36 +1307,72 @@ export function createDrawer(
     const visible = visibleWindow();
     const rect = field.getBoundingClientRect();
     if (rect.top >= visible.top && rect.bottom <= visible.bottom) return false;
-    snapIndex = lastIndex;
-    opts.onSnapPointChange?.(lastIndex);
+    // Scrolls to the largest snap point, then re-measures the field's own
+    // rect for real instead of predicting it: `scrollTo` with
+    // `behavior: 'instant'` is synchronous, and reading
+    // `getBoundingClientRect()` right after forces the layout this needs
+    // without painting it, so trying this and reverting if it made things
+    // worse costs one extra reflow, nothing the user ever sees. Reverted
+    // when the field's own top would land above the visible window instead
+    // of inside it -- a drawer held mid-pan, where the window's own top has
+    // already moved down the layout viewport, is the case that matters
+    // here (#327).
+    const previousScroll = viewport[axis.scroll];
     viewport.scrollTo({
       [axis.scrollToKey]: scrollForSnap(lastIndex),
       behavior: 'instant'
     });
+    const afterTop = field.getBoundingClientRect().top;
+    if (afterTop < visible.top && afterTop < rect.top) {
+      viewport.scrollTo({
+        [axis.scrollToKey]: previousScroll,
+        behavior: 'instant'
+      });
+      return false;
+    }
+    snapIndex = lastIndex;
+    opts.onSnapPointChange?.(lastIndex);
     updateContentLock();
     return true;
   }
 
-  /** Scrolls the focused keyboard field back into the real visible window
-   * (`visibleWindow`) when it still falls outside it, once
-   * `maybeExpandForKeyboard` has already settled the snap point: moving to
-   * the largest snap point does not itself scroll anything, and the
-   * browser's own native scroll-into-view only ran on focus, which happened
-   * before the keyboard event this reacts to. Covers the case
-   * `maybeExpandForKeyboard` does not: a drawer already at its largest snap
-   * point, with nothing left to expand to, whose focused field the keyboard
-   * still covers. `scroll-padding-bottom` on Content (`updateKeyboardInset`,
-   * below, keeps it at `--drawer-keyboard-inset`) is what stops `'nearest'`
-   * from treating the keyboard-covered strip at Content's own bottom as
-   * still visible. A no-op when the field is already visible, so this never
-   * fights a user's own scroll once it is. */
+  /** Scrolls Content -- the Panel's own inner content scroller, never the
+   * Viewport -- so the focused keyboard field sits inside the real visible
+   * window (`visibleWindow`), once `maybeExpandForKeyboard` has already
+   * settled the snap point: moving to the largest snap point does not
+   * itself scroll Content, and a snap point that does not expand (already
+   * at the largest, or `maybeExpandForKeyboard` skipped it to avoid pushing
+   * the field above the window) still needs this to clear the field.
+   * Measured in the field's own `getBoundingClientRect()` coordinates, the
+   * same ones `visibleWindow()` returns: a small margin
+   * (`KEYBOARD_FIELD_MARGIN`) keeps the field's own bottom edge off the
+   * window's exact bottom, rather than flush against it. Writes only
+   * Content's own `scrollTop`, never the Viewport's `scrollTop`/`scrollLeft`
+   * -- a `left`/`right` drawer's horizontally clipped field is never
+   * dragged into view sideways by this, unlike the native
+   * `scrollIntoView({block: 'nearest'})` this replaced, which could also
+   * reach up to the Viewport and move its own `scrollLeft`. Also unlike
+   * that native call, this never relies on Content's own `scroll-padding-
+   * bottom` (kept on Content for a browser's own, unrelated native
+   * scrolling, such as `Tab` navigation): that padding is measured from
+   * Content's own bottom edge, which can sit below the real visible window
+   * whenever the drawer's largest snap point is itself below 1, so a check
+   * against the field's own real rect, not Content's box model, is what
+   * this uses instead. A no-op when the field is already visible, so this
+   * never fights a user's own scroll once it is. */
   function ensureFieldVisible() {
     const field = focusedKeyboardField();
-    if (!field) return;
+    const content = parts.content;
+    if (!field || !content) return;
     const visible = visibleWindow();
     const rect = field.getBoundingClientRect();
-    if (rect.top >= visible.top && rect.bottom <= visible.bottom) return;
-    field.scrollIntoView({ block: 'nearest' });
+    const overflowBottom =
+      rect.bottom - (visible.bottom - KEYBOARD_FIELD_MARGIN);
+    if (overflowBottom > 0) {
+      content.scrollTop += overflowBottom;
+    } else if (rect.top < visible.top) {
+      content.scrollTop -= visible.top - rect.top;
+    }
   }
 
   /** Reads `visualViewport` and writes `--drawer-keyboard-inset` and
@@ -1337,20 +1398,18 @@ export function createDrawer(
       keyboardInset = inset;
       dialog.style.setProperty('--drawer-keyboard-inset', `${inset}px`);
       if (parts.content) {
-        // Both, not `scroll-padding-bottom` alone: a field with nothing
-        // after it inside Content -- the last one in a form, the common
-        // case -- has no scrollable room left past it for
-        // `scrollIntoView`'s own "nearest" to scroll into, so
-        // `scroll-padding-bottom` by itself just asks for a spot the
-        // scrollable range cannot reach, and the browser clamps short of
-        // it, right back at Content's own unpadded, keyboard-covered
-        // bottom. Content's own `height` is fixed (never `auto`), so a real
-        // `padding-bottom` grows `scrollHeight` without growing
-        // `clientHeight`: genuine scrollable room past the last field, not
-        // just a hint about where "visible" ends. `scroll-padding-bottom`
-        // stays alongside it so `scrollIntoView` still stops right at that
-        // padding's own edge for a field that already has real content
-        // below it, instead of scrolling past the natural stopping point
+        // Both, not `padding-bottom` alone: a field with nothing after it
+        // inside Content -- the last one in a form, the common case -- has
+        // no scrollable room left past it for `ensureFieldVisible`'s own
+        // explicit `scrollTop` write to scroll into without this. Content's
+        // own `height` is fixed (never `auto`), so a real `padding-bottom`
+        // grows `scrollHeight` without growing `clientHeight`: genuine
+        // scrollable room past the last field, not just a hint about where
+        // "visible" ends. `scroll-padding-bottom` stays alongside it for a
+        // browser's own native scrolling inside Content, such as `Tab`
+        // moving focus, so that still stops right at that padding's own
+        // edge for a field that already has real content below it, instead
+        // of scrolling past the natural stopping point
         // into the empty padding for no reason.
         parts.content.style.paddingBottom = inset > 0 ? `${inset}px` : '';
         parts.content.style.scrollPaddingBottom = inset > 0 ? `${inset}px` : '';
