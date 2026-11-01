@@ -59,11 +59,17 @@ layout). Where it does not (Firefox), `--drawer-progress` (`0` closed to `1`
 at the first snap point) is written on `Drawer.Popup` instead, as the
 viewport scrolls.
 
-`--drawer-keyboard-inset`, also on `Drawer.Popup`, is the on-screen
-keyboard's own height in pixels. It stays unset until the first keyboard
-open, drops back to `0px` if the keyboard closes while the drawer stays
-open, and is removed again when the drawer itself closes. On by default,
-no prop: see "On-screen keyboard".
+`--drawer-keyboard-inset`, also on `Drawer.Popup`, is the part of the full
+page, in pixels, the Viewport's own bottom edge still leaves covered once
+it has fitted itself to the browser's own visible area -- not the
+keyboard's own full height, which a browser that pans the page instead of
+shrinking it (iOS Safari) can already have moved most of out of this
+inset's way. It stays unset until the first keyboard open, drops back to
+`0px` if the keyboard closes while the drawer stays open, and is removed
+again when the drawer itself closes. On by default, no prop: a resize or a
+pan while the drawer is on its way out never moves the fit, and the drawer
+expands to its largest snap point when the keyboard would otherwise hide
+the focused field -- see "On-screen keyboard".
 
 ## Not in the beta
 
