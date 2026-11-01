@@ -507,7 +507,8 @@ main .home-family .home-more {
 /* The on-screen keyboard demo (components/demos/example-keyboard.tsx), on
    the "On-screen keyboard" guide: a text input and a textarea, so a
    phone's own keyboard has something to open. The lift itself needs none
-   of this -- the engine applies it to the Viewport's own height inline. */
+   of this -- the engine applies it to the Viewport's own position and
+   height inline. */
 
 .drawer-demo__form {
   display: flex;

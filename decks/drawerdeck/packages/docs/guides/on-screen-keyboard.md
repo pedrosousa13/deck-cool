@@ -47,10 +47,12 @@ the full page the fitted Viewport's own bottom edge still leaves covered
 when the browser pans instead of shrinking, that covered part can be
 smaller than the keyboard, or zero, since the fit itself is what pulls the
 Viewport's own bottom edge up to meet the visible window. It stays unset
-until the first keyboard open, drops back to `0px` if the keyboard closes
-while the drawer stays open, and is removed again when the drawer itself
-closes. Read it for your own layout, for example to reserve space for a
-footer input below the scrollable content:
+while the fitted Viewport's own bottom edge already reaches the visible
+window's own bottom (a pan can already do that on its own, right when the
+keyboard opens), is set once there is still a part left covered, drops back
+to `0px` if the keyboard closes while the drawer stays open, and is removed
+again when the drawer itself closes. Read it for your own layout, for
+example to reserve space for a footer input below the scrollable content:
 
 ```css
 .footer {
@@ -96,9 +98,12 @@ at whatever it read when the animation started.
 Either way, the drawer keeps its snap index (unless it expands to the
 largest one, above) and never closes.
 
-A resize or a pan while the drawer is already on its way out -- Escape, an
-outside press, `Drawer.Close` or `close()` -- never touches the Viewport:
-the exit runs to its own, undisturbed end first.
+A resize or a pan while the drawer is already on its way out (Escape, an
+outside press, `Drawer.Close` or `close()`) still keeps the fit tracking
+the visible area, exactly as it would with the keyboard closed: a CSS
+transition runs for its own declared duration regardless of how the box it
+animates changes size, so keeping the Panel inside the visible area for the
+whole exit never cuts that transition short.
 
 ## Every side
 

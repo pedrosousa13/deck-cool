@@ -5,11 +5,12 @@ import DemoFrame from "./demo-frame.tsx";
 
 // A textarea and a text input, so a phone's on-screen keyboard has
 // something to open (#273, the "On-screen keyboard" guide): focus either
-// one and the drawer lifts itself above the keyboard, on the same snap
-// point. The lift does not scroll a field into view on its own (the guide
-// says so), so the taller field (Message) sits first, closest to the
-// Panel's own top, within reach at the drawer's default, shorter snap
-// point; Subject comes after.
+// one and the drawer lifts itself above the keyboard, keeping its current
+// snap point when the field already fits inside it, or expanding to the
+// largest one and scrolling the field into view when it does not. The
+// taller field (Message) sits first, closest to the Panel's own top,
+// within reach at the drawer's default, shorter snap point; Subject comes
+// after.
 export default function Keyboard() {
   return (
     <DemoFrame>

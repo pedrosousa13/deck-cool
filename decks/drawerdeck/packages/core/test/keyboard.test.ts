@@ -412,17 +412,20 @@ describe('a real tap on Close with the keyboard open (#327 finding 3)', () => {
   });
 });
 
-describe('the exit runs undisturbed even when the browser un-pans mid-exit (#327 finding 4)', () => {
+describe('the exit runs its full declared duration even when the browser un-pans mid-exit (#327 finding 4)', () => {
   beforeEach(() => mockReducedMotion());
 
   /** The same recipe `css-transition.test.ts` uses: a real CSS transition on
    * `transform`, tied to `data-ending-style`. A Panel whose own CSS tracks
    * the Viewport's height (`panelHeight: '100%'` below, the site's own
-   * `.drawer-demo__panel`) moves with it if a keyboard-driven resize is
-   * still allowed to touch the Viewport mid-exit -- #273's own code did
-   * exactly that, recomputing and re-writing the Viewport's own height (and,
-   * through it, the Panel's) out from under a CSS exit already under way,
-   * on every `visualViewport` event, with no `cssExiting` guard at all. */
+   * `.drawer-demo__panel`) moves with it as the keyboard fit keeps tracking
+   * the visible area mid-exit. This checks behavior, not an implementation
+   * detail: an earlier version of this test instead asserted the Viewport's
+   * own inline style never changed during the exit, which only proved a
+   * `cssExiting` guard was in place, not that the exit itself ran
+   * undisturbed (a CSS transition runs on elapsed time, not on the size of
+   * the box it animates, so that guard was never what kept this exit from
+   * being cut short). */
   function withTransformExitTransition(
     el: HTMLElement,
     { durationMs }: { durationMs: number }
@@ -441,7 +444,7 @@ describe('the exit runs undisturbed even when the browser un-pans mid-exit (#327
     };
   }
 
-  it('leaves the Viewport exactly as the exit found it, through to the Panel leaving the DOM, even though the browser un-pans mid-exit', async () => {
+  it('keeps the exit running for its full 300ms, with data-ending-style on throughout, even though the browser un-pans mid-exit', async () => {
     const vv = installFakeViewport();
     fixture = mount({ snapPoints: [1] }, { panelHeight: '100%' });
     const { panel, content, viewport, drawer } = fixture;
@@ -456,43 +459,125 @@ describe('the exit runs undisturbed even when the browser un-pans mid-exit (#327
     // The second field's own pan (log #46/#47): chosen, not the first
     // field's, because it is the one case where #273's own formula still
     // read a nonzero inset (144px) -- the shrink actually has to happen for
-    // reverting it mid-exit to disturb anything.
+    // the fit to have anything to revert when the browser un-pans below.
     vv.height = window.innerHeight - 331;
     vv.offsetTop = 192;
     vv.resize();
     await nextFrame();
-    const fittedHeight = viewport.style.height;
-    const fittedPosition = viewport.style.position;
 
     drawer.close('close-button');
     expect(drawer.phase).toBe('closing');
     expect(panel.hasAttribute('data-ending-style')).toBe(true);
 
     // The browser un-pans mid-exit, the way Safari's own log showed (#327
-    // finding 4). #273's own code reacted to this the same as it would have
-    // at any other time: it re-measured and shrank the Viewport straight
-    // back to its un-panned, full height -- and, through `panelHeight:
-    // '100%'`, the Panel with it -- while its own CSS exit was still
-    // running, moving the Panel out from under its own `transform`. Fixed,
-    // nothing here reacts to `visualViewport` at all until the exit settles,
-    // so the Viewport -- and so the Panel -- stay exactly as they were for
-    // the whole run.
+    // finding 4): `offsetTop` back to 0, `height` back to full, before the
+    // exit's own 300ms transition is anywhere near done. The fit keeps
+    // tracking this (unlike #273's first cut, which guarded the fit with
+    // `cssExiting` instead, freezing the Viewport at the panned reading for
+    // the rest of the exit): the Viewport reverts to neutral right away,
+    // proving the fit is still live, not frozen, through the exit.
     vv.offsetTop = 0;
     vv.height = window.innerHeight;
     vv.scroll();
     await nextFrame();
-
-    expect(viewport.style.height).toBe(fittedHeight);
-    expect(viewport.style.position).toBe(fittedPosition);
+    expect(viewport.style.position).toBe('relative');
+    expect(viewport.style.height).toBe('100%');
 
     await sleep(150);
-    // Well past half the declared duration: still mid-exit, not cut short.
+    // Well past half the declared duration: still mid-exit, not cut short
+    // by the fit change above.
     expect(drawer.phase).toBe('closing');
     expect(panel.hasAttribute('data-ending-style')).toBe(true);
-    expect(viewport.style.height).toBe(fittedHeight);
+
+    await sleep(110);
+    // 260ms since the close: still short of the declared 300ms, so the
+    // exit has not settled anywhere in between either.
+    expect(drawer.phase).toBe('closing');
+    expect(panel.hasAttribute('data-ending-style')).toBe(true);
 
     await expectSettledTo(() => drawer.phase, 'closed');
     removeTransition();
+  });
+});
+
+describe('scrolling the focused field into view on a fit change (#327)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  /** Enough rows before the field that Content's own natural height (the
+   * site's real layout: a Panel sized to the Viewport, `panelHeight: '100%'`
+   * below, with Content filling whatever is left of it) is well short of
+   * them: unlocking `overflow-y` (`updateContentLock`) does not itself
+   * scroll Content to reveal anything past its own `clientHeight`, and a
+   * fixed, overlong Panel (the other describe blocks' default fixture)
+   * never asks Content to scroll at all, so neither proves this on its
+   * own. This mirrors PR #327's own repro: Content unlocks with
+   * `scrollHeight` well past `clientHeight`, but the field stays outside
+   * the visible area until something actually scrolls it in. */
+  function appendFieldPastTheFold(content: HTMLElement) {
+    for (let i = 0; i < 20; i += 1) {
+      const row = document.createElement('p');
+      row.textContent = `Row ${i}`;
+      row.style.margin = '0';
+      row.style.height = '40px';
+      content.append(row);
+    }
+    const field = document.createElement('input');
+    field.type = 'text';
+    content.append(field);
+    return field;
+  }
+
+  it('scrolls the field in once expanding to the largest snap point alone leaves it outside the fitted Viewport', async () => {
+    const vv = installFakeViewport();
+    fixture = mount({ snapPoints: [0.5, 1] }, { panelHeight: '100%' });
+    const { viewport, content, drawer } = fixture;
+    const field = appendFieldPastTheFold(content);
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    field.focus({ preventScroll: true });
+    expect(document.activeElement).toBe(field);
+
+    // Safari's first-field pan (log #32): `vvH` drops by 336px.
+    vv.height = window.innerHeight - 336;
+    vv.offsetTop = 336;
+    vv.resize();
+    await nextFrame();
+
+    expect(drawer.snapIndex).toBe(1);
+    expect(content.style.overflowY).toBe('auto');
+    expect(content.scrollHeight).toBeGreaterThan(content.clientHeight);
+    const rect = field.getBoundingClientRect();
+    const visible = visibleRect(viewport);
+    expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+    expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+  });
+
+  it('scrolls the field in on a fit change even when the drawer is already at its largest snap point, with nothing left to expand to', async () => {
+    const vv = installFakeViewport();
+    fixture = mount({ snapPoints: [1] }, { panelHeight: '100%' });
+    const { viewport, content, drawer } = fixture;
+    const field = appendFieldPastTheFold(content);
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    field.focus({ preventScroll: true });
+    expect(document.activeElement).toBe(field);
+
+    vv.height = window.innerHeight - 336;
+    vv.offsetTop = 336;
+    vv.resize();
+    await nextFrame();
+
+    // Already at the (only) largest snap point: `maybeExpandForKeyboard`
+    // never moves it, so `ensureFieldVisible` is the only thing that can
+    // still bring the field into view here.
+    expect(drawer.snapIndex).toBe(0);
+    expect(content.scrollHeight).toBeGreaterThan(content.clientHeight);
+    const rect = field.getBoundingClientRect();
+    const visible = visibleRect(viewport);
+    expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+    expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
   });
 });
 
