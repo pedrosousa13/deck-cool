@@ -260,9 +260,7 @@ describe("Safari's own pan, left alone (real iPhone replays, iOS 18.7)", () => {
       await nextFrame();
       expect(snapshotRect(viewport)).toEqual(rectBaseline);
       expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
-      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
-        ''
-      );
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
       let visible = visibleWindow(vv);
       let rect = field.getBoundingClientRect();
       expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
@@ -276,9 +274,7 @@ describe("Safari's own pan, left alone (real iPhone replays, iOS 18.7)", () => {
       await nextFrame();
       expect(snapshotRect(viewport)).toEqual(rectBaseline);
       expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
-      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
-        ''
-      );
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
       rect = field.getBoundingClientRect();
       expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
       expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
@@ -339,9 +335,7 @@ describe("Safari's own pan, left alone (real iPhone replays, iOS 18.7)", () => {
       // -- the inset never left neutral, so it stays unset, the same as
       // before the keyboard ever opened (the guide's own "stays unset"
       // wording).
-      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
-        ''
-      );
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
       let visible = visibleWindow(vv);
       let rect = field.getBoundingClientRect();
       expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
@@ -969,14 +963,17 @@ describe('every side (#270)', () => {
 
   const sides: Side[] = ['bottom', 'top', 'left', 'right'];
   for (const side of sides) {
-    it(`side="${side}": never moves the Viewport, and keeps the snap index`, async () => {
+    const horizontal = side === 'left' || side === 'right';
+
+    it(`side="${side}": never moves or scrolls the Viewport from a keyboard resize alone, and keeps the snap index`, async () => {
       const vv = installFakeViewport();
       fixture = mount({ side, snapPoints: [0.5, 1] });
       const { dialog, viewport, drawer } = fixture;
 
       drawer.open(0);
       await expectSettledTo(() => drawer.phase, 'open');
-      const baseline = snapshotRect(viewport);
+      const rectBaseline = snapshotRect(viewport);
+      const scrollBaseline = snapshotScroll(viewport);
 
       vv.height = window.innerHeight - 240;
       vv.resize();
@@ -985,11 +982,176 @@ describe('every side (#270)', () => {
       expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
         '240px'
       );
-      expectUnmoved(viewport, baseline);
+      expectUnmoved(viewport, rectBaseline);
+      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
       expect(drawer.snapIndex).toBe(0);
       expect(drawer.phase).toBe('open');
     });
+
+    // A vertically hidden focused field: a legitimate reason to expand for
+    // `bottom`/`top` (their own snap axis is the same vertical one the
+    // keyboard covers), never for `left`/`right` -- expanding those would
+    // only scroll the Viewport's own `scrollLeft` sideways, revealing
+    // nothing (this guide's own "Every side" section). Positioned the same
+    // way "expanding to the largest snap point" above does -- a direct
+    // `marginTop` and `focus()`, not a real click -- since the field's own
+    // vertical position inside Content does not depend on `side` at all.
+    it(
+      horizontal
+        ? `side="${side}": never expands or scrolls the Viewport for a vertically hidden focused field`
+        : `side="${side}": expands to the largest snap point for a vertically hidden focused field`,
+      async () => {
+        const vv = installFakeViewport();
+        const onSnapPointChange = vi.fn();
+        fixture = mount({ side, snapPoints: [0.3, 1], onSnapPointChange });
+        const { viewport, content, drawer } = fixture;
+
+        drawer.open(0);
+        await expectSettledTo(() => drawer.phase, 'open');
+        const scrollBaseline = snapshotScroll(viewport);
+
+        // Past the 0.3 snap's own reveal (hidden at rest), comfortably
+        // inside the 1.0 snap's (visible there) -- same fractions as
+        // "expanding to the largest snap point" above.
+        const extent = viewport.clientHeight;
+        const field = document.createElement('input');
+        field.type = 'text';
+        field.style.marginTop = `${extent * 0.5}px`;
+        content.append(field);
+        field.focus({ preventScroll: true });
+        expect(document.activeElement).toBe(field);
+
+        vv.height = window.innerHeight - 80;
+        vv.resize();
+        await nextFrame();
+
+        if (horizontal) {
+          expect(drawer.snapIndex).toBe(0);
+          expect(onSnapPointChange).not.toHaveBeenCalled();
+          expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
+        } else {
+          expect(drawer.snapIndex).toBe(1);
+          expect(onSnapPointChange).toHaveBeenCalledWith(1);
+        }
+      }
+    );
   }
+});
+
+describe('the visible window is measured from Drawer.Popup’s own rect, not visualViewport alone (#327)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  /** On a real iPhone (iOS 18.7), a fixed, inset-0 element's own
+   * `getBoundingClientRect()` during a held pan already reads in
+   * visual-viewport coordinates: `top: -offsetTop`,
+   * `bottom: innerHeight - offsetTop` -- the real device logs
+   * `index.ts`'s own module doc cites (run2 #32: `-336..331` at `offsetTop`
+   * 336; #46: `-192..475` at `offsetTop` 192). A field's own rect reads the
+   * same shifted way. Stubbing both `getBoundingClientRect()`s this way
+   * reproduces that coordinate shift without a real device; Chromium and
+   * WebKit never shift either one on their own, so nothing here fakes
+   * anything these two browsers would ever disagree with. */
+  function stubPannedRects(
+    dialog: HTMLDialogElement,
+    field: HTMLElement,
+    opts: {
+      iH: number;
+      offsetTop: number;
+      fieldTop: number;
+      fieldBottom: number;
+    }
+  ) {
+    const { iH, offsetTop, fieldTop, fieldBottom } = opts;
+    vi.spyOn(dialog, 'getBoundingClientRect').mockReturnValue({
+      top: -offsetTop,
+      bottom: iH - offsetTop,
+      left: 0,
+      right: 0,
+      width: 0,
+      height: iH,
+      x: 0,
+      y: -offsetTop,
+      toJSON() {
+        return {};
+      }
+    } as DOMRect);
+    vi.spyOn(field, 'getBoundingClientRect').mockReturnValue({
+      top: fieldTop,
+      bottom: fieldBottom,
+      left: 0,
+      right: 0,
+      width: 0,
+      height: fieldBottom - fieldTop,
+      x: 0,
+      y: fieldTop,
+      toJSON() {
+        return {};
+      }
+    } as DOMRect);
+  }
+
+  it('reads a field the keyboard actually covers as hidden, where the raw visualViewport numbers alone would read it as visible (run2 #46)', async () => {
+    // Repro: `340 >= 192 && 370 <= 523` reads as visible against the raw
+    // `[offsetTop, offsetTop + vvH]` window -- it is not: the real device's
+    // own coordinates put the visible window at `[0, 331]` instead, well
+    // short of the field's own `370`.
+    const vv = installFakeViewport();
+    const onSnapPointChange = vi.fn();
+    fixture = mount({ snapPoints: [0.3, 1], onSnapPointChange });
+    const { dialog, content, drawer } = fixture;
+    const field = document.createElement('input');
+    field.type = 'text';
+    content.append(field);
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    field.focus({ preventScroll: true });
+
+    vv.height = 331;
+    vv.offsetTop = 192;
+    stubPannedRects(dialog, field, {
+      iH: 667,
+      offsetTop: 192,
+      fieldTop: 340,
+      fieldBottom: 370
+    });
+    vv.resize();
+    await nextFrame();
+
+    expect(drawer.snapIndex).toBe(1);
+    expect(onSnapPointChange).toHaveBeenCalledWith(1);
+  });
+
+  it('does not expand for a field the pan already reveals, where the raw visualViewport numbers alone would read it as hidden (run2 #32, held pan)', async () => {
+    // Repro: `165 < 336` reads as hidden against the raw window -- it is
+    // not: the real device's own coordinates put the visible window at
+    // `[0, 331]` instead, which already contains the field's own `150..180`.
+    const vv = installFakeViewport();
+    const onSnapPointChange = vi.fn();
+    fixture = mount({ snapPoints: [0.3, 1], onSnapPointChange });
+    const { dialog, content, drawer } = fixture;
+    const field = document.createElement('input');
+    field.type = 'text';
+    content.append(field);
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    field.focus({ preventScroll: true });
+
+    vv.height = 331;
+    vv.offsetTop = 336;
+    stubPannedRects(dialog, field, {
+      iH: 667,
+      offsetTop: 336,
+      fieldTop: 150,
+      fieldBottom: 180
+    });
+    vv.resize();
+    await nextFrame();
+
+    expect(drawer.snapIndex).toBe(0);
+    expect(onSnapPointChange).not.toHaveBeenCalled();
+  });
 });
 
 describe('non-modal (#271): the hit area is unaffected by the keyboard', () => {

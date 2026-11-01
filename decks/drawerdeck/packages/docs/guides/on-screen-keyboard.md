@@ -81,6 +81,14 @@ expand to, skips straight to scrolling the field in. Neither one moves a
 field that is already visible, and neither one reverts once the keyboard
 closes -- the drawer stays at whatever snap point it expanded to.
 
+This only happens for `bottom` and `top` drawers. The keyboard covers the
+bottom of the layout viewport, a vertical concern whichever edge the drawer
+opens from, so a field it hides is hidden vertically, never horizontally: a
+`left` or `right` drawer never expands for it, since moving further along
+its own horizontal axis would only scroll the Viewport sideways and reveal
+nothing. Scrolling the field itself, below, still works the same for every
+side.
+
 ## Safari's own pan
 
 iOS Safari's own response to a focus inside a scrollable area is to scroll
@@ -93,9 +101,14 @@ on iOS.
 
 `--drawer-keyboard-inset` and the expand-and-scroll behavior above (see
 "Expanding to the largest snap point") still bring the focused field itself
-back above the keyboard regardless, since both read `visualViewport`'s own
-current numbers no matter where the pan leaves the Panel: only the Panel's
-own top edge is left to the browser. An earlier round of this file tried to
+back above the keyboard regardless, no matter where the pan leaves the
+Panel: both check the field against the real visible window, read from
+`Drawer.Popup`'s own rect plus `visualViewport`'s current `offsetTop`, not
+`visualViewport`'s numbers alone -- a real iPhone reports a field's own
+`getBoundingClientRect()` in visual-viewport coordinates during a held pan,
+and the Popup's own rect shifts by the exact same amount, so adding its
+`offsetTop` back cancels that shift for both. Only the Panel's own top edge
+is left to the browser. An earlier round of this file tried to
 undo the pan by hand instead -- a standalone CSS `translate` on
 `Drawer.Panel`, plus a momentary `transform` on the focused field copied
 from vaul's own vendored, older React Aria -- but neither was ever checked
@@ -157,9 +170,13 @@ transition that is still running on elapsed time regardless.
 
 ## Every side
 
-Nothing here depends on which edge the drawer opens from: the Viewport
-never moves for a keyboard whichever one it is, and `--drawer-keyboard-inset`
-reads the same `visualViewport` numbers regardless of `side`.
+The Viewport never moves for a keyboard whichever edge the drawer opens
+from, and `--drawer-keyboard-inset` reads the same `visualViewport` numbers
+regardless of `side`. Expanding to the largest snap point (above) does not:
+the keyboard is a vertical concern, so only `bottom` and `top` drawers ever
+expand for it. A `left` or `right` drawer skips that step and scrolls the
+field in directly -- Content's own scroll is vertical regardless of `side`,
+so this still brings the field back the same way.
 
 ## What this does not cover
 

@@ -1218,12 +1218,29 @@ export function createDrawer(
    * `visualViewport` at all -- never reached in practice, since every
    * caller here only runs while `attachKeyboardListeners` has already
    * confirmed one exists, kept only so this has a defined answer rather
-   * than reading undefined fields off `undefined`. */
+   * than reading undefined fields off `undefined`.
+   *
+   * Measured from the dialog's own `getBoundingClientRect()`, not
+   * `visualViewport.offsetTop` alone: on a real iPhone (iOS 18.7), a field's
+   * own `getBoundingClientRect()` during a held pan is already reported in
+   * visual-viewport coordinates, not layout-viewport ones, and so is the
+   * fixed, inset-0 dialog's -- it reads `top: -offsetTop`,
+   * `bottom: innerHeight - offsetTop` (the real device logs this section's
+   * own module doc cites: `offsetTop` 336 gives a dialog rect of
+   * `-336..331`, 192 gives `-192..475`). Adding `vv.offsetTop` back to the
+   * dialog's own (already-shifted) top cancels that shift and lands this at
+   * `0`, so the window this returns sits in the same coordinates the
+   * field's own rect does, there or in Chromium/WebKit, where the dialog
+   * never actually moves and this comes out identical to the old, simpler
+   * formula. */
   function visibleWindow(): { top: number; bottom: number } {
     const vv = window.visualViewport;
-    if (vv) return { top: vv.offsetTop, bottom: vv.offsetTop + vv.height };
-    const rect = viewport.getBoundingClientRect();
-    return { top: rect.top, bottom: rect.bottom };
+    if (!vv) {
+      const rect = viewport.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom };
+    }
+    const top = dialog.getBoundingClientRect().top + vv.offsetTop;
+    return { top, bottom: top + vv.height };
   }
 
   /** Moves to the largest snap point when the focused field would not be
@@ -1243,8 +1260,20 @@ export function createDrawer(
    * animation (nothing here moves while the keyboard opens or closes, the
    * design ruling in this section's own module doc) -- there is no resize
    * for an `onResize` call to react to any more, since the Viewport's own
-   * extent never changes for a keyboard. */
+   * extent never changes for a keyboard.
+   *
+   * Never for `left`/`right`: the keyboard covers the bottom of the layout
+   * viewport, a vertical concern regardless of which edge the drawer opens
+   * from, so a field it hides is hidden *vertically*, never horizontally.
+   * Moving a `left`/`right` drawer to a larger snap point slides the Panel
+   * further along its own horizontal axis -- scrolling the Viewport's own
+   * `scrollLeft` -- which reveals nothing hidden on the vertical axis and
+   * only drags the Viewport out from under a pan or a drag the user did not
+   * ask it to move for. `ensureFieldVisible`, called right after this in
+   * `updateKeyboardInset`, still brings the field back for every side, since
+   * Content's own scroll is vertical regardless of `side` too. */
   function maybeExpandForKeyboard(): boolean {
+    if (horizontal) return false;
     if (snapPx.length === 0) return false;
     const lastIndex = snapPx.length - 1;
     if (snapIndex === lastIndex) return false;
