@@ -59,23 +59,19 @@ layout). Where it does not (Firefox), `--drawer-progress` (`0` closed to `1`
 at the first snap point) is written on `Drawer.Popup` instead, as the
 viewport scrolls.
 
-`--drawer-keyboard-inset`, also on `Drawer.Popup`, is the part of the full
-page, in pixels, the Viewport's own bottom edge still leaves covered once
-it has fitted itself to the browser's own visible area -- not the
-keyboard's own full height, which a browser that pans the page instead of
-shrinking it (iOS Safari) can already have moved most of out of this
-inset's way. It stays unset while the fit already reaches the visible
-window's own bottom edge on its own (a pan can do that right when the
-keyboard opens), is set once there is still a part left covered, drops back
-to `0px` if the keyboard closes while the drawer stays open, and is removed
-again when the drawer itself closes. On by default, no prop: the fit keeps
-tracking the visible area through a resize or a pan while the drawer is on
-its way out too, and the drawer expands to its largest snap point when the
-keyboard would otherwise hide the focused field -- see "On-screen
-keyboard". Extend `Drawer.Backdrop` by `--drawer-keyboard-inset`, flush
-against its own bottom edge, to continue the drawer's own surface behind
-the keyboard the way a native iOS sheet does -- see "On-screen keyboard"'s
-own "The gap behind the keyboard".
+`--drawer-keyboard-inset`, also on `Drawer.Popup`, is the part of the layout
+viewport a keyboard covers at its own bottom edge, in pixels --
+`visualViewport`'s own numbers, not the keyboard's own full height, which a
+browser that pans the page can already have moved part of out of this
+inset's way. It stays unset while nothing covers the Viewport, is set once
+a keyboard covers part of it, drops back to `0px` if the keyboard closes
+while the drawer stays open, and is removed again when the drawer itself
+closes. On by default, no prop: the Viewport keeps its full size and
+position for as long as a keyboard is open or closing, and the drawer
+expands to its largest snap point when the keyboard would otherwise hide
+the focused field, scrolling it clear of the keyboard with
+`Drawer.Content`'s own `padding-bottom`/`scroll-padding-bottom` (both set
+to `--drawer-keyboard-inset`) -- see "On-screen keyboard".
 
 ## Not in the beta
 

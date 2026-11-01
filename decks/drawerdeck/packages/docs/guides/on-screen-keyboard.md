@@ -1,19 +1,19 @@
 ---
 title: On-screen keyboard
-description: 'Focusing an input inside the drawer lifts it above the on-screen keyboard by default (#273, fixed for a real device in #327): the visible-area fit, the CSS variable it sets, both keyboard models, and when the drawer expands to its largest snap point.'
+description: 'The drawer stays put when the on-screen keyboard opens (#273, redesigned in #327): the CSS variable the keyboard still exposes, when the drawer expands to its largest snap point, and how it keeps the focused field clear of the keyboard.'
 ---
 
 Focusing a text field inside the drawer, on a touch device, opens the
-on-screen keyboard. By default, the drawer lifts itself above it: the
-Viewport fits itself to exactly the part of the screen the browser still
-shows, and the drawer keeps whatever snap point it was already resting on.
-Nothing animates, and nothing closes. Closing the keyboard puts the drawer
-back to its full height, on the same snap point.
+on-screen keyboard. The drawer stays exactly where it is: the Viewport keeps
+its full size and position, and the keyboard simply covers its own lower
+part, the same way Base UI's `DrawerVirtualKeyboardProvider` and React
+Aria's `Sheet` both leave their own sheet alone and let the keyboard cover
+it.
 
-If the focused field would not fit inside that smaller, fitted Viewport at
-the current snap point, the drawer expands to its largest one -- the same
-thing a native iOS sheet does, so the content unlocks, and the engine then
-scrolls the field into the fitted Viewport itself, with
+If the focused field would not be visible above the keyboard at the current
+snap point, the drawer expands to its largest one -- the same thing a
+native iOS sheet does, so the content unlocks -- and the engine then
+scrolls the field clear of the keyboard itself, with
 `field.scrollIntoView({ block: 'nearest' })`. It stays there once the
 keyboard closes; a field already visible never moves the drawer at all.
 
@@ -23,37 +23,20 @@ Open it on a phone and focus either field: a short summary, or a longer
 message.
 
 This is on by default, with no prop to turn it on. It costs two passive
-`visualViewport` listeners and one `window` listener, all only while the
-drawer is open.
-
-## The visible-area fit
-
-A touch browser does not shrink the page to make room for the keyboard: it
-keeps reporting the same `window.innerHeight`, and tells a page which part
-of it is actually visible through `visualViewport`'s own `offsetTop` and
-`height`. The drawer fits its Viewport to exactly that: `top` tracks
-`visualViewport.offsetTop` and `height` tracks `visualViewport.height`,
-both in the same pixels the browser reports them in. A Viewport that only
-ever shrank its own height, never moving its own top, is wrong by however
-far the browser panned the page to bring the focused field into view --
-the Viewport's own bottom edge comes up short of the real, visible window
-by that amount, cutting off the drawer's own bottom. Fitting both tracks
-the pan directly, whatever caused it.
+`visualViewport` listeners, one `window` listener and one `focusin`
+listener, all only while the drawer is open.
 
 ## The CSS variable
 
-`Drawer.Popup` carries `--drawer-keyboard-inset`, in pixels: the part of
-the full page the fitted Viewport's own bottom edge still leaves covered
-(`innerHeight - offsetTop - height`), not the keyboard's own full height --
-when the browser pans instead of shrinking, that covered part can be
-smaller than the keyboard, or zero, since the fit itself is what pulls the
-Viewport's own bottom edge up to meet the visible window. It stays unset
-while the fitted Viewport's own bottom edge already reaches the visible
-window's own bottom (a pan can already do that on its own, right when the
-keyboard opens), is set once there is still a part left covered, drops back
-to `0px` if the keyboard closes while the drawer stays open, and is removed
-again when the drawer itself closes. Read it for your own layout, for
-example to reserve space for a footer input below the scrollable content:
+`Drawer.Popup` carries `--drawer-keyboard-inset`, in pixels: the part of the
+layout viewport a keyboard covers at its own bottom edge --
+`max(0, innerHeight - offsetTop - height)`, `visualViewport`'s own numbers.
+It stays unset while nothing covers the Viewport (before the first keyboard
+open, and whenever `visualViewport` reports no gap at all), is set once a
+keyboard covers part of it, drops back to `0px` if the keyboard closes while
+the drawer stays open, and is removed again when the drawer itself closes.
+Read it for your own layout, for example to reserve space for a footer
+input below the scrollable content:
 
 ```css
 .footer {
@@ -61,123 +44,129 @@ example to reserve space for a footer input below the scrollable content:
 }
 ```
 
-## The gap behind the keyboard
-
-The fitted Viewport, and the Panel inside it, stop at the visible window's
-own bottom edge on purpose: the Panel's own content, and a Close button,
-stay above the keyboard rather than being pulled down behind it. A real
-device still showed a real gap there, though -- a strip of the page itself,
-undimmed, between the fitted Viewport's own bottom edge and the keyboard
-(#327's own screenshot). `Drawer.Popup` already reaches `window.innerHeight`
-on its own (`100dvh`, which does not shrink for the keyboard), so that is
-not the gap's cause, and `Drawer.Popup`'s `overflow: hidden` does not clip
-`Drawer.Backdrop` either: `Drawer.Backdrop` is `position: fixed`, and an
-ancestor's `overflow` only clips a fixed-position descendant when that
-ancestor itself establishes the containing block for it (a transform, a
-filter, and a few other properties do; a plain `overflow: hidden` does
-not). What actually leaves that strip undimmed on a real device is still
-unconfirmed -- plausibly Safari not painting a fixed-position element
-behind its own floating address pill and keyboard toolbar at all, which a
-future real-device check, with the debug overlay logging millisecond
-timestamps, still needs to settle.
-
-The Backdrop is not clipped to the visible area the way the Viewport is, so
-it is what continues the drawer's own surface down behind the keyboard,
-like a native iOS sheet: extend it, flush against its own bottom edge, by
-`--drawer-keyboard-inset`, in the Panel's own surface color (the "Style the
-backdrop" guide covers `Drawer.Backdrop`'s own stacking):
-
-```css
-.backdrop::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0 0;
-  height: var(--drawer-keyboard-inset, 0px);
-  background-color: var(--panel-surface-color);
-}
-```
-
-Zero height, and so invisible, whenever there is no keyboard open: the same
-`0px` fallback the variable itself always needs.
+The engine also applies it to `Drawer.Content` itself, as both a real
+`padding-bottom` and a `scroll-padding-bottom`: see "Keeping the field clear
+of the keyboard", below, for why it needs both. This needs no CSS of your
+own; it is there so `scrollIntoView` keeps a field clear of the keyboard
+without your own layout doing anything.
 
 Always keep the `0px` fallback: the variable is only present while the
 drawer is open, so a bare `var(--drawer-keyboard-inset)` is invalid before
 the first keyboard open and after the drawer closes.
 
-The fit itself needs none of this. The engine applies it directly to the
-Viewport's own position and height, so it works headless, with no CSS of
-your own.
+## Keeping the field clear of the keyboard
+
+`Drawer.Content`'s own `clientHeight` never shrinks for a keyboard -- the
+Viewport above it never does either -- so a field sitting at Content's own
+natural end has nothing below it for a plain `scroll-padding-bottom` alone
+to scroll into: the browser clamps at Content's own maximum scroll position,
+short of the padded target, landing the field flush with Content's own
+unpadded bottom, exactly where the keyboard still covers it. The engine
+gives `Drawer.Content` a real `padding-bottom` too, equal to
+`--drawer-keyboard-inset`: genuine scrollable room past the last field,
+which `scrollIntoView` can actually reach. `scroll-padding-bottom`, kept
+alongside it, is what then stops `scrollIntoView`'s own `'nearest'` right at
+that padding's edge for a field that already has real content below it,
+rather than scrolling past the natural stopping point into the empty
+padding for no reason.
+
+## Expanding to the largest snap point
+
+A field the current snap point does not reveal above the keyboard moves the
+drawer to its largest snap point first, the same thing a native iOS sheet
+does: the content unlocks there (see "Why native scrolling" for why the top
+snap point is what unlocks it), giving the engine room to scroll the field
+itself. A drawer already at its largest snap point, with nothing left to
+expand to, skips straight to scrolling the field in. Neither one moves a
+field that is already visible, and neither one reverts once the keyboard
+closes -- the drawer stays at whatever snap point it expanded to.
+
+## Stopping Safari's own pan
+
+iOS Safari's own response to a focus inside a scrollable area is to scroll
+the _whole page_ so the focused field sits centered in the visible window --
+which, since `Drawer.Popup` is `position: fixed`, can push its own top edge
+above that window for as long as the pan lasts. React Aria's
+`usePreventScroll` (whose own source credits the file vaul vendors a copy
+of, `vaul/dist/index.js`'s `onFocus` handler) stops this at the source: a
+momentary `transform: translateY(-2000px)` on the focused field itself,
+convincing Safari the field is already off the top of the page, so it has
+nothing left to pan the page to reveal. The engine does the same, on
+`focusin`, for the smallest piece of that trick this needs -- one
+transform, one frame, on the field alone, never the touch-event
+interception or the body-margin trick the rest of `usePreventScroll` also
+carries, both there to stop a user's own touch scroll from moving the page,
+a problem this engine does not have.
+
+The trick's own race (React Aria's own issue #10485, on its
+`react-spectrum` repository): the field
+sits transformed for a whole animation frame, and a real `visualViewport`
+event can land inside that same frame. The engine closes this itself,
+restoring the field to its real position synchronously the moment anything
+here needs to read it, rather than waiting for the trick's own scheduled
+frame.
+
+Where a pan still happens anyway -- Safari starting one from somewhere this
+trick does not reach, such as the keyboard's own next/previous field
+buttons -- the Viewport never having moved in the first place (above) is
+what keeps its own top edge from _staying_ off screen, not a second,
+reactive undo on top of this. A pan Safari starts anyway still settles back
+to `offsetTop: 0` on its own, the same way a real iPhone's own log of this
+showed it doing.
 
 ## Two keyboard models
 
-A touch browser handles the keyboard one of two ways, and drawerdeck
-covers both:
+A touch browser handles the keyboard one of two ways, and drawerdeck covers
+both:
 
-- **The overlay model.** iOS Safari always, and Android Chrome by
-  default (`interactive-widget=resizes-visual`, the default when no
-  `viewport` meta tag sets `interactive-widget` at all). The keyboard
-  covers part of the page: `visualViewport.height` shrinks, and the
-  browser pans the page to keep the focused field above the keyboard, so
-  `visualViewport.offsetTop` moves too, while `window.innerHeight` does
-  not. The fit tracks both.
+- **The overlay model.** iOS Safari always, and Android Chrome by default
+  (`interactive-widget=resizes-visual`, the default when no `viewport` meta
+  tag sets `interactive-widget` at all). The keyboard covers part of the
+  page: `visualViewport.height` shrinks, and the browser may also pan the
+  page to keep the focused field above the keyboard, moving
+  `visualViewport.offsetTop` too, while `window.innerHeight` does not.
+  `--drawer-keyboard-inset` tracks both.
 - **`interactive-widget=resizes-content`.** `window.innerHeight` itself
   shrinks, `visualViewport` tracks it exactly, and the gap between them
-  stays 0. The drawer already handles this: its layout is built on
-  `100dvh`, so a layout-viewport resize mid-open already keeps the same
-  snap point through the same path a window resize or an orientation
-  change use.
+  stays 0 -- `--drawer-keyboard-inset` never leaves neutral. The drawer's
+  layout is built on `100dvh`, so this is a plain layout-viewport resize,
+  handled the same way an orientation change already is.
 
 A WKWebView wrapper around a site (a non-Safari iOS browser, in practice)
 can also shrink the layout viewport itself, the way
 `interactive-widget=resizes-content` does, but animated over many `window`
-'resize' events rather than settling at once -- the fit also runs on every
-`window` 'resize' while open, not only `visualViewport`'s own, so it
-re-reads and converges at each step of that animation instead of freezing
-at whatever it read when the animation started.
+'resize' events rather than settling at once -- `--drawer-keyboard-inset`
+also re-reads on every `window` 'resize' while open, not only
+`visualViewport`'s own, so it converges at each step of that animation
+instead of freezing at whatever it read when the animation started.
 
 Either way, the drawer keeps its snap index (unless it expands to the
 largest one, above) and never closes.
 
 A resize or a pan while the drawer is already on its way out (Escape, an
-outside press, `Drawer.Close` or `close()`) still keeps the fit tracking
-the visible area, exactly as it would with the keyboard closed: a CSS
-transition runs for its own declared duration regardless of how the box it
-animates changes size, so keeping the Panel inside the visible area for the
-whole exit never cuts that transition short. The fit still writes the
-Viewport's scroll position, too, the same as it does while the drawer
-rests open: a fit change mid-exit (the keyboard finishing a close in the
-same tick as a tap on `Drawer.Close`, say -- #327's own final finding) can
-still change the Viewport's own scrollable range, and leaving the old
-scroll position in place would drop the Panel out of the visible window
-well before the transition's own declared duration -- a visual jump, not
-the phase closing early, but indistinguishable from one on a real device.
-A real touch, wheel or pointer down there still ends the exit at once, the
-same as it always has.
+outside press, `Drawer.Close` or `close()`) changes nothing about the exit:
+the Viewport does not move for a keyboard at any point, open or closing, so
+there is nothing left for a keyboard change mid-exit to desync from a CSS
+transition that is still running on elapsed time regardless.
 
 ## Every side
 
-The fit sets the same two properties on the Viewport whichever edge the
-drawer opens from: its `top` to `visualViewport.offsetTop`, and its
-`height` to `visualViewport.height`. A `bottom` drawer's panel sits flush
-against the Viewport's own bottom edge, so it lifts as the height shrinks.
-`left` and `right` panels typically fill the Viewport's own height, so they
-get shorter the same way. A `top` drawer's panel sits flush against the
-Viewport's own top edge, so it moves down with `visualViewport.offsetTop`
-exactly like the others. Nothing keeps a `top` drawer's own top edge fixed
-while the browser pans the page.
+Nothing here depends on which edge the drawer opens from: the Viewport
+never moves for a keyboard whichever one it is, and `--drawer-keyboard-inset`
+reads the same `visualViewport` numbers regardless of `side`.
 
 ## What this does not cover
 
 iOS Safari supports neither the `interactive-widget` viewport meta tag nor
-the VirtualKeyboard API: `visualViewport` is the only signal it gives a
-page about the keyboard, which is what this feature reads. Android's two
-models above, and the WKWebView variant of the second, are the only ones
-this guide documents; a phone running an older WebView, or a browser this
-was never checked against, falls back to whatever that browser already
-does with an overflowing page, the same as before this feature existed.
+the VirtualKeyboard API: `visualViewport` is the only signal it gives a page
+about the keyboard, which is what this feature reads. Android's two models
+above, and the WKWebView variant of the second, are the only ones this guide
+documents; a phone running an older WebView, or a browser this was never
+checked against, falls back to whatever that browser already does with an
+overflowing page, the same as before this feature existed.
 
 This has been checked in Chromium and WebKit through a stand-in for
 `visualViewport`, replaying sequences logged from a real iPhone in both
-Safari and a WKWebView browser: see the "Compare" page for how
-drawerdeck's keyboard handling reads next to vaul, Base UI's Drawer and
-React Aria's Sheet.
+Safari and a WKWebView browser: see the "Compare" page for how drawerdeck's
+keyboard handling reads next to vaul, Base UI's Drawer and React Aria's
+Sheet.

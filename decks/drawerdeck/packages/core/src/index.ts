@@ -1130,66 +1130,109 @@ export function createDrawer(
   }
   document.addEventListener('keydown', onDocumentKeyDown);
 
-  // ---------- the on-screen keyboard (#273, fixed for a real device in #327) ----------
-  // Fits the Viewport to the browser's own visible area instead of only
-  // shrinking its height: `visualViewport` reports that area two different
-  // ways, and a real iPhone showed #273's first cut only covered one of
-  // them (PR #327's three findings below).
+  // ---------- the on-screen keyboard (#273, redesigned in #327 after a real
+  // device) ----------
+  // The drawer stays put. #273's first cut, and #327's own first round,
+  // both fitted the Viewport to `visualViewport`'s own `offsetTop`/`height`,
+  // chasing whichever visible area the browser reported. A real iPhone kept
+  // finding new ways for that chase to fall out of step with the browser's
+  // own, separate idea of the same area: Safari panning the *layout*
+  // viewport instead of shrinking it (so the Viewport's own fitted rect and
+  // the actually-visible window could disagree for a frame), a WKWebView
+  // wrapper (Brave) shrinking the layout viewport itself over a run of
+  // `window` 'resize' events rather than settling at once, and a fit
+  // frozen mid-exit dropping the Panel out of view before its own CSS
+  // transition had actually finished. Base UI's
+  // `DrawerVirtualKeyboardProvider` and React Aria's `Sheet`
+  // (`--visual-viewport-height`/`--sheet-scroll-padding-y`) both leave the
+  // sheet's own box alone and let the keyboard simply cover its lower part;
+  // this follows them. The Viewport keeps its full `position: fixed; inset:
+  // 0; height: 100dvh` the whole time a keyboard is open or closing --
+  // nothing here ever writes its `top`, its `height` or its `position`
+  // again, so there is nothing left that can fall out of step with
+  // `visualViewport`, and nothing for a CSS exit's own `transform` to race
+  // (`keyboard.test.ts` asserts the Viewport's own `getBoundingClientRect()`
+  // never changes through either replay below, open or closing).
   //
-  // iOS Safari (and any WebKit-based iOS browser -- Brave included) PANS
-  // the layout viewport to bring the focused field above the keyboard,
-  // rather than shrinking it: `innerHeight` stays put, and
-  // `visualViewport.height` shrinks while `visualViewport.offsetTop` moves
-  // down by roughly the same amount -- the visible window sits at
-  // `[offsetTop, offsetTop + height]` *inside* the (unmoved) layout
-  // viewport, not flush against its own top. A Viewport whose own top stays
-  // at 0 while only its height shrinks (#273's first cut) is positioned
-  // wrong by exactly `offsetTop`: part of it sits above the pan, out of
-  // view, and its own bottom edge comes up short of the keyboard by the
-  // same amount -- the missing bottom a real iPhone showed. Fitting both
-  // the Viewport's own `top` and `height` to `visualViewport`'s `offsetTop`/
-  // `height` (`updateKeyboardFit`, below) tracks the pan directly, whatever
-  // caused it, and `--drawer-keyboard-inset` becomes the part of the layout
-  // viewport the fitted Viewport's own bottom edge still leaves covered
-  // (`innerHeight - offsetTop - height`), not the keyboard's own full
-  // height.
+  // `--drawer-keyboard-inset`, on the Popup, stays: the part of the layout
+  // viewport a keyboard covers at its own bottom edge --
+  // `max(0, innerHeight - offsetTop - height)`, `visualViewport`'s own
+  // numbers once a pan (if any) has settled, not the keyboard's own full
+  // height when a pan already reveals part of it for free. Read on every
+  // `visualViewport` 'resize'/'scroll', and on every `window` 'resize' too
+  // (Brave's own many-step shrink fires only the latter): each step
+  // re-reads and converges on the real device's own two sequences
+  // (`updateKeyboardInset`, below) instead of freezing mid-animation, the
+  // same two findings #327's first round already made, just without a fit
+  // left to desync. Applied to the Panel's own Content as both a real
+  // `padding-bottom` and `scroll-padding-bottom` (`updateKeyboardInset`'s
+  // own comment explains why both): genuine scrollable room past
+  // Content's own last field, which `scrollIntoView({block:'nearest'})`
+  // (`ensureFieldVisible`, below) can actually scroll into, instead of
+  // clamping short of the keyboard-covered strip at Content's own
+  // otherwise-unpadded bottom.
   //
-  // A WKWebView wrapper (Brave on iOS) instead shrinks the LAYOUT viewport
-  // itself, over a run of `window` 'resize' events as it animates --
-  // `visualViewport` only fires its own 'resize'/'scroll' once, near the
-  // start, so reading the fit on those alone leaves it stuck at whatever it
-  // read mid-animation while `innerHeight` keeps moving underneath (a real
-  // iPhone showed a stale inset subtracted a second time from a layout
-  // viewport that had already shrunk through its own `100dvh`, leaving a
-  // far smaller drawer than either shrink alone would). `updateKeyboardFit`
-  // also runs on every `window` 'resize' while open, so each step re-reads
-  // and converges instead of freezing.
+  // Stopping Safari's own pan. iOS Safari's native response to a focus
+  // inside a scrollable area is to scroll the *whole page* so the focused
+  // field sits centered in the visible window -- which, since the Popup is
+  // `position: fixed`, can push its own top edge above that window for as
+  // long as the pan lasts (the real device logs this file's own callers
+  // cite show it: `offsetTop` jumping to 320-370px on focus, then usually
+  // settling back to 0 on its own). React Aria's `usePreventScroll` (whose
+  // own file credits the same source vaul vendors a copy of,
+  // `vaul/dist/index.js`'s `onFocus` handler) stops this at the source: a
+  // `transform: translateY(-2000px)` on the field itself, for one frame
+  // around the `focus` event, convinces Safari the field is already off
+  // the top of the page, so it has nothing left to pan the page to reveal.
+  // `onFocusIn`, below, is the smallest piece of that trick this needs --
+  // one transform, one frame, on the field alone, never the touch-event
+  // interception or the body-margin trick the rest of `usePreventScroll`
+  // also carries, which exist to stop a *user's own touch scroll* from
+  // moving the page, a problem this engine does not have (the Viewport is
+  // its own native scroll container; nothing here relies on the page itself
+  // staying still). Where it still is not enough -- a pan Safari starts
+  // from somewhere this trick does not reach, such as the keyboard's own
+  // next/previous field buttons -- the Viewport never having moved in the
+  // first place is what keeps its own top edge from *staying* off screen:
+  // the design this file's own module doc opens with, not a second,
+  // reactive undo on top of it. A pan Safari starts anyway still settles
+  // back to `offsetTop: 0` on its own, same as the real device logs showed,
+  // landing the Popup back where it always was.
   //
-  // Kept active even while `cssExiting`, on purpose. An earlier version of
-  // this fix stopped here on that flag, reasoning that resizing the
-  // Viewport, and through it a Panel whose own CSS tracks the Viewport's
-  // height, while the Panel's own CSS exit was still running a percentage
-  // `transform` would let that transform re-resolve against the shrunk box
-  // and cut the exit short. It does not: a CSS transition interpolates on
-  // elapsed time, not on the distance between its start and end values, so
-  // resizing the box underneath it cannot shorten its declared duration
-  // (`keyboard.test.ts` proves the exit still runs its full duration with
-  // this fit left active throughout). The leave-view `IntersectionObserver`
-  // (#296) and `onScrollEnd` keep their own, separate `cssExiting` guards,
-  // unrelated to this one: they never fired a close of their own either way.
-  // Stopping the fit here only made the real device's own bug worse. When
-  // Safari un-pans mid-exit, with `offsetTop` moving back toward 0 while
-  // `height` is still shrunk, a fit frozen at the pre-exit reading leaves
-  // the Viewport, and the Panel inside it, sitting wherever that pan last
-  // had them, now behind the keyboard the un-pan just revealed: exactly the
-  // dropped Panel a real iPhone showed. Tracking the visible area through
-  // the whole exit instead keeps the Panel inside it the same as at every
-  // other moment the drawer is open.
+  // The trick's own race (React Aria's open issue #10485, cited by this
+  // file's own callers for exactly this): the field sits at
+  // `translateY(-2000px)` for a whole animation frame, and a real
+  // `visualViewport` event -- the pan this is trying to stop, arriving
+  // anyway, or an unrelated one -- can land inside that same frame. Reading
+  // the field's own `getBoundingClientRect()` then, in
+  // `maybeExpandForKeyboard` or `ensureFieldVisible`, would measure the
+  // trick's own fake, off-screen position, not the field's real one, and
+  // `ensureFieldVisible`'s own `scrollIntoView` would scroll this engine's
+  // own Viewport -- a real, native scroll-snap container whose position
+  // *is* the drawer's own open/snap state -- toward wherever the fake
+  // position asked for, as far as fully closed. `restorePendingUnpan`,
+  // below, closes this: every path that measures a field's own position
+  // calls it first, landing the field back at its real, untransformed spot
+  // synchronously, before anything here reads it.
   let keyboardInset = 0;
-  let fitActive = false;
-  let fitTop = 0;
-  let fitHeight = 0;
   let keyboardListenersAttached = false;
+  let pendingUnpanField: HTMLElement | null = null;
+  let pendingUnpanTransform = '';
+  let pendingUnpanFrame = 0;
+
+  /** Restores a field still sitting at the pan-prevention trick's own
+   * `translateY(-2000px)` (`onFocusIn`, below) immediately, instead of
+   * waiting for its own scheduled frame: called first by every function in
+   * this section that reads a field's own `getBoundingClientRect()`, so
+   * none of them ever measures the trick's own fake position (this
+   * section's own module doc: React Aria's issue #10485). A no-op once the
+   * field's own frame has already restored it, or when nothing is pending. */
+  function restorePendingUnpan() {
+    if (!pendingUnpanField) return;
+    cancelAnimationFrame(pendingUnpanFrame);
+    pendingUnpanField.style.transform = pendingUnpanTransform;
+    pendingUnpanField = null;
+  }
 
   /** The focused element, if it is inside the Panel and would itself keep
    * the keyboard up (`opensKeyboard`) -- what `maybeExpandForKeyboard`,
@@ -1201,171 +1244,194 @@ export function createDrawer(
     return active;
   }
 
+  /** The part of the layout viewport actually visible right now, in the
+   * same pixels `visualViewport.offsetTop`/`height` report: what
+   * `maybeExpandForKeyboard` and `ensureFieldVisible`, both below, check a
+   * focused field's own `getBoundingClientRect()` against, since the
+   * Viewport's own rect no longer shrinks to it (this section's own module
+   * doc). Falls back to the Viewport's own rect where there is no
+   * `visualViewport` at all -- never reached in practice, since every
+   * caller here only runs while `attachKeyboardListeners` has already
+   * confirmed one exists, kept only so this has a defined answer rather
+   * than reading undefined fields off `undefined`. */
+  function visibleWindow(): { top: number; bottom: number } {
+    const vv = window.visualViewport;
+    if (vv) return { top: vv.offsetTop, bottom: vv.offsetTop + vv.height };
+    const rect = viewport.getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom };
+  }
+
   /** Moves to the largest snap point when the focused field would not be
-   * fully visible inside the Viewport's own fitted rect at the snap point
-   * it currently rests on: the same thing iOS's own sheets do, since the
-   * content unlocks at the top snap point (`updateContentLock`). Unlocking
-   * it is not enough on its own to reveal the field: focus already
-   * happened, before the keyboard event that triggered this, so there is no
-   * fresh focus for a browser's own native scroll-into-view to act on.
-   * `ensureFieldVisible`, called right after this in `updateKeyboardFit`, is
-   * what actually scrolls it in. A no-op once already at the largest point,
-   * or when the field is already visible there: never moves a drawer that
-   * does not need it, and never reverts on its own once the keyboard closes
-   * (the design ruling: a drawer stays at the snap point it expanded to).
-   * Reads the Viewport's own rect, not the fit's own `top`/`height` fields,
-   * so it sees the layout exactly as `onResize`, called right after this, is
-   * about to scroll into: forced synchronous by that same read, same as any
-   * other `getBoundingClientRect()` after a style write. */
+   * fully visible, inside the real visible window (`visibleWindow`), at the
+   * snap point the drawer currently rests on: the same thing iOS's own
+   * sheets do, since the content unlocks at the top snap point
+   * (`updateContentLock`). Unlocking it is not enough on its own to reveal
+   * the field: focus already happened, before the keyboard event that
+   * triggered this, so there is no fresh focus for a browser's own native
+   * scroll-into-view to act on -- `ensureFieldVisible`, called right after
+   * this in `updateKeyboardInset`, is what actually scrolls it in. A no-op
+   * once already at the largest point, or when the field is already visible
+   * there: never moves a drawer that does not need it, and never reverts on
+   * its own once the keyboard closes (the design ruling: a drawer stays at
+   * the snap point it expanded to). Scrolls the Viewport straight to the
+   * new snap point's own offset itself, same as `snapTo` without the
+   * animation (nothing here moves while the keyboard opens or closes, the
+   * design ruling in this section's own module doc) -- there is no resize
+   * for an `onResize` call to react to any more, since the Viewport's own
+   * extent never changes for a keyboard. */
   function maybeExpandForKeyboard(): boolean {
     if (snapPx.length === 0) return false;
     const lastIndex = snapPx.length - 1;
     if (snapIndex === lastIndex) return false;
+    restorePendingUnpan();
     const field = focusedKeyboardField();
     if (!field) return false;
-    const visible = viewport.getBoundingClientRect();
+    const visible = visibleWindow();
     const rect = field.getBoundingClientRect();
     if (rect.top >= visible.top && rect.bottom <= visible.bottom) return false;
     snapIndex = lastIndex;
     opts.onSnapPointChange?.(lastIndex);
+    viewport.scrollTo({
+      [axis.scrollToKey]: scrollForSnap(lastIndex),
+      behavior: 'instant'
+    });
+    updateContentLock();
     return true;
   }
 
-  /** Scrolls the focused keyboard field back into the Viewport's own fitted
-   * rect when a fit change still leaves it outside, once `onResize` (and,
-   * where it ran, `maybeExpandForKeyboard`) has already settled the layout:
-   * neither moving to the largest snap point nor merely refitting the
-   * Viewport scrolls anything on its own, and the browser's own native
-   * scroll-into-view only runs on focus, which happened before the keyboard
-   * event this reacts to. Covers the case `maybeExpandForKeyboard` does not:
-   * a drawer already at its largest snap point, with nothing left to expand
-   * to, whose focused field the keyboard still covers. A no-op when the
-   * field is already visible, so this never fights a user's own scroll
-   * once it is. */
+  /** Scrolls the focused keyboard field back into the real visible window
+   * (`visibleWindow`) when it still falls outside it, once
+   * `maybeExpandForKeyboard` has already settled the snap point: moving to
+   * the largest snap point does not itself scroll anything, and the
+   * browser's own native scroll-into-view only ran on focus, which happened
+   * before the keyboard event this reacts to. Covers the case
+   * `maybeExpandForKeyboard` does not: a drawer already at its largest snap
+   * point, with nothing left to expand to, whose focused field the keyboard
+   * still covers. `scroll-padding-bottom` on Content (`updateKeyboardInset`,
+   * below, keeps it at `--drawer-keyboard-inset`) is what stops `'nearest'`
+   * from treating the keyboard-covered strip at Content's own bottom as
+   * still visible. A no-op when the field is already visible, so this never
+   * fights a user's own scroll once it is. */
   function ensureFieldVisible() {
+    restorePendingUnpan();
     const field = focusedKeyboardField();
     if (!field) return;
-    const visible = viewport.getBoundingClientRect();
+    const visible = visibleWindow();
     const rect = field.getBoundingClientRect();
     if (rect.top >= visible.top && rect.bottom <= visible.bottom) return;
     field.scrollIntoView({ block: 'nearest' });
   }
 
-  /** Reads `visualViewport` and fits the Viewport to it (this section's own
-   * module doc, above): `top`/`height` track `visualViewport`'s own
-   * `offsetTop`/`height` whenever either leaves the Viewport short of the
-   * full layout viewport, and `--drawer-keyboard-inset` (on the Popup, for
-   * a consumer's own CSS) becomes the part of the layout viewport the
-   * fitted Viewport's own bottom edge still leaves covered. Each writes
-   * only when its own value actually changed: one read and at most one set
-   * of writes per 'resize'/'scroll' event (`visualViewport`'s own, or a
-   * `window` one, both only while open), never per frame. Ignored entirely
-   * while pinch-zoomed (`scale > 1`): a zoomed page's `visualViewport`
-   * shrinks for a reason that has nothing to do with the keyboard. Kept
-   * active while `cssExiting` (this section's own module doc explains why). */
-  function updateKeyboardFit() {
+  /** Reads `visualViewport` and writes `--drawer-keyboard-inset` and
+   * Content's own `scroll-padding-bottom` (this section's own module doc):
+   * never the Viewport's `top`, `height` or `position`, which stay exactly
+   * as `createDrawer`'s own setup left them for as long as a keyboard is
+   * open or closing. Each writes only when its own value actually changed:
+   * one read and at most one set of writes per 'resize'/'scroll' event
+   * (`visualViewport`'s own, or a `window` one), never per frame. Ignored
+   * entirely while pinch-zoomed (`scale > 1`): a zoomed page's
+   * `visualViewport` shrinks for a reason that has nothing to do with the
+   * keyboard. */
+  function updateKeyboardInset() {
     const vv = window.visualViewport;
     if (!vv || vv.scale > 1) return;
-    const top = Math.round(Math.max(0, vv.offsetTop));
-    const height = Math.round(vv.height);
     const inset = Math.max(
       0,
       Math.round(window.innerHeight - vv.offsetTop - vv.height)
     );
-    const active = top > 0 || inset > 0;
+    const active = inset > 0 || vv.offsetTop > 0;
 
-    const insetChanged = inset !== keyboardInset;
-    const fitChanged =
-      active !== fitActive ||
-      (active && (top !== fitTop || height !== fitHeight));
-    if (!insetChanged && !fitChanged) return;
-
-    if (insetChanged) {
+    if (inset !== keyboardInset) {
       keyboardInset = inset;
       dialog.style.setProperty('--drawer-keyboard-inset', `${inset}px`);
-    }
-
-    if (fitChanged) {
-      fitActive = active;
-      if (active) {
-        fitTop = top;
-        fitHeight = height;
-        Object.assign(viewport.style, {
-          position: 'fixed',
-          left: '0',
-          right: '0',
-          top: `${top}px`,
-          height: `${height}px`
-        });
-      } else {
-        fitTop = 0;
-        fitHeight = 0;
-        Object.assign(viewport.style, {
-          position: 'relative',
-          left: '',
-          right: '',
-          top: '',
-          height: '100%'
-        });
+      if (parts.content) {
+        // Both, not `scroll-padding-bottom` alone: a field with nothing
+        // after it inside Content -- the last one in a form, the common
+        // case -- has no scrollable room left past it for
+        // `scrollIntoView`'s own "nearest" to scroll into, so
+        // `scroll-padding-bottom` by itself just asks for a spot the
+        // scrollable range cannot reach, and the browser clamps short of
+        // it, right back at Content's own unpadded, keyboard-covered
+        // bottom. Content's own `height` is fixed (never `auto`), so a real
+        // `padding-bottom` grows `scrollHeight` without growing
+        // `clientHeight`: genuine scrollable room past the last field, not
+        // just a hint about where "visible" ends. `scroll-padding-bottom`
+        // stays alongside it so `scrollIntoView` still stops right at that
+        // padding's own edge for a field that already has real content
+        // below it, instead of scrolling past the natural stopping point
+        // into the empty padding for no reason.
+        parts.content.style.paddingBottom = inset > 0 ? `${inset}px` : '';
+        parts.content.style.scrollPaddingBottom = inset > 0 ? `${inset}px` : '';
       }
     }
 
-    // The existing resize-mid-open path: measures the now-fitted (or
-    // restored) Viewport once, keeps the current snap index -- or the one
-    // `maybeExpandForKeyboard` just moved to -- (it scrolls straight to
-    // that index's own offset in the freshly measured layout, not wherever
-    // a shrink's clamp already left `scrollTop`), and never animates or
-    // closes (this file's own `onResize` doc, below).
-    onResize();
-    if (active && maybeExpandForKeyboard()) onResize();
-    // Covers the expand just above and every other fit change on its own
-    // (a fresh pan, a Brave-style shrink step, the drawer already resting
-    // at its largest snap point): whatever just moved, if the focused field
-    // is still outside the Viewport's own fitted rect, this is what brings
-    // it back in.
-    if (active) ensureFieldVisible();
-    // Non-modal only: keeps the JS-fallback hit area (`updateHitArea`'s own
-    // doc) correct for a browser without a scroll timeline, since
-    // `onResize` itself does not call it. Where the scroll timeline
-    // resolves, this is a no-op -- the clip-path already tracks the scroll
-    // position natively.
-    updateHitArea();
+    if (!active) return;
+    // Covers the expand just above and every other reason the visible
+    // window just moved (a fresh pan, a Brave-style shrink step, the
+    // drawer already resting at its largest snap point): whatever just
+    // changed, if the focused field is still outside it, this brings it
+    // back in.
+    maybeExpandForKeyboard();
+    ensureFieldVisible();
+  }
+
+  /** The smallest piece of React Aria's own `usePreventScroll` this needs
+   * (this section's own module doc): a momentary transform on the field
+   * itself, around its own `focus`, so Safari has nothing left to pan the
+   * page to reveal. `focusin`, not `focus` (which does not bubble): one
+   * listener on `document` covers every field inside the Panel, present
+   * when it mounts or not, the same reach `focusedKeyboardField` already
+   * assumes elsewhere in this section. Reads and restores the field's own
+   * prior inline `transform` rather than assuming an empty one, in case a
+   * consumer's own CSS already sets one. Restores a still-pending previous
+   * field first (`restorePendingUnpan`): focus moving straight from one
+   * keyboard field to another, inside the same frame, must never leave the
+   * first one behind at `translateY(-2000px)`. */
+  function onFocusIn(event: FocusEvent) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (!panel.contains(target) || !opensKeyboard(target)) return;
+    restorePendingUnpan();
+    pendingUnpanField = target;
+    pendingUnpanTransform = target.style.transform;
+    target.style.transform = 'translateY(-2000px)';
+    pendingUnpanFrame = requestAnimationFrame(() => {
+      pendingUnpanField = null;
+      target.style.transform = pendingUnpanTransform;
+    });
   }
 
   function attachKeyboardListeners() {
     if (keyboardListenersAttached || !window.visualViewport) return;
     keyboardListenersAttached = true;
-    window.visualViewport.addEventListener('resize', updateKeyboardFit);
-    window.visualViewport.addEventListener('scroll', updateKeyboardFit);
+    window.visualViewport.addEventListener('resize', updateKeyboardInset);
+    window.visualViewport.addEventListener('scroll', updateKeyboardInset);
     // Brave's own shrinking-layout-viewport model (this section's own
     // module doc): only a `window` 'resize' fires at every step of that
-    // animation, so the fit needs this to converge instead of freezing.
-    window.addEventListener('resize', updateKeyboardFit);
+    // animation, so this needs it to converge instead of freezing.
+    window.addEventListener('resize', updateKeyboardInset);
+    document.addEventListener('focusin', onFocusIn);
   }
 
   /** Removed on close and on `destroy()`: an open drawer is the only thing
-   * that ever needs to know about the keyboard. Also resets the fit and the
-   * inset (style and CSS var) straight to neutral -- no `onResize` call,
-   * unlike `updateKeyboardFit`: the dialog is already closing or gone, so
-   * there is nothing left to reflow. */
+   * that ever needs to know about the keyboard. Also resets the inset
+   * (the CSS var and Content's own `scroll-padding-bottom`) straight to
+   * neutral; the Viewport itself needs no reset, since nothing here ever
+   * wrote to it. */
   function detachKeyboardListeners() {
     if (!keyboardListenersAttached) return;
     keyboardListenersAttached = false;
-    window.visualViewport?.removeEventListener('resize', updateKeyboardFit);
-    window.visualViewport?.removeEventListener('scroll', updateKeyboardFit);
-    window.removeEventListener('resize', updateKeyboardFit);
+    window.visualViewport?.removeEventListener('resize', updateKeyboardInset);
+    window.visualViewport?.removeEventListener('scroll', updateKeyboardInset);
+    window.removeEventListener('resize', updateKeyboardInset);
+    document.removeEventListener('focusin', onFocusIn);
+    restorePendingUnpan();
     keyboardInset = 0;
-    fitActive = false;
-    fitTop = 0;
-    fitHeight = 0;
     dialog.style.removeProperty('--drawer-keyboard-inset');
-    Object.assign(viewport.style, {
-      position: 'relative',
-      left: '',
-      right: '',
-      top: '',
-      height: '100%'
-    });
+    if (parts.content) {
+      parts.content.style.paddingBottom = '';
+      parts.content.style.scrollPaddingBottom = '';
+    }
   }
 
   function onResize() {
@@ -1377,20 +1443,21 @@ export function createDrawer(
     measure();
     positionMarkers();
     if (!dialog.open) return;
-    // Keeps writing a scroll position through a CSS exit, too (a real
-    // iPhone check found the regression a prior cut of this fix left: see
-    // this file's own module doc for the on-screen keyboard). The exit
+    // Keeps writing a scroll position through a CSS exit, too: the exit
     // moves the Panel with a `transform`, never `scrollTop`/`scrollLeft`,
     // but `measure()`, just above, can still change the Viewport's own
-    // scrollable range mid-exit -- the keyboard closing shrinks or grows
-    // it the same as any other fit change -- and a `scrollTop` left behind
-    // from before that change no longer represents the same resting point
-    // in the new range. Left unwritten, the Viewport's own visible window
-    // drifts away from the snap point the exit's `transform` is still
-    // measured against, dropping the Panel out of view well before the
-    // transition itself ends. Writing it keeps the Panel's resting
-    // position -- and so what the transform animates away from -- correct
-    // throughout, the same as for a resize while open.
+    // scrollable range mid-exit -- a real window resize, or the layout
+    // viewport itself shrinking for `interactive-widget=resizes-content`
+    // (this file's own module doc for the on-screen keyboard: a keyboard
+    // covering the Viewport's own lower part no longer resizes it at all,
+    // only this genuinely different case still does) -- and a `scrollTop`
+    // left behind from before that change no longer represents the same
+    // resting point in the new range. Left unwritten, the Viewport's own
+    // visible window drifts away from the snap point the exit's `transform`
+    // is still measured against, dropping the Panel out of view well
+    // before the transition itself ends. Writing it keeps the Panel's
+    // resting position -- and so what the transform animates away from --
+    // correct throughout, the same as for a resize while open.
     //
     // Never resize onto closed: only reposition onto an open point
     // (ADR 0001). Scrolls to the *resting* snap index's own offset in the
@@ -1398,10 +1465,8 @@ export function createDrawer(
     // whatever `viewport[axis.scroll]` reads, which a shrink can already
     // have clamped by the time this runs: a real window resize already
     // resizes the layout, and so clamps `scrollTop` to the new, smaller
-    // `scrollHeight`, before the 'resize' event this handles even fires;
-    // `updateKeyboardFit`'s own `viewport.style` writes (`top` and `height`)
-    // do the same, synchronously, a line ahead of its own call here. Either way,
-    // reading the scroll position after the clamp would land on the
+    // `scrollHeight`, before the 'resize' event this handles even fires.
+    // Reading the scroll position after that clamp would land on the
     // wrong, now-nearest point instead of the one the drawer actually
     // rests on. `snapIndex`, this engine's own record of it, is what
     // "keeps the snap index" (the design ruling, #273) means.
