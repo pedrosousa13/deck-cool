@@ -68,12 +68,12 @@ a keyboard covers part of it, drops back to `0px` if the keyboard closes
 while the drawer stays open, and is removed again when the drawer itself
 closes. On by default, no prop: the Viewport keeps its full size and
 position for as long as a keyboard is open or closing, and the drawer
-expands to its largest snap point when the keyboard would otherwise hide
-the focused field, scrolling it clear of the keyboard with an explicit
-`Drawer.Content` scroll (`Drawer.Content`'s own `padding-bottom`, set to
-`--drawer-keyboard-inset`, gives it room to scroll into). While typing, the
-drawer's own top edge may move up with Safari's own page pan -- see
-"On-screen keyboard".
+always expands to its largest snap point when the keyboard opens while a
+field inside it has focus, scrolling it clear of the keyboard with an
+explicit `Drawer.Content` scroll (`Drawer.Content`'s own `padding-bottom`,
+set to `--drawer-keyboard-inset`, gives it room to scroll into). While
+typing, the drawer's own top edge may move up with Safari's own page pan --
+see "On-screen keyboard".
 
 ## Not in the beta
 

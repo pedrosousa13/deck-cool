@@ -526,10 +526,10 @@ describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', 
   });
 });
 
-describe('expanding to the largest snap point only when the field was hidden (#327)', () => {
+describe('always expanding to the largest snap point on keyboard open (#273/#327)', () => {
   beforeEach(() => mockReducedMotion());
 
-  it('moves to the largest snap point when the keyboard would hide the focused field, and stays there once it closes', async () => {
+  it('moves to the largest snap point when the keyboard opens with a field focused, and stays there once it closes', async () => {
     const vv = installFakeViewport();
     const onSnapPointChange = vi.fn();
     fixture = mount({ snapPoints: [0.3, 1], onSnapPointChange });
@@ -540,8 +540,9 @@ describe('expanding to the largest snap point only when the field was hidden (#3
     expect(drawer.snapIndex).toBe(0);
 
     // Positioned, from the Panel's own top, at half the Viewport's own
-    // (pre-keyboard) extent -- past the 0.3 snap's own reveal (so hidden
-    // at rest), comfortably inside the 1.0 snap's (so visible there).
+    // (pre-keyboard) extent, comfortably visible at either snap point: the
+    // move is unconditional now, so this never had to be hidden at rest to
+    // prove it.
     const extent = fixture.viewport.clientHeight;
     const field = document.createElement('input');
     field.type = 'text';
@@ -572,25 +573,6 @@ describe('expanding to the largest snap point only when the field was hidden (#3
 
     expect(drawer.snapIndex).toBe(1);
     expect(onSnapPointChange).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not move when the focused field is already visible at the current snap point', async () => {
-    const vv = installFakeViewport();
-    const onSnapPointChange = vi.fn();
-    fixture = mount({ snapPoints: [0.5, 1], onSnapPointChange });
-    const { content, drawer } = fixture;
-    const field = appendFieldTo(content);
-
-    drawer.open(0);
-    await expectSettledTo(() => drawer.phase, 'open');
-    field.focus();
-
-    vv.height = window.innerHeight - 100;
-    vv.resize();
-    await nextFrame();
-
-    expect(drawer.snapIndex).toBe(0);
-    expect(onSnapPointChange).not.toHaveBeenCalled();
   });
 
   it('does not move when nothing inside the Panel has focus', async () => {
@@ -1062,122 +1044,6 @@ describe('every side (#270)', () => {
   }
 });
 
-describe('the visible window is measured from Drawer.Popup’s own rect, not visualViewport alone (#327)', () => {
-  beforeEach(() => mockReducedMotion());
-
-  /** On a real iPhone (iOS 18.7), a fixed, inset-0 element's own
-   * `getBoundingClientRect()` during a held pan already reads in
-   * visual-viewport coordinates: `top: -offsetTop`,
-   * `bottom: innerHeight - offsetTop` -- the real device logs
-   * `index.ts`'s own module doc cites (run2 #32: `-336..331` at `offsetTop`
-   * 336; #46: `-192..475` at `offsetTop` 192). A field's own rect reads the
-   * same shifted way. Stubbing both `getBoundingClientRect()`s this way
-   * reproduces that coordinate shift without a real device; Chromium and
-   * WebKit never shift either one on their own, so nothing here fakes
-   * anything these two browsers would ever disagree with. */
-  function stubPannedRects(
-    dialog: HTMLDialogElement,
-    field: HTMLElement,
-    opts: {
-      iH: number;
-      offsetTop: number;
-      fieldTop: number;
-      fieldBottom: number;
-    }
-  ) {
-    const { iH, offsetTop, fieldTop, fieldBottom } = opts;
-    vi.spyOn(dialog, 'getBoundingClientRect').mockReturnValue({
-      top: -offsetTop,
-      bottom: iH - offsetTop,
-      left: 0,
-      right: 0,
-      width: 0,
-      height: iH,
-      x: 0,
-      y: -offsetTop,
-      toJSON() {
-        return {};
-      }
-    } as DOMRect);
-    vi.spyOn(field, 'getBoundingClientRect').mockReturnValue({
-      top: fieldTop,
-      bottom: fieldBottom,
-      left: 0,
-      right: 0,
-      width: 0,
-      height: fieldBottom - fieldTop,
-      x: 0,
-      y: fieldTop,
-      toJSON() {
-        return {};
-      }
-    } as DOMRect);
-  }
-
-  it('reads a field the keyboard actually covers as hidden, where the raw visualViewport numbers alone would read it as visible (run2 #46)', async () => {
-    // Repro: `340 >= 192 && 370 <= 523` reads as visible against the raw
-    // `[offsetTop, offsetTop + vvH]` window -- it is not: the real device's
-    // own coordinates put the visible window at `[0, 331]` instead, well
-    // short of the field's own `370`.
-    const vv = installFakeViewport();
-    const onSnapPointChange = vi.fn();
-    fixture = mount({ snapPoints: [0.3, 1], onSnapPointChange });
-    const { dialog, content, drawer } = fixture;
-    const field = document.createElement('input');
-    field.type = 'text';
-    content.append(field);
-
-    drawer.open(0);
-    await expectSettledTo(() => drawer.phase, 'open');
-    field.focus({ preventScroll: true });
-
-    vv.height = 331;
-    vv.offsetTop = 192;
-    stubPannedRects(dialog, field, {
-      iH: 667,
-      offsetTop: 192,
-      fieldTop: 340,
-      fieldBottom: 370
-    });
-    vv.resize();
-    await nextFrame();
-
-    expect(drawer.snapIndex).toBe(1);
-    expect(onSnapPointChange).toHaveBeenCalledWith(1);
-  });
-
-  it('does not expand for a field the pan already reveals, where the raw visualViewport numbers alone would read it as hidden (run2 #32, held pan)', async () => {
-    // Repro: `165 < 336` reads as hidden against the raw window -- it is
-    // not: the real device's own coordinates put the visible window at
-    // `[0, 331]` instead, which already contains the field's own `150..180`.
-    const vv = installFakeViewport();
-    const onSnapPointChange = vi.fn();
-    fixture = mount({ snapPoints: [0.3, 1], onSnapPointChange });
-    const { dialog, content, drawer } = fixture;
-    const field = document.createElement('input');
-    field.type = 'text';
-    content.append(field);
-
-    drawer.open(0);
-    await expectSettledTo(() => drawer.phase, 'open');
-    field.focus({ preventScroll: true });
-
-    vv.height = 331;
-    vv.offsetTop = 336;
-    stubPannedRects(dialog, field, {
-      iH: 667,
-      offsetTop: 336,
-      fieldTop: 150,
-      fieldBottom: 180
-    });
-    vv.resize();
-    await nextFrame();
-
-    expect(drawer.snapIndex).toBe(0);
-    expect(onSnapPointChange).not.toHaveBeenCalled();
-  });
-});
-
 describe('non-modal (#271): the hit area is unaffected by the keyboard', () => {
   beforeEach(() => mockReducedMotion());
 
@@ -1300,10 +1166,10 @@ describe('cleanup', () => {
   });
 });
 
-describe('expanding to a larger snap point during a held pan, without crossing above the window (#327 review)', () => {
+describe('always expands for the demo geometry on a real device keyboard sequence (#327 review)', () => {
   beforeEach(() => mockReducedMotion());
 
-  it("run 2's [0.5, 1]: does not expand across the held 336 pan when that would push an already-mostly-visible field above the window, then expands once the pan settles at 192 where it genuinely helps", async () => {
+  it("run 2's 336 pan step: expands to the largest snap point the moment the keyboard opens, no held-pan distinction", async () => {
     const width = window.innerWidth;
     const iH0 = window.innerHeight;
     const iH = 667;
@@ -1316,69 +1182,36 @@ describe('expanding to a larger snap point during a held pan, without crossing a
         { snapPoints: [0.5, 1], onSnapPointChange },
         { panelHeight: '100%' }
       );
-      const { viewport, content, drawer } = fixture;
-      // Positioned so the field's own bottom edge is just 3px past the
-      // layout viewport's own bottom at rest (the 0.5 snap) -- fine at the
-      // top, barely clipped at the bottom, the same shape as the real
-      // device's own Subject field (620..670 against the built site's own
-      // window). A spacer well past the field gives Content genuine
-      // scrollable room once it unlocks, so `ensureFieldVisible`'s own
-      // explicit scroll has somewhere to go.
-      const field = document.createElement('input');
-      field.type = 'text';
-      field.style.marginTop = '315.5px';
-      const spacerAfter = document.createElement('div');
-      spacerAfter.style.height = '2000px';
-      content.append(field, spacerAfter);
+      const { content, drawer } = fixture;
+      content.style.boxSizing = 'border-box';
+      const field = appendFieldPastTheFold(content);
 
       drawer.open(0);
       await expectSettledTo(() => drawer.phase, 'open');
-      const scrollBaseline = snapshotScroll(viewport);
       field.focus({ preventScroll: true });
 
       // Log #32 ("vv.resize"): the field focuses and the pan starts --
-      // `vvH` 331, `offsetTop` 336. Expanding to the 1.0 snap here would
-      // shift everything up by half the Panel's own extent, well past the
-      // field's own top -- landing it above the window instead of fixing
-      // the small overflow at its bottom, so this must not expand.
+      // `vvH` 331, `offsetTop` 336. The maintainer's ruling drops the old
+      // prediction-and-revert check this held pan used to trip on review:
+      // the move happens on this very step, not once a later step proves
+      // it "genuinely helps".
       vv.height = 331;
       vv.offsetTop = 336;
       vv.resize();
       await nextFrame();
-      expect(drawer.snapIndex).toBe(0);
-      expect(onSnapPointChange).not.toHaveBeenCalled();
-      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
-      let visible = visibleWindow(vv);
-      let rect = field.getBoundingClientRect();
-      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
-      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
 
-      // Log #46 ("vv.scroll"): the pan settles at `offsetTop` 192, `vvH`
-      // staying 331. The window now starts well above where the field
-      // already sits, so expanding to the 1.0 snap genuinely helps this
-      // time -- the Viewport legitimately moves.
-      vv.offsetTop = 192;
-      vv.scroll();
-      await nextFrame();
       expect(drawer.snapIndex).toBe(1);
       expect(onSnapPointChange).toHaveBeenCalledWith(1);
-      expect(snapshotScroll(viewport)).not.toEqual(scrollBaseline);
-      visible = visibleWindow(vv);
-      rect = field.getBoundingClientRect();
+      const visible = visibleWindow(vv);
+      const rect = field.getBoundingClientRect();
       expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
       expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
-      // The generous spacer past the field gives Content real room beyond
-      // `--drawer-keyboard-inset`'s own padding, so `ensureFieldVisible`'s
-      // own small margin (`KEYBOARD_FIELD_MARGIN`) actually lands, not just
-      // clamps flush with the window's own bottom the way a plain
-      // `scrollIntoView({block: 'nearest'})` would.
-      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom - 2);
     } finally {
       await page.viewport(width, iH0);
     }
   });
 
-  it("run 4's [0.5, 1]: does not expand across the held 320 pan when that would push an already-mostly-visible field above the window, then expands once the pan settles at 0 where it genuinely helps", async () => {
+  it("run 4's 320 pan step: expands to the largest snap point the moment the keyboard opens", async () => {
     const width = window.innerWidth;
     const iH0 = window.innerHeight;
     const iH = 613;
@@ -1391,56 +1224,33 @@ describe('expanding to a larger snap point during a held pan, without crossing a
         { snapPoints: [0.5, 1], onSnapPointChange },
         { panelHeight: '100%' }
       );
-      const { viewport, content, drawer } = fixture;
-      // Same shape as run 2's own case above, scaled to run 4's own
-      // `innerHeight` (613): 3px past the window's own bottom at rest.
-      const field = document.createElement('input');
-      field.type = 'text';
-      field.style.marginTop = '288.5px';
-      const spacerAfter = document.createElement('div');
-      spacerAfter.style.height = '2000px';
-      content.append(field, spacerAfter);
+      const { content, drawer } = fixture;
+      content.style.boxSizing = 'border-box';
+      const field = appendFieldPastTheFold(content);
 
       drawer.open(0);
       await expectSettledTo(() => drawer.phase, 'open');
-      const scrollBaseline = snapshotScroll(viewport);
       field.focus({ preventScroll: true });
 
       // Log #37 ("vv.resize"): the pan starts -- `vvH` 293, `offsetTop`
-      // 320. Expanding here would push the field above the window, the
-      // same shape of problem run 2's own held pan reproduces.
+      // 320.
       vv.height = 293;
       vv.offsetTop = 320;
       vv.resize();
       await nextFrame();
-      expect(drawer.snapIndex).toBe(0);
-      expect(onSnapPointChange).not.toHaveBeenCalled();
-      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
-      let visible = visibleWindow(vv);
-      let rect = field.getBoundingClientRect();
-      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
-      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
 
-      // Log #40 ("vv.scroll"): the pan settles back toward `offsetTop` 0,
-      // `vvH` staying 293 -- the window now sits well above the field, so
-      // expanding genuinely helps.
-      vv.offsetTop = 0;
-      vv.scroll();
-      await nextFrame();
       expect(drawer.snapIndex).toBe(1);
       expect(onSnapPointChange).toHaveBeenCalledWith(1);
-      expect(snapshotScroll(viewport)).not.toEqual(scrollBaseline);
-      visible = visibleWindow(vv);
-      rect = field.getBoundingClientRect();
+      const visible = visibleWindow(vv);
+      const rect = field.getBoundingClientRect();
       expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
       expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
-      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom - 2);
     } finally {
       await page.viewport(width, iH0);
     }
   });
 
-  it("Brave's own [0.5, 1]: expands for a field past the fold during the held 263 pan, and keeps it clear of the keyboard through the real layout viewport's own shrink", async () => {
+  it("Brave's own sequence: expands on the first pan step and stays expanded through the real layout viewport's own shrink", async () => {
     const width = window.innerWidth;
     const iH0 = window.innerHeight;
     try {
@@ -1450,29 +1260,23 @@ describe('expanding to a larger snap point during a held pan, without crossing a
         { snapPoints: [0.5, 1], onSnapPointChange },
         { panelHeight: '100%' }
       );
-      const { viewport, content, drawer } = fixture;
+      const { content, drawer } = fixture;
       content.style.boxSizing = 'border-box';
       const field = appendFieldPastTheFold(content);
-      const spacerAfter = document.createElement('div');
-      spacerAfter.style.height = '2000px';
-      content.append(spacerAfter);
 
       drawer.open(0);
       await expectSettledTo(() => drawer.phase, 'open');
-      const scrollBaseline = snapshotScroll(viewport);
       field.focus({ preventScroll: true });
 
       // Log #13 ("vv.resize"): Brave pans first too -- `vvH` 363,
       // `offsetTop` 263 -- before the real layout viewport starts
-      // shrinking. The field, buried past the fold, is nowhere near
-      // visible yet, so this genuinely needs the expand.
+      // shrinking.
       vv.height = 363;
       vv.offsetTop = 263;
       vv.resize();
       await nextFrame();
       expect(drawer.snapIndex).toBe(1);
       expect(onSnapPointChange).toHaveBeenCalledWith(1);
-      expect(snapshotScroll(viewport)).not.toEqual(scrollBaseline);
       let visible = visibleWindow(vv);
       let rect = field.getBoundingClientRect();
       expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
@@ -1491,11 +1295,6 @@ describe('expanding to a larger snap point during a held pan, without crossing a
       rect = field.getBoundingClientRect();
       expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
       expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
-      // The generous spacer past the field gives Content real scrollable
-      // room beyond the keyboard inset's own padding, so the field lands
-      // `KEYBOARD_FIELD_MARGIN` short of the window's own bottom here, not
-      // flush with it the way a plain `scrollIntoView` would.
-      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom - 2);
     } finally {
       await page.viewport(width, iH0);
     }

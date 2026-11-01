@@ -1220,10 +1220,10 @@ export function createDrawer(
 
   /** The part of the layout viewport actually visible right now, in the
    * same pixels `visualViewport.offsetTop`/`height` report: what
-   * `maybeExpandForKeyboard` and `ensureFieldVisible`, both below, check a
-   * focused field's own `getBoundingClientRect()` against, since the
-   * Viewport's own rect no longer shrinks to it (this section's own module
-   * doc). Falls back to the Viewport's own rect where there is no
+   * `ensureFieldVisible`, below, checks a focused field's own
+   * `getBoundingClientRect()` against, since the Viewport's own rect no
+   * longer shrinks to it (this section's own module doc). Falls back to
+   * the Viewport's own rect where there is no
    * `visualViewport` at all -- never reached in practice, since every
    * caller here only runs while `attachKeyboardListeners` has already
    * confirmed one exists, kept only so this has a defined answer rather
@@ -1252,37 +1252,21 @@ export function createDrawer(
     return { top, bottom: top + vv.height };
   }
 
-  /** Moves to the largest snap point when the focused field would not be
-   * fully visible, inside the real visible window (`visibleWindow`), at the
-   * snap point the drawer currently rests on *and* the move itself would not
-   * make the field's own top edge worse off: the same thing iOS's own
-   * sheets do, since the content unlocks at the top snap point
-   * (`updateContentLock`). Checks where the field's own rect would really
-   * land at that snap point before committing to it -- scrolling there,
-   * re-measuring the field, and scrolling straight back if that left the
-   * field's own top both above the visible window *and* higher up than it
-   * already was (a drawer held mid-pan, `offsetTop > 0`: the window's own
-   * top has moved down the layout viewport, and expanding slides the field
-   * up past it, the opposite of what this is for). Comparing against the
-   * field's own previous top, not just checking the new one against the
-   * window, is what tells this apart from a field that was already above
-   * the window before expanding even started -- expanding still helps that
-   * one along, even short of fully revealing it, so this never blocks a
-   * move that only keeps an existing problem exactly as bad, only one that
-   * makes it worse. `scrollTo` with `behavior: 'instant'` is synchronous,
-   * so trying the move and reverting it costs one extra reflow, nothing the
-   * user ever sees, in exchange for checking the real layout instead of
-   * predicting it. `ensureFieldVisible`, called right after this in
-   * `updateKeyboardInset` regardless of whether this moved anything, is
-   * what actually scrolls Content to bring the field in -- unlocking the
-   * content is not enough on its own, and neither is a snap-point move that
-   * only shifts the Viewport. A no-op once already at the largest point, or
-   * when the field is already visible there: never moves a drawer that
-   * does not need it, and never reverts on its own once the keyboard
-   * closes (the design ruling: a drawer stays at the snap point it
-   * expanded to). Scrolls the Viewport straight to the new snap point's own
-   * offset itself, same as `snapTo` without the animation (nothing here
-   * moves while the keyboard opens or closes, the design ruling in this
+  /** Moves to the largest snap point whenever a keyboard field inside the
+   * Panel has focus and the drawer is not resting there already: the
+   * maintainer's ruling, after the prediction-and-revert version of this
+   * kept failing review, is to always expand, with no prediction, no
+   * decline, no revert, no overlap comparison. `ensureFieldVisible`, called
+   * right after this in `updateKeyboardInset`, is what actually scrolls
+   * Content to bring the field in: unlocking the content is not enough on
+   * its own, and neither is a snap-point move that only shifts the
+   * Viewport. A no-op once already at the largest point: never moves a
+   * drawer that is already there, and never reverts on its own once the
+   * keyboard closes (the design ruling: a drawer stays at the snap point it
+   * expanded to).
+   * Scrolls the Viewport straight to the new snap point's own offset
+   * itself, same as `snapTo` without the animation (nothing here moves
+   * while the keyboard opens or closes, the design ruling in this
    * section's own module doc) -- there is no resize for an `onResize` call
    * to react to any more, since the Viewport's own extent never changes for
    * a keyboard.
@@ -1302,34 +1286,11 @@ export function createDrawer(
     if (snapPx.length === 0) return false;
     const lastIndex = snapPx.length - 1;
     if (snapIndex === lastIndex) return false;
-    const field = focusedKeyboardField();
-    if (!field) return false;
-    const visible = visibleWindow();
-    const rect = field.getBoundingClientRect();
-    if (rect.top >= visible.top && rect.bottom <= visible.bottom) return false;
-    // Scrolls to the largest snap point, then re-measures the field's own
-    // rect for real instead of predicting it: `scrollTo` with
-    // `behavior: 'instant'` is synchronous, and reading
-    // `getBoundingClientRect()` right after forces the layout this needs
-    // without painting it, so trying this and reverting if it made things
-    // worse costs one extra reflow, nothing the user ever sees. Reverted
-    // when the field's own top would land above the visible window instead
-    // of inside it -- a drawer held mid-pan, where the window's own top has
-    // already moved down the layout viewport, is the case that matters
-    // here (#327).
-    const previousScroll = viewport[axis.scroll];
+    if (!focusedKeyboardField()) return false;
     viewport.scrollTo({
       [axis.scrollToKey]: scrollForSnap(lastIndex),
       behavior: 'instant'
     });
-    const afterTop = field.getBoundingClientRect().top;
-    if (afterTop < visible.top && afterTop < rect.top) {
-      viewport.scrollTo({
-        [axis.scrollToKey]: previousScroll,
-        behavior: 'instant'
-      });
-      return false;
-    }
     snapIndex = lastIndex;
     opts.onSnapPointChange?.(lastIndex);
     updateContentLock();
@@ -1341,9 +1302,8 @@ export function createDrawer(
    * window (`visibleWindow`), once `maybeExpandForKeyboard` has already
    * settled the snap point: moving to the largest snap point does not
    * itself scroll Content, and a snap point that does not expand (already
-   * at the largest, or `maybeExpandForKeyboard` skipped it to avoid pushing
-   * the field above the window) still needs this to clear the field.
-   * Measured in the field's own `getBoundingClientRect()` coordinates, the
+   * at the largest) still needs this to clear the field. Measured in the
+   * field's own `getBoundingClientRect()` coordinates, the
    * same ones `visibleWindow()` returns: a small margin
    * (`KEYBOARD_FIELD_MARGIN`) keeps the field's own bottom edge off the
    * window's exact bottom, rather than flush against it. Writes only

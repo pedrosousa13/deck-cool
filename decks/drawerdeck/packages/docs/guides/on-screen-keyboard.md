@@ -10,13 +10,12 @@ part, the same way Base UI's `DrawerVirtualKeyboardProvider` and React
 Aria's `Sheet` both leave their own sheet alone and let the keyboard cover
 it.
 
-If the focused field would not be visible above the keyboard at the current
-snap point, the drawer expands to its largest one -- the same thing a
-native iOS sheet does, so the content unlocks -- and the engine then
-scrolls `Drawer.Content` itself, by an explicit `scrollTop` delta measured
-against the real visible window, to bring the field clear of the keyboard.
-It stays there once the keyboard closes; a field already visible never
-moves the drawer at all.
+Whenever the keyboard opens while a field inside the drawer has focus, the
+drawer always moves to its largest snap point if it is not there already
+(the same thing a native iOS sheet does, so the content unlocks), and the
+engine then scrolls `Drawer.Content` itself, measured against the real
+visible window, to bring the field clear of the keyboard. It stays there
+once the keyboard closes.
 
 <!-- demo:example-keyboard -->
 
@@ -63,9 +62,9 @@ natural end has nothing below it to scroll into without the engine's own
 `padding-bottom`, equal to `--drawer-keyboard-inset`: genuine scrollable
 room past the last field. The engine then checks the focused field's own
 `getBoundingClientRect()` against the real visible window directly, and
-writes `Drawer.Content`'s own `scrollTop` by the exact delta needed to bring
-the field back inside it -- never `Drawer.Viewport`'s own scroll position,
-which stays untouched by this. `scroll-padding-bottom`, kept alongside the
+writes `Drawer.Content`'s own `scrollTop` to bring the field back inside
+it, never `Drawer.Viewport`'s own scroll position, which stays untouched by
+this. `scroll-padding-bottom`, kept alongside the
 padding, is for a browser's own native scrolling inside Content, such as
 `Tab` moving focus, so that still stops right at the padding's own edge for
 a field that already has real content below it, rather than scrolling past
@@ -73,20 +72,17 @@ the natural stopping point into the empty padding for no reason.
 
 ## Expanding to the largest snap point
 
-A field the current snap point does not reveal above the keyboard moves the
-drawer to its largest snap point first, the same thing a native iOS sheet
-does: the content unlocks there (see "Why native scrolling" for why the top
-snap point is what unlocks it), giving the engine room to scroll the field
-itself. But only when expanding would actually help: the engine computes
-where the field would land at the largest snap point first, and skips the
-move when that would push the field's own top above the visible window
-instead -- a drawer held mid-pan, where the visible window's own top has
-already moved down the layout viewport, is the case that matters here.
-Either way, the engine still scrolls the field in afterward (see "Keeping
-the field clear of the keyboard"). A drawer already at its largest snap
-point, with nothing left to expand to, skips straight to that. Neither one
-moves a field that is already visible, and neither one reverts once the
-keyboard closes -- the drawer stays at whatever snap point it expanded to.
+Whenever a field inside `Drawer.Panel` has focus and the keyboard opens,
+the drawer always moves to its largest snap point first, if it is not
+there already (the same thing a native iOS sheet does: the content unlocks
+there, see "Why native scrolling" for why the top snap point is what
+unlocks it), giving the engine room to scroll the field itself (see
+"Keeping the field clear of the keyboard"). No prediction, no decline, no
+revert: the engine does not check where the field already sits before
+expanding, and never reverts the move once the keyboard closes; the drawer
+stays at whatever snap point it expanded to. A drawer already at its
+largest snap point, with nothing left to expand to, skips straight to
+scrolling the field in.
 
 This only happens for `bottom` and `top` drawers. The keyboard covers the
 bottom of the layout viewport, a vertical concern whichever edge the drawer
@@ -106,16 +102,16 @@ stop or undo this: while typing, the drawer's own top edge may move up with
 Safari's own pan, the same way React Aria's own `Sheet` already lets happen
 on iOS.
 
-`--drawer-keyboard-inset` and the expand-and-scroll behavior above (see
-"Expanding to the largest snap point") still bring the focused field itself
-back above the keyboard regardless, no matter where the pan leaves the
-Panel: both check the field against the real visible window, read from
-`Drawer.Popup`'s own rect plus `visualViewport`'s current `offsetTop`, not
-`visualViewport`'s numbers alone -- a real iPhone reports a field's own
+`--drawer-keyboard-inset` and the scroll-to-clear step above (see "Keeping
+the field clear of the keyboard") still bring the focused field itself back
+above the keyboard regardless, no matter where the pan leaves the Panel:
+the scroll step reads the real visible window from `Drawer.Popup`'s own
+rect plus `visualViewport`'s current `offsetTop`, not `visualViewport`'s
+numbers alone: a real iPhone reports a field's own
 `getBoundingClientRect()` in visual-viewport coordinates during a held pan,
 and the Popup's own rect shifts by the exact same amount, so adding its
-`offsetTop` back cancels that shift for both. Only the Panel's own top edge
-is left to the browser. An earlier round of this file tried to
+`offsetTop` back cancels that shift. Only the Panel's own top edge is left
+to the browser. An earlier round of this file tried to
 undo the pan by hand instead -- a standalone CSS `translate` on
 `Drawer.Panel`, plus a momentary `transform` on the focused field copied
 from vaul's own vendored, older React Aria -- but neither was ever checked
