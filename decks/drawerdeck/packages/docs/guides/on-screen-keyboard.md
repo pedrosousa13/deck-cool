@@ -114,8 +114,8 @@ through an entire close in another, disproving the premise that a pan
 alone.
 
 A transform-frame race this surfaced while building it (not React Aria's
-issue [#10485](https://github.com/adobe/react-spectrum/issues/10485), which
-describes a different race, between `useViewportSize`'s own `setState` and
+own issue #10485, on its `react-spectrum` repository, which describes a
+different race, between `useViewportSize`'s own `setState` and
 a reveal that runs before React re-renders the CSS variable it writes): the
 field sits transformed for a whole animation frame after `onFocusIn`, and a
 real `visualViewport` event can land inside that same frame. The engine
