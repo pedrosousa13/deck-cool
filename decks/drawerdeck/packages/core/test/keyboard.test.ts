@@ -5,16 +5,25 @@
 // many `window` 'resize' events, and a fit frozen mid-exit dropping the
 // Panel out of view before its own CSS transition had finished). The engine
 // itself now never writes the Viewport's `top`, `height` or `position`: the
-// Safari replay below proves the Viewport's own painted rect never changes
-// for a fake `visualViewport` pan; the Brave replay proves the opposite
-// case on purpose, with a *real* window resize -- the Viewport's own
-// `height: 100dvh` genuinely does shrink with the real layout viewport, the
-// browser's own doing, while the engine's own inline style stays exactly
-// what it was at open. A pan also pushes the Popup's own top edge off the
-// real, visible window without moving the Viewport itself (`position:
-// fixed` is unaffected by `visualViewport.offsetTop`); the Safari replay
-// also proves the Panel's own top edge stays on screen through that, not
-// only once a pan settles.
+// Safari replays below prove the Viewport's own painted rect, and its own
+// scroll position, never change for a fake `visualViewport` pan; the Brave
+// replay proves the opposite case on purpose, with a *real* window resize --
+// the Viewport's own `height: 100dvh` genuinely does shrink with the real
+// layout viewport, the browser's own doing, while the engine's own inline
+// style stays exactly what it was at open.
+//
+// Safari's own pan is left alone (the maintainer's own ruling, after an
+// earlier round tried to undo it with a standalone `translate` on the Panel
+// and a vaul-style momentary transform on the focused field, neither ever
+// checked against a real Safari pan): the Panel's own top edge may move
+// with the pan, the way React Aria's current `Sheet` already lets it on
+// iOS. What these tests prove instead is narrower and checkable without a
+// real device: a field at Content's own natural end -- the one a pan or a
+// keyboard already tends to reveal, never one buried above the fold --
+// still ends up inside the real visible window (`offsetTop` to
+// `offsetTop + height`) at every step, `--drawer-keyboard-inset` tracks the
+// same numbers throughout, and the Viewport itself never moves or scrolls
+// for any of it.
 //
 // A desktop browser has no on-screen keyboard at all, so every test here
 // emulates one with a stand-in for `window.visualViewport`: a plain
@@ -34,14 +43,15 @@
 //
 // The "Safari's pan" and "Brave's shrinking layout viewport" describe
 // blocks below replay sequences logged from a real iPhone (iOS 18.7)
-// against this guide's own demo: Safari's own numbers (`iH`/`vvH`/`vvTop`
-// below) from the device's own run 4 (log lines #37, #38, #40 and #43:
-// `innerHeight` 613 throughout, a pan to `vvH` 293/`offsetTop` 320 on
+// against this guide's own demo: run 2 (`innerHeight` 667 throughout, a
+// pan to `vvH` 331/`offsetTop` 336 held for eleven seconds before settling
+// to `offsetTop` 192, the keyboard staying up throughout), run 4
+// (`innerHeight` 613 throughout, a pan to `vvH` 293/`offsetTop` 320 on
 // focus, settling back to `offsetTop` 0 while the keyboard stays up, then
-// the keyboard closing), Brave's from its own keyboard log (#13-#34: a pan
-// first, `vvH` 363/`offsetTop` 263, then `innerHeight` stepping down from
-// 595 to 363 over the run's own ~15 `window` 'resize' events, with no
-// further `visualViewport` event at all).
+// the keyboard closing), and Brave's own keyboard log (a pan first, `vvH`
+// 363/`offsetTop` 263, then `innerHeight` stepping down from 595 to 363
+// over the run's own ~15 `window` 'resize' events, with no further
+// `visualViewport` event at all).
 import { page, userEvent } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Side } from '../src/index';
@@ -110,6 +120,41 @@ function appendFieldTo(parent: HTMLElement) {
   return input;
 }
 
+/** Enough rows before the field that Content's own natural height is well
+ * short of them, so unlocking `overflow-y` does not itself reveal the
+ * field, and the field itself sits at Content's own bottom -- squarely
+ * inside the keyboard-covered strip `scroll-padding-bottom` carves out, or
+ * the strip a Safari pan reveals for free, so a native `scrollIntoView`
+ * that ignored either would still land the field short of it. Content's
+ * own `clientHeight` is the full Viewport's (this file's own design:
+ * nothing shrinks it for a keyboard any more, and nothing undoes a pan any
+ * more either), so this needs comfortably more than any real viewport this
+ * runs in, not just more than a keyboard-shrunk one. A field at Content's
+ * own natural end, never one buried above the fold, is also the only shape
+ * the engine's own "let Safari pan" design can promise anything about
+ * (this file's own module doc). */
+function appendFieldPastTheFold(content: HTMLElement) {
+  for (let i = 0; i < 60; i += 1) {
+    const row = document.createElement('p');
+    row.textContent = `Row ${i}`;
+    row.style.margin = '0';
+    row.style.height = '40px';
+    content.append(row);
+  }
+  const field = document.createElement('input');
+  field.type = 'text';
+  content.append(field);
+  return field;
+}
+
+/** `{ scrollTop, scrollLeft }`, rounded: what every "the Viewport's own
+ * scroll position never changes" assertion below compares against, since
+ * the engine letting Safari's own pan happen must never itself move or
+ * resize the Viewport's own scrollable range or position, on any side. */
+function snapshotScroll(el: HTMLElement) {
+  return { top: Math.round(el.scrollTop), left: Math.round(el.scrollLeft) };
+}
+
 afterEach(() => {
   if (fixture) unmount(fixture);
   fixture = undefined;
@@ -173,89 +218,168 @@ function expectUnmoved(
   expect(snapshotRect(el)).toEqual(baseline);
 }
 
-describe("the Viewport stays put (Safari's pan, real iPhone replay: run 4, iOS 18.7)", () => {
+describe("Safari's own pan, left alone (real iPhone replays, iOS 18.7)", () => {
   beforeEach(() => mockReducedMotion());
 
-  it('never moves or resizes the Viewport while a keyboard opens, pans and closes, and keeps --drawer-keyboard-inset right at each step', async () => {
-    const vv = installFakeViewport();
+  it('run 2: keeps --drawer-keyboard-inset right and the field above the keyboard through an eleven-second held pan, with the Viewport never moving or scrolling', async () => {
+    // A real resize (`page.viewport`), not a mock: Content's own natural
+    // bottom -- where `appendFieldPastTheFold`'s own field sits -- is the
+    // real, painted dialog's own bottom edge, so the real window has to be
+    // exactly `iH` tall for that edge to land where the real device's own
+    // numbers below assume it does. Restored in `finally`, same reason as
+    // the Brave replay below.
+    const width = window.innerWidth;
+    const iH0 = window.innerHeight;
+    const iH = 667; // run 2's own `innerHeight`, constant throughout.
+    try {
+      await page.viewport(width, iH);
+      const vv = installFakeViewport();
+      vv.height = iH;
+      fixture = mount({ snapPoints: [1] }, { panelHeight: '100%' });
+      const { dialog, viewport, content, drawer } = fixture;
+      content.style.boxSizing = 'border-box'; // see `appendFieldPastTheFold`'s own fixture.
+      const field = appendFieldPastTheFold(content);
+
+      drawer.open();
+      await expectSettledTo(() => drawer.phase, 'open');
+      const rectBaseline = snapshotRect(viewport);
+      const scrollBaseline = snapshotScroll(viewport);
+
+      // A real click, which also scrolls the field into Content's own view,
+      // the way a tap on a field past the fold really does, before any
+      // keyboard event ever fires.
+      await userEvent.click(field);
+
+      // Log #32 ("vv.resize"): the field focuses and Safari starts its own
+      // pan -- `vvH` drops to 331, `offsetTop` to 336 -- instead of
+      // shrinking `innerHeight`. `336 + 331 === 667`: the pan alone already
+      // reveals the full layout viewport, so nothing is left covered yet.
+      vv.height = 331;
+      vv.offsetTop = 336;
+      vv.resize();
+      await nextFrame();
+      expect(snapshotRect(viewport)).toEqual(rectBaseline);
+      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+        ''
+      );
+      let visible = visibleWindow(vv);
+      let rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+
+      // The real device held this exact pan for eleven seconds before it
+      // settled: a second, identical read must find everything still
+      // correct, not just the first one, since nothing here assumes a pan
+      // is temporary any more.
+      vv.scroll();
+      await nextFrame();
+      expect(snapshotRect(viewport)).toEqual(rectBaseline);
+      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+        ''
+      );
+      rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+
+      // Log #46 ("vv.scroll"): the pan settles, not to `offsetTop: 0` this
+      // time but to 192, `vvH` staying at 331. `667 - 192 - 331 === 144`,
+      // the real device's own recorded `--drawer-keyboard-inset` value here.
+      vv.offsetTop = 192;
+      vv.scroll();
+      await nextFrame();
+      expect(snapshotRect(viewport)).toEqual(rectBaseline);
+      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+        '144px'
+      );
+      visible = visibleWindow(vv);
+      rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+      expect(drawer.phase).toBe('open');
+    } finally {
+      await page.viewport(width, iH0);
+    }
+  });
+
+  it('run 4: keeps --drawer-keyboard-inset right and the field above the keyboard through a pan, its settle and the keyboard closing, with the Viewport never moving or scrolling', async () => {
+    const width = window.innerWidth;
+    const iH0 = window.innerHeight;
     const iH = 613; // run 4's own `innerHeight`, constant throughout.
-    mockInnerHeight(iH);
-    vv.height = iH;
-    fixture = mount({ snapPoints: [1] });
-    const { dialog, viewport, panel, content, drawer } = fixture;
-    const field = appendFieldTo(content);
+    try {
+      await page.viewport(width, iH);
+      const vv = installFakeViewport();
+      vv.height = iH;
+      fixture = mount({ snapPoints: [1] }, { panelHeight: '100%' });
+      const { dialog, viewport, content, drawer } = fixture;
+      content.style.boxSizing = 'border-box';
+      const field = appendFieldPastTheFold(content);
 
-    drawer.open();
-    await expectSettledTo(() => drawer.phase, 'open');
-    const baseline = snapshotRect(viewport);
-    const panelBaseline = snapshotRect(panel);
-    // The design ruling this section exists to prove: the drawer's own top
-    // edge is already on screen at rest, and nothing below ever moves it.
-    expect(baseline.top).toBeGreaterThanOrEqual(0);
+      drawer.open();
+      await expectSettledTo(() => drawer.phase, 'open');
+      const rectBaseline = snapshotRect(viewport);
+      const scrollBaseline = snapshotScroll(viewport);
 
-    // Log #37 ("vv.resize"): the field focuses and Safari starts its own
-    // pan instead of shrinking `innerHeight` -- `vvH` drops to 293, with
-    // `offsetTop` moving to 320. #273's first cut, and #327's first round,
-    // both fitted the Viewport to this; this round leaves it alone.
-    await userEvent.click(field);
-    vv.height = 293;
-    vv.offsetTop = 320;
-    vv.resize();
-    await nextFrame();
-    expectUnmoved(viewport, baseline);
-    // The Panel's own top edge, converted to the same visual-viewport
-    // coordinates `offsetTop` is in, must stay on screen through the pan
-    // itself, not just once it settles: `updatePanOffset` shifts the Panel
-    // down by `offsetTop` to prove it, without moving the Viewport the
-    // assertion just above already checked. Two of the real device logs
-    // this file's own callers cite held a pan exactly this long (eleven
-    // seconds, and through a whole close) rather than settling at once, so
-    // this checks it while still panned, not only after.
-    expect(
-      panel.getBoundingClientRect().top - vv.offsetTop
-    ).toBeGreaterThanOrEqual(0);
-    // `320 + 293 === 613`: the pan alone already reveals the full layout
-    // viewport through the visible window, so nothing is left covered yet --
-    // the inset never left neutral, so it stays unset, the same as before
-    // the keyboard ever opened (the guide's own "stays unset" wording).
-    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
+      // Log #37 ("vv.resize"): the field focuses and Safari starts its own
+      // pan instead of shrinking `innerHeight` -- `vvH` drops to 293, with
+      // `offsetTop` moving to 320. #273's first cut, and #327's first two
+      // rounds, all either fitted the Viewport to this or tried to undo it;
+      // this round leaves it alone.
+      await userEvent.click(field);
+      vv.height = 293;
+      vv.offsetTop = 320;
+      vv.resize();
+      await nextFrame();
+      expect(snapshotRect(viewport)).toEqual(rectBaseline);
+      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
+      // `320 + 293 === 613`: the pan alone already reveals the full layout
+      // viewport through the visible window, so nothing is left covered yet
+      // -- the inset never left neutral, so it stays unset, the same as
+      // before the keyboard ever opened (the guide's own "stays unset"
+      // wording).
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+        ''
+      );
+      let visible = visibleWindow(vv);
+      let rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
 
-    // Log #40 ("vv.scroll"): the pan settles back toward `offsetTop: 0`,
-    // while `vvH` stays at 293 -- the keyboard itself is still up. `613 - 0
-    // - 293 === 320`, the real device's own recorded `--drawer-keyboard-inset`
-    // value at this exact step (its own debug overlay logged `var 320px`).
-    vv.offsetTop = 0;
-    vv.scroll();
-    await nextFrame();
-    expectUnmoved(viewport, baseline);
-    // The pan offset clears with it: the Panel's own top edge is back at
-    // its un-shifted rest position, not left translated down.
-    expect(panel.getBoundingClientRect().top - vv.offsetTop).toBeCloseTo(
-      panelBaseline.top,
-      0
-    );
-    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
-      '320px'
-    );
-    // The focused field still ends up inside the real visible window, and
-    // above the keyboard -- `vvH` already excludes the keyboard, so one
-    // check covers both.
-    const visible = visibleWindow(vv);
-    const rect = field.getBoundingClientRect();
-    expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
-    expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+      // Log #40 ("vv.scroll"): the pan settles back toward `offsetTop: 0`,
+      // while `vvH` stays at 293 -- the keyboard itself is still up. `613 -
+      // 0 - 293 === 320`, the real device's own recorded
+      // `--drawer-keyboard-inset` value at this exact step (its own debug
+      // overlay logged `var 320px`).
+      vv.offsetTop = 0;
+      vv.scroll();
+      await nextFrame();
+      expect(snapshotRect(viewport)).toEqual(rectBaseline);
+      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+        '320px'
+      );
+      visible = visibleWindow(vv);
+      rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
 
-    // Log #43 ("vv.resize"): the keyboard closes, `vvH` back to the full
-    // 613 and `offsetTop` back to 0. The Viewport never had anything to
-    // revert.
-    vv.height = iH;
-    vv.resize();
-    await nextFrame();
-    expectUnmoved(viewport, baseline);
-    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
-      '0px'
-    );
-    expect(drawer.phase).toBe('open');
+      // Log #43 ("vv.resize"): the keyboard closes, `vvH` back to the full
+      // 613 and `offsetTop` back to 0. The Viewport never had anything to
+      // revert.
+      vv.height = iH;
+      vv.resize();
+      await nextFrame();
+      expect(snapshotRect(viewport)).toEqual(rectBaseline);
+      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
+      expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
+        '0px'
+      );
+      expect(drawer.phase).toBe('open');
+    } finally {
+      await page.viewport(width, iH0);
+    }
   });
 });
 
@@ -275,9 +399,10 @@ describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', 
     const iH0 = window.innerHeight;
     try {
       const vv = installFakeViewport();
-      fixture = mount({ snapPoints: [1] });
+      fixture = mount({ snapPoints: [1] }, { panelHeight: '100%' });
       const { dialog, viewport, content, drawer } = fixture;
-      const input = appendFieldTo(content);
+      content.style.boxSizing = 'border-box'; // see `appendFieldPastTheFold`'s own fixture.
+      const field = appendFieldPastTheFold(content);
 
       drawer.open();
       await expectSettledTo(() => drawer.phase, 'open');
@@ -291,7 +416,8 @@ describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', 
       // this describe block is not about.
       const dialogGeometry = geometryStyle(dialog);
       const viewportGeometry = geometryStyle(viewport);
-      await userEvent.click(input);
+      const scrollBaseline = snapshotScroll(viewport);
+      await userEvent.click(field);
 
       // Log #13 ("vv.resize"): like Safari, Brave pans first -- `vvH` 363,
       // `offsetTop` 263 -- a fake `visualViewport` pan only, before the
@@ -302,12 +428,21 @@ describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', 
       await nextFrame();
       expect(geometryStyle(dialog)).toEqual(dialogGeometry);
       expect(geometryStyle(viewport)).toEqual(viewportGeometry);
+      // Still only a fake pan, no real resize yet: the Viewport's own
+      // scroll position genuinely must not have moved.
+      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
 
       // Log #16 ("win.resize"): the layout viewport's own shrink animation
       // starts, un-panning in the same step -- `offsetTop` back to 0, the
       // real `window.innerHeight` already down to 558. `visualViewport`
       // itself stays put at 363 for the rest of the animation: only
-      // `window` 'resize' fires from here on.
+      // `window` 'resize' fires from here on. A real resize is the one
+      // genuinely different case this file's own module doc calls out: it
+      // does re-scroll the Viewport, to the same resting snap point in the
+      // freshly measured, now-smaller layout (`onResize`'s own doc) -- the
+      // scroll position itself is expected to change from here on, unlike
+      // every fake-pan-only step above and the keyboard-only replays above
+      // this describe block.
       vv.offsetTop = 0;
       await page.viewport(width, 558);
       await nextFrame();
@@ -319,6 +454,10 @@ describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', 
       expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
         `${558 - 363}px`
       );
+      let visible = visibleWindow(vv);
+      let rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
 
       // Log #18-#33 (a representative subset of the real run's own ~15
       // steps): `innerHeight` keeps falling toward 363 (`vvH`'s own value)
@@ -326,7 +465,8 @@ describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', 
       // 'resize'. Each step must re-read: the Viewport's own `100dvh`
       // tracks every real step on its own, but the inset this still
       // exposes must keep tracking it too, proving the read itself
-      // converges rather than sticking at whatever it computed first.
+      // converges rather than sticking at whatever it computed first, and
+      // the field, past the fold, must stay above the keyboard throughout.
       for (const iH of [
         520, 486, 457, 434, 416, 402, 391, 384, 378, 374, 371, 368, 367, 366,
         365, 364
@@ -339,6 +479,10 @@ describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', 
         expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
           `${iH - 363}px`
         );
+        visible = visibleWindow(vv);
+        rect = field.getBoundingClientRect();
+        expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+        expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
       }
 
       // Log #34 ("win.resize"): the layout viewport finishes shrinking to
@@ -353,6 +497,10 @@ describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', 
       expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
         '0px'
       );
+      visible = visibleWindow(vv);
+      rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
       expect(drawer.phase).toBe('open');
     } finally {
       await page.viewport(width, iH0);
@@ -448,29 +596,6 @@ describe('expanding to the largest snap point only when the field was hidden (#3
 describe('scrolling the focused field into view, clear of the keyboard (#327)', () => {
   beforeEach(() => mockReducedMotion());
 
-  /** Enough rows before the field that Content's own natural height is well
-   * short of them, so unlocking `overflow-y` does not itself reveal the
-   * field, and the field itself sits at Content's own bottom -- squarely
-   * inside the keyboard-covered strip `scroll-padding-bottom` carves out,
-   * so a native `scrollIntoView` that ignored it would still land the field
-   * there, not above the keyboard. Content's own `clientHeight` is the full
-   * Viewport's (this file's own design: nothing shrinks it for a keyboard
-   * any more), so this needs comfortably more than any real viewport this
-   * runs in, not just more than a keyboard-shrunk one. */
-  function appendFieldPastTheFold(content: HTMLElement) {
-    for (let i = 0; i < 60; i += 1) {
-      const row = document.createElement('p');
-      row.textContent = `Row ${i}`;
-      row.style.margin = '0';
-      row.style.height = '40px';
-      content.append(row);
-    }
-    const field = document.createElement('input');
-    field.type = 'text';
-    content.append(field);
-    return field;
-  }
-
   it('applies --drawer-keyboard-inset to Content as scroll-padding-bottom, and keeps the field above the keyboard once expanding reaches the largest snap point', async () => {
     const vv = installFakeViewport();
     fixture = mount({ snapPoints: [0.5, 1] }, { panelHeight: '100%' });
@@ -551,49 +676,6 @@ describe('scrolling the focused field into view, clear of the keyboard (#327)', 
     await nextFrame();
     expect(content.style.paddingBottom).toBe('');
     expect(content.style.scrollPaddingBottom).toBe('');
-  });
-});
-
-describe("stopping Safari's own pan on focus (#327: adapted from React Aria's usePreventScroll)", () => {
-  beforeEach(() => mockReducedMotion());
-
-  it('applies a momentary transform to a field that opens the keyboard on focusin, and restores it the next frame', async () => {
-    installFakeViewport();
-    fixture = mount({ snapPoints: [0.5] });
-    const { content, drawer } = fixture;
-    const field = appendFieldTo(content);
-    field.style.transform = 'rotate(1deg)'; // a consumer's own prior transform.
-
-    drawer.open();
-    await expectSettledTo(() => drawer.phase, 'open');
-
-    // `field.focus()`, not `userEvent.click`, here on purpose: this checks
-    // the handler's own synchronous, one-frame effect, and a real click's
-    // own round trip through Playwright already takes longer than that one
-    // frame by the time control returns -- the other tests in this file use
-    // a real click throughout to focus a field, this one alone needs to see
-    // the moment in between.
-    field.focus();
-    expect(field.style.transform).toBe('translateY(-2000px)');
-
-    await nextFrame();
-    // Restored to the consumer's own prior value, not cleared outright.
-    expect(field.style.transform).toBe('rotate(1deg)');
-  });
-
-  it('never touches a field that does not open the keyboard', async () => {
-    installFakeViewport();
-    fixture = mount({ snapPoints: [0.5] });
-    const { content, drawer } = fixture;
-    const button = document.createElement('button');
-    button.textContent = 'Not a field';
-    content.append(button);
-
-    drawer.open();
-    await expectSettledTo(() => drawer.phase, 'open');
-    await userEvent.click(button);
-
-    expect(button.style.transform).toBe('');
   });
 });
 
@@ -952,16 +1034,13 @@ describe('non-modal (#271): the hit area is unaffected by the keyboard', () => {
 describe('cleanup', () => {
   beforeEach(() => mockReducedMotion());
 
-  it('removes the visualViewport, window and focusin listeners on close, and attaches fresh ones on reopen', async () => {
+  it('removes the visualViewport and window listeners on close, leaves no inline style behind, and attaches fresh ones on reopen', async () => {
     const vv = installFakeViewport();
     const addSpy = vi.spyOn(vv, 'addEventListener');
     const removeSpy = vi.spyOn(vv, 'removeEventListener');
-    const docAddSpy = vi.spyOn(document, 'addEventListener');
-    const docRemoveSpy = vi.spyOn(document, 'removeEventListener');
     fixture = mount({ snapPoints: [0.5] });
-    const { dialog, drawer } = fixture;
+    const { dialog, panel, content, drawer } = fixture;
     addSpy.mockClear(); // drop the engine's own, unrelated permanent listener.
-    docAddSpy.mockClear();
 
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
@@ -969,9 +1048,6 @@ describe('cleanup', () => {
       'resize',
       'scroll'
     ]);
-    expect(
-      docAddSpy.mock.calls.filter(([type]) => type === 'focusin')
-    ).toHaveLength(1);
 
     drawer.close();
     await expectSettledTo(() => drawer.phase, 'closed');
@@ -979,9 +1055,16 @@ describe('cleanup', () => {
       'resize',
       'scroll'
     ]);
-    expect(
-      docRemoveSpy.mock.calls.filter(([type]) => type === 'focusin')
-    ).toHaveLength(1);
+    // Nothing this section ever writes (the inset, the Panel's own inline
+    // geometry) is left behind once the keyboard listeners it came from are
+    // gone: `panel.style.transform`/`translate` stay whatever a consumer's
+    // own CSS left them at (empty, here), since this round removed the
+    // only two things that ever wrote to either.
+    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
+    expect(content.style.paddingBottom).toBe('');
+    expect(content.style.scrollPaddingBottom).toBe('');
+    expect(panel.style.transform).toBe('');
+    expect(panel.style.translate).toBe('');
 
     // Closed: the keyboard changing now must do nothing at all.
     vv.height = window.innerHeight - 300;
@@ -993,27 +1076,22 @@ describe('cleanup', () => {
     expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
 
     addSpy.mockClear();
-    docAddSpy.mockClear();
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
     expect(addSpy.mock.calls.map(([type]) => type).sort()).toEqual([
       'resize',
       'scroll'
     ]);
-    expect(
-      docAddSpy.mock.calls.filter(([type]) => type === 'focusin')
-    ).toHaveLength(1);
   });
 
-  it('removes the visualViewport and focusin listeners on destroy', async () => {
+  it('removes the visualViewport listeners on destroy, and leaves no inline style behind', async () => {
     const vv = installFakeViewport();
     fixture = mount({ snapPoints: [0.5] });
-    const { dialog, drawer } = fixture;
+    const { dialog, panel, content, drawer } = fixture;
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
 
     const removeSpy = vi.spyOn(vv, 'removeEventListener');
-    const docRemoveSpy = vi.spyOn(document, 'removeEventListener');
     drawer.destroy(); // idempotent: afterEach's own unmount() calling it again, and removing the dialog, is a no-op on top of this.
 
     // Two 'resize' removals, not one: this feature's own, plus the
@@ -1023,9 +1101,11 @@ describe('cleanup', () => {
     const removedTypes = removeSpy.mock.calls.map(([type]) => type);
     expect(removedTypes.filter((t) => t === 'resize').length).toBe(2);
     expect(removedTypes.filter((t) => t === 'scroll').length).toBe(1);
-    expect(
-      docRemoveSpy.mock.calls.filter(([type]) => type === 'focusin')
-    ).toHaveLength(1);
+    expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
+    expect(content.style.paddingBottom).toBe('');
+    expect(content.style.scrollPaddingBottom).toBe('');
+    expect(panel.style.transform).toBe('');
+    expect(panel.style.translate).toBe('');
 
     vv.height = window.innerHeight - 300;
     vv.resize();
