@@ -12,9 +12,10 @@ back to its full height, on the same snap point.
 
 If the focused field would not fit inside that smaller, fitted Viewport at
 the current snap point, the drawer expands to its largest one -- the same
-thing a native iOS sheet does, so the content unlocks and the browser's own
-scroll-into-view can reveal the field. It stays there once the keyboard
-closes; a field already visible never moves the drawer at all.
+thing a native iOS sheet does, so the content unlocks, and the engine then
+scrolls the field into the fitted Viewport itself, with
+`field.scrollIntoView({ block: 'nearest' })`. It stays there once the
+keyboard closes; a field already visible never moves the drawer at all.
 
 <!-- demo:example-keyboard -->
 
@@ -107,11 +108,15 @@ whole exit never cuts that transition short.
 
 ## Every side
 
-The keyboard always comes up from the bottom of the screen, so the fit
-always moves the Viewport's own bottom edge, whichever edge the drawer
-opens from: a `bottom` drawer lifts, `left` and `right` get shorter (their
-panel typically fills the Viewport's own height), and `top` keeps its own
-top edge exactly where it was.
+The fit sets the same two properties on the Viewport whichever edge the
+drawer opens from: its `top` to `visualViewport.offsetTop`, and its
+`height` to `visualViewport.height`. A `bottom` drawer's panel sits flush
+against the Viewport's own bottom edge, so it lifts as the height shrinks.
+`left` and `right` panels typically fill the Viewport's own height, so they
+get shorter the same way. A `top` drawer's panel sits flush against the
+Viewport's own top edge, so it moves down with `visualViewport.offsetTop`
+exactly like the others. Nothing keeps a `top` drawer's own top edge fixed
+while the browser pans the page.
 
 ## What this does not cover
 

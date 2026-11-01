@@ -171,19 +171,24 @@ describe("Safari's pan model (real iPhone replay, iOS 18.7)", () => {
     expect(subjectRect.top).toBeGreaterThanOrEqual(rect.top - 1);
     expect(subjectRect.bottom).toBeLessThanOrEqual(rect.bottom + 1);
 
-    // Step 3 ("vv.scroll", log #60): tapping Done un-pans the page --
-    // `offsetTop` back to 0, `vvH` back to full -- before the exit even
-    // starts. The fit reverts to neutral, the same as the keyboard never
-    // having opened.
+    // Step 3 ("vv.scroll", log #60): tapping Done starts the close (the
+    // dedicated exit test below covers that phase) and, in the same
+    // moment, un-pans the page: `offsetTop` back to 0, but `vvH` stays at
+    // 331, the keyboard itself still up. The fit keeps tracking the
+    // un-pan directly, the same as any other fit change.
     vv.offsetTop = 0;
-    vv.height = iH;
+    vv.height = iH - 336;
     vv.scroll();
     await nextFrame();
 
-    expect(viewport.style.position).toBe('relative');
-    expect(viewport.style.height).toBe('100%');
+    rect = visibleRect(viewport);
+    expect(Math.abs(rect.top - 0)).toBeLessThan(2);
+    expect(Math.abs(rect.bottom - (iH - 336))).toBeLessThan(2);
+    // The keyboard itself is still up (`vvH` stays at 331, not back to
+    // 667), so the full 336px below the fitted Viewport's own bottom edge
+    // is still covered.
     expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe(
-      '0px'
+      '336px'
     );
     expect(drawer.phase).toBe('open');
   });
@@ -470,18 +475,23 @@ describe('the exit runs its full declared duration even when the browser un-pans
     expect(panel.hasAttribute('data-ending-style')).toBe(true);
 
     // The browser un-pans mid-exit, the way Safari's own log showed (#327
-    // finding 4): `offsetTop` back to 0, `height` back to full, before the
-    // exit's own 300ms transition is anywhere near done. The fit keeps
-    // tracking this (unlike #273's first cut, which guarded the fit with
-    // `cssExiting` instead, freezing the Viewport at the panned reading for
-    // the rest of the exit): the Viewport reverts to neutral right away,
-    // proving the fit is still live, not frozen, through the exit.
+    // finding 4, log #60): `offsetTop` back to 0, but `height` stays at
+    // 331, the keyboard itself still up, only the pan reverted, and this
+    // lands before the exit's own 300ms transition is anywhere near done.
+    // The fit keeps tracking this (unlike #273's first cut, which
+    // guarded the fit with `cssExiting` instead, freezing the Viewport at
+    // the panned reading for the rest of the exit): the Viewport's own
+    // rect follows the un-pan directly, proving the fit is still live, not
+    // frozen, through the exit.
     vv.offsetTop = 0;
-    vv.height = window.innerHeight;
+    vv.height = window.innerHeight - 336;
     vv.scroll();
     await nextFrame();
-    expect(viewport.style.position).toBe('relative');
-    expect(viewport.style.height).toBe('100%');
+    const rect = visibleRect(viewport);
+    expect(Math.abs(rect.top - 0)).toBeLessThan(2);
+    expect(Math.abs(rect.bottom - (window.innerHeight - 336))).toBeLessThan(
+      2
+    );
 
     await sleep(150);
     // Well past half the declared duration: still mid-exit, not cut short
