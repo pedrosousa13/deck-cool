@@ -1,6 +1,6 @@
 ---
 title: Nested drawers
-description: 'A drawer opened from inside another just stacks, for free (#272): data-nested-open and --drawer-nested for CSS, Escape and the cascade on closing an outer one both handled, no new prop. The inner drawer must be modal.'
+description: 'A drawer opened from inside another just stacks, for free (#272): data-nested-open, --drawer-nested and --drawer-nested-progress for CSS, Escape and the cascade on closing an outer one both handled, no new prop. The inner drawer must be modal.'
 ---
 
 A `Drawer.Root` rendered from inside another one's `Drawer.Content`, a
@@ -102,8 +102,19 @@ the other through the DOM: `data-nested-open` is removed the moment the
 last one closes; `--drawer-nested` stays, at `0`, so a CSS rule that reads
 it on the frontmost drawer (nothing stacked above it) always finds a real
 number there, never a value inherited from a dialog further down the
-stack. Set and cleared per open/close event, never per scroll frame or
-drag frame, the same as every other data attribute here.
+stack. Set and cleared once per update, never removed and immediately
+re-added for the same one.
+
+Both move the moment a drawer nested above this one starts closing, by
+any path -- a close button, Escape, a drag release, a flick, or a parent's
+own cascade -- not once it finishes: `--drawer-nested` drops (and
+`data-nested-open` clears, once nothing is left) together with that
+drawer's own CSS exit starting, so a `transition` reading either, below,
+runs at the same time as the exit, not sequentially after it. An
+interrupted close -- the drawer nested above this one starts closing and
+then, before it finishes, is asked to stay open again -- reverts on its
+own, with no special case: both just go back to describing whatever is
+genuinely open above this one once more.
 
 ```css
 .panel[data-nested-open] {
@@ -125,8 +136,53 @@ matter: list `transform` explicitly alongside `scale`, as above, or a rule
 that only names `scale` overrides the Panel's own `transition: transform
 ...` from the entrance/exit recipe wherever it has higher specificity or
 comes later in the sheet, and the Panel's entrance and exit then jump
-instead of sliding. The demo above uses exactly this recipe, with both
-properties named.
+instead of sliding.
+
+## `--drawer-nested-progress`: following a drag, not only an open or a close
+
+`--drawer-nested`'s own jump, above, is right for a close button or Escape,
+each already its own 300ms CSS transition, but a real drag or swipe on the
+drawer directly above this one has no such discrete moment: dragging it
+only decides open or closed at release, so a recipe that reads
+`--drawer-nested` alone stays at its fully-nested scale for the whole
+drag and only moves once the user lets go. `Drawer.Panel` also carries
+`--drawer-nested-progress`, the live open progress of the one drawer
+directly above it that is currently open or opening -- `0` fully closed,
+`1` fully open -- updated continuously as that drawer is dragged, swiped
+or thrown, the same way iOS's own nested sheets and vaul's
+`onNestedDrag`/`onNestedOpenChange` do, but with no JS running per drag
+frame where the browser supports a named scroll timeline (Chromium,
+Safari; see "Why native scrolling"). Interpolate between the fully-open
+and fully-closed scales with it, instead of jumping straight to the
+fully-open one:
+
+```css
+.panel {
+  --nested-scale: calc(1 - 0.05 * var(--drawer-nested, 0));
+  scale: calc(1 - (1 - var(--nested-scale)) * var(--drawer-nested-progress, 0));
+  transition:
+    transform 300ms ease,
+    scale 300ms ease;
+}
+```
+
+At rest -- nothing open above, or something open above and fully settled
+-- this reads exactly the same as the simpler, `--drawer-nested`-only
+recipe above (`--drawer-nested-progress` sits at `1` once the drawer above
+has finished opening, and at `0`, written just as directly, once nothing
+is open above this one at all). While the drawer directly above this one
+is being dragged, it moves continuously in between, and a release that
+snaps back open restores it the same way, with no special handling: both
+are driven off the same live scroll position a real gesture already
+moves.
+
+Only the drawer _directly_ above: a three-level stack's own outermost
+level reads the _middle_ one's progress, not the innermost's, the same way
+`--drawer-nested`'s own count only ever counts, never tracks which
+specific level is moving. Dragging the innermost level of three, the
+middle one follows it continuously; the outermost one's own
+`--drawer-nested` (`2`, unchanged through the drag) still scales it back
+by the fully-nested amount throughout, exactly as it already did.
 
 ## Closing an outer drawer while an inner one is open
 
@@ -197,10 +253,18 @@ the nested drawer is _dragged_, the outer one's own content element
 (`drawerRef.current`, the same node `Drawer.Content` renders, not a
 separate background element) scales and translates from the live drag
 percentage, in JS, on every drag frame (`vaul` 1.1.2,
-`dist/index.mjs:1310-1318`, `onNestedDrag`). drawerdeck's `--drawer-nested`
-recipe, above, only ever changes on an open or a close event, never a drag
-frame, in keeping with this engine's native-scrolling rule (see "Why
-native scrolling").
+`dist/index.mjs:1310-1318`, `onNestedDrag`). `--drawer-nested-progress`,
+above, follows the same live drag percentage, but, in keeping with this
+engine's native-scrolling rule (see "Why native scrolling"), with no JS
+running per drag frame where the browser supports a named scroll timeline:
+the inner drawer's own Viewport exposes a second one, lifted to the outer
+drawer's own dialog with `timeline-scope`, and an `animation` the outer
+drawer sets on its own Panel reads it directly, scoped
+(`animation-range`) to the inner drawer's own resting open position.
+Where a named scroll timeline is unsupported (Firefox), the inner
+drawer's own engine instead reports the same number on a real scroll
+frame, mirroring vaul's own per-frame JS exactly, just as a fallback
+rather than the only path.
 
 **Base UI**'s `Drawer` ships the closest match: `data-nested-drawer-open`
 and `--nested-drawers`, read from a `DrawerPopupDataAttributes`/

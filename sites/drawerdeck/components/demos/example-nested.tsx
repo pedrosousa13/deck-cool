@@ -11,23 +11,25 @@ import DemoFrame from "./demo-frame.tsx";
 // recipe (drawer-demo__panel--nested, styles/drawerdeck.css) reads
 // --drawer-nested, the engine's own count of how many drawers are
 // currently stacked above this one, to scale each one back a little
-// while something is open on top of it.
+// while something is open on top of it, and --drawer-nested-progress,
+// the live open progress of the one directly above it, to ease into that
+// scale as it opens, drags or closes, instead of jumping straight to it.
 const LEVELS = [
   {
     title: "Settings",
     body: "The first drawer. Open Notifications from in here.",
-    next: "Notifications"
+    next: "Notifications",
   },
   {
     title: "Notifications",
     body: "Nested one level deep. Open Advanced from in here.",
-    next: "Advanced"
+    next: "Advanced",
   },
   {
     title: "Advanced",
     body: "Nested two levels deep: nothing opens from in here, so --drawer-nested never counts above 2.",
-    next: null
-  }
+    next: null,
+  },
 ] as const;
 
 function NestedLevel({ index }: { index: number }) {

@@ -539,16 +539,20 @@ main .home-family .home-more {
 /* The nested demo (components/demos/example-nested.tsx), on the "Nested
    drawers" guide: three Drawer.Root levels, each a plain child of the one
    before it. --drawer-nested is the engine's own count of how many
-   drawers are currently stacked above this one (set on Drawer.Popup, read
-   here on its Panel through the cascade); scale, a CSS property
-   independent of transform, composes with the entrance/exit recipe's own
-   translateY with no conflict, so the level behind keeps shrinking
-   natively as each one opens, and growing back as each one closes -- no
-   JS runs per frame for this, only the one data write the engine already
-   makes per open/close event. */
+   drawers are currently stacked above this one, and --drawer-nested-progress
+   the live open progress (0 closed to 1 fully open) of the one directly
+   above it, written on its own Panel directly. --nested-scale is the
+   fully-stacked target for the current count; scale interpolates toward
+   it as --drawer-nested-progress rises, so dragging, swiping or flicking
+   a level scales the one behind it in step, with no JS running per drag
+   frame where the browser supports a named scroll timeline (the "Nested
+   drawers" guide's own "--drawer-nested-progress" section). scale, a CSS
+   property independent of transform, composes with the entrance/exit
+   recipe's own translateY with no conflict. */
 
 .drawer-demo__panel--nested {
-  scale: calc(1 - 0.05 * var(--drawer-nested, 0));
+  --nested-scale: calc(1 - 0.05 * var(--drawer-nested, 0));
+  scale: calc(1 - (1 - var(--nested-scale)) * var(--drawer-nested-progress, 0));
   transform-origin: top center;
 }
 
