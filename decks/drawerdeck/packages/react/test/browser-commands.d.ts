@@ -29,5 +29,24 @@ declare module 'vitest/internal/browser' {
     dragPointerMoveTo: (x: number, y: number) => Promise<void>;
     /** Releases the pointer `dragPointerDown` started. */
     dragPointerUp: () => Promise<void>;
+    /** A real OS-level touch tap (Playwright's own `page.touchscreen`,
+     * which needs the browser context's `hasTouch` option, already set in
+     * `../../vitest.config.ts`): on the element `selector` resolves to, at
+     * `offsetX`/`offsetY` from its own top-left corner. */
+    tapAt: (
+      selector: string,
+      offsetX: number,
+      offsetY: number
+    ) => Promise<void>;
+    /** A real OS-level mouse wheel tick (Playwright's own `page.mouse`):
+     * moves the pointer to `offsetX`/`offsetY` from the element `selector`
+     * resolves to's own top-left corner, then scrolls `deltaX`/`deltaY`. */
+    wheelAt: (
+      selector: string,
+      offsetX: number,
+      offsetY: number,
+      deltaX: number,
+      deltaY: number
+    ) => Promise<void>;
   }
 }

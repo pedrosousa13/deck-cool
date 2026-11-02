@@ -1145,105 +1145,6 @@ describe('a nested drawer’s own keyboard never moves the outer behind it (#332
   });
 });
 
-// With no portal, a nested drawer's own Viewport is a real DOM descendant
-// of the outer Panel too, so a touch, a wheel or a pointer down starting on
-// the inner one still bubbles into the outer's own interrupt listeners
-// (`attachInterruptListeners`, `@drawerdeck/core`), which finish the Panel's
-// CSS entrance or exit immediately, same as a real touch on the outer's own
-// Viewport does (#268) -- except here nobody touched the outer at all
-// (#332).
-describe('an outer CSS entrance is never interrupted by activity inside a nested drawer (#332)', () => {
-  it("a real touchstart on the inner's own Viewport never finishes the outer's own entrance early", async () => {
-    mockReducedMotion();
-    let setInnerOpen: ((open: boolean) => void) | undefined;
-    function Harness() {
-      const [innerOpen, setOpen2] = useState(false);
-      useLayoutEffect(() => {
-        setInnerOpen = setOpen2;
-      }, []);
-      return (
-        <Drawer.Root>
-          <Drawer.Trigger data-testid="open-1">Open 1</Drawer.Trigger>
-          <Drawer.Popup data-testid="popup-1">
-            <Drawer.Viewport>
-              <Drawer.Panel data-testid="panel-1">
-                <Drawer.Title>Level 1</Drawer.Title>
-                <Drawer.Content>
-                  {/* Controlled, with no Trigger of its own: opened
-                      through `setInnerOpen` directly, below, never
-                      through a real click -- a real click anywhere
-                      inside the outer's own Panel (its trigger to open
-                      the inner included) legitimately interrupts the
-                      outer's own entrance on its own (#268), which would
-                      hide the bug this test is actually about: a touch
-                      that starts *inside the inner, once it is open*
-                      bubbling into the outer's own listener. */}
-                  <Drawer.Root
-                    open={innerOpen}
-                    onOpenChange={(next) => setOpen2(next)}
-                  >
-                    <Drawer.Popup data-testid="popup-2">
-                      <Drawer.Viewport>
-                        <Drawer.Panel data-testid="panel-2">
-                          <Drawer.Title>Level 2</Drawer.Title>
-                          <Drawer.Content>
-                            <p>Level 2 content.</p>
-                          </Drawer.Content>
-                        </Drawer.Panel>
-                      </Drawer.Viewport>
-                    </Drawer.Popup>
-                  </Drawer.Root>
-                </Drawer.Content>
-                <Drawer.Close data-testid="close-1">Close 1</Drawer.Close>
-              </Drawer.Panel>
-            </Drawer.Viewport>
-          </Drawer.Popup>
-        </Drawer.Root>
-      );
-    }
-    render(<Harness />);
-    // Installed before opening: the outer's own entrance needs a real
-    // transition to stay interruptible for long enough to open the inner
-    // and dispatch the touch below inside that same window.
-    const removeTransition = withTransformTransition(panelAt(1), 300);
-    try {
-      await userEvent.click(screen.getByTestId('open-1'));
-      // Synchronous, inside `open()` itself: no race to poll for.
-      expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
-
-      act(() => setInnerOpen?.(true));
-      await expect
-        .poll(() => popupAt(2).getAttribute('data-phase'))
-        .toBe('open');
-      expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
-
-      // A real touch starting on the inner's own Viewport -- nothing the
-      // outer itself was ever touched by. Wrapped in `act`, not a bare
-      // `dispatchEvent`: the engine's own phase flips synchronously, but
-      // without `act` the `data-phase` attribute below would still be
-      // reading whatever React's own last, batched render left it at,
-      // proving nothing either way.
-      act(() => {
-        viewportOf(popupAt(2)).dispatchEvent(
-          new Event('touchstart', { bubbles: true })
-        );
-      });
-
-      // Left unscoped, the outer's own interrupt listener would have read
-      // that as a touch on its own Viewport and finished its entrance
-      // immediately.
-      expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
-
-      await expectSettledTo(
-        () => popupAt(1).getAttribute('data-phase'),
-        'open'
-      );
-    } finally {
-      removeTransition();
-    }
-  });
-});
-
 // The review's own repro (#332, fourth round): a mouse press that starts on
 // a modal inner drawer while that inner is still in its own CSS entrance or
 // exit bubbles into the outer's `onPointerDown` (`@drawerdeck/core`)
@@ -1321,9 +1222,18 @@ describe('a mouse press on a modal inner mid-entrance never drags the outer behi
 // `@drawerdeck/core`): a touch, a wheel or a pointer down starting on a
 // modal inner's own Viewport all bubble into the outer's own
 // `onInterrupt` the same way, and all three are scoped by the same
-// `ownsTarget` check (#332). Table-driven over the three, instead of one
-// test per kind, since the harness and the assertions are identical for
-// all of them.
+// `ownsTarget` check (#332). With no portal, a nested drawer's own
+// Viewport is a real DOM descendant of the outer Panel too, so each one
+// still bubbles into the outer's own interrupt listeners, which finish the
+// Panel's CSS entrance or exit immediately, same as a real touch on the
+// outer's own Viewport does (#268), except here nobody touched the outer
+// at all. Table-driven over the three, instead of one test per kind,
+// since the harness and the assertions are identical for all of them.
+// Each gesture is real OS-level input, through Playwright
+// (`tapAt`/`wheelAt`/`dragPointerDown`, `../../vitest.config.ts`), not a
+// hand-dispatched `new Event(type)`: the latter never goes through the
+// browser's own dispatch at all, so it cannot tell a scoped listener from
+// an unscoped one either way.
 describe("the outer's own interrupt listeners never react to a modal inner's own events (#332)", () => {
   function OuterWithControlledInner({
     innerOpen,
@@ -1340,11 +1250,10 @@ describe("the outer's own interrupt listeners never react to a modal inner's own
             <Drawer.Panel data-testid="panel-1">
               <Drawer.Title>Level 1</Drawer.Title>
               <Drawer.Content>
-                {/* Controlled, with no Trigger of its own, the same reason
-                    the existing touchstart test above gives: a real click
-                    anywhere inside the outer's own Panel would legitimately
-                    interrupt its own entrance on its own (#268), hiding the
-                    bug this test is about. */}
+                {/* Controlled, with no Trigger of its own: a real click
+                    anywhere inside the outer's own Panel would
+                    legitimately interrupt its own entrance on its own
+                    (#268), hiding the bug this test is about. */}
                 <Drawer.Root open={innerOpen} onOpenChange={onInnerOpenChange}>
                   <Drawer.Popup data-testid="popup-2">
                     <Drawer.Viewport>
@@ -1367,12 +1276,31 @@ describe("the outer's own interrupt listeners never react to a modal inner's own
   }
 
   it.each([
-    ['touchstart', { bubbles: true }],
-    ['wheel', { bubbles: true, deltaY: 40 }],
-    ['pointerdown', { bubbles: true }]
+    ['touchstart', () => commands.tapAt('[data-testid="panel-2"]', 30, 20)],
+    [
+      'wheel',
+      // Four ticks, not one, the same real-wheel shape the `#312` tests
+      // in `drawer.test.tsx` already use (`userEvent.wheel(..., { times:
+      // 4 })`): a single real wheel tick, right after the inner's own
+      // `showModal()` just changed the top layer, can land on Chromium's
+      // compositor-only fast path for scrolling and never reach the DOM
+      // at all, before the browser notices this region needs it.
+      async () => {
+        for (let i = 0; i < 4; i++) {
+          await commands.wheelAt('[data-testid="panel-2"]', 30, 20, 0, 30);
+        }
+      }
+    ],
+    [
+      'pointerdown',
+      async () => {
+        await commands.dragPointerDown('[data-testid="panel-2"]', 30, 20);
+        await commands.dragPointerUp();
+      }
+    ]
   ] as const)(
     "a real '%s' starting on a modal inner's own Viewport never finishes the outer's own entrance early",
-    async (type, init) => {
+    async (type, fireGesture) => {
       mockReducedMotion();
       let setInnerOpen: ((open: boolean) => void) | undefined;
       function Harness() {
@@ -1388,7 +1316,10 @@ describe("the outer's own interrupt listeners never react to a modal inner's own
         );
       }
       render(<Harness />);
-      const removeTransition = withTransformTransition(panelAt(1), 300);
+      // 1500ms, not the 300ms a hand-dispatched event could get away
+      // with: a real gesture round-trips through Playwright, and the
+      // outer's own entrance has to still be running when it lands.
+      const removeTransition = withTransformTransition(panelAt(1), 1500);
       try {
         await userEvent.click(screen.getByTestId('open-1'));
         expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
@@ -1399,9 +1330,7 @@ describe("the outer's own interrupt listeners never react to a modal inner's own
           .toBe('open');
         expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
 
-        act(() => {
-          viewportOf(popupAt(2)).dispatchEvent(new Event(type, init));
-        });
+        await fireGesture();
 
         // Left unscoped, the outer's own interrupt listener would have
         // read this as an interaction on its own Viewport and finished its
