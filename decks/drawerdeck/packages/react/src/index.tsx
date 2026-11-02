@@ -51,11 +51,13 @@ declare const process: { env: { NODE_ENV?: string } };
  * `@drawerdeck/core` is handed the *result*, not the relationship: a
  * plain `nestedCount` number through `setOptions`, the same way
  * `snapPoints`/`dismissible`/`modal` already go in. The engine renders it
- * (`data-nested-open`, `--drawer-nested`) and uses it to yield Escape and
- * an outside press to whatever is nested above; this file is the one that
- * works out what that number is, and sequences the cascade when an outer
- * drawer closes while an inner one is still open (`closeAndWait`, in
- * `Root`, below).
+ * (`data-nested-open`, `--drawer-nested`) and, for a non-modal drawer only,
+ * reads it to yield Escape to whatever modal drawer is nested above it --
+ * a modal drawer needs no such check, for Escape or an outside press,
+ * since the browser's own top layer and inertness already keep both off a
+ * drawer that is not topmost. This file is the one that works out what
+ * that number is, and sequences the cascade when an outer drawer closes
+ * while an inner one is still open (`closeAndWait`, in `Root`, below).
  *
  * Nesting only supports a modal inner drawer (#237, the maintainer's
  * ruling on #272 after review): a non-modal `<dialog>` is not in the top
@@ -356,10 +358,12 @@ export function Root({
    * an outer drawer while an inner one is open closes the inner one first,
    * then the outer one" ruling (#272). Used by `Drawer.Close` and by a
    * controlled `open` going false -- never by Escape, a drag or an
-   * outside press, which only ever reach the drawer actually acted on
-   * (`@drawerdeck/core`'s own `nestedCount` guard already keeps those off
-   * a drawer that is not the topmost, so there is nothing here for them to
-   * cascade). */
+   * outside press, which only ever reach the drawer actually acted on: for
+   * a modal inner, the browser's own top layer and inertness keep all
+   * three off a drawer that is not topmost (`@drawerdeck/core` no longer
+   * guards any of them with `nestedCount` -- only its non-modal Escape
+   * listener still reads it), so there is nothing here for them to
+   * cascade. */
   const closeAndWait = useCallback(async (reason: OpenChangeReason) => {
     // Captured before the await, below, not read fresh after it: only the
     // controlled-`open`-went-false call site (the one effect that calls

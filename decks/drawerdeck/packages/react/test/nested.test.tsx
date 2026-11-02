@@ -19,13 +19,35 @@ import {
   expectSettledTo,
   mockReducedMotion,
   nextFrame,
-  sleep
+  sleep,
+  viewportOf
 } from './fixtures';
 
 const popupAt = (n: number) =>
   document.querySelector<HTMLDialogElement>(`[data-testid="popup-${n}"]`)!;
 const panelAt = (n: number) =>
   document.querySelector<HTMLElement>(`[data-testid="panel-${n}"]`)!;
+
+/** A stand-in for `window.visualViewport`, the same shape
+ * `packages/core/test/keyboard.test.ts` uses: a plain `EventTarget` with
+ * settable `height`/`offsetTop`/`scale`, installed in place of the real one
+ * so a test can fire its own 'resize'/'scroll' without a real on-screen
+ * keyboard. */
+class FakeVisualViewport extends EventTarget {
+  height: number;
+  offsetTop = 0;
+  scale = 1;
+  constructor(height: number) {
+    super();
+    this.height = height;
+  }
+  resize() {
+    this.dispatchEvent(new Event('resize'));
+  }
+  scroll() {
+    this.dispatchEvent(new Event('scroll'));
+  }
+}
 
 /** The *computed* `--drawer-nested`, never the inline style alone: with no
  * portal, a nested level's own dialog is a real DOM descendant of the one
@@ -989,5 +1011,233 @@ describe('a 3-level controlled cascade with inline snapPoints at every level (#3
     // `Root`'s own gate correctly stays quiet about a close the controlling
     // prop already asked for.
     expect(events).toEqual(['3:false:programmatic', '2:false:programmatic']);
+  });
+});
+
+// With no portal, a nested drawer's own focused field is a real DOM
+// descendant of the outer Panel too, so `@drawerdeck/core`'s own
+// `focusedKeyboardField` -- `panel.contains(active)` alone -- could not
+// tell the inner's own field apart from one that actually belongs to the
+// outer. The outer's own keyboard listeners (`maybeExpandForKeyboard`,
+// `ensureFieldVisible`) then acted on it: focusing the inner's own field
+// expanded and scrolled the *outer*, inert behind it, moving its snap
+// point and its Viewport's own scroll position with nobody touching it
+// (#332).
+describe('a nested drawer’s own keyboard never moves the outer behind it (#332)', () => {
+  function OuterWithModalInner({
+    onOuterSnapChange
+  }: {
+    onOuterSnapChange: (index: number) => void;
+  }) {
+    return (
+      <Drawer.Root snapPoints={[0.5, 1]} onSnapPointChange={onOuterSnapChange}>
+        <Drawer.Trigger data-testid="open-1">Open 1</Drawer.Trigger>
+        <Drawer.Popup data-testid="popup-1">
+          <Drawer.Viewport>
+            <Drawer.Panel data-testid="panel-1">
+              <Drawer.Title>Level 1</Drawer.Title>
+              <Drawer.Content>
+                {/* The next level's own Trigger comes first, so a real
+                    `userEvent.click` can still reach it at the outer's
+                    own snap index 0 (0.5): the filler after it, not
+                    before, is what makes the outer's own 1.0 snap point
+                    actually reachable (`measure`'s own fractions are of
+                    the Viewport's extent, which the Panel has to be at
+                    least as tall as to reach), without pushing the
+                    trigger itself out of the one snap point a real click
+                    can reach (`Level`'s own comment, above, makes the
+                    same tradeoff). */}
+                <Drawer.Root snapPoints={[1]}>
+                  <Drawer.Trigger data-testid="open-2">Open 2</Drawer.Trigger>
+                  <Drawer.Popup data-testid="popup-2">
+                    <Drawer.Viewport>
+                      {/* `height: '100%'` on the Panel and Content, the
+                          same shape `packages/core/test/keyboard.test.ts`'s
+                          own fixture uses: without it, an unbounded
+                          Content just grows to fit all 60 rows, so there
+                          is nothing for it to scroll *within*, and the
+                          field at its own end sits past the one Viewport's
+                          worth `snapPoints={[1]}` actually reveals. Bounded
+                          to the Viewport's own extent instead, Content
+                          itself scrolls to bring the field in, the same
+                          way a real drawer's own CSS would size it. */}
+                      <Drawer.Panel
+                        data-testid="panel-2"
+                        style={{ height: '100%' }}
+                      >
+                        <Drawer.Title>Level 2</Drawer.Title>
+                        <Drawer.Content style={{ height: '100%' }}>
+                          {Array.from({ length: 60 }, (_, i) => (
+                            <div key={i} style={{ height: 40 }}>
+                              Inner row {i}
+                            </div>
+                          ))}
+                          <input data-testid="inner-field" />
+                        </Drawer.Content>
+                        <Drawer.Close data-testid="close-2">
+                          Close 2
+                        </Drawer.Close>
+                      </Drawer.Panel>
+                    </Drawer.Viewport>
+                  </Drawer.Popup>
+                </Drawer.Root>
+                {Array.from({ length: 50 }, (_, i) => (
+                  <div key={i} style={{ height: 40 }}>
+                    Outer row {i}
+                  </div>
+                ))}
+              </Drawer.Content>
+              <Drawer.Close data-testid="close-1">Close 1</Drawer.Close>
+            </Drawer.Panel>
+          </Drawer.Viewport>
+        </Drawer.Popup>
+      </Drawer.Root>
+    );
+  }
+
+  it("focusing the inner's own field never expands or scrolls the outer, inert behind it", async () => {
+    mockReducedMotion();
+    const onOuterSnapChange = vi.fn();
+    const realVisualViewport = window.visualViewport;
+    const vv = new FakeVisualViewport(window.innerHeight);
+    Object.defineProperty(window, 'visualViewport', {
+      value: vv,
+      configurable: true
+    });
+    try {
+      render(<OuterWithModalInner onOuterSnapChange={onOuterSnapChange} />);
+      await openLevel(1);
+      await openLevel(2);
+      const outerViewport = viewportOf(popupAt(1));
+      expect(popupAt(1).getAttribute('data-snap-index')).toBe('0');
+      const scrollBefore = outerViewport.scrollTop;
+
+      // Focused directly, not through a real click: at Content's own
+      // natural end, past the 60 rows before it, there is no real click
+      // target left on screen at this scroll position to reach it with
+      // (`packages/core/test/keyboard.test.ts`'s own "expanding to the
+      // largest snap point" tests make the same tradeoff, for the same
+      // reason). `document.activeElement` is all `focusedKeyboardField`
+      // reads either way.
+      const field = screen.getByTestId('inner-field');
+      field.focus({ preventScroll: true });
+      expect(document.activeElement).toBe(field);
+
+      // The real device's own numbers from the review: a pan to `vvH` 331,
+      // `offsetTop` 336.
+      vv.height = 331;
+      vv.offsetTop = 336;
+      vv.resize();
+      vv.scroll();
+      await nextFrame();
+
+      expect(onOuterSnapChange).not.toHaveBeenCalled();
+      expect(popupAt(1).getAttribute('data-snap-index')).toBe('0');
+      expect(outerViewport.scrollTop).toBe(scrollBefore);
+    } finally {
+      Object.defineProperty(window, 'visualViewport', {
+        value: realVisualViewport,
+        configurable: true
+      });
+    }
+  });
+});
+
+// With no portal, a nested drawer's own Viewport is a real DOM descendant
+// of the outer Panel too, so a touch, a wheel or a pointer down starting on
+// the inner one still bubbles into the outer's own interrupt listeners
+// (`attachInterruptListeners`, `@drawerdeck/core`), which finish the Panel's
+// CSS entrance or exit immediately, same as a real touch on the outer's own
+// Viewport does (#268) -- except here nobody touched the outer at all
+// (#332).
+describe('an outer CSS entrance is never interrupted by activity inside a nested drawer (#332)', () => {
+  it("a real touchstart on the inner's own Viewport never finishes the outer's own entrance early", async () => {
+    mockReducedMotion();
+    let setInnerOpen: ((open: boolean) => void) | undefined;
+    function Harness() {
+      const [innerOpen, setOpen2] = useState(false);
+      useLayoutEffect(() => {
+        setInnerOpen = setOpen2;
+      }, []);
+      return (
+        <Drawer.Root>
+          <Drawer.Trigger data-testid="open-1">Open 1</Drawer.Trigger>
+          <Drawer.Popup data-testid="popup-1">
+            <Drawer.Viewport>
+              <Drawer.Panel data-testid="panel-1">
+                <Drawer.Title>Level 1</Drawer.Title>
+                <Drawer.Content>
+                  {/* Controlled, with no Trigger of its own: opened
+                      through `setInnerOpen` directly, below, never
+                      through a real click -- a real click anywhere
+                      inside the outer's own Panel (its trigger to open
+                      the inner included) legitimately interrupts the
+                      outer's own entrance on its own (#268), which would
+                      hide the bug this test is actually about: a touch
+                      that starts *inside the inner, once it is open*
+                      bubbling into the outer's own listener. */}
+                  <Drawer.Root
+                    open={innerOpen}
+                    onOpenChange={(next) => setOpen2(next)}
+                  >
+                    <Drawer.Popup data-testid="popup-2">
+                      <Drawer.Viewport>
+                        <Drawer.Panel data-testid="panel-2">
+                          <Drawer.Title>Level 2</Drawer.Title>
+                          <Drawer.Content>
+                            <p>Level 2 content.</p>
+                          </Drawer.Content>
+                        </Drawer.Panel>
+                      </Drawer.Viewport>
+                    </Drawer.Popup>
+                  </Drawer.Root>
+                </Drawer.Content>
+                <Drawer.Close data-testid="close-1">Close 1</Drawer.Close>
+              </Drawer.Panel>
+            </Drawer.Viewport>
+          </Drawer.Popup>
+        </Drawer.Root>
+      );
+    }
+    render(<Harness />);
+    // Installed before opening: the outer's own entrance needs a real
+    // transition to stay interruptible for long enough to open the inner
+    // and dispatch the touch below inside that same window.
+    const removeTransition = withTransformTransition(panelAt(1), 300);
+    try {
+      await userEvent.click(screen.getByTestId('open-1'));
+      // Synchronous, inside `open()` itself: no race to poll for.
+      expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
+
+      act(() => setInnerOpen?.(true));
+      await expect
+        .poll(() => popupAt(2).getAttribute('data-phase'))
+        .toBe('open');
+      expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
+
+      // A real touch starting on the inner's own Viewport -- nothing the
+      // outer itself was ever touched by. Wrapped in `act`, not a bare
+      // `dispatchEvent`: the engine's own phase flips synchronously, but
+      // without `act` the `data-phase` attribute below would still be
+      // reading whatever React's own last, batched render left it at,
+      // proving nothing either way.
+      act(() => {
+        viewportOf(popupAt(2)).dispatchEvent(
+          new Event('touchstart', { bubbles: true })
+        );
+      });
+
+      // Left unscoped, the outer's own interrupt listener would have read
+      // that as a touch on its own Viewport and finished its entrance
+      // immediately.
+      expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
+
+      await expectSettledTo(
+        () => popupAt(1).getAttribute('data-phase'),
+        'open'
+      );
+    } finally {
+      removeTransition();
+    }
   });
 });

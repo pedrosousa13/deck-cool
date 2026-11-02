@@ -868,8 +868,17 @@ export function createDrawer(
    * closed, now, with the reason the exit already carries
    * (`finishExit`): an interruption never reopens a drawer that was on its
    * way out. The gesture that interrupted it then continues natively from
-   * there, same as always. */
-  function onInterrupt() {
+   * there, same as always.
+   *
+   * Scoped to this drawer's own dialog (#332): with no portal, a nested
+   * drawer's own Viewport is a real DOM descendant of this one too (inside
+   * the Panel), so a touch, a wheel or a pointer down starting on the inner
+   * one still bubbles into this listener. Left unchecked, that would finish
+   * this drawer's own entrance or exit early just because something was
+   * interacted with in a drawer nested inside it. */
+  function onInterrupt(event: Event) {
+    const target = event.target as Element | null;
+    if (target?.closest('dialog') !== dialog) return;
     if (phase === 'opening') {
       finishEnter();
     } else if (phase === 'closing') {
@@ -1335,11 +1344,18 @@ export function createDrawer(
 
   /** The focused element, if it is inside the Panel and would itself keep
    * the keyboard up (`opensKeyboard`) -- what `maybeExpandForKeyboard`,
-   * below, checks before moving to the largest snap point. */
+   * below, checks before moving to the largest snap point. `panel.contains`
+   * alone is not enough (#332): with no portal, a nested drawer's own field
+   * is a real DOM descendant of this Panel too, so this also checked
+   * `active.closest('dialog') === dialog`, scoping it to a field that
+   * belongs to *this* drawer's own dialog, not one nested inside it -- the
+   * nearest dialog ancestor of a field inside a nested drawer is that
+   * drawer's own, never this one's. */
   function focusedKeyboardField(): HTMLElement | null {
     const active = document.activeElement;
     if (!(active instanceof HTMLElement)) return null;
     if (!panel.contains(active) || !opensKeyboard(active)) return null;
+    if (active.closest('dialog') !== dialog) return null;
     return active;
   }
 
