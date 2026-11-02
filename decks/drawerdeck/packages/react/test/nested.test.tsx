@@ -12,7 +12,7 @@
 import { type ComponentProps, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { act, render, screen } from '@testing-library/react';
-import { commands, userEvent } from 'vitest/browser';
+import { commands, page, userEvent } from 'vitest/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Drawer from '@drawerdeck/react';
 import {
@@ -190,6 +190,91 @@ function MixedModalityLevels({
                       <Drawer.Title>Level 2</Drawer.Title>
                       <Drawer.Content>
                         <p>Level 2 content.</p>
+                      </Drawer.Content>
+                      <Drawer.Close data-testid="close-2">Close 2</Drawer.Close>
+                    </Drawer.Panel>
+                  </Drawer.Viewport>
+                </Drawer.Popup>
+              </Drawer.Root>
+            </Drawer.Content>
+            <Drawer.Close data-testid="close-1">Close 1</Drawer.Close>
+          </Drawer.Panel>
+        </Drawer.Viewport>
+      </Drawer.Popup>
+    </Drawer.Root>
+  );
+}
+
+/** Three levels deep, every one given an inline `snapPoints={[1]}` literal:
+ * a fresh array reference each render, the shape that makes
+ * `setOptions`'s own `layoutRelevant` check (`@drawerdeck/core`) misread any
+ * re-render -- even one nothing about the snap points actually asked for,
+ * such as a sibling's own `nestedCount` changing -- as a real snap-point
+ * change, and so re-measure and reposition markers that should have been
+ * left alone (#332). Only the outermost level is controlled, the same
+ * shape the existing cascade test above uses. */
+function ThreeLevelsInlineSnap({
+  open,
+  onOpenChange,
+  onEvent
+}: {
+  open: boolean;
+  onOpenChange(next: boolean): void;
+  onEvent: OnEvent;
+}) {
+  return (
+    <Drawer.Root
+      open={open}
+      snapPoints={[1]}
+      onOpenChange={(next, info) => {
+        onOpenChange(next);
+        onEvent(1, next, info.reason);
+      }}
+    >
+      <Drawer.Trigger data-testid="open-1">Open 1</Drawer.Trigger>
+      <Drawer.Popup data-testid="popup-1">
+        <Drawer.Viewport>
+          <Drawer.Panel data-testid="panel-1">
+            <Drawer.Handle data-testid="handle-1" />
+            <Drawer.Title>Level 1</Drawer.Title>
+            <Drawer.Content>
+              <p>Level 1 content.</p>
+              <Drawer.Root
+                snapPoints={[1]}
+                onOpenChange={(next, info) => onEvent(2, next, info.reason)}
+              >
+                <Drawer.Trigger data-testid="open-2">Open 2</Drawer.Trigger>
+                <Drawer.Popup data-testid="popup-2">
+                  <Drawer.Viewport>
+                    <Drawer.Panel data-testid="panel-2">
+                      <Drawer.Handle data-testid="handle-2" />
+                      <Drawer.Title>Level 2</Drawer.Title>
+                      <Drawer.Content>
+                        <p>Level 2 content.</p>
+                        <Drawer.Root
+                          snapPoints={[1]}
+                          onOpenChange={(next, info) =>
+                            onEvent(3, next, info.reason)
+                          }
+                        >
+                          <Drawer.Trigger data-testid="open-3">
+                            Open 3
+                          </Drawer.Trigger>
+                          <Drawer.Popup data-testid="popup-3">
+                            <Drawer.Viewport>
+                              <Drawer.Panel data-testid="panel-3">
+                                <Drawer.Handle data-testid="handle-3" />
+                                <Drawer.Title>Level 3</Drawer.Title>
+                                <Drawer.Content>
+                                  <p>Level 3 content.</p>
+                                </Drawer.Content>
+                                <Drawer.Close data-testid="close-3">
+                                  Close 3
+                                </Drawer.Close>
+                              </Drawer.Panel>
+                            </Drawer.Viewport>
+                          </Drawer.Popup>
+                        </Drawer.Root>
                       </Drawer.Content>
                       <Drawer.Close data-testid="close-2">Close 2</Drawer.Close>
                     </Drawer.Panel>
@@ -742,5 +827,167 @@ describe('nesting a non-modal drawer (#237)', () => {
     await openLevel(2);
 
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+// With no portal, a nested level's own Viewport is a real DOM descendant of
+// the outer Panel, so an unscoped `querySelectorAll('[data-drawer-snap]')`
+// (or `querySelector('[data-drawer-gap]')`) run against the outer's own
+// Viewport also returns the inner's own markers and gap. Whenever the outer
+// re-measures -- a window resize, a parent re-render that hands it a fresh
+// inline `snapPoints` array (a new reference every time, which
+// `setOptions`'s own `layoutRelevant` check cannot tell from a real change),
+// or its own entrance settling (`settleEnter`) -- that moves the inner's
+// markers to the outer's own offsets, and the inner Viewport's mandatory
+// scroll-snap settles at closed underneath it, misreporting a close nobody
+// asked for as reason 'drag' (#332).
+describe('an outer re-measure must never touch an inner drawer’s own markers (#332)', () => {
+  it('a window resize that re-measures the outer leaves an open inner alone, with no spurious close', async () => {
+    mockReducedMotion();
+    const events: string[] = [];
+    render(
+      <Level
+        n={1}
+        depth={2}
+        onEvent={(level, open, reason) =>
+          events.push(`${level}:${open}:${reason}`)
+        }
+      />
+    );
+    await openLevel(1);
+    await openLevel(2);
+    events.length = 0;
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    try {
+      // A real resize (`page.viewport`), the same one a URL bar hiding, a
+      // rotation or the iOS keyboard sends: this fires both a `window` and
+      // a `visualViewport` 'resize', each of which calls `onResize` on
+      // every mounted drawer, the outer included.
+      await page.viewport(width, height - 84);
+      await sleep(300);
+
+      expect(popupAt(2).getAttribute('data-phase')).toBe('open');
+      expect(popupAt(1).getAttribute('data-phase')).toBe('open');
+      expect(events).toEqual([]);
+    } finally {
+      await page.viewport(width, height);
+      await sleep(100);
+    }
+  });
+
+  it('a parent re-render that hands the outer a fresh inline snapPoints array leaves an open inner alone, with no spurious close', async () => {
+    mockReducedMotion();
+    const events: string[] = [];
+    let rerender: (() => void) | undefined;
+    function Harness() {
+      const [, setTick] = useState(0);
+      useLayoutEffect(() => {
+        rerender = () => setTick((t) => t + 1);
+      }, []);
+      return (
+        <Level
+          n={1}
+          depth={2}
+          snapPoints={[1]}
+          onEvent={(level, open, reason) =>
+            events.push(`${level}:${open}:${reason}`)
+          }
+        />
+      );
+    }
+    render(<Harness />);
+    await openLevel(1);
+    await openLevel(2);
+    events.length = 0;
+
+    // Nothing about either drawer's own props actually changes here: this
+    // is a sibling re-render reaching the outer `Drawer.Root` only because
+    // `snapPoints={[1]}` is a fresh array literal every time, never a
+    // memoized one.
+    act(() => rerender?.());
+    await sleep(300);
+
+    expect(popupAt(2).getAttribute('data-phase')).toBe('open');
+    expect(popupAt(1).getAttribute('data-phase')).toBe('open');
+    expect(events).toEqual([]);
+  });
+
+  it('opening the inner before the outer’s own entrance settles leaves the inner open, with no spurious close once the outer does settle', async () => {
+    mockReducedMotion();
+    const events: string[] = [];
+    render(
+      <Level
+        n={1}
+        depth={2}
+        onEvent={(level, open, reason) =>
+          events.push(`${level}:${open}:${reason}`)
+        }
+      />
+    );
+
+    // Real clicks, back to back, with no settle awaited in between: the
+    // outer's own dialog is already modally shown (`showModal()` runs
+    // synchronously inside `open()`, before its own CSS entrance even
+    // starts), so the inner's own trigger is already reachable while the
+    // outer is still mid-entrance -- exactly the window `settleEnter`'s own
+    // re-measure can land in.
+    await userEvent.click(screen.getByTestId('open-1'));
+    await userEvent.click(screen.getByTestId('open-2'));
+
+    await expectSettledTo(() => popupAt(2).getAttribute('data-phase'), 'open');
+    await expectSettledTo(() => popupAt(1).getAttribute('data-phase'), 'open');
+    events.length = 0;
+    await sleep(300);
+
+    expect(popupAt(2).getAttribute('data-phase')).toBe('open');
+    expect(popupAt(1).getAttribute('data-phase')).toBe('open');
+    expect(events).toEqual([]);
+  });
+});
+
+describe('a 3-level controlled cascade with inline snapPoints at every level (#332)', () => {
+  it('closes inner-first, each reporting its own close, never "drag"', async () => {
+    mockReducedMotion();
+    const events: string[] = [];
+    let setOuterOpen: ((open: boolean) => void) | undefined;
+    function Harness() {
+      const [outerOpen, setOpen1] = useState(false);
+      useLayoutEffect(() => {
+        setOuterOpen = setOpen1;
+      }, []);
+      return (
+        <ThreeLevelsInlineSnap
+          open={outerOpen}
+          onOpenChange={setOpen1}
+          onEvent={(level, open, reason) =>
+            events.push(`${level}:${open}:${reason}`)
+          }
+        />
+      );
+    }
+    render(<Harness />);
+    await openLevel(1);
+    await openLevel(2);
+    await openLevel(3);
+    events.length = 0;
+
+    act(() => setOuterOpen?.(false));
+
+    await expectSettledTo(
+      () => popupAt(1).getAttribute('data-phase'),
+      'closed'
+    );
+    expect(popupAt(2).getAttribute('data-phase')).toBe('closed');
+    expect(popupAt(3).getAttribute('data-phase')).toBe('closed');
+    // Inner-first, both 'programmatic', never 'drag': the outer itself
+    // reports nothing here (the existing 2-level version of this test, in
+    // "closing an outer drawer while an inner one is open", above, is the
+    // same way) -- it is controlled, already at the `open: false` this
+    // close is settling into by the time its own engine reports it, and
+    // `Root`'s own gate correctly stays quiet about a close the controlling
+    // prop already asked for.
+    expect(events).toEqual(['3:false:programmatic', '2:false:programmatic']);
   });
 });

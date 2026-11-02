@@ -30,11 +30,17 @@
  * this engine does add is `nestedCount` (`DrawerOptions`, below), the one
  * number `@drawerdeck/react`'s own nested `Drawer.Root`s, found through
  * context, feed in: rendered as `data-nested-open`/`--drawer-nested`, and
- * read to yield Escape and an outside press to whatever is nested above.
- * The cascade on closing an outer drawer with an inner one still open, and
- * the count itself, are `@drawerdeck/react`'s own job (see its module
- * doc): this engine only renders a number it is handed, never discovers
- * one of its own.
+ * read by a non-modal drawer's own document-level Escape listener
+ * (`onDocumentKeyDown`, below) to yield to whatever modal drawer is nested
+ * above it, which has no such native ordering of its own. A modal drawer
+ * needs no such check for either Escape (`onCancel`) or an outside press
+ * (`onGapClick`): the browser's own top-layer close-watcher stack already
+ * routes `cancel` to only the topmost dialog, and makes everything behind
+ * it inert, so neither ever runs while something is genuinely nested above
+ * a modal drawer. The cascade on closing an outer drawer with an inner one
+ * still open, and the count itself, are `@drawerdeck/react`'s own job (see
+ * its module doc): this engine only renders a number it is handed, never
+ * discovers one of its own.
  *
  * Nesting only supports a modal inner drawer (#237): a non-modal `<dialog>`
  * is not in the top layer, so nested it inherits whichever transform or
@@ -113,8 +119,9 @@ export interface DrawerOptions {
    * changes, the same as `snapPoints`/`dismissible`/`modal` already do.
    * This engine never discovers it itself (no DOM walk, no registry of
    * every mounted drawer): it only renders the count (`data-nested-open`
-   * and `--drawer-nested` on the dialog and the panel) and uses it to
-   * yield Escape and an outside press to whatever is nested above it, so
+   * and `--drawer-nested` on the dialog and the panel) and, for a
+   * non-modal drawer only, reads it to yield Escape to whatever modal
+   * drawer is nested above it (`onDocumentKeyDown`'s own module doc), so
    * "the smallest API" for this engine is a single number in, not a
    * `parent` reference or a DOM query. Defaults to 0. */
   nestedCount?: number;
@@ -459,7 +466,14 @@ export function createDrawer(
    * did -- the double-Escape quirk mid-entrance (#268's second bug). */
   let pendingEngineCloses = 0;
 
-  const gap = viewport.querySelector<HTMLElement>('[data-drawer-gap]');
+  // `:scope >`, not a plain descendant selector: with no portal, a nested
+  // drawer's own Viewport is a real DOM descendant of this one (it sits
+  // inside the Panel, `parts`'s own doc above), so an unscoped query here
+  // would also match the inner drawer's own gap (#332). `Drawer.Viewport`
+  // (`@drawerdeck/react`) always renders the gap as a direct child of the
+  // Viewport it belongs to, never any deeper, so `:scope >` finds exactly
+  // this drawer's own one.
+  const gap = viewport.querySelector<HTMLElement>(':scope > [data-drawer-gap]');
 
   // Chromium and Safari ship `animation-timeline`, `scroll-timeline` and
   // `timeline-scope` together; Firefox stable does not yet (#236). Where
@@ -568,8 +582,8 @@ export function createDrawer(
    * once per `setOptions` call that actually changes it, never per frame,
    * same as every other data attribute here. Modal or not -- nesting
    * itself does not care, only the native top layer (free, for a modal
-   * drawer) and this engine's own Escape/outside-press guards (`onCancel`,
-   * `onDocumentKeyDown`, `onGapClick`, below) do. */
+   * drawer) and this engine's own non-modal Escape guard
+   * (`onDocumentKeyDown`, below) do. */
   function updateNestedAttrs() {
     const count = opts.nestedCount ?? 0;
     dialog.style.setProperty(NESTED_COUNT_VAR, String(count));
@@ -683,8 +697,19 @@ export function createDrawer(
    * not dismissible, so a drag or fling toward it settles on the nearest
    * open point instead. */
   function positionMarkers() {
-    const markers =
-      viewport.querySelectorAll<HTMLElement>('[data-drawer-snap]');
+    // `:scope >`, the same reason `gap`'s own query above uses it (#332):
+    // with no portal, a nested drawer's own markers are real DOM
+    // descendants of this Viewport too (inside its Panel), so an unscoped
+    // query here would also reposition the inner drawer's own markers to
+    // this drawer's offsets every time this one re-measures -- a window
+    // resize (`onResize`), a `setOptions` call that actually changed
+    // `snapPoints`/`dismissible` (or, with an inline array literal, merely
+    // looks like it did), or this drawer's own entrance settling
+    // (`settleEnter`) -- unsettling the inner drawer's own mandatory
+    // scroll-snap and closing it, reason 'drag', out from under itself.
+    const markers = viewport.querySelectorAll<HTMLElement>(
+      ':scope > [data-drawer-snap]'
+    );
     markers.forEach((marker, i) => {
       const target = i === 0 ? scrollForSnap(-1) : scrollForSnap(i - 1);
       marker.style.position = 'absolute';
@@ -1177,15 +1202,6 @@ export function createDrawer(
     // Always handled ourselves, so the native instant close never runs
     // ahead of the Panel's own CSS exit.
     event.preventDefault();
-    // Escape closes only the topmost drawer (#272): a drawer nested above
-    // this one is already handling the very same key press itself (its own
-    // `cancel`, for a modal one; `onDocumentKeyDown`, below, for a
-    // non-modal one), so this yields instead of racing it. The browser's
-    // own top-layer close-watcher stack already routes a modal drawer's
-    // `cancel` to only the topmost dialog, which would make this
-    // redundant; kept anyway so the guarantee holds the same way for a
-    // non-modal drawer too, where there is no such native ordering.
-    if ((opts.nestedCount ?? 0) > 0) return;
     if (!opts.dismissible) return;
     if (phase === 'opening') {
       // Escape mid-entrance starts the exit directly, the way `close()`
@@ -1214,11 +1230,6 @@ export function createDrawer(
     // and never reaches the gap at all, but a test (or a consumer)
     // dispatching one straight at it should see the same no-op.
     if (opts.modal === false || !opts.dismissible || phase !== 'open') return;
-    // Yields to whatever is nested above, the same reason `onCancel` does
-    // (#272): a non-modal drawer nested above this modal one has no top
-    // layer of its own to make this one's gap unreachable, so a real
-    // outside press can still land here while it is open.
-    if ((opts.nestedCount ?? 0) > 0) return;
     beginExit('outside-press');
   }
   gap?.addEventListener('click', onGapClick);

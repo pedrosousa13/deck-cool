@@ -7,9 +7,8 @@ A `Drawer.Root` rendered from inside another one's `Drawer.Content`, a
 "Settings" drawer with a button that opens "Notifications" from inside it,
 nests. Nothing new to configure: `side`, `dismissible`, `snapPoints`, a
 controlled `open`, all work exactly as documented everywhere else, on every
-level. `modal` has one restriction: the maintainer's ruling on review is
-that nesting only supports a modal inner drawer (see "Modal or non-modal:
-only the outermost can skip it", below).
+level. `modal` has one restriction: nesting only supports a modal inner
+drawer (see "Modal or non-modal: only the outermost can skip it", below).
 
 ```tsx
 <Drawer.Root>
@@ -156,19 +155,19 @@ in today.
 
 ## Modal or non-modal: only the outermost can skip it
 
-Nesting supports a modal inner drawer only (the maintainer's ruling on
-review, recorded on #237): a non-modal `Drawer.Popup` is a `show()`ed
-`<dialog>`, never in the browser's own top layer, so nested it is a plain
-`position: fixed` element whose containing block is whatever ancestor
-sets up a transform or a stacking context -- the Panel behind it, under
-the scale-back recipe above, or the resting `transform: translateY(0)`
+Nesting supports a modal inner drawer only: a non-modal `Drawer.Popup` is
+a `show()`ed `<dialog>`, never in the browser's own top layer, so nested
+it is a plain `position: fixed` element whose containing block is
+whatever ancestor sets up a transform or a stacking context -- the Panel
+behind it, under the scale-back recipe above, or the resting
+`transform: translateY(0)`
 ("Animate the drawer") -- instead of the viewport. Nested under either,
 the inner Panel renders offset from where it should be, and the outer one
 gets clipped. Its close cannot cascade cleanly either: nothing here makes
 a non-modal drawer's own close wait its turn the way a modal nested
 drawer's does.
 
-A non-modal drawer may still be the *outermost* level, with modal drawers
+A non-modal drawer may still be the _outermost_ level, with modal drawers
 nested inside it: that drawer has no top layer of its own either way (see
 "Non-modal drawers"), and nothing about being the outermost asks it for
 one. `Drawer.Root` warns once, with `console.warn`, in development only,
