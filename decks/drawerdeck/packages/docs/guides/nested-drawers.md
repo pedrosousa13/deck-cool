@@ -71,13 +71,16 @@ than one non-modal listener on `document` at a time in any one nested
 stack, and so no race between two of them to guard against either.
 
 **Dragging, closing or flicking one never touches another.** With no
-portal, a nested drawer's own Panel is a real DOM descendant of the Panel
-behind it, so a mouse-drag `pointerdown` on the inner one still bubbles
-into the outer Panel's own listener too. The outer one recognizes a press
-already claimed by whatever is nested inside it (a shared marker, not
+portal, a nested drawer's own DOM -- its Panel, its Viewport, a field
+focused inside it -- is a real descendant of the Panel behind it, so a
+mouse-drag `pointerdown`, a touch, a wheel or a focus move on the inner one
+still bubbles (or is read as the active element) into the outer's own
+listeners too. Every one of those checks that the event's own target, or
+the focused element, belongs to its own dialog -- its nearest `dialog`
+ancestor is this drawer's own, never one nested inside it -- and yields
+instead of acting on something that is not actually its own. Never
 `stopPropagation()`, which would also hide the press from a consumer's own
-listener further up the tree) and yields instead of starting a second drag
-from the same press.
+listener further up the tree.
 
 ## `data-nested-open` and `--drawer-nested`
 

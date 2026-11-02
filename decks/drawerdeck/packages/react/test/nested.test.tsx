@@ -5,10 +5,12 @@
 // one first, and focus returns to the button (inside the outer) that
 // opened the inner one once it closes. Every open, close and keypress here
 // is real input (`userEvent`, or the `dragPointerDown`/`dragPointerMoveTo`/
-// `dragPointerUp` commands for the one drag test): `@drawerdeck/core`'s
-// own `nestedCount` guard (in `onCancel`/`onDocumentKeyDown`/`onGapClick`)
-// and the browser's own top layer are both things only real input, not a
-// hand-dispatched event, actually exercises.
+// `dragPointerUp` commands for the drag tests): `@drawerdeck/core`'s own
+// `nestedCount` guard is `onDocumentKeyDown`'s alone now (non-modal only --
+// a modal inner's own `cancel` never reaches it); for a modal inner, the
+// browser's own top layer and inertness do the rest, and the browser's own
+// top layer is a thing only real input, not a hand-dispatched event,
+// actually exercises.
 import { type ComponentProps, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { act, render, screen } from '@testing-library/react';
@@ -1240,4 +1242,179 @@ describe('an outer CSS entrance is never interrupted by activity inside a nested
       removeTransition();
     }
   });
+});
+
+// The review's own repro (#332, fourth round): a mouse press that starts on
+// a modal inner drawer while that inner is still in its own CSS entrance or
+// exit bubbles into the outer's `onPointerDown` (`@drawerdeck/core`)
+// unmarked, since the inner's own handler returns before it ever claims the
+// event (its own `phase !== 'open'` check runs first). `ownsTarget` fixes
+// this by checking the press's own DOM position instead of a marker, so it
+// holds regardless of the inner's phase. No `mockReducedMotion`, matching
+// the review's own repro: `open()` itself never animates the scroll
+// position either way, and nothing here reaches the one place `reducedMotion`
+// does -- `throwTo`, after a drag genuinely starts -- since the drag this
+// test presses for must never start on either drawer.
+describe('a mouse press on a modal inner mid-entrance never drags the outer behind it (#332)', () => {
+  it('a real mouse drag starting on panel-2 while it is still opening leaves the outer untouched', async () => {
+    const events: string[] = [];
+    render(
+      <Level
+        n={1}
+        depth={2}
+        onEvent={(level, open, reason) =>
+          events.push(`${level}:${open}:${reason}`)
+        }
+      />
+    );
+    await openLevel(1);
+    const outerViewport = viewportOf(popupAt(1));
+    const outerScrollBefore = outerViewport.scrollTop;
+    events.length = 0;
+
+    // Installed before opening level 2: a real, slow entrance to press
+    // into mid-flight.
+    const removeTransition = withTransformTransition(panelAt(2), 1500);
+    try {
+      await userEvent.click(screen.getByTestId('open-2'));
+      await sleep(700);
+      expect(popupAt(2).getAttribute('data-phase')).toBe('opening');
+
+      const start = await commands.dragPointerDown(
+        '[data-testid="panel-2"]',
+        40,
+        10
+      );
+      let y = start.y;
+      for (let i = 0; i < 30; i++) {
+        y += 20;
+        await commands.dragPointerMoveTo(start.x, y);
+        await nextFrame();
+      }
+      await commands.dragPointerUp();
+
+      // Left unscoped, the outer's own `onPointerDown` would have read the
+      // unmarked press as its own drag start: `setPointerCapture`,
+      // scrolling its own Viewport toward closed, and closing both
+      // drawers, reason 'drag' (the review's own numbers: scrollTop 104 to
+      // 0 in Chromium, 89 to 0 in WebKit).
+      expect(outerViewport.scrollTop).toBe(outerScrollBefore);
+      expect(popupAt(1).getAttribute('data-phase')).toBe('open');
+      expect(events).not.toContain('1:false:drag');
+      expect(events).not.toContain('2:false:drag');
+
+      // The inner itself never started a drag either (its own
+      // `onPointerDown` still correctly declines mid-entrance): the press
+      // instead finishes its entrance immediately, the existing #268
+      // behavior for any real gesture arriving mid-flight.
+      await expectSettledTo(
+        () => popupAt(2).getAttribute('data-phase'),
+        'open'
+      );
+    } finally {
+      removeTransition();
+    }
+  });
+});
+
+// One function, three event kinds (`attachInterruptListeners`,
+// `@drawerdeck/core`): a touch, a wheel or a pointer down starting on a
+// modal inner's own Viewport all bubble into the outer's own
+// `onInterrupt` the same way, and all three are scoped by the same
+// `ownsTarget` check (#332). Table-driven over the three, instead of one
+// test per kind, since the harness and the assertions are identical for
+// all of them.
+describe("the outer's own interrupt listeners never react to a modal inner's own events (#332)", () => {
+  function OuterWithControlledInner({
+    innerOpen,
+    onInnerOpenChange
+  }: {
+    innerOpen: boolean;
+    onInnerOpenChange(next: boolean): void;
+  }) {
+    return (
+      <Drawer.Root>
+        <Drawer.Trigger data-testid="open-1">Open 1</Drawer.Trigger>
+        <Drawer.Popup data-testid="popup-1">
+          <Drawer.Viewport>
+            <Drawer.Panel data-testid="panel-1">
+              <Drawer.Title>Level 1</Drawer.Title>
+              <Drawer.Content>
+                {/* Controlled, with no Trigger of its own, the same reason
+                    the existing touchstart test above gives: a real click
+                    anywhere inside the outer's own Panel would legitimately
+                    interrupt its own entrance on its own (#268), hiding the
+                    bug this test is about. */}
+                <Drawer.Root open={innerOpen} onOpenChange={onInnerOpenChange}>
+                  <Drawer.Popup data-testid="popup-2">
+                    <Drawer.Viewport>
+                      <Drawer.Panel data-testid="panel-2">
+                        <Drawer.Title>Level 2</Drawer.Title>
+                        <Drawer.Content>
+                          <p>Level 2 content.</p>
+                        </Drawer.Content>
+                      </Drawer.Panel>
+                    </Drawer.Viewport>
+                  </Drawer.Popup>
+                </Drawer.Root>
+              </Drawer.Content>
+              <Drawer.Close data-testid="close-1">Close 1</Drawer.Close>
+            </Drawer.Panel>
+          </Drawer.Viewport>
+        </Drawer.Popup>
+      </Drawer.Root>
+    );
+  }
+
+  it.each([
+    ['touchstart', { bubbles: true }],
+    ['wheel', { bubbles: true, deltaY: 40 }],
+    ['pointerdown', { bubbles: true }]
+  ] as const)(
+    "a real '%s' starting on a modal inner's own Viewport never finishes the outer's own entrance early",
+    async (type, init) => {
+      mockReducedMotion();
+      let setInnerOpen: ((open: boolean) => void) | undefined;
+      function Harness() {
+        const [innerOpen, setOpen2] = useState(false);
+        useLayoutEffect(() => {
+          setInnerOpen = setOpen2;
+        }, []);
+        return (
+          <OuterWithControlledInner
+            innerOpen={innerOpen}
+            onInnerOpenChange={setOpen2}
+          />
+        );
+      }
+      render(<Harness />);
+      const removeTransition = withTransformTransition(panelAt(1), 300);
+      try {
+        await userEvent.click(screen.getByTestId('open-1'));
+        expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
+
+        act(() => setInnerOpen?.(true));
+        await expect
+          .poll(() => popupAt(2).getAttribute('data-phase'))
+          .toBe('open');
+        expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
+
+        act(() => {
+          viewportOf(popupAt(2)).dispatchEvent(new Event(type, init));
+        });
+
+        // Left unscoped, the outer's own interrupt listener would have
+        // read this as an interaction on its own Viewport and finished its
+        // entrance immediately.
+        expect(popupAt(1).getAttribute('data-phase')).toBe('opening');
+
+        await expectSettledTo(
+          () => popupAt(1).getAttribute('data-phase'),
+          'open'
+        );
+      } finally {
+        removeTransition();
+      }
+    }
+  );
 });

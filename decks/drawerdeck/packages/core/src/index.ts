@@ -253,19 +253,6 @@ function hitAreaInset(side: Side, v: string): string {
 let resetSheet: CSSStyleSheet | undefined;
 let mountedDrawers = 0;
 
-/** Keyed by the `PointerEvent` object itself, not by any one drawer: marks
- * that some drawer's own mouse-drag `pointerdown` handler (`onPointerDown`,
- * below) has already claimed this exact press. With no portal, a nested
- * drawer's own Panel is a real DOM descendant of the Panel behind it, so a
- * `pointerdown` starting on the inner one still bubbles into the outer
- * Panel's own listener too; this lets the outer one recognize that and
- * yield instead of starting a second drag from the same press (#272). It
- * does not call `stopPropagation()` to get there: that would also hide the
- * press from a consumer's own listener further up the tree (React's root
- * listener among them), breaking a drawer that never nests at all, which
- * has nothing above it to yield to and so never touches this set. */
-const pointerDownHandledFor = new WeakSet<PointerEvent>();
-
 function ensureBackdropReset() {
   mountedDrawers += 1;
   if (resetSheet) return;
@@ -413,6 +400,26 @@ export function createDrawer(
   let pendingCloseReason: OpenChangeReason | null = null;
   let scrollEndDebounce: ReturnType<typeof setTimeout> | undefined;
   let destroyed = false;
+
+  /** Whether `node` belongs to this drawer's own dialog, not one nested
+   * inside or around it (#272, #332): its nearest `dialog` ancestor
+   * (`Element.closest('dialog')`) is this drawer's own `dialog`, never
+   * absent (`null`) and never another drawer's. With no portal, a nested
+   * drawer's own DOM -- its Viewport, its Panel, a field focused inside it
+   * -- is a real descendant of this drawer's Panel too, so every listener
+   * below that reads an event target or the active element checks this
+   * first, instead of acting on something that actually belongs to a
+   * drawer nested inside this one. One structural check, replacing each
+   * earlier round's own hand-rolled `target.closest('dialog') !== dialog`
+   * (`onInterrupt`, `focusedKeyboardField`, below) and the `onPointerDown`
+   * bug neither of those two caught (#332's own fourth-round review): a
+   * shared marker an earlier round tried there instead missed a press on
+   * the inner mid-entrance or mid-exit, since the inner's own handler
+   * returned before ever marking it; this checks the target's own DOM
+   * position instead, which holds at any phase. */
+  function ownsTarget(node: Element | null): boolean {
+    return (node?.closest('dialog') ?? null) === dialog;
+  }
 
   /** Turns a snap candidate's index (-1 for closed, else an index into
    * `snapPxArr`) into the actual `scrollTop`/`scrollLeft` value that
@@ -841,6 +848,8 @@ export function createDrawer(
     if (cssExiting) teardownExit();
     finishClose(reason);
   }
+  // No `ownsTarget` needed (#332): `close` does not bubble, so this only
+  // ever fires for this exact dialog, never one nested inside or around it.
   dialog.addEventListener('close', onNativeClose);
 
   /** Forces the style flush that starts the transition `el`'s attribute
@@ -870,15 +879,15 @@ export function createDrawer(
    * way out. The gesture that interrupted it then continues natively from
    * there, same as always.
    *
-   * Scoped to this drawer's own dialog (#332): with no portal, a nested
-   * drawer's own Viewport is a real DOM descendant of this one too (inside
-   * the Panel), so a touch, a wheel or a pointer down starting on the inner
-   * one still bubbles into this listener. Left unchecked, that would finish
-   * this drawer's own entrance or exit early just because something was
-   * interacted with in a drawer nested inside it. */
+   * Scoped to this drawer's own dialog with `ownsTarget` (#332): with no
+   * portal, a nested drawer's own Viewport is a real DOM descendant of this
+   * one too (inside the Panel), so a touch, a wheel or a pointer down
+   * starting on the inner one still bubbles into this listener. Left
+   * unchecked, that would finish this drawer's own entrance or exit early
+   * just because something was interacted with in a drawer nested inside
+   * it. */
   function onInterrupt(event: Event) {
-    const target = event.target as Element | null;
-    if (target?.closest('dialog') !== dialog) return;
+    if (!ownsTarget(event.target as Element | null)) return;
     if (phase === 'opening') {
       finishEnter();
     } else if (phase === 'closing') {
@@ -1098,6 +1107,11 @@ export function createDrawer(
   // fallback, below) stays as the fallback for whatever this misses. Axis-
   // independent: an IntersectionObserver reads overlap, not which edge it
   // is measured from.
+  //
+  // No `ownsTarget` needed (#332): this observer only ever `observe()`s
+  // this drawer's own Panel (`settleEnter`/`finishEnter`), so every entry
+  // it reports already describes that exact element, never a nested
+  // drawer's own.
   const panelVisibilityObserver = new IntersectionObserver(
     (entries) => {
       const entry = entries[entries.length - 1];
@@ -1171,6 +1185,12 @@ export function createDrawer(
     }
   }
 
+  // No `ownsTarget` needed on any of this Viewport's own `scroll`/
+  // `scrollend` listeners, here and in `onScroll` just below (#332):
+  // neither event bubbles for an element (unlike on `document`), so each
+  // only ever fires for the exact Viewport it was attached to, and neither
+  // handler reads `event.target` at all -- both read `viewport[axis.scroll]`
+  // directly, already this drawer's own.
   const supportsScrollEnd = 'onscrollend' in window;
   function onScrollEndDebounce() {
     clearTimeout(scrollEndDebounce);
@@ -1229,6 +1249,8 @@ export function createDrawer(
     // Escape's own `preventDefault()` does not hold. 'closed': nothing to
     // do.
   }
+  // No `ownsTarget` needed (#332): `cancel` does not bubble either, the
+  // same as `close` above.
   dialog.addEventListener('cancel', onCancel);
 
   function onGapClick() {
@@ -1238,6 +1260,11 @@ export function createDrawer(
     // (the hit area clips it out of the Viewport entirely, `updateHitArea`)
     // and never reaches the gap at all, but a test (or a consumer)
     // dispatching one straight at it should see the same no-op.
+    //
+    // No `ownsTarget` needed (#332): the gap renders no children of its
+    // own, so a nested drawer's own DOM, which sits inside the Panel, never
+    // sits inside the gap, and a click starting there never bubbles into
+    // this listener at all.
     if (opts.modal === false || !opts.dismissible || phase !== 'open') return;
     beginExit('outside-press');
   }
@@ -1259,7 +1286,11 @@ export function createDrawer(
     // alone is what this listener checks: nesting only supports a modal
     // inner drawer (#237), so there is at most one non-modal listener on
     // `document` in any one nested stack, and so no same-press race
-    // between two of them to guard against.
+    // between two of them to guard against. Deliberately not `ownsTarget`
+    // (#332): this is a single, document-level listener with no element of
+    // its own to scope a target against, and `nestedCount` already answers
+    // the one question it needs -- is anything open above me -- without
+    // depending on where focus or the event target currently sit.
     if ((opts.nestedCount ?? 0) > 0) return;
     if (!opts.dismissible) return;
     if (phase !== 'opening' && phase !== 'open') return;
@@ -1346,16 +1377,15 @@ export function createDrawer(
    * the keyboard up (`opensKeyboard`) -- what `maybeExpandForKeyboard`,
    * below, checks before moving to the largest snap point. `panel.contains`
    * alone is not enough (#332): with no portal, a nested drawer's own field
-   * is a real DOM descendant of this Panel too, so this also checked
-   * `active.closest('dialog') === dialog`, scoping it to a field that
-   * belongs to *this* drawer's own dialog, not one nested inside it -- the
-   * nearest dialog ancestor of a field inside a nested drawer is that
-   * drawer's own, never this one's. */
+   * is a real DOM descendant of this Panel too, so this also checks
+   * `ownsTarget`, scoping it to a field that belongs to *this* drawer's own
+   * dialog, not one nested inside it -- the nearest dialog ancestor of a
+   * field inside a nested drawer is that drawer's own, never this one's. */
   function focusedKeyboardField(): HTMLElement | null {
     const active = document.activeElement;
     if (!(active instanceof HTMLElement)) return null;
     if (!panel.contains(active) || !opensKeyboard(active)) return null;
-    if (active.closest('dialog') !== dialog) return null;
+    if (!ownsTarget(active)) return null;
     return active;
   }
 
@@ -1527,6 +1557,11 @@ export function createDrawer(
     ensureFieldVisible();
   }
 
+  // No `ownsTarget` needed on `updateKeyboardInset` (#332): a `window`/
+  // `visualViewport` 'resize' or 'scroll' carries no useful target at all
+  // (`visualViewport` is not even a node), so neither this function nor its
+  // listeners below take an event parameter to read one from. It calls
+  // `focusedKeyboardField`, which is scoped, for what it reads instead.
   function attachKeyboardListeners() {
     if (keyboardListenersAttached || !window.visualViewport) return;
     keyboardListenersAttached = true;
@@ -1557,6 +1592,9 @@ export function createDrawer(
     }
   }
 
+  // No `ownsTarget` needed (#332): same reason as `updateKeyboardInset`
+  // above, a `window`/`visualViewport` 'resize' has no element target to
+  // check, and `onResize` takes no event parameter either.
   function onResize() {
     // `opening` reconciles too: `open()` no longer animates the scroll
     // position (it is already at its snap point, synchronously, before
@@ -1628,18 +1666,25 @@ export function createDrawer(
     ) {
       return;
     }
-    // Yields to whatever already claimed this exact press (#272):
-    // `pointerDownHandledFor`'s own module doc above explains why a shared
-    // marker, not `stopPropagation()`, is how a nested drawer's own Panel
-    // keeps this same `pointerdown` from also starting a drag on the
-    // Panel behind it.
-    if (pointerDownHandledFor.has(event)) return;
+    // Scoped to this drawer's own dialog with `ownsTarget` (#332): with no
+    // portal, a nested drawer's own Panel is a real DOM descendant of the
+    // Panel behind it, so a press starting on the inner one still bubbles
+    // here too, at any phase of the inner's own CSS entrance or exit. An
+    // earlier round tried to catch this with a shared `pointerDownHandledFor`
+    // marker the inner's own handler set before this one saw the same
+    // event, but that marker was only ever set once the inner reached
+    // `phase === 'open'` -- the very check just above, on the inner's own
+    // call -- so a press arriving while the inner was still `'opening'` or
+    // `'closing'` reached here unmarked (#332's fourth round). `ownsTarget`
+    // checks the target's own DOM position instead, which holds regardless
+    // of the inner's phase, so the marker is gone: nothing here needs it
+    // any more.
+    if (!ownsTarget(event.target as Element | null)) return;
     const target = event.target as Element | null;
     if (target?.closest('input, button, a, textarea, select')) {
       return;
     }
     event.preventDefault();
-    pointerDownHandledFor.add(event);
     dragging = true;
     dragStartMain = pointerMain(event);
     dragStartScroll = viewport[axis.scroll];
@@ -1657,6 +1702,16 @@ export function createDrawer(
     opts.onDragChange?.(true);
   }
 
+  // No `ownsTarget` needed on `onPointerMove`/`onPointerUp`, just below
+  // (#332): neither reads `event.target` at all (`pointerMain` reads
+  // `clientX`/`clientY`, not the target), and both only ever act while
+  // `dragging` is true, which only this drawer's own, now-scoped
+  // `onPointerDown` ever sets -- a press that was not this drawer's own
+  // never reaches here in the first place. Once a drag is under way,
+  // `panel.setPointerCapture` also retargets every later pointer event
+  // for it straight at this drawer's own Panel regardless of where the
+  // pointer physically is, so `event.target` could not read a nested
+  // drawer's own element here even if either function looked.
   function onPointerMove(event: PointerEvent) {
     if (!dragging || event.pointerType !== 'mouse') return;
     const d = pointerMain(event) - dragStartMain;
@@ -1801,6 +1856,11 @@ export function createDrawer(
           settleEnter();
           return;
         }
+        // No `ownsTarget` needed (#332): `transitionend` bubbles, so a
+        // nested drawer's own Panel finishing its own entrance also
+        // reaches here, but the exact-identity check below already
+        // excludes it -- a nested Panel is never literally this `panel` --
+        // which is stricter than `ownsTarget` would be anyway.
         const onEnd = (event: Event) => {
           if ((event as TransitionEvent).target !== panel) return;
           settleEnter();

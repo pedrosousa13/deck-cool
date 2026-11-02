@@ -347,10 +347,10 @@ describe('a mouse pointerdown on a drawer that never nests (#272)', () => {
       // engine's own mouse-drag handler on the Panel (`onPointerDown`,
       // `@drawerdeck/core`) still claims the press to start a drag, but
       // must never call `stopPropagation()` to do it. #272's own nested
-      // guard uses a shared `WeakSet` instead, precisely so a drawer with
-      // nothing nested above it, this one, never touches it and lets
-      // the press keep bubbling, the way `main`'s own core, with no
-      // nesting concept at all, always did.
+      // guard (`ownsTarget`, #332) checks the press's own DOM position, so
+      // a drawer with nothing nested above it, this one, always finds its
+      // own press is its own and lets it keep bubbling, the way `main`'s
+      // own core, with no nesting concept at all, always did.
       await userEvent.click(screen.getByTestId('row'));
 
       expect(rowSpy).toHaveBeenCalledTimes(1);
