@@ -30,6 +30,29 @@ import {
 export type { OpenChangeReason, Phase, Side, SnapPoint };
 
 /**
+ * Nesting (#272): a `Drawer.Root` finds the nearest enclosing one, if any,
+ * through context (`Root`'s own `parentCtx`, below) -- never a `parent`
+ * prop and never a DOM walk, since the relationship is already there in
+ * the component tree, and a DOM walk would miss a `Drawer.Popup` a
+ * consumer portals elsewhere (the "React portal" test in
+ * `test/nested.test.tsx` exists to prove that still works). Base UI's own
+ * `Drawer` does the same thing, through its own `DrawerRootContext`
+ * (`useDrawerRootContext(true)`, read optionally) and a `notifyParent*`
+ * family of callbacks a nested root is handed; this follows the same
+ * shape, with the smaller surface drawerdeck's own CSS-only recipe needs:
+ * no swipe progress, no frontmost height, just a depth count and a close.
+ *
+ * `@drawerdeck/core` is handed the *result*, not the relationship: a
+ * plain `nestedCount` number through `setOptions`, the same way
+ * `snapPoints`/`dismissible`/`modal` already go in. The engine renders it
+ * (`data-nested-open`, `--drawer-nested`) and uses it to yield Escape and
+ * an outside press to whatever is nested above; this file is the one that
+ * works out what that number is, and sequences the cascade when an outer
+ * drawer closes while an inner one is still open (`closeAndWait`, in
+ * `Root`, below).
+ */
+
+/**
  * A part's `render` prop (Base UI's and vaul's convention, carried over for
  * drawerdeck's own primitives): a `ReactElement` to clone the part's own
  * props onto, or a function given them to build one. Without it, the part
@@ -138,6 +161,24 @@ interface DrawerContextValue extends DrawerState {
   requestOpen(reason: OpenChangeReason): void;
   requestClose(reason: OpenChangeReason): void;
   requestSnap(index: number): void;
+  /** Nesting (#272), for a `Drawer.Root` that finds this one through
+   * context as its nearest enclosing drawer -- never called by a part, and
+   * never read back by this Root's own rendering: `childId` is that
+   * nested Root's own `useId()`, `contribution` is 0 while it is closed,
+   * else 1 plus however many drawers are nested inside *it*. This Root
+   * aggregates every registered child's contribution (the largest, since
+   * only one chain is ever actually open in practice) into its own
+   * `nestedCount`, fed to `@drawerdeck/core` through `setOptions` the same
+   * way `snapPoints`/`dismissible`/`modal` already are. */
+  notifyNestedChange(childId: string, contribution: number): void;
+  /** The same nested Root's own close, so that if *this* Root closes while
+   * it is still open, it closes first: `null` while it is closed, unused
+   * either way. Resolves once that Root (and whatever is nested inside
+   * it, recursively) has fully closed. */
+  registerNestedClose(
+    childId: string,
+    closeFn: (() => Promise<void>) | null
+  ): void;
 }
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
@@ -246,6 +287,80 @@ export function Root({
   const triggerRef = useRef<HTMLElement | null>(null);
   const drawerRef = useRef<Drawer | null>(null);
 
+  // ---------- nesting (#272) ----------
+  // Found through context, not a prop and not a DOM walk: `null` when this
+  // Root is not nested inside another one at all. A stable identity
+  // (`useId`) names this Root to whichever Root `parentCtx` belongs to, so
+  // its own `notifyNestedChange`/`registerNestedClose` can tell this
+  // Root's own contribution apart from a sibling's.
+  const parentCtx = use(DrawerContext);
+  const childId = useId();
+  // Resolved by `onPhaseChange`, below, the moment this Root's own phase
+  // actually reaches 'closed': what `closeAndWait` awaits, so a drawer
+  // nested above this one (or `Drawer.Close`, or a controlled `open` going
+  // false) can tell the close is really finished, not just requested.
+  const closeWaitersRef = useRef<(() => void)[]>([]);
+  // This Root's own nested children (zero, one, or in the unusual case of
+  // two open at once, more), keyed the same way: each one's contribution
+  // (`notifyNestedChange`) and its own close-and-wait (`registerNestedClose`),
+  // read by `nestedCount` and `closeAndWait`, below.
+  const nestedContributionsRef = useRef<Map<string, number>>(new Map());
+  const nestedClosersRef = useRef<Map<string, () => Promise<void>>>(new Map());
+  const [nestedCount, setNestedCount] = useState(0);
+
+  /** Aggregates every registered child's own contribution (1 plus
+   * whatever is nested inside *it*) into this Root's own `nestedCount`:
+   * the largest, not the sum, of however many are currently registered --
+   * in practice there is only ever one open chain, and taking the largest
+   * keeps an unusual second one from double-counting the drawers really
+   * stacked above this one. Exposed to a nested child through context,
+   * never called by a part of this Root's own. */
+  const notifyNestedChange = useCallback((id: string, contribution: number) => {
+    if (contribution > 0) nestedContributionsRef.current.set(id, contribution);
+    else nestedContributionsRef.current.delete(id);
+    const values = [...nestedContributionsRef.current.values()];
+    setNestedCount(values.length > 0 ? Math.max(...values) : 0);
+  }, []);
+
+  /** The same child's own close-and-wait, kept so this Root's own close
+   * (`closeAndWait`, below) can cascade into it first. */
+  const registerNestedClose = useCallback(
+    (id: string, closeFn: (() => Promise<void>) | null) => {
+      if (closeFn) nestedClosersRef.current.set(id, closeFn);
+      else nestedClosersRef.current.delete(id);
+    },
+    []
+  );
+
+  /** Closes this Root's own drawer and waits for it to actually finish,
+   * cascading first into whatever is nested inside it (recursively, since
+   * every level's own `closeAndWait` does the same check): the "closing
+   * an outer drawer while an inner one is open closes the inner one first,
+   * then the outer one" ruling (#272). Used by `Drawer.Close` and by a
+   * controlled `open` going false -- never by Escape, a drag or an
+   * outside press, which only ever reach the drawer actually acted on
+   * (`@drawerdeck/core`'s own `nestedCount` guard already keeps those off
+   * a drawer that is not the topmost, so there is nothing here for them to
+   * cascade). */
+  const closeAndWait = useCallback(async (reason: OpenChangeReason) => {
+    const closers = [...nestedClosersRef.current.values()];
+    if (closers.length > 0) await Promise.all(closers.map((close) => close()));
+    const drawer = drawerRef.current;
+    if (!drawer || drawer.phase === 'closed') return;
+    // The waiter goes in *before* `close()`: with no CSS transition at
+    // all (nothing here declares one, or `prefers-reduced-motion`
+    // zeroed it), `close()` runs synchronously all the way through to
+    // `onPhaseChange('closed')` -- the very callback that resolves this
+    // queue -- so pushing the resolver after the call would push it onto
+    // a queue `onPhaseChange` already drained, and this would never
+    // settle.
+    const closed = new Promise<void>((resolve) => {
+      closeWaitersRef.current.push(resolve);
+    });
+    drawer.close(reason);
+    await closed;
+  }, []);
+
   const openRef = useRef(open);
   const snapPointRef = useRef(snapPoint);
   const onOpenChangeRef = useRef(onOpenChange);
@@ -290,8 +405,16 @@ export function Root({
         modal: modalRef.current,
         onPhaseChange(phase) {
           setState((s) => ({ ...s, phase }));
-          if (phase === 'closed')
+          if (phase === 'closed') {
             triggerRef.current?.focus({ preventScroll: true });
+            // Nested or not: `closeAndWait`'s own promise (if anything is
+            // waiting on it -- `Drawer.Close`, a controlled `open` going
+            // false, or the Root this one is nested inside, cascading)
+            // resolves only now, once the close is actually finished.
+            const waiters = closeWaitersRef.current;
+            closeWaitersRef.current = [];
+            waiters.forEach((resolve) => resolve());
+          }
         },
         onSnapPointChange(index) {
           setState((s) => ({ ...s, snapIndex: index }));
@@ -320,8 +443,13 @@ export function Root({
   }, [initialOpen, initialSide]);
 
   useLayoutEffect(() => {
-    drawerRef.current?.setOptions({ snapPoints, dismissible, modal });
-  }, [snapPoints, dismissible, modal]);
+    drawerRef.current?.setOptions({
+      snapPoints,
+      dismissible,
+      modal,
+      nestedCount
+    });
+  }, [snapPoints, dismissible, modal, nestedCount]);
 
   // Controlled `open`: follows a new value, and returns to it after a close
   // the parent's `onOpenChange` did not take (the parent kept `open` true).
@@ -332,8 +460,10 @@ export function Root({
     const drawer = drawerRef.current;
     if (!drawer || open === undefined) return;
     if (open && drawer.phase === 'closed') drawer.open(snapPoint);
-    if (!open && drawer.phase !== 'closed') drawer.close('programmatic');
-  }, [open, snapPoint, state.phase]);
+    // `closeAndWait`, not a direct `drawer.close()`: a nested drawer still
+    // open inside this one closes first (#272).
+    if (!open && drawer.phase !== 'closed') void closeAndWait('programmatic');
+  }, [open, snapPoint, state.phase, closeAndWait]);
 
   // Controlled `snapPoint`, while already open.
   useLayoutEffect(() => {
@@ -342,15 +472,39 @@ export function Root({
     if (snapPoint !== drawer.snapIndex) drawer.snapTo(snapPoint);
   }, [snapPoint, state.phase]);
 
+  const isOpen = state.phase !== 'closed';
+
+  // Nesting (#272): registers this Root's own contribution and its own
+  // close-and-wait with whichever Root `parentCtx` belongs to, only while
+  // this Root is itself nested inside one.
+  useLayoutEffect(() => {
+    if (!parentCtx) return;
+    parentCtx.notifyNestedChange(childId, isOpen ? 1 + nestedCount : 0);
+    return () => parentCtx.notifyNestedChange(childId, 0);
+  }, [parentCtx, childId, isOpen, nestedCount]);
+  useLayoutEffect(() => {
+    if (!parentCtx) return;
+    parentCtx.registerNestedClose(
+      childId,
+      isOpen ? () => closeAndWait('programmatic') : null
+    );
+    return () => parentCtx.registerNestedClose(childId, null);
+  }, [parentCtx, childId, isOpen, closeAndWait]);
+
   const requestOpen = useCallback((reason: OpenChangeReason) => {
     drawerRef.current?.open(
       snapPointRef.current ?? initialSnapIndexRef.current
     );
     onOpenChangeRef.current?.(true, { reason });
   }, []);
-  const requestClose = useCallback((reason: OpenChangeReason) => {
-    drawerRef.current?.close(reason);
-  }, []);
+  // `closeAndWait`, not a direct `drawer.close()`: a nested drawer still
+  // open inside this one closes first (#272).
+  const requestClose = useCallback(
+    (reason: OpenChangeReason) => {
+      void closeAndWait(reason);
+    },
+    [closeAndWait]
+  );
   const requestSnap = useCallback((index: number) => {
     drawerRef.current?.snapTo(index);
   }, []);
@@ -358,7 +512,6 @@ export function Root({
   const titleId = useId();
   const descriptionId = useId();
   const snapCount = (snapPoints?.length ?? 1) + 1;
-  const isOpen = state.phase !== 'closed';
 
   const context = useMemo<DrawerContextValue>(
     () => ({
@@ -377,7 +530,9 @@ export function Root({
       triggerRef,
       requestOpen,
       requestClose,
-      requestSnap
+      requestSnap,
+      notifyNestedChange,
+      registerNestedClose
     }),
     [
       state,
@@ -389,7 +544,9 @@ export function Root({
       descriptionId,
       requestOpen,
       requestClose,
-      requestSnap
+      requestSnap,
+      notifyNestedChange,
+      registerNestedClose
     ]
   );
 

@@ -23,6 +23,18 @@
  * prototype's variant B (`decks/sheetdeck-prototype/index.html`,
  * `prototype/sheetdeck`), ruled on in #232: the inner content stays locked
  * until the drawer reaches its top snap point.
+ *
+ * Nests (#272): a drawer opened from inside another is just another
+ * `<dialog>`, so `showModal()`'s own top-layer order already stacks it
+ * above, and makes the one behind inert, with no code here at all. What
+ * this engine does add is `nestedCount` (`DrawerOptions`, below), the one
+ * number `@drawerdeck/react`'s own nested `Drawer.Root`s, found through
+ * context, feed in: rendered as `data-nested-open`/`--drawer-nested`, and
+ * read to yield Escape and an outside press to whatever is nested above.
+ * The cascade on closing an outer drawer with an inner one still open, and
+ * the count itself, are `@drawerdeck/react`'s own job (see its module
+ * doc): this engine only renders a number it is handed, never discovers
+ * one of its own.
  */
 
 /** A snap point: a fraction of the Viewport's extent along the side's axis
@@ -87,6 +99,18 @@ export interface DrawerOptions {
    * the "Non-modal drawers" guide for why `show()`, not the Popover
    * API). */
   modal?: boolean;
+  /** How many drawers are currently open, stacked above this one (#272):
+   * `@drawerdeck/react` is the one that knows this, from its own nested
+   * `Drawer.Root`s registering with the nearest enclosing one through
+   * context, and feeds it in here through `setOptions` each time it
+   * changes, the same as `snapPoints`/`dismissible`/`modal` already do.
+   * This engine never discovers it itself (no DOM walk, no registry of
+   * every mounted drawer): it only renders the count (`data-nested-open`
+   * and `--drawer-nested` on the dialog and the panel) and uses it to
+   * yield Escape and an outside press to whatever is nested above it, so
+   * "the smallest API" for this engine is a single number in, not a
+   * `parent` reference or a DOM query. Defaults to 0. */
+  nestedCount?: number;
   onOpenChange?(open: boolean, reason: OpenChangeReason): void;
   onSnapPointChange?(index: number): void;
   onPhaseChange?(phase: Phase): void;
@@ -127,6 +151,13 @@ const KEYBOARD_FIELD_MARGIN = 4;
  * migrating from it is easy. */
 const STARTING_STYLE_ATTR = 'data-starting-style';
 const ENDING_STYLE_ATTR = 'data-ending-style';
+/** Set on the dialog and the panel while a drawer nested inside this one is
+ * open (#272), alongside `NESTED_COUNT_VAR`: `updateNestedAttrs`, below. */
+const NESTED_OPEN_ATTR = 'data-nested-open';
+/** How many drawers are stacked above this one: `--drawer-nested`, set on
+ * the dialog only (the panel does not need its own copy; a consumer reads
+ * it from an ancestor custom property the same as any other). */
+const NESTED_COUNT_VAR = '--drawer-nested';
 /** Added to the Panel's own computed transition duration for the enter and
  * exit timeout fallbacks, so a `transitionend` that lands a frame or two
  * late (it does) still arrives before the timeout settles the phase
@@ -207,6 +238,31 @@ function hitAreaInset(side: Side, v: string): string {
  * ordinary custom property each Viewport sets on itself (`measure`). */
 let resetSheet: CSSStyleSheet | undefined;
 let mountedDrawers = 0;
+
+/** Keyed by the `KeyboardEvent` object itself, not by any one drawer: marks
+ * that some non-modal drawer's own document-wide Escape listener
+ * (`onDocumentKeyDown`, below) has already closed itself for this exact
+ * key press, so a shallower one sharing the same `document` listener
+ * target does not also act on it (#272, "Escape closes only the
+ * topmost"). Every non-modal drawer nested inside another mounts its own
+ * listener on the very first render, before any dialog is even shown (a
+ * `<dialog>` without `open` is still mounted), in child-before-parent
+ * order (React's own effect order), so for any later key press the
+ * deepest -- and so, whichever of them is actually open, the topmost --
+ * listener always runs first; this exists only because that deepest
+ * listener's own `beginExit` can synchronously flush a state update that
+ * zeroes a shallower drawer's own `nestedCount` before its listener's
+ * turn even comes, which read as "nothing is nested above me any more"
+ * there (true, but only because this key press just made it so) rather
+ * than "something was, when this press started" -- a `nestedCount` check
+ * alone cannot tell those apart; this can, and does not depend on when
+ * React flushes anything. A modal drawer needs none of this: the
+ * browser's own top-layer close-watcher stack already delivers `cancel`
+ * to the topmost dialog alone, a real per-dialog event, not one shared
+ * across a document-wide listener. Never grows unbounded: `WeakSet` drops
+ * each entry once that one key press's own event object is no longer
+ * referenced anywhere. */
+const escapeHandledFor = new WeakSet<KeyboardEvent>();
 
 function ensureBackdropReset() {
   mountedDrawers += 1;
@@ -513,6 +569,25 @@ export function createDrawer(
     updateHitArea();
   }
 
+  /** Renders `opts.nestedCount` (#272) on the dialog and the panel: set
+   * once per `setOptions` call that actually changes it, never per frame,
+   * same as every other data attribute here. Modal or not -- nesting
+   * itself does not care, only the native top layer (free, for a modal
+   * drawer) and this engine's own Escape/outside-press guards (`onCancel`,
+   * `onDocumentKeyDown`, `onGapClick`, below) do. */
+  function updateNestedAttrs() {
+    const count = opts.nestedCount ?? 0;
+    if (count > 0) {
+      dialog.setAttribute(NESTED_OPEN_ATTR, '');
+      panel.setAttribute(NESTED_OPEN_ATTR, '');
+      dialog.style.setProperty(NESTED_COUNT_VAR, String(count));
+    } else {
+      dialog.removeAttribute(NESTED_OPEN_ATTR);
+      panel.removeAttribute(NESTED_OPEN_ATTR);
+      dialog.style.removeProperty(NESTED_COUNT_VAR);
+    }
+  }
+
   /** The Viewport's own hit-testable region, non-modal only (see
    * `applyModalStyle`, above, for why it needs one at all): clipped
    * (`hitAreaInset`) to exactly the portion of the Panel currently
@@ -555,6 +630,7 @@ export function createDrawer(
     }
   }
   applyModalStyle();
+  updateNestedAttrs();
 
   // The timeline plumbing only: a consumer's own `@keyframes` and
   // `animation-timeline: --drawer` on `Drawer.Backdrop` (or any other
@@ -833,8 +909,27 @@ export function createDrawer(
     // scrollable-overflow spec folds into the Viewport's `scrollHeight`/
     // `scrollWidth`, so `--drawer-max-scroll` came out inflated. The Panel
     // now rests at its real, untransformed position, so this is the first
-    // accurate reading.
+    // accurate reading. `positionMarkers` and the scroll write right after
+    // it are this `measure`'s own mandatory pair everywhere else in this
+    // file (`open`, `onResize`, `setOptions`): skipping them here was
+    // harmless on its own (a drawer with nothing else on the page never
+    // re-measures to a materially different layout right as it settles),
+    // until a nested drawer gave the page a reason to (#272): an ancestor
+    // drawer's own `setOptions` call, reporting `nestedCount` the moment
+    // this one starts opening, can land its own re-render -- and so a
+    // style/layout pass -- in the same window, right as this settles. The
+    // stale `[data-drawer-snap]` marker this measure's own fresh `snapPx`
+    // left behind was enough for the browser's own `scroll-snap-type` to
+    // settle `scrollTop` back toward 0 on that pass, in both Chromium and
+    // WebKit, with nothing here that read `phase` or `dialog.open` able to
+    // tell: both still agreed the drawer was open, just scrolled to
+    // closed's own offset underneath that. Repositioning the markers and
+    // re-asserting the resting scroll position against the fresh
+    // measurement, the same way `onResize` already does for a resize
+    // mid-open, closes the gap.
     measure();
+    positionMarkers();
+    viewport[axis.scroll] = scrollForSnap(snapIndex);
     // Arms the leave-view close (#296) only now: the entrance has actually
     // settled, so the Panel's own position reflects where it rests open,
     // not wherever a consumer's CSS transform still had it mid-flight.
@@ -857,6 +952,8 @@ export function createDrawer(
     // Re-measures now the jump has landed the Panel at its real position
     // (`settleEnter`'s own comment: #312).
     measure();
+    positionMarkers();
+    viewport[axis.scroll] = scrollForSnap(snapIndex);
     // Arms the leave-view close (#296): see `settleEnter`, above.
     panelVisibilityObserver.observe(panel);
     setPhase('open');
@@ -1086,6 +1183,15 @@ export function createDrawer(
     // Always handled ourselves, so the native instant close never runs
     // ahead of the Panel's own CSS exit.
     event.preventDefault();
+    // Escape closes only the topmost drawer (#272): a drawer nested above
+    // this one is already handling the very same key press itself (its own
+    // `cancel`, for a modal one; `onDocumentKeyDown`, below, for a
+    // non-modal one), so this yields instead of racing it. The browser's
+    // own top-layer close-watcher stack already routes a modal drawer's
+    // `cancel` to only the topmost dialog, which would make this
+    // redundant; kept anyway so the guarantee holds the same way for a
+    // non-modal drawer too, where there is no such native ordering.
+    if ((opts.nestedCount ?? 0) > 0) return;
     if (!opts.dismissible) return;
     if (phase === 'opening') {
       // Escape mid-entrance starts the exit directly, the way `close()`
@@ -1114,6 +1220,11 @@ export function createDrawer(
     // and never reaches the gap at all, but a test (or a consumer)
     // dispatching one straight at it should see the same no-op.
     if (opts.modal === false || !opts.dismissible || phase !== 'open') return;
+    // Yields to whatever is nested above, the same reason `onCancel` does
+    // (#272): a non-modal drawer nested above this modal one has no top
+    // layer of its own to make this one's gap unreachable, so a real
+    // outside press can still land here while it is open.
+    if ((opts.nestedCount ?? 0) > 0) return;
     beginExit('outside-press');
   }
   gap?.addEventListener('click', onGapClick);
@@ -1127,8 +1238,13 @@ export function createDrawer(
   // not enough.
   function onDocumentKeyDown(event: KeyboardEvent) {
     if (opts.modal !== false || event.key !== 'Escape') return;
+    // Escape closes only the topmost drawer (#272): `escapeHandledFor`'s
+    // own module doc explains why this, not `nestedCount`, is the guard
+    // here.
+    if (escapeHandledFor.has(event)) return;
     if (!opts.dismissible) return;
     if (phase !== 'opening' && phase !== 'open') return;
+    escapeHandledFor.add(event);
     event.preventDefault();
     beginExit('escape');
   }
@@ -1492,6 +1608,17 @@ export function createDrawer(
       return;
     }
     event.preventDefault();
+    // Stops it right here (#272): with no portal, a nested drawer's own
+    // Panel is a real DOM descendant of the one behind it, so this same
+    // `pointerdown` would otherwise keep bubbling straight into that
+    // outer Panel's own listener too -- which has no way to tell "this
+    // gesture started on a drawer nested above me" from one actually
+    // meant for it, and would start dragging *both* at once from a single
+    // press. Only `pointerdown` needs this: `onPointerMove`/`onPointerUp`
+    // below only ever act while this engine's own `dragging` is already
+    // true, which it never becomes for the outer Panel once its own
+    // `pointerdown` never arrives.
+    event.stopPropagation();
     dragging = true;
     dragStartMain = pointerMain(event);
     dragStartScroll = viewport[axis.scroll];
@@ -1701,11 +1828,35 @@ export function createDrawer(
   }
 
   function setOptions(next: Partial<DrawerOptions>) {
+    const previous = opts;
     opts = { ...opts, ...next };
-    measure();
-    positionMarkers();
-    updateContentLock();
-    applyModalStyle();
+    // `nestedCount` (#272) never affects a snap target -- it is not
+    // `snapPoints`, `side` (fixed at creation anyway) or anything
+    // `measure`/`positionMarkers` reads -- and `@drawerdeck/react` sends a
+    // fresh one through here every time a nested drawer somewhere above or
+    // below this one opens or closes, far more often than `snapPoints`,
+    // `dismissible` or `modal` themselves actually change. Re-measuring
+    // and repositioning the snap markers for a change that could not have
+    // moved them found a real bug (#272's own write-up): a mandatory
+    // scroll-snap container can resettle its own scroll position toward
+    // whichever marker now reads nearest the moment anything repositions
+    // them, with no user gesture, and in both Chromium and WebKit that
+    // landed on the wrong one often enough to close an open nested drawer
+    // out from under itself. Skipping the whole measure, instead of
+    // reasserting the scroll position after it (which this tried first,
+    // and which did not reliably outrun the browser's own re-snap either),
+    // is what actually closes the gap, and costs nothing: nothing here
+    // needed measuring in the first place.
+    const layoutRelevant =
+      previous.snapPoints !== opts.snapPoints ||
+      previous.dismissible !== opts.dismissible;
+    if (layoutRelevant) {
+      measure();
+      positionMarkers();
+      updateContentLock();
+    }
+    if (previous.modal !== opts.modal) applyModalStyle();
+    updateNestedAttrs();
   }
 
   function destroy() {

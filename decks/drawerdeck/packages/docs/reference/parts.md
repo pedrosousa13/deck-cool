@@ -75,6 +75,12 @@ set to `--drawer-keyboard-inset`, gives it room to scroll into). While
 typing, the drawer's own top edge may move up with Safari's own page pan;
 see "On-screen keyboard".
 
+`data-nested-open`, on `Drawer.Popup` and `Drawer.Panel`, is set while a
+drawer opened from inside this one (at any depth) is open, and
+`--drawer-nested`, on `Drawer.Popup` only, is an integer: how many drawers
+are currently stacked above this one (`1`, `2`, …). Both are cleared the
+moment the last one closes. See "Nested drawers".
+
 ## Not in the beta
 
-Nested drawers (#237) and a background indent.
+A background indent.
