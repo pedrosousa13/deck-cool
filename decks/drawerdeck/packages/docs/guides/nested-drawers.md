@@ -50,13 +50,22 @@ and only that level moves.
 Each level is its own `<dialog>`. Opening one with `showModal()` puts it in
 the browser's own top layer, above whatever was already there, and the
 browser's own rule for "blocked by a modal dialog" (any node that is not
-a descendant of the topmost shown one) makes the drawer behind it inert
-on its own: no pointer event reaches it, no keyboard focus can land in it,
-with no code here at all. This holds regardless of where in the DOM the
-nested dialog actually lives. `test/nested.test.tsx` opens one through a
-React portal, rendered as a sibling of every other level instead of a
-descendant of the Panel behind it, in both Chromium and WebKit, and the
-behaviour is identical.
+a descendant of the topmost shown one) makes the drawer behind it inert on
+its own: an outside press or Escape never reaches it, and no keyboard focus
+can land in it, with no code here at all for either. This holds regardless
+of where in the DOM the nested dialog actually lives. `test/nested.test.tsx`
+opens one through a React portal, rendered as a sibling of every other
+level instead of a descendant of the Panel behind it, in both Chromium and
+WebKit, and the behaviour is identical.
+
+A mouse drag is the one exception. With no portal, a nested drawer's own
+Panel is a real descendant of the Panel behind it, so a press starting
+there still bubbles into the outer's own listener, the same as it always
+has: the top layer's inertness only keeps a press from _targeting_ the
+outer directly, not from bubbling through it on its way up from something
+the outer actually contains. The outer recognizes that press is not its
+own and yields (see "Dragging, closing or flicking one never touches
+another", below).
 
 **Escape closes only the topmost.** The browser's own close-watcher stack
 already delivers a modal dialog's `cancel` event to the topmost one alone.

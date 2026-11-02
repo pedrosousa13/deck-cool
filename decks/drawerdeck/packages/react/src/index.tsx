@@ -359,11 +359,12 @@ export function Root({
    * then the outer one" ruling (#272). Used by `Drawer.Close` and by a
    * controlled `open` going false -- never by Escape, a drag or an
    * outside press, which only ever reach the drawer actually acted on: for
-   * a modal inner, the browser's own top layer and inertness keep all
-   * three off a drawer that is not topmost (`@drawerdeck/core` no longer
-   * guards any of them with `nestedCount` -- only its non-modal Escape
-   * listener still reads it), so there is nothing here for them to
-   * cascade. */
+   * a modal inner, the browser's own top layer and inertness keep Escape
+   * and an outside press off a drawer that is not topmost, and
+   * `ownsTarget` keeps a drag off it the same way (`@drawerdeck/core` no
+   * longer guards any of the three with `nestedCount`; only its
+   * non-modal Escape listener still reads it), so there is nothing here
+   * for them to cascade. */
   const closeAndWait = useCallback(async (reason: OpenChangeReason) => {
     // Captured before the await, below, not read fresh after it: only the
     // controlled-`open`-went-false call site (the one effect that calls
