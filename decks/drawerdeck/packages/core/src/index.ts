@@ -405,8 +405,8 @@ export function createDrawer(
    * inside or around it (#272, #332): its nearest `dialog` ancestor
    * (`Element.closest('dialog')`) is this drawer's own `dialog`, never
    * absent (`null`) and never another drawer's. With no portal, a nested
-   * drawer's own DOM -- its Viewport, its Panel, a field focused inside it
-   * -- is a real descendant of this drawer's Panel too, so every listener
+   * drawer's own DOM, its Viewport, its Panel, a field focused inside it,
+   * is a real descendant of this drawer's Panel too, so every listener
    * below that reads an event target or the active element checks this
    * first, instead of acting on something that actually belongs to a
    * drawer nested inside this one. One structural check, replacing each
@@ -1189,7 +1189,7 @@ export function createDrawer(
   // `scrollend` listeners, here and in `onScroll` just below (#332):
   // neither event bubbles for an element (unlike on `document`), so each
   // only ever fires for the exact Viewport it was attached to, and neither
-  // handler reads `event.target` at all -- both read `viewport[axis.scroll]`
+  // handler reads `event.target` at all: both read `viewport[axis.scroll]`
   // directly, already this drawer's own.
   const supportsScrollEnd = 'onscrollend' in window;
   function onScrollEndDebounce() {
@@ -1289,7 +1289,7 @@ export function createDrawer(
     // between two of them to guard against. Deliberately not `ownsTarget`
     // (#332): this is a single, document-level listener with no element of
     // its own to scope a target against, and `nestedCount` already answers
-    // the one question it needs -- is anything open above me -- without
+    // the one question it needs (is anything open above me) without
     // depending on where focus or the event target currently sit.
     if ((opts.nestedCount ?? 0) > 0) return;
     if (!opts.dismissible) return;
@@ -1379,7 +1379,7 @@ export function createDrawer(
    * alone is not enough (#332): with no portal, a nested drawer's own field
    * is a real DOM descendant of this Panel too, so this also checks
    * `ownsTarget`, scoping it to a field that belongs to *this* drawer's own
-   * dialog, not one nested inside it -- the nearest dialog ancestor of a
+   * dialog, not one nested inside it: the nearest dialog ancestor of a
    * field inside a nested drawer is that drawer's own, never this one's. */
   function focusedKeyboardField(): HTMLElement | null {
     const active = document.activeElement;
@@ -1673,8 +1673,8 @@ export function createDrawer(
     // earlier round tried to catch this with a shared `pointerDownHandledFor`
     // marker the inner's own handler set before this one saw the same
     // event, but that marker was only ever set once the inner reached
-    // `phase === 'open'` -- the very check just above, on the inner's own
-    // call -- so a press arriving while the inner was still `'opening'` or
+    // `phase === 'open'` (the very check just above, on the inner's own
+    // call), so a press arriving while the inner was still `'opening'` or
     // `'closing'` reached here unmarked (#332's fourth round). `ownsTarget`
     // checks the target's own DOM position instead, which holds regardless
     // of the inner's phase, so the marker is gone: nothing here needs it
@@ -1706,7 +1706,7 @@ export function createDrawer(
   // (#332): neither reads `event.target` at all (`pointerMain` reads
   // `clientX`/`clientY`, not the target), and both only ever act while
   // `dragging` is true, which only this drawer's own, now-scoped
-  // `onPointerDown` ever sets -- a press that was not this drawer's own
+  // `onPointerDown` ever sets: a press that was not this drawer's own
   // never reaches here in the first place. Once a drag is under way,
   // `panel.setPointerCapture` also retargets every later pointer event
   // for it straight at this drawer's own Panel regardless of where the
@@ -1859,7 +1859,7 @@ export function createDrawer(
         // No `ownsTarget` needed (#332): `transitionend` bubbles, so a
         // nested drawer's own Panel finishing its own entrance also
         // reaches here, but the exact-identity check below already
-        // excludes it -- a nested Panel is never literally this `panel` --
+        // excludes it (a nested Panel is never literally this `panel`),
         // which is stricter than `ownsTarget` would be anyway.
         const onEnd = (event: Event) => {
           if ((event as TransitionEvent).target !== panel) return;

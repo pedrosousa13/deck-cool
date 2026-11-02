@@ -6,7 +6,7 @@
 // opened the inner one once it closes. Every open, close and keypress here
 // is real input (`userEvent`, or the `dragPointerDown`/`dragPointerMoveTo`/
 // `dragPointerUp` commands for the drag tests): `@drawerdeck/core`'s own
-// `nestedCount` guard is `onDocumentKeyDown`'s alone now (non-modal only --
+// `nestedCount` guard is `onDocumentKeyDown`'s alone now (non-modal only:
 // a modal inner's own `cancel` never reaches it); for a modal inner, the
 // browser's own top layer and inertness do the rest, and the browser's own
 // top layer is a thing only real input, not a hand-dispatched event,
@@ -1253,7 +1253,7 @@ describe('an outer CSS entrance is never interrupted by activity inside a nested
 // holds regardless of the inner's phase. No `mockReducedMotion`, matching
 // the review's own repro: `open()` itself never animates the scroll
 // position either way, and nothing here reaches the one place `reducedMotion`
-// does -- `throwTo`, after a drag genuinely starts -- since the drag this
+// does (`throwTo`, after a drag genuinely starts), since the drag this
 // test presses for must never start on either drawer.
 describe('a mouse press on a modal inner mid-entrance never drags the outer behind it (#332)', () => {
   it('a real mouse drag starting on panel-2 while it is still opening leaves the outer untouched', async () => {
