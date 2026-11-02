@@ -41,4 +41,4 @@ lighter or faster.
 ## What's still open
 
 What's still open includes the composable API, sides other than the bottom,
-the on-screen keyboard, and Firefox's and older Safari's fallbacks.
+and Firefox's and older Safari's fallbacks.
