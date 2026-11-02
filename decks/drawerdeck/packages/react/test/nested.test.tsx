@@ -15,7 +15,12 @@ import { act, render, screen } from '@testing-library/react';
 import { commands, userEvent } from 'vitest/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Drawer from '@drawerdeck/react';
-import { expectSettledTo, mockReducedMotion, nextFrame } from './fixtures';
+import {
+  expectSettledTo,
+  mockReducedMotion,
+  nextFrame,
+  sleep
+} from './fixtures';
 
 const popupAt = (n: number) =>
   document.querySelector<HTMLDialogElement>(`[data-testid="popup-${n}"]`)!;
@@ -147,11 +152,11 @@ type OnEvent = (
 
 /** Two levels with independent `modal` values, unlike `Level` above (which
  * always passes its own `modal` straight down to the next level): the one
- * shape `Level` cannot build, needed for the `escapeHandledFor` guard's own
- * edge case (#272): a modal inner never touches `escapeHandledFor` at
- * all (it yields to the browser's own close-watcher stack, in `onCancel`),
- * so a non-modal outer's `onDocumentKeyDown` needs the `nestedCount` guard
- * to see it, not the shared `WeakSet`. */
+ * shape `Level` cannot build, needed for a non-modal outer with a modal
+ * inner (#237's own edge case for `onDocumentKeyDown`'s `nestedCount`
+ * guard: a modal inner's own `cancel` event never reaches it, yet the key
+ * press still bubbles to `document`), and for a non-modal drawer nested
+ * inside another at all (the dev-warning tests, below). */
 function MixedModalityLevels({
   outerModal,
   innerModal,
@@ -191,63 +196,6 @@ function MixedModalityLevels({
                   </Drawer.Viewport>
                 </Drawer.Popup>
               </Drawer.Root>
-            </Drawer.Content>
-            <Drawer.Close data-testid="close-1">Close 1</Drawer.Close>
-          </Drawer.Panel>
-        </Drawer.Viewport>
-      </Drawer.Popup>
-    </Drawer.Root>
-  );
-}
-
-/** The inner `Drawer.Root` mounts only once "Mount inner" is pressed, after
- * the outer one already opened: its own `document` `keydown` listener
- * (`onDocumentKeyDown`, `@drawerdeck/core`) registers after the outer's,
- * not before it, breaking the child-before-parent mount order
- * `escapeHandledFor`'s own module doc assumes (#272). */
-function ConditionalInnerLevel({ onEvent }: { onEvent: OnEvent }) {
-  const [showInner, setShowInner] = useState(false);
-  return (
-    <Drawer.Root
-      modal={false}
-      onOpenChange={(open, info) => onEvent(1, open, info.reason)}
-    >
-      <Drawer.Trigger data-testid="open-1">Open 1</Drawer.Trigger>
-      <Drawer.Popup data-testid="popup-1">
-        <Drawer.Viewport>
-          <Drawer.Panel data-testid="panel-1">
-            <Drawer.Handle data-testid="handle-1" />
-            <Drawer.Title>Level 1</Drawer.Title>
-            <Drawer.Content>
-              <button
-                type="button"
-                data-testid="mount-inner"
-                onClick={() => setShowInner(true)}
-              >
-                Mount inner
-              </button>
-              {showInner && (
-                <Drawer.Root
-                  modal={false}
-                  onOpenChange={(open, info) => onEvent(2, open, info.reason)}
-                >
-                  <Drawer.Trigger data-testid="open-2">Open 2</Drawer.Trigger>
-                  <Drawer.Popup data-testid="popup-2">
-                    <Drawer.Viewport>
-                      <Drawer.Panel data-testid="panel-2">
-                        <Drawer.Handle data-testid="handle-2" />
-                        <Drawer.Title>Level 2</Drawer.Title>
-                        <Drawer.Content>
-                          <p>Level 2 content.</p>
-                        </Drawer.Content>
-                        <Drawer.Close data-testid="close-2">
-                          Close 2
-                        </Drawer.Close>
-                      </Drawer.Panel>
-                    </Drawer.Viewport>
-                  </Drawer.Popup>
-                </Drawer.Root>
-              )}
             </Drawer.Content>
             <Drawer.Close data-testid="close-1">Close 1</Drawer.Close>
           </Drawer.Panel>
@@ -670,31 +618,58 @@ describe('closing an outer drawer while an inner one is open', () => {
       removeTransitions.forEach((remove) => remove());
     }
   });
-});
 
-describe('non-modal nesting', () => {
-  it('a non-modal drawer nested inside another non-modal one is still tracked, and Escape still closes only the topmost', async () => {
+  it('a controlled outer reopened mid-cascade ends open, never reporting its own close', async () => {
     mockReducedMotion();
-    render(<Level n={1} depth={2} modal={false} />);
+    const events: string[] = [];
+    let setOuterOpen: ((open: boolean) => void) | undefined;
+    function Harness() {
+      const [outerOpen, setOpen1] = useState(false);
+      useLayoutEffect(() => {
+        setOuterOpen = setOpen1;
+      }, []);
+      return (
+        <Level
+          n={1}
+          depth={2}
+          open={outerOpen}
+          onOpenChange={(next) => setOpen1(next)}
+          onEvent={(level, open, reason) =>
+            events.push(`${level}:${open}:${reason}`)
+          }
+        />
+      );
+    }
+    render(<Harness />);
     await openLevel(1);
     await openLevel(2);
+    events.length = 0;
 
-    expect(popupAt(1).getAttribute('data-nested-open')).toBe('');
-    expect(popupAt(1).style.getPropertyValue('--drawer-nested')).toBe('1');
-    expect(popupAt(1).matches(':modal')).toBe(false);
-    expect(popupAt(2).matches(':modal')).toBe(false);
+    // A real transition on the inner Panel alone, long enough that level
+    // 1's own `closeAndWait` is still awaiting it 80ms later, when the
+    // controlling `open` goes back to true.
+    const removeTransition = withTransformTransition(panelAt(2), 160);
+    try {
+      act(() => setOuterOpen?.(false));
+      await sleep(80);
+      act(() => setOuterOpen?.(true));
 
-    await userEvent.keyboard('{Escape}');
-
-    await expectSettledTo(
-      () => popupAt(2).getAttribute('data-phase'),
-      'closed'
-    );
-    expect(popupAt(1).getAttribute('data-phase')).toBe('open');
+      await expectSettledTo(
+        () => popupAt(2).getAttribute('data-phase'),
+        'closed'
+      );
+      // The outer never closes: reopened mid-cascade, `closeAndWait` bails
+      // out before ever calling `drawer.close()` on it, so it never
+      // reports a close either.
+      expect(popupAt(1).getAttribute('data-phase')).toBe('open');
+      expect(events).toEqual(['2:false:programmatic']);
+    } finally {
+      removeTransition();
+    }
   });
 });
 
-describe('Escape yields to a nested drawer even when escapeHandledFor cannot see it (#272)', () => {
+describe('Escape yields to a modal inner even where nestedCount is all it has (#272)', () => {
   it('a non-modal outer with a modal inner, both open: Escape closes only the inner, both reporting their own reason', async () => {
     mockReducedMotion();
     const events: string[] = [];
@@ -719,39 +694,53 @@ describe('Escape yields to a nested drawer even when escapeHandledFor cannot see
     );
     expect(popupAt(1).getAttribute('data-phase')).toBe('open');
     // Not ['1:false:escape', '2:false:drag']: the modal inner's own
-    // `cancel` event never touches `escapeHandledFor`, so a non-modal
-    // outer's `onDocumentKeyDown` would otherwise find it unset and act
-    // on the same key press itself, closing both and misreporting the
-    // inner's own reason as 'drag' (the outer's close cascading into it).
+    // `cancel` event never reaches the outer's own `document` listener at
+    // all, but the key press itself still bubbles there regardless, so if
+    // that listener did not check `nestedCount` it would act on the same
+    // press itself, closing both and misreporting the inner's own reason
+    // as 'drag' (the outer's close cascading into it).
     expect(events).toEqual(['2:false:escape']);
   });
+});
 
-  it('two non-modal levels, the inner Drawer.Root mounted only after the outer opened: Escape still closes only the inner', async () => {
+describe('nesting a non-modal drawer (#237)', () => {
+  it('warns once, in development, the first time it opens nested inside another, but still opens', async () => {
     mockReducedMotion();
-    const events: string[] = [];
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     render(
-      <ConditionalInnerLevel
-        onEvent={(level, open, reason) =>
-          events.push(`${level}:${open}:${reason}`)
-        }
+      <MixedModalityLevels
+        outerModal={true}
+        innerModal={false}
+        onEvent={() => {}}
       />
     );
+
     await openLevel(1);
-    await userEvent.click(screen.getByTestId('mount-inner'));
+    expect(warn).not.toHaveBeenCalled();
+
     await openLevel(2);
-    events.length = 0;
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatch(/non-modal/);
 
-    await userEvent.keyboard('{Escape}');
-
+    // Closing and reopening the same inner drawer does not warn again:
+    // once per instance, not once per open.
+    await userEvent.click(screen.getByTestId('close-2'));
     await expectSettledTo(
       () => popupAt(2).getAttribute('data-phase'),
       'closed'
     );
-    expect(popupAt(1).getAttribute('data-phase')).toBe('open');
-    // Not ['1:false:escape', '2:false:drag']: the inner's own `document`
-    // `keydown` listener registers after the outer's (it mounted later),
-    // so it is not guaranteed to run first and set `escapeHandledFor`
-    // before the outer's own listener checks it.
-    expect(events).toEqual(['2:false:escape']);
+    await openLevel(2);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('never warns for a modal inner, nested or not', async () => {
+    mockReducedMotion();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<Level n={1} depth={2} />);
+
+    await openLevel(1);
+    await openLevel(2);
+
+    expect(warn).not.toHaveBeenCalled();
   });
 });

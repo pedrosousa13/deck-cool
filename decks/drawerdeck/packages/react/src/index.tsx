@@ -29,6 +29,12 @@ import {
 
 export type { OpenChangeReason, Phase, Side, SnapPoint };
 
+// Left in the build for the consumer's bundler to replace, as
+// `@drawerdeck/react-18`'s own shim (`react.ts`) already does: this package
+// has no bundler of its own (`tsc -b` only), so `process.env.NODE_ENV` ships
+// as source, not a literal.
+declare const process: { env: { NODE_ENV?: string } };
+
 /**
  * Nesting (#272): a `Drawer.Root` finds the nearest enclosing one, if any,
  * through context (`Root`'s own `parentCtx`, below) -- never a `parent`
@@ -50,6 +56,14 @@ export type { OpenChangeReason, Phase, Side, SnapPoint };
  * works out what that number is, and sequences the cascade when an outer
  * drawer closes while an inner one is still open (`closeAndWait`, in
  * `Root`, below).
+ *
+ * Nesting only supports a modal inner drawer (#237, the maintainer's
+ * ruling on #272 after review): a non-modal `<dialog>` is not in the top
+ * layer, so nested it inherits whichever transform or stacking context the
+ * Panel behind it sets up, and its own close cannot cascade the way a
+ * modal inner's does. A non-modal drawer may still be the *outermost*
+ * level, with modal drawers nested inside it. `Root`, below, warns once in
+ * development when a non-modal drawer opens nested inside another.
  */
 
 /**
@@ -286,6 +300,10 @@ export function Root({
   const backdropRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
   const drawerRef = useRef<Drawer | null>(null);
+  // Read by `closeAndWait`, below, ahead of its own declaration further
+  // down with the rest of this Root's ref-synced props: a controlled
+  // `open` that goes back to `true` mid-cascade is what it bails out for.
+  const openRef = useRef(open);
 
   // ---------- nesting (#272) ----------
   // Found through context, not a prop and not a DOM walk: `null` when this
@@ -343,8 +361,22 @@ export function Root({
    * a drawer that is not the topmost, so there is nothing here for them to
    * cascade). */
   const closeAndWait = useCallback(async (reason: OpenChangeReason) => {
+    // Captured before the await, below, not read fresh after it: only the
+    // controlled-`open`-went-false call site (the one effect that calls
+    // this with `openRef.current` already `false`) can ever see this flip
+    // back to `true` out from under it, during the very cascade that call
+    // site itself started. `Drawer.Close` and a parent cascading into this
+    // Root's own close both call this with `openRef.current` still `true`
+    // (a controlled drawer's own close is reported, not yet granted) --
+    // neither should bail just because it is.
+    const wasOpenProp = openRef.current;
     const closers = [...nestedClosersRef.current.values()];
     if (closers.length > 0) await Promise.all(closers.map((close) => close()));
+    // Re-checked now, not only at the top: a controlled outer whose `open`
+    // goes back to `true` while the cascade above was still running no
+    // longer wants this close at all (#237's review). Bailing out before
+    // `drawer.close()` keeps this Root from ever reporting one.
+    if (wasOpenProp === false && openRef.current === true) return;
     const drawer = drawerRef.current;
     if (!drawer || drawer.phase === 'closed') return;
     // The waiter goes in *before* `close()`: with no CSS transition at
@@ -361,7 +393,6 @@ export function Root({
     await closed;
   }, []);
 
-  const openRef = useRef(open);
   const snapPointRef = useRef(snapPoint);
   const onOpenChangeRef = useRef(onOpenChange);
   const onSnapPointChangeRef = useRef(onSnapPointChange);
@@ -490,6 +521,24 @@ export function Root({
     );
     return () => parentCtx.registerNestedClose(childId, null);
   }, [parentCtx, childId, isOpen, closeAndWait]);
+
+  // Nesting only supports a modal inner drawer (#237, this file's own
+  // module doc): warns once, in development only, the first time this
+  // Root opens non-modal while nested inside another. Never stops it from
+  // opening -- this is a correctness warning, like React's own for a
+  // missing `key`, not a guard.
+  const warnedNestedNonModalRef = useRef(false);
+  useLayoutEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (!parentCtx || modal !== false || !isOpen) return;
+    if (warnedNestedNonModalRef.current) return;
+    warnedNestedNonModalRef.current = true;
+    console.warn(
+      'Drawer.Root: a non-modal drawer (modal={false}) opened nested ' +
+        'inside another Drawer.Root. Nesting only supports a modal inner ' +
+        'drawer: make this one modal, or move it to the outermost level.'
+    );
+  }, [parentCtx, modal, isOpen]);
 
   const requestOpen = useCallback((reason: OpenChangeReason) => {
     drawerRef.current?.open(

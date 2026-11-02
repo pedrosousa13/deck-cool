@@ -1,13 +1,15 @@
 ---
 title: Nested drawers
-description: 'A drawer opened from inside another just stacks, for free (#272): data-nested-open and --drawer-nested for CSS, Escape and the cascade on closing an outer one both handled, no new prop.'
+description: 'A drawer opened from inside another just stacks, for free (#272): data-nested-open and --drawer-nested for CSS, Escape and the cascade on closing an outer one both handled, no new prop. The inner drawer must be modal.'
 ---
 
 A `Drawer.Root` rendered from inside another one's `Drawer.Content`, a
 "Settings" drawer with a button that opens "Notifications" from inside it,
-nests. Nothing new to configure: `side`, `modal`, `dismissible`,
-`snapPoints`, a controlled `open`, all work exactly as documented
-everywhere else, on every level.
+nests. Nothing new to configure: `side`, `dismissible`, `snapPoints`, a
+controlled `open`, all work exactly as documented everywhere else, on every
+level. `modal` has one restriction: the maintainer's ruling on review is
+that nesting only supports a modal inner drawer (see "Modal or non-modal:
+only the outermost can skip it", below).
 
 ```tsx
 <Drawer.Root>
@@ -60,22 +62,23 @@ behaviour is identical.
 **Escape closes only the topmost.** The browser's own close-watcher stack
 already delivers a modal dialog's `cancel` event to the topmost one alone.
 A non-modal drawer's own `document`-level listener (see "Non-modal
-drawers") has no such native ordering, so the engine checks two things
-before acting on a key press: its own `nestedCount`, and a marker shared
-across every non-modal listener on the one `document`, set the moment any
-of them actually closes for this exact key press. Either one finding
-something already spoken for is enough to yield. The marker alone is not
-enough on its own: a modal drawer nested above a non-modal one never sets
-it (it yields to the browser's own close-watcher stack instead), and a
-non-modal child mounted after its parent already opened registers its own
-listener after the parent's, so it is not guaranteed to run, and set the
-marker, first.
+drawers") has no such native ordering, so it checks its own `nestedCount`
+before acting on a key press, and yields once that is above zero: a modal
+drawer nested above it never touches this listener at all (it yields to
+the browser's own close-watcher stack instead), but the key press still
+bubbles to `document` regardless, so the count alone is what this listener
+reads. Nesting only supports a modal inner drawer, so there is never more
+than one non-modal listener on `document` at a time in any one nested
+stack, and so no race between two of them to guard against either.
 
 **Dragging, closing or flicking one never touches another.** With no
 portal, a nested drawer's own Panel is a real DOM descendant of the Panel
-behind it, so a mouse-drag `pointerdown` on the inner one would otherwise
-keep bubbling straight into the outer Panel's own listener too. The engine
-stops it there.
+behind it, so a mouse-drag `pointerdown` on the inner one still bubbles
+into the outer Panel's own listener too. The outer one recognizes a press
+already claimed by whatever is nested inside it (a shared marker, not
+`stopPropagation()`, which would also hide the press from a consumer's own
+listener further up the tree) and yields instead of starting a second drag
+from the same press.
 
 ## `data-nested-open` and `--drawer-nested`
 
@@ -151,19 +154,27 @@ own, by a DOM walk or otherwise. No `parent` prop exists, and none is
 needed for the one shape `@drawerdeck/react` renders a nested `Drawer.Root`
 in today.
 
-## Modal or non-modal, either nests
+## Modal or non-modal: only the outermost can skip it
 
-Nesting itself, the count, the attributes, the close cascade, Escape
-closing only the topmost, works the same whether every level is modal,
-every level is non-modal, or a mix. What a non-modal level does not get is
-the browser's own top layer or its automatic inertness: a non-modal
-drawer never had those even on its own (see "Non-modal drawers"), and
-nesting does not add them. Two non-modal levels stack visually by plain
-DOM paint order (the inner is a later sibling in spirit, so it paints over
-the outer), and the same `clip-path` hit area each already has clips its
-own Viewport to its own Panel, but neither gets a focus trap, nested or
-not. Reach for modal where a real focus trap, on every level, matters more
-than an interactive page behind the whole stack.
+Nesting supports a modal inner drawer only (the maintainer's ruling on
+review, recorded on #237): a non-modal `Drawer.Popup` is a `show()`ed
+`<dialog>`, never in the browser's own top layer, so nested it is a plain
+`position: fixed` element whose containing block is whatever ancestor
+sets up a transform or a stacking context -- the Panel behind it, under
+the scale-back recipe above, or the resting `transform: translateY(0)`
+("Animate the drawer") -- instead of the viewport. Nested under either,
+the inner Panel renders offset from where it should be, and the outer one
+gets clipped. Its close cannot cascade cleanly either: nothing here makes
+a non-modal drawer's own close wait its turn the way a modal nested
+drawer's does.
+
+A non-modal drawer may still be the *outermost* level, with modal drawers
+nested inside it: that drawer has no top layer of its own either way (see
+"Non-modal drawers"), and nothing about being the outermost asks it for
+one. `Drawer.Root` warns once, with `console.warn`, in development only,
+the moment a non-modal drawer opens nested inside another one. Make the
+inner drawer modal, or move it to the outermost level, to clear the
+warning.
 
 ## What vaul, Base UI and React Aria do
 

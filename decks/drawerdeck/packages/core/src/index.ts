@@ -35,6 +35,13 @@
  * the count itself, are `@drawerdeck/react`'s own job (see its module
  * doc): this engine only renders a number it is handed, never discovers
  * one of its own.
+ *
+ * Nesting only supports a modal inner drawer (#237): a non-modal `<dialog>`
+ * is not in the top layer, so nested it inherits whichever transform or
+ * stacking context the Panel behind it sets up, breaking the documented
+ * scale-back recipe. This engine does not enforce that on its own (it has
+ * no notion of "inner" or "outer" to enforce it with); `@drawerdeck/react`
+ * warns about it in development.
  */
 
 /** A snap point: a fraction of the Viewport's extent along the side's axis
@@ -239,35 +246,9 @@ function hitAreaInset(side: Side, v: string): string {
 let resetSheet: CSSStyleSheet | undefined;
 let mountedDrawers = 0;
 
-/** Keyed by the `KeyboardEvent` object itself, not by any one drawer: marks
- * that some non-modal drawer's own document-wide Escape listener
- * (`onDocumentKeyDown`, below) has already closed itself for this exact
- * key press, so a shallower one sharing the same `document` listener
- * target does not also act on it (#272, "Escape closes only the
- * topmost"). Every non-modal drawer nested inside another mounts its own
- * listener on the very first render, before any dialog is even shown (a
- * `<dialog>` without `open` is still mounted), in child-before-parent
- * order (React's own effect order), so for any later key press the
- * deepest -- and so, whichever of them is actually open, the topmost --
- * listener always runs first; this exists only because that deepest
- * listener's own `beginExit` can synchronously flush a state update that
- * zeroes a shallower drawer's own `nestedCount` before its listener's
- * turn even comes, which read as "nothing is nested above me any more"
- * there (true, but only because this key press just made it so) rather
- * than "something was, when this press started" -- a `nestedCount` check
- * alone cannot tell those apart; this can, and does not depend on when
- * React flushes anything. A modal drawer needs none of this: the
- * browser's own top-layer close-watcher stack already delivers `cancel`
- * to the topmost dialog alone, a real per-dialog event, not one shared
- * across a document-wide listener. Never grows unbounded: `WeakSet` drops
- * each entry once that one key press's own event object is no longer
- * referenced anywhere. */
-const escapeHandledFor = new WeakSet<KeyboardEvent>();
-
 /** Keyed by the `PointerEvent` object itself, not by any one drawer: marks
  * that some drawer's own mouse-drag `pointerdown` handler (`onPointerDown`,
- * below) has already claimed this exact press, the same device
- * `escapeHandledFor` uses for Escape, above. With no portal, a nested
+ * below) has already claimed this exact press. With no portal, a nested
  * drawer's own Panel is a real DOM descendant of the Panel behind it, so a
  * `pointerdown` starting on the inner one still bubbles into the outer
  * Panel's own listener too; this lets the outer one recognize that and
@@ -1251,22 +1232,17 @@ export function createDrawer(
   // not enough.
   function onDocumentKeyDown(event: KeyboardEvent) {
     if (opts.modal !== false || event.key !== 'Escape') return;
-    // Escape closes only the topmost drawer (#272): `escapeHandledFor`'s
-    // own module doc explains why that, not `nestedCount` alone, guards
-    // against a same-press race between two non-modal listeners. But a
-    // modal drawer nested above this one never touches `escapeHandledFor`
-    // at all (it yields to the browser's own close-watcher stack, in
-    // `onCancel`, above), and a non-modal child mounted after this drawer
-    // already opened registers its own listener after this one's, so it
-    // is not guaranteed to run first either. `nestedCount` alone misses
-    // the same-press race `escapeHandledFor` exists for, so both guards
-    // run: either one seeing the key press as already spoken for is
-    // enough to yield.
+    // Escape closes only the topmost drawer (#272): a modal drawer nested
+    // above this one never touches this listener at all (it yields to the
+    // browser's own close-watcher stack, in `onCancel`, above), but the
+    // key press still bubbles here regardless of that, so `nestedCount`
+    // alone is what this listener checks: nesting only supports a modal
+    // inner drawer (#237), so there is at most one non-modal listener on
+    // `document` in any one nested stack, and so no same-press race
+    // between two of them to guard against.
     if ((opts.nestedCount ?? 0) > 0) return;
-    if (escapeHandledFor.has(event)) return;
     if (!opts.dismissible) return;
     if (phase !== 'opening' && phase !== 'open') return;
-    escapeHandledFor.add(event);
     event.preventDefault();
     beginExit('escape');
   }
