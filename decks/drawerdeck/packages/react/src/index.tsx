@@ -761,11 +761,23 @@ export function Root({
   }, [parentCtx, childId, isOpen, closeAndWait]);
 
   // The same Root's own live open progress (#332's own follow-up to
-  // #272): registered the same way, and gated by the same
-  // `contributesNesting` the discrete `nestedCount` contribution above
-  // is, so a parent's own `--drawer-nested-progress` starts and stops
-  // tracking this Root in step with `--drawer-nested` itself, not on some
-  // separate schedule.
+  // #272): registered the same way `registerNestedClose`, above, is, but
+  // gated on `isOpen`, not `contributesNesting`. The discrete `nestedCount`
+  // contribution, above, is right to drop the moment this Root starts
+  // closing (that is what lets the parent's own `data-nested-open` and
+  // `--drawer-nested` move together with this Root's own CSS exit,
+  // `contributesNesting`'s own module doc), but dropping the progress
+  // source that early snaps the parent's own `--drawer-nested-progress`
+  // straight to `0` the instant this Root's phase becomes 'closing',
+  // before its own exit transition has even started moving: a worse jump
+  // than the two-step close this round's own fix replaces, not a fix for
+  // it. Kept registered through 'closing' instead, this Root's own
+  // scroll position (and so the parent's own native progress, where a
+  // scroll timeline is supported) stays live for the whole exit, so the
+  // parent's own scale-back transition runs together with it, the same
+  // moment `--drawer-nested` already does. Only once this Root is
+  // genuinely `closed` does the source clear, the same point
+  // `registerNestedClose` already waits for.
   useLayoutEffect(() => {
     if (!parentCtx) return;
     return () => parentCtx.notifyNestedProgressSource(childId, null);
@@ -774,7 +786,7 @@ export function Root({
     if (!parentCtx) return;
     parentCtx.notifyNestedProgressSource(
       childId,
-      contributesNesting
+      isOpen
         ? {
             timelineName,
             side: initialSide,
@@ -782,7 +794,7 @@ export function Root({
           }
         : null
     );
-  }, [parentCtx, childId, contributesNesting, timelineName, initialSide]);
+  }, [parentCtx, childId, isOpen, timelineName, initialSide]);
 
   // Nesting only supports a modal inner drawer (#237, this file's own
   // module doc): warns once, in development only, the first time this

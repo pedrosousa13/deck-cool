@@ -542,13 +542,35 @@ main .home-family .home-more {
    drawers are currently stacked above this one, and --drawer-nested-progress
    the live open progress (0 closed to 1 fully open) of the one directly
    above it, written on its own Panel directly. --nested-scale is the
-   fully-stacked target for the current count; scale interpolates toward
-   it as --drawer-nested-progress rises, so dragging, swiping or flicking
-   a level scales the one behind it in step, with no JS running per drag
-   frame where the browser supports a named scroll timeline (the "Nested
-   drawers" guide's own "--drawer-nested-progress" section). scale, a CSS
-   property independent of transform, composes with the entrance/exit
-   recipe's own translateY with no conflict. */
+   fully-stacked target for the current count alone, same as before;
+   scale blends from it toward 1 as --drawer-nested-progress rises, so
+   dragging, swiping or flicking a level scales the one behind it in
+   step, with no JS running per drag frame where the browser supports a
+   named scroll timeline (the "Nested drawers" guide's own
+   "--drawer-nested-progress" section).
+
+   --nested-scale needs its own @property registration, and the
+   `transition` below needs to read on it, not on scale: --drawer-nested
+   flips the instant a drawer above this one starts or finishes closing
+   (its own comment, above), a plain write with nothing animated about
+   it, so transitioning --nested-scale (which depends only on that count)
+   eases smoothly between its two target numbers, a registered custom
+   property's own point. scale then just reads it back through the same
+   calc() this recipe always used, composing it with whatever
+   --drawer-nested-progress is doing that frame (continuous during a
+   drag, already-eased by --nested-scale's own transition otherwise) with
+   no `transition` of its own at all: scale, read straight off a calc()
+   over --drawer-nested-progress, which moves through a native
+   `animation` wherever a scroll timeline is supported, would never
+   start one anyway, animated or not. scale, a CSS property independent
+   of transform, composes with the entrance/exit recipe's own translateY
+   with no conflict either way. */
+
+@property --nested-scale {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
 
 .drawer-demo__panel--nested {
   --nested-scale: calc(1 - 0.05 * var(--drawer-nested, 0));
@@ -560,7 +582,7 @@ main .home-family .home-more {
   .drawer-demo__panel--nested {
     transition:
       transform 300ms var(--ease),
-      scale 300ms var(--ease);
+      --nested-scale 300ms var(--ease);
   }
 }
 

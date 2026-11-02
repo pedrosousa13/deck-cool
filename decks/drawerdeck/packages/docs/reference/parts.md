@@ -90,7 +90,7 @@ drawers".
 
 `--drawer-nested-progress`, on `Drawer.Panel` only, is the live open
 progress of the one drawer directly above it that is currently open or
-opening -- `0` fully closed, `1` fully open -- updated continuously as
+opening (`0` fully closed, `1` fully open), updated continuously as
 that drawer is dragged, swiped or thrown, with no JS running per drag
 frame where the browser supports a named scroll timeline (Chromium,
 Safari). Written as `1` once that drawer has fully opened and `0` once

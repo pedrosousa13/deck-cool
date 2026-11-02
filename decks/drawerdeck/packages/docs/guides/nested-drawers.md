@@ -106,13 +106,13 @@ stack. Set and cleared once per update, never removed and immediately
 re-added for the same one.
 
 Both move the moment a drawer nested above this one starts closing, by
-any path -- a close button, Escape, a drag release, a flick, or a parent's
-own cascade -- not once it finishes: `--drawer-nested` drops (and
+any path (a close button, Escape, a drag release, a flick, or a parent's
+own cascade), not once it finishes: `--drawer-nested` drops (and
 `data-nested-open` clears, once nothing is left) together with that
 drawer's own CSS exit starting, so a `transition` reading either, below,
 runs at the same time as the exit, not sequentially after it. An
-interrupted close -- the drawer nested above this one starts closing and
-then, before it finishes, is asked to stay open again -- reverts on its
+interrupted close (the drawer nested above this one starts closing and
+then, before it finishes, is asked to stay open again) reverts on its
 own, with no special case: both just go back to describing whatever is
 genuinely open above this one once more.
 
@@ -147,8 +147,8 @@ only decides open or closed at release, so a recipe that reads
 `--drawer-nested` alone stays at its fully-nested scale for the whole
 drag and only moves once the user lets go. `Drawer.Panel` also carries
 `--drawer-nested-progress`, the live open progress of the one drawer
-directly above it that is currently open or opening -- `0` fully closed,
-`1` fully open -- updated continuously as that drawer is dragged, swiped
+directly above it that is currently open or opening (`0` fully closed,
+`1` fully open), updated continuously as that drawer is dragged, swiped
 or thrown, the same way iOS's own nested sheets and vaul's
 `onNestedDrag`/`onNestedOpenChange` do, but with no JS running per drag
 frame where the browser supports a named scroll timeline (Chromium,
@@ -157,17 +157,38 @@ and fully-closed scales with it, instead of jumping straight to the
 fully-open one:
 
 ```css
+@property --nested-scale {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
 .panel {
   --nested-scale: calc(1 - 0.05 * var(--drawer-nested, 0));
   scale: calc(1 - (1 - var(--nested-scale)) * var(--drawer-nested-progress, 0));
   transition:
     transform 300ms ease,
-    scale 300ms ease;
+    --nested-scale 300ms ease;
 }
 ```
 
-At rest -- nothing open above, or something open above and fully settled
--- this reads exactly the same as the simpler, `--drawer-nested`-only
+`--nested-scale` is the fully-nested target for the current count alone,
+same as the simpler recipe above, just registered with `@property` now,
+and the `transition` reads on it, not on `scale`: `--drawer-nested` flips
+the instant the drawer above this one starts or finishes closing (its
+own section, above), a plain write with nothing animated about it, so
+transitioning `--nested-scale`, which depends only on that count, eases
+smoothly between its two target numbers. `scale` then just reads it back
+through the same `calc()` either recipe uses, composing it with whatever
+`--drawer-nested-progress` is doing that frame: continuous during a drag,
+already eased by `--nested-scale`'s own transition otherwise. `scale`
+gets no `transition` of its own at all here: read straight off a
+`calc()` over `--drawer-nested-progress`, which moves through a native
+`animation` wherever a scroll timeline is supported, it would never
+start one anyway.
+
+At rest, nothing open above, or something open above and fully settled,
+this reads exactly the same as the simpler, `--drawer-nested`-only
 recipe above (`--drawer-nested-progress` sits at `1` once the drawer above
 has finished opening, and at `0`, written just as directly, once nothing
 is open above this one at all). While the drawer directly above this one

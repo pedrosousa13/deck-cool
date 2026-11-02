@@ -380,9 +380,21 @@ function ensureBackdropReset() {
   // engine never needs that in between value, but a browser without
   // `@property` support just ignores this rule and leaves the direct `'0'`
   // write `updateNestedProgress` already falls back to in that case).
+  // `inherits:false`, not `true`: every Panel this engine ever renders
+  // gets its own explicit value, either a live `animation` or a direct
+  // `setProperty`, from the moment `updateNestedProgress` first runs on
+  // it, so inheritance was never load-bearing here, only a leak waiting
+  // to happen. A Panel with nothing open above it, and no source of its
+  // own yet (a fresh Panel at creation, or one reopened after its only
+  // source closed), would otherwise read whatever an ancestor dialog's
+  // own live `animation` happens to be driving its copy toward, a real
+  // value with no relationship to this Panel's own nesting at all. With
+  // `inherits:false`, a Panel with nothing set falls back to this
+  // property's own `initial-value`, `0`, regardless of what any ancestor
+  // is doing with its own copy.
   let css =
     `.${RESET_CLASS}::backdrop{background:transparent}` +
-    `@property ${NESTED_PROGRESS_VAR}{syntax:'<number>';inherits:true;initial-value:0}`;
+    `@property ${NESTED_PROGRESS_VAR}{syntax:'<number>';inherits:false;initial-value:0}`;
   for (const side of SIDES) {
     const reversed = side === 'top' || side === 'left';
     const openInset = hitAreaInset(side, `var(${MAX_SCROLL_VAR},0px)`);

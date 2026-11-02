@@ -95,10 +95,20 @@ function withTransformTransition(
  * continuously toward the discrete, count-based scale-back as
  * `--drawer-nested-progress` rises from 0 to 1, instead of jumping
  * straight to it, so a real drag's own effect on `el`'s computed `scale`
- * is observable frame by frame, and a CSS transition on `scale` itself
- * carries the discrete jump (a Close tap, Escape, or the cascade) the
- * same `-nested` demo's own 300ms recipe does. Removed again once the
- * test is done with it. */
+ * is observable frame by frame, and a CSS transition carries the
+ * discrete jump (a Close tap, Escape, or the cascade) the same `-nested`
+ * demo's own 300ms recipe does. The `transition` sits on `--nested-scale`
+ * itself, a registered custom property that depends only on the plain,
+ * never-animated `--drawer-nested`, not on `scale`: `scale`, read
+ * straight off a `calc()` over an animated `--drawer-nested-progress`
+ * (the native `animation` `updateNestedProgress`, `@drawerdeck/core`,
+ * attaches wherever a scroll timeline is supported), never starts a
+ * `transition` of its own, so testing the guide's old recipe here (one
+ * that transitioned `scale` directly) would carry the exact one-frame
+ * jump this round's own fix (the demo CSS,
+ * `sites/drawerdeck/styles/drawerdeck.css`) replaces. `scale` just reads
+ * `--nested-scale`'s already-eased value back through the same `calc()`
+ * it always used. Removed again once the test is done with it. */
 function withNestedScaleRecipe(
   el: HTMLElement,
   durationMs: number
@@ -107,11 +117,17 @@ function withNestedScaleRecipe(
   el.setAttribute(marker, '');
   const style = document.createElement('style');
   style.textContent = `
+    @property --nested-scale {
+      syntax: '<number>';
+      inherits: false;
+      initial-value: 1;
+    }
     [${marker}] {
+      --nested-scale: calc(1 - 0.05 * var(--drawer-nested, 0));
       scale: calc(
-        1 - (0.05 * var(--drawer-nested, 0)) * var(--drawer-nested-progress, 0)
+        1 - (1 - var(--nested-scale)) * var(--drawer-nested-progress, 0)
       );
-      transition: scale ${durationMs}ms linear;
+      transition: --nested-scale ${durationMs}ms linear;
     }
   `;
   document.head.append(style);
@@ -1612,9 +1628,61 @@ describe("the outer's own scale-back starts together with the inner's own exit, 
       expect(
         Math.abs((outerSettled?.t ?? 0) - (innerClosed?.t ?? 0))
       ).toBeLessThanOrEqual(DURATION + 50);
+
+      // `movedAt <= 2` alone, above, also passes a one-frame jump
+      // straight from the nested scale to 1, settled well before the
+      // inner itself finishes closing: this is what that jump would
+      // look like instead, a sample partway through the transition
+      // (half `DURATION`) strictly between the two, still easing.
+      const midway = samples.find((s) => s.t >= DURATION / 2);
+      expect(midway).toBeDefined();
+      expect(midway!.v.scale).toBeGreaterThan(nestedScale);
+      expect(midway!.v.scale).toBeLessThan(1);
     } finally {
       restoreScale();
       restoreExit();
+    }
+  });
+
+  it("opening the inner eases the outer's own scale through intermediate values, not a single jump", async () => {
+    mockReducedMotion();
+    render(<Level n={1} depth={2} />);
+    await openLevel(1);
+
+    const DURATION = 300;
+    const restoreScale = withNestedScaleRecipe(panelAt(1), DURATION);
+    const restoreEnter = withTransformTransition(panelAt(2), DURATION);
+    try {
+      expect(readScale(panelAt(1))).toBe(1);
+
+      await userEvent.click(screen.getByTestId('open-2'));
+      // Same reasoning as the Close tap test, above: `userEvent.click`
+      // resolves only once React has flushed the layout effects the
+      // click's own `open()` call triggered, so `data-phase` already
+      // reads 'opening' by now, and the sampling loop below starts right
+      // as the scale-back begins, not partway through it.
+      expect(popupAt(2).getAttribute('data-phase')).toBe('opening');
+
+      const samples = await sampleFrames(DURATION + 200, () =>
+        readScale(panelAt(1))
+      );
+
+      await waitForNestedScale(panelAt(1));
+      const nestedScale = readScale(panelAt(1));
+      expect(nestedScale).toBeLessThan(1);
+
+      // A one-frame jump straight to the fully-nested scale would settle
+      // within the first couple of samples; this instead eases through
+      // it, so a sample partway through the transition still reads
+      // strictly between 1 (where it started) and the fully-nested
+      // scale (where it ends).
+      const midway = samples.find((s) => s.t >= DURATION / 2);
+      expect(midway).toBeDefined();
+      expect(midway!.v).toBeGreaterThan(nestedScale);
+      expect(midway!.v).toBeLessThan(1);
+    } finally {
+      restoreScale();
+      restoreEnter();
     }
   });
 });
