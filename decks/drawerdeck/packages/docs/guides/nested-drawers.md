@@ -53,10 +53,22 @@ browser's own rule for "blocked by a modal dialog" (any node that is not
 a descendant of the topmost shown one) makes the drawer behind it inert on
 its own: an outside press or Escape never reaches it, and no keyboard focus
 can land in it, with no code here at all for either. This holds regardless
-of where in the DOM the nested dialog actually lives. `test/nested.test.tsx`
-opens one through a React portal, rendered as a sibling of every other
-level instead of a descendant of the Panel behind it, in both Chromium and
-WebKit, and the behaviour is identical.
+of where in the DOM the nested dialog actually lives, for everything
+stacking order governs on its own: opening, inertness, Escape and the
+close cascade. `test/nested.test.tsx` opens one through a React portal,
+rendered as a sibling of every other level instead of a descendant of the
+Panel behind it, in both Chromium and WebKit, and all of that behaves the
+same.
+
+One thing a portal does change: the live, drag-following value
+(`--drawer-nested-progress`, below) needs `timeline-scope` to lift the
+nested child's own named scroll timeline up to the dialog behind it, which
+only reaches a genuine DOM descendant. A portal takes the child out of
+that reach, so the drawer behind it never gets a resolved timeline to
+animate from, and still scales back by the full nested amount the moment
+the child opens, the same direct write `--drawer-nested` already gets,
+just without following a drag or swipe on it continuously the way a
+DOM-descendant nested drawer does.
 
 A mouse drag is the one exception. With no portal, a nested drawer's own
 Panel is a real descendant of the Panel behind it, so a press starting

@@ -201,7 +201,13 @@ export interface DrawerOptions {
    * follows (never left for a descendant to inherit across the dialog
    * boundary; see `NESTED_COUNT_VAR`'s own comment). `null`, or simply
    * never set, while nothing is nested: the variable then reads a
-   * literal `0`, written the same direct way. */
+   * literal `0`, written the same direct way. `timeline-scope` only
+   * reaches a child that is a genuine DOM descendant of this drawer's
+   * own dialog, so a child rendered through a portal never gets a
+   * resolved timeline to animate from; the variable is still written, a
+   * literal `1` instead, the moment a source is set, so the Panel still
+   * scales back by the full nested amount, just without following a
+   * drag on that child continuously the way a DOM-descendant one does. */
   nestedProgressSource?: {
     timelineName: string;
     side: Side;
@@ -795,10 +801,42 @@ export function createDrawer(
    * never depends on inheriting it from an ancestor across the dialog
    * boundary.
    *
+   * `timeline-scope` only reaches a child that is a genuine DOM
+   * descendant of this drawer's own dialog, which a child rendered
+   * through a portal is not: the animation's own timeline then never
+   * resolves, so it never writes the variable at all, and the Panel
+   * would otherwise read whatever its registered `initial-value` is, 0,
+   * the same as nothing being open above it at all, even though a
+   * source genuinely is set. `nestedProgressFallbackRaf`, below, checks
+   * for exactly that, two frames after the animation is set up (the same
+   * catch-up window this file's own tests wait out for WebKit, on a
+   * resolving timeline): if the variable still reads its own
+   * `initial-value` by then, nothing ever wrote it, so this writes 1
+   * (fully open) directly, the Panel's own best guess with no live
+   * progress to read. A DOM-descendant child's own animation, once truly
+   * live, always writes the variable well before this check ever runs,
+   * so it never fires for that case.
+   *
+   * This is deliberately not written unconditionally, up front, the
+   * moment the animation is set up: measured directly, in both
+   * Chromium and WebKit, with a real drag two levels deep straight after
+   * a reduced-motion open (the inner already fully open, its own
+   * timeline already at its range's own end, the exact moment this
+   * fallback would also read 1), doing that in WebKit stopped the live
+   * binding from ever attaching at all, freezing the Panel at the
+   * fallback's own value through a real drag that should have moved it
+   * well off it: the specified (inline) value and the animation's own
+   * resting, filled output were identical, and WebKit never invalidated
+   * to resolve the difference between them because there wasn't one to
+   * find, yet. Checking after the fact, instead, only ever writes the
+   * fallback where the live binding truly never resolves, so a real one
+   * is never raced.
+   *
    * The fallback (`nestedProgressValue`, a plain number `@drawerdeck/react`
    * forwards from the child's own `onProgressChange`), where a named
    * scroll timeline is unsupported: written directly, the same way, just
-   * without an `animation` to drive it.
+   * without an `animation` to drive it, and with no such race to guard
+   * against, since nothing here competes with it for the property.
    *
    * Guarded by `lastNestedProgressTimelineName`/`lastNestedProgressValue`,
    * the same reason `updateNestedAttrs` guards `lastNestedCount`: called
@@ -809,6 +847,7 @@ export function createDrawer(
   let lastNestedProgressTimelineName: string | null = null;
   let lastNestedProgressRangePercent: number | null = null;
   let lastNestedProgressValue: number | undefined;
+  let nestedProgressFallbackRaf = 0;
   function updateNestedProgress() {
     if (supportsScrollTimeline) {
       const source = opts.nestedProgressSource ?? null;
@@ -822,6 +861,8 @@ export function createDrawer(
       }
       lastNestedProgressTimelineName = name;
       lastNestedProgressRangePercent = rangePercent;
+      cancelAnimationFrame(nestedProgressFallbackRaf);
+      nestedProgressFallbackRaf = 0;
       if (source) {
         dialog.style.setProperty(
           'timeline-scope',
@@ -845,12 +886,32 @@ export function createDrawer(
           'animation-range',
           reversedChild ? `${rangePercent}% 100%` : `0% ${rangePercent}%`
         );
+        nestedProgressFallbackRaf = requestAnimationFrame(() => {
+          nestedProgressFallbackRaf = requestAnimationFrame(() => {
+            nestedProgressFallbackRaf = 0;
+            // Stale: a different source (or none) took over, or cleared,
+            // since this frame was scheduled; that call already left the
+            // variable in whatever state it wants.
+            if (
+              name !== lastNestedProgressTimelineName ||
+              rangePercent !== lastNestedProgressRangePercent
+            ) {
+              return;
+            }
+            const current = getComputedStyle(panel)
+              .getPropertyValue(NESTED_PROGRESS_VAR)
+              .trim();
+            if (current === '0') {
+              panel.style.setProperty(NESTED_PROGRESS_VAR, '1');
+            }
+          });
+        });
       } else {
         dialog.style.setProperty('timeline-scope', SCROLL_TIMELINE_NAME);
         panel.style.removeProperty('animation');
         panel.style.removeProperty('animation-timeline');
         panel.style.removeProperty('animation-range');
-        panel.style.setProperty(NESTED_PROGRESS_VAR, '0');
+        panel.style.removeProperty(NESTED_PROGRESS_VAR);
       }
       return;
     }
@@ -2263,6 +2324,7 @@ export function createDrawer(
     clearTimeout(scrollEndDebounce);
     cancelAnimationFrame(throwFrame);
     cancelAnimationFrame(progressFrame);
+    cancelAnimationFrame(nestedProgressFallbackRaf);
     viewport.removeEventListener('scrollend', onScrollEnd);
     viewport.removeEventListener('scroll', onScrollEndDebounce);
     viewport.removeEventListener('scroll', onScroll);

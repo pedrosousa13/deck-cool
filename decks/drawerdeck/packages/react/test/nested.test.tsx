@@ -668,6 +668,25 @@ describe('two levels deep', () => {
     expect(popupAt(1).getAttribute('data-nested-open')).toBe('');
     expect(popupAt(1).style.getPropertyValue('--drawer-nested')).toBe('1');
 
+    // #332's own follow-up to #272: `timeline-scope` only reaches a
+    // genuine DOM descendant, so a child rendered through a portal never
+    // gets a resolved timeline to animate `--drawer-nested-progress`
+    // from, and the Panel would otherwise read its registered
+    // `initial-value`, 0, leaving it at its full, unscaled size instead
+    // of the fully nested one. The engine checks for exactly that, two
+    // frames after setting the source up (`nestedProgressFallbackRaf`,
+    // `@drawerdeck/core`), and writes a literal `1` directly where
+    // nothing else ever did: fails on the previous head, reading `0` and
+    // a scale of `1` instead of `0.95`.
+    await nextFrame();
+    await nextFrame();
+    expect(panelAt(1).style.getPropertyValue('--drawer-nested-progress')).toBe(
+      '1'
+    );
+    const restoreScale = withNestedScaleRecipe(panelAt(1), 300);
+    expect(readScale(panelAt(1))).toBeCloseTo(0.95, 5);
+    restoreScale();
+
     const close1 = screen.getByTestId('close-1');
     close1.focus();
     expect(document.activeElement).not.toBe(close1);
@@ -678,6 +697,11 @@ describe('two levels deep', () => {
       'closed'
     );
     expect(popupAt(1).getAttribute('data-phase')).toBe('open');
+    // Removed, not left at a stale `1`, now that nothing is nested above
+    // it any more.
+    expect(panelAt(1).style.getPropertyValue('--drawer-nested-progress')).toBe(
+      ''
+    );
     close1.focus();
     expect(document.activeElement).toBe(close1);
   });
