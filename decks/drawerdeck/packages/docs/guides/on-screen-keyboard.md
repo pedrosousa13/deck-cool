@@ -22,19 +22,18 @@ once the keyboard closes.
 Open it on a phone and focus either field: a short summary, or a longer
 message.
 
-This is on by default, with no prop to turn it on. It costs two passive
+This is on by default, with no prop to turn it on. It costs two
 `visualViewport` listeners and one `window` listener, both only while the
 drawer is open.
 
 ## The CSS variable
 
 `Drawer.Popup` carries `--drawer-keyboard-inset`, in pixels: the part of the
-layout viewport a keyboard covers at its own bottom edge --
+layout viewport a keyboard covers at its own bottom edge:
 `max(0, innerHeight - offsetTop - height)`, `visualViewport`'s own numbers.
-It stays unset while nothing covers the Viewport (before the first keyboard
-open, and whenever `visualViewport` reports no gap at all), is set once a
-keyboard covers part of it, drops back to `0px` if the keyboard closes while
-the drawer stays open, and is removed again when the drawer itself closes.
+It stays unset until the first keyboard open, is set once a keyboard covers
+part of it, drops back to `0px` if the keyboard closes while the drawer
+stays open, and is removed again when the drawer itself closes.
 Read it for your own layout, for example to reserve space for a footer
 input below the scrollable content:
 
@@ -56,8 +55,8 @@ the first keyboard open and after the drawer closes.
 
 ## Keeping the field clear of the keyboard
 
-`Drawer.Content`'s own `clientHeight` never shrinks for a keyboard -- the
-Viewport above it never does either -- so a field sitting at Content's own
+`Drawer.Content`'s own `clientHeight` never shrinks for a keyboard, and the
+Viewport above it never does either, so a field sitting at Content's own
 natural end has nothing below it to scroll into without the engine's own
 `padding-bottom`, equal to `--drawer-keyboard-inset`: genuine scrollable
 room past the last field. The engine then checks the focused field's own
@@ -95,8 +94,8 @@ side.
 ## Safari's own pan
 
 iOS Safari's own response to a focus inside a scrollable area is to scroll
-the _whole page_ so the focused field sits centered in the visible window --
-which, since `Drawer.Popup` is `position: fixed`, can push its own top edge
+the _whole page_ so the focused field sits centered in the visible window.
+Since `Drawer.Popup` is `position: fixed`, this can push its own top edge
 above that window for as long as the pan lasts. The engine does not try to
 stop or undo this: while typing, the drawer's own top edge may move up with
 Safari's own pan, the same way React Aria's own `Sheet` already lets happen
@@ -111,12 +110,8 @@ numbers alone: a real iPhone reports a field's own
 `getBoundingClientRect()` in visual-viewport coordinates during a held pan,
 and the Popup's own rect shifts by the exact same amount, so adding its
 `offsetTop` back cancels that shift. Only the Panel's own top edge is left
-to the browser. An earlier round of this file tried to
-undo the pan by hand instead -- a standalone CSS `translate` on
-`Drawer.Panel`, plus a momentary `transform` on the focused field copied
-from vaul's own vendored, older React Aria -- but neither was ever checked
-against a real Safari pan, only against values a real device's own debug
-log recorded, and the maintainer's own ruling after review is to drop both.
+to the browser: the engine applies no transform or translate of its own to
+counter the pan.
 
 Current React Aria (`react-aria` 3.53.1) no longer stops the pan with a
 field transform either: its own `usePreventScroll` sets `overflow: hidden`
@@ -124,7 +119,7 @@ on the root element, overrides `HTMLElement.prototype.focus` to add
 `preventScroll: true`, and does its own `scrollIntoView` once the keyboard
 is up. The momentary `transform: translateY(-2000px)`-on-focus trick
 survives in two places only: vaul 1.1.2's own vendored copy of an older
-React Aria (`vaul/dist/index.js`'s `onFocus` and `onTouchEnd` handlers --
+React Aria (`vaul/dist/index.js`'s `onFocus` and `onTouchEnd` handlers:
 the former for focus that moves without a tap, such as the keyboard's own
 next/previous buttons, the latter so a tap on a field applies it before the
 browser's own focus event, focusing the field itself first), and Base UI's
@@ -150,14 +145,14 @@ both:
   `--drawer-keyboard-inset` tracks both.
 - **`interactive-widget=resizes-content`.** `window.innerHeight` itself
   shrinks, `visualViewport` tracks it exactly, and the gap between them
-  stays 0 -- `--drawer-keyboard-inset` never leaves neutral. The drawer's
+  stays 0, so `--drawer-keyboard-inset` never leaves neutral. The drawer's
   layout is built on `100dvh`, so this is a plain layout-viewport resize,
   handled the same way an orientation change already is.
 
 A WKWebView wrapper around a site (a non-Safari iOS browser, in practice)
 can also shrink the layout viewport itself, the way
 `interactive-widget=resizes-content` does, but animated over many `window`
-'resize' events rather than settling at once -- `--drawer-keyboard-inset`
+'resize' events rather than settling at once; `--drawer-keyboard-inset`
 also re-reads on every `window` 'resize' while open, not only
 `visualViewport`'s own, so it converges at each step of that animation
 instead of freezing at whatever it read when the animation started.
@@ -178,7 +173,7 @@ from, and `--drawer-keyboard-inset` reads the same `visualViewport` numbers
 regardless of `side`. Expanding to the largest snap point (above) does not:
 the keyboard is a vertical concern, so only `bottom` and `top` drawers ever
 expand for it. A `left` or `right` drawer skips that step and scrolls the
-field in directly -- Content's own scroll is vertical regardless of `side`,
+field in directly; Content's own scroll is vertical regardless of `side`,
 so this still brings the field back the same way.
 
 ## What this does not cover
