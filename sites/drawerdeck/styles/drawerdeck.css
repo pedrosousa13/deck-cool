@@ -554,7 +554,9 @@ main .home-family .home-more {
 
 @media (prefers-reduced-motion: no-preference) {
   .drawer-demo__panel--nested {
-    transition: scale 300ms var(--ease);
+    transition:
+      transform 300ms var(--ease),
+      scale 300ms var(--ease);
   }
 }
 

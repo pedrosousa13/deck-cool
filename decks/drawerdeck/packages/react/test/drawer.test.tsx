@@ -322,6 +322,45 @@ describe('the inner content', () => {
   });
 });
 
+describe('a mouse pointerdown on a drawer that never nests (#272)', () => {
+  it("still reaches a consumer's own onPointerDown, and a document-level listener, instead of being stopped for a nested drawer that is not there", async () => {
+    mockReducedMotion();
+    const rowSpy = vi.fn();
+    const documentSpy = vi.fn();
+    document.addEventListener('pointerdown', documentSpy);
+    try {
+      render(
+        <TestDrawer
+          content={
+            <div data-testid="row" onPointerDown={rowSpy}>
+              Row
+            </div>
+          }
+        />
+      );
+      act(() => screen.getByText('Open').click());
+      const popup = popupOf(document.body);
+      await expectSettledTo(() => popup.getAttribute('data-phase'), 'open');
+      documentSpy.mockClear();
+
+      // A mouse click on a plain, non-interactive row inside Content: the
+      // engine's own mouse-drag handler on the Panel (`onPointerDown`,
+      // `@drawerdeck/core`) still claims the press to start a drag, but
+      // must never call `stopPropagation()` to do it. #272's own nested
+      // guard uses a shared `WeakSet` instead, precisely so a drawer with
+      // nothing nested above it, this one, never touches it and lets
+      // the press keep bubbling, the way `main`'s own core, with no
+      // nesting concept at all, always did.
+      await userEvent.click(screen.getByTestId('row'));
+
+      expect(rowSpy).toHaveBeenCalledTimes(1);
+      expect(documentSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      document.removeEventListener('pointerdown', documentSpy);
+    }
+  });
+});
+
 describe('a controlled drawer', () => {
   it('opens and closes with the open prop', async () => {
     mockReducedMotion();

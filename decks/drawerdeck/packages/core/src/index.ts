@@ -264,6 +264,20 @@ let mountedDrawers = 0;
  * referenced anywhere. */
 const escapeHandledFor = new WeakSet<KeyboardEvent>();
 
+/** Keyed by the `PointerEvent` object itself, not by any one drawer: marks
+ * that some drawer's own mouse-drag `pointerdown` handler (`onPointerDown`,
+ * below) has already claimed this exact press, the same device
+ * `escapeHandledFor` uses for Escape, above. With no portal, a nested
+ * drawer's own Panel is a real DOM descendant of the Panel behind it, so a
+ * `pointerdown` starting on the inner one still bubbles into the outer
+ * Panel's own listener too; this lets the outer one recognize that and
+ * yield instead of starting a second drag from the same press (#272). It
+ * does not call `stopPropagation()` to get there: that would also hide the
+ * press from a consumer's own listener further up the tree (React's root
+ * listener among them), breaking a drawer that never nests at all, which
+ * has nothing above it to yield to and so never touches this set. */
+const pointerDownHandledFor = new WeakSet<PointerEvent>();
+
 function ensureBackdropReset() {
   mountedDrawers += 1;
   if (resetSheet) return;
@@ -577,14 +591,13 @@ export function createDrawer(
    * `onDocumentKeyDown`, `onGapClick`, below) do. */
   function updateNestedAttrs() {
     const count = opts.nestedCount ?? 0;
+    dialog.style.setProperty(NESTED_COUNT_VAR, String(count));
     if (count > 0) {
       dialog.setAttribute(NESTED_OPEN_ATTR, '');
       panel.setAttribute(NESTED_OPEN_ATTR, '');
-      dialog.style.setProperty(NESTED_COUNT_VAR, String(count));
     } else {
       dialog.removeAttribute(NESTED_OPEN_ATTR);
       panel.removeAttribute(NESTED_OPEN_ATTR);
-      dialog.style.removeProperty(NESTED_COUNT_VAR);
     }
   }
 
@@ -1239,8 +1252,17 @@ export function createDrawer(
   function onDocumentKeyDown(event: KeyboardEvent) {
     if (opts.modal !== false || event.key !== 'Escape') return;
     // Escape closes only the topmost drawer (#272): `escapeHandledFor`'s
-    // own module doc explains why this, not `nestedCount`, is the guard
-    // here.
+    // own module doc explains why that, not `nestedCount` alone, guards
+    // against a same-press race between two non-modal listeners. But a
+    // modal drawer nested above this one never touches `escapeHandledFor`
+    // at all (it yields to the browser's own close-watcher stack, in
+    // `onCancel`, above), and a non-modal child mounted after this drawer
+    // already opened registers its own listener after this one's, so it
+    // is not guaranteed to run first either. `nestedCount` alone misses
+    // the same-press race `escapeHandledFor` exists for, so both guards
+    // run: either one seeing the key press as already spoken for is
+    // enough to yield.
+    if ((opts.nestedCount ?? 0) > 0) return;
     if (escapeHandledFor.has(event)) return;
     if (!opts.dismissible) return;
     if (phase !== 'opening' && phase !== 'open') return;
@@ -1603,22 +1625,18 @@ export function createDrawer(
     ) {
       return;
     }
+    // Yields to whatever already claimed this exact press (#272):
+    // `pointerDownHandledFor`'s own module doc above explains why a shared
+    // marker, not `stopPropagation()`, is how a nested drawer's own Panel
+    // keeps this same `pointerdown` from also starting a drag on the
+    // Panel behind it.
+    if (pointerDownHandledFor.has(event)) return;
     const target = event.target as Element | null;
     if (target?.closest('input, button, a, textarea, select')) {
       return;
     }
     event.preventDefault();
-    // Stops it right here (#272): with no portal, a nested drawer's own
-    // Panel is a real DOM descendant of the one behind it, so this same
-    // `pointerdown` would otherwise keep bubbling straight into that
-    // outer Panel's own listener too -- which has no way to tell "this
-    // gesture started on a drawer nested above me" from one actually
-    // meant for it, and would start dragging *both* at once from a single
-    // press. Only `pointerdown` needs this: `onPointerMove`/`onPointerUp`
-    // below only ever act while this engine's own `dragging` is already
-    // true, which it never becomes for the outer Panel once its own
-    // `pointerdown` never arrives.
-    event.stopPropagation();
+    pointerDownHandledFor.add(event);
     dragging = true;
     dragStartMain = pointerMain(event);
     dragStartScroll = viewport[axis.scroll];

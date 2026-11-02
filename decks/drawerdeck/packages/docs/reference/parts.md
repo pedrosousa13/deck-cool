@@ -76,10 +76,13 @@ typing, the drawer's own top edge may move up with Safari's own page pan;
 see "On-screen keyboard".
 
 `data-nested-open`, on `Drawer.Popup` and `Drawer.Panel`, is set while a
-drawer opened from inside this one (at any depth) is open, and
-`--drawer-nested`, on `Drawer.Popup` only, is an integer: how many drawers
-are currently stacked above this one (`1`, `2`, …). Both are cleared the
-moment the last one closes. See "Nested drawers".
+drawer opened from inside this one (at any depth) is open, and is removed
+the moment the last one closes. `--drawer-nested`, on `Drawer.Popup` only,
+is an integer: how many drawers are currently stacked above this one
+(`1`, `2`, …). It is always present, written as `0` once nothing is
+stacked above, not removed, so a CSS rule reading it on the frontmost
+drawer never inherits a stale count from a dialog further down the stack.
+See "Nested drawers".
 
 ## Not in the beta
 

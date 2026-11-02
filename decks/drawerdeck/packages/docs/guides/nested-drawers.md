@@ -60,11 +60,16 @@ behaviour is identical.
 **Escape closes only the topmost.** The browser's own close-watcher stack
 already delivers a modal dialog's `cancel` event to the topmost one alone.
 A non-modal drawer's own `document`-level listener (see "Non-modal
-drawers") has no such native ordering, so the engine gives every one of
-them a way to tell "something has already acted on this exact key press"
-apart from "nothing is nested above me": the two read the same from a
-plain count once the inner one's own close has already run, which a shared
-listener on one `document` can observe mid-dispatch.
+drawers") has no such native ordering, so the engine checks two things
+before acting on a key press: its own `nestedCount`, and a marker shared
+across every non-modal listener on the one `document`, set the moment any
+of them actually closes for this exact key press. Either one finding
+something already spoken for is enough to yield. The marker alone is not
+enough on its own: a modal drawer nested above a non-modal one never sets
+it (it yields to the browser's own close-watcher stack instead), and a
+non-modal child mounted after its parent already opened registers its own
+listener after the parent's, so it is not guaranteed to run, and set the
+marker, first.
 
 **Dragging, closing or flicking one never touches another.** With no
 portal, a nested drawer's own Panel is a real DOM descendant of the Panel
@@ -77,10 +82,13 @@ stops it there.
 While a drawer is open somewhere above this one, a direct child, or a
 grandchild with nothing open between, `Drawer.Popup` and `Drawer.Panel`
 both carry `data-nested-open`, and `Drawer.Popup` carries `--drawer-nested`,
-an integer: how many drawers are currently stacked above it. Both clear
-the moment the last one closes. Set and cleared per open/close event,
-never per scroll frame or drag frame, the same as every other data
-attribute here.
+an integer: how many drawers are currently stacked above it. `data-nested-open`
+is removed the moment the last one closes; `--drawer-nested` stays, at `0`,
+so a CSS rule that reads it on the frontmost drawer (nothing stacked above
+it) always finds a real number there, never a value inherited from a
+dialog further down the stack through the DOM. Set and cleared per
+open/close event, never per scroll frame or drag frame, the same as every
+other data attribute here.
 
 ```css
 .panel[data-nested-open] {
@@ -89,15 +97,21 @@ attribute here.
 
 .panel {
   scale: calc(1 - 0.05 * var(--drawer-nested, 0));
-  transition: scale 300ms ease;
+  transition:
+    transform 300ms ease,
+    scale 300ms ease;
 }
 ```
 
-`scale` is a standalone CSS property, not folded into `transform`, so it
-composes with the Panel's own entrance/exit `transform` ("Animate the
-drawer") with no conflict: the level behind keeps shrinking natively as
-each one opens, and growing back as each closes, with no JS running per
-frame either way. The demo above uses exactly this recipe.
+`scale` is a standalone CSS property, not folded into `transform`, so the
+computed style composes with the Panel's own entrance/exit `transform`
+("Animate the drawer") with no conflict. Its `transition` is a separate
+matter: list `transform` explicitly alongside `scale`, as above, or a rule
+that only names `scale` overrides the Panel's own `transition: transform
+...` from the entrance/exit recipe wherever it has higher specificity or
+comes later in the sheet, and the Panel's entrance and exit then jump
+instead of sliding. The demo above uses exactly this recipe, with both
+properties named.
 
 ## Closing an outer drawer while an inner one is open
 
@@ -156,27 +170,36 @@ than an interactive page behind the whole stack.
 **vaul**'s `Drawer.NestedRoot` is a dedicated component (`nested: true`
 under the hood), placed inside the outer `Drawer.Root` and reading
 `onNestedDrag`/`onNestedOpenChange`/`onNestedRelease` off its context: as
-the nested drawer is _dragged_, the outer one's own background scales and
-translates from the live drag percentage, in JS, on every drag frame
-(`vaul`'s own `onNestedDrag`). drawerdeck's `--drawer-nested` recipe, above,
-only ever changes on an open or a close event, never a drag frame, in
-keeping with this engine's native-scrolling rule (see "Why native
-scrolling").
+the nested drawer is _dragged_, the outer one's own content element
+(`drawerRef.current`, the same node `Drawer.Content` renders, not a
+separate background element) scales and translates from the live drag
+percentage, in JS, on every drag frame (`vaul` 1.1.2,
+`dist/index.mjs:1310-1318`, `onNestedDrag`). drawerdeck's `--drawer-nested`
+recipe, above, only ever changes on an open or a close event, never a drag
+frame, in keeping with this engine's native-scrolling rule (see "Why
+native scrolling").
 
 **Base UI**'s `Drawer` ships the closest match: `data-nested-drawer-open`
-and `--nested-drawers` (an integer count, frontmost at index `0`), read
-from a `DrawerPopupDataAttributes`/`DrawerPopupCssVars` pair documented in
-its own "Nested drawers" section, with the same "style when something is
-open above this one" shape drawerdeck's `data-nested-open`/`--drawer-nested`
-follow. Both ship a `Drawer.Portal` for a nested example, so each dialog
-is a sibling in the DOM, not a descendant; drawerdeck's own
+and `--nested-drawers`, read from a `DrawerPopupDataAttributes`/
+`DrawerPopupCssVars` pair documented in its own "Nested drawers" section,
+with the same "style when something is open above this one" shape
+drawerdeck's `data-nested-open`/`--drawer-nested` follow. `--nested-drawers`
+is documented only as "the number of nested drawers that are currently
+open" (`@base-ui/react` 1.9.0, `DrawerPopupCssVars.nestedDrawers`), with no
+stated ordering. Both ship a `Drawer.Portal` for a nested example, so each
+dialog is a sibling in the DOM, not a descendant; drawerdeck's own
 `@drawerdeck/react` needs none, since `Drawer.Popup` renders wherever its
 own `Drawer.Root` does and the top layer does not care where that is.
 
 **React Aria**'s `Sheet` stacks by nesting one `SheetTrigger` (and its own
-`Sheet`) inside another, exposing `data-stack-index` (the frontmost at
-`0`) and `data-has-descendants`, with a `stackAnimation` prop naming a CSS
-`@keyframes` the parent sheet runs while a child is open: closer in spirit
-to drawerdeck's own CSS-only recipe than vaul's JS-driven one, though
-keyed to a named animation rather than a live custom property a
-consumer's own `calc()` can read directly.
+`Sheet`) inside another, exposing `data-stack-index` and
+`data-has-descendants`. In `react-aria-components` 1.22.1
+(`dist/private/Sheet.mjs`), `stackIndex` is a sheet's own index in a
+module-level stack that every open `Sheet` appends itself to in open
+order, and `descendants` is `sheetStack.slice(index + 1)`: index `0` is
+the first sheet opened, the backmost, not the frontmost, and the highest
+index is whichever opened last and so sits on top. A `stackAnimation` prop
+names a CSS `@keyframes` the parent sheet runs while a child is open:
+closer in spirit to drawerdeck's own CSS-only recipe than vaul's JS-driven
+one, though keyed to a named animation rather than a live custom property
+a consumer's own `calc()` can read directly.
