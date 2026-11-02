@@ -95,14 +95,15 @@ listener further up the tree.
 
 While a drawer is open somewhere above this one, a direct child, or a
 grandchild with nothing open between, `Drawer.Popup` and `Drawer.Panel`
-both carry `data-nested-open`, and `Drawer.Popup` carries `--drawer-nested`,
-an integer: how many drawers are currently stacked above it. `data-nested-open`
-is removed the moment the last one closes; `--drawer-nested` stays, at `0`,
-so a CSS rule that reads it on the frontmost drawer (nothing stacked above
-it) always finds a real number there, never a value inherited from a
-dialog further down the stack through the DOM. Set and cleared per
-open/close event, never per scroll frame or drag frame, the same as every
-other data attribute here.
+both carry `data-nested-open`, and both also carry `--drawer-nested`, an
+integer: how many drawers are currently stacked above it. Both are written
+on the Popup and the Panel directly, never left for one to inherit from
+the other through the DOM: `data-nested-open` is removed the moment the
+last one closes; `--drawer-nested` stays, at `0`, so a CSS rule that reads
+it on the frontmost drawer (nothing stacked above it) always finds a real
+number there, never a value inherited from a dialog further down the
+stack. Set and cleared per open/close event, never per scroll frame or
+drag frame, the same as every other data attribute here.
 
 ```css
 .panel[data-nested-open] {

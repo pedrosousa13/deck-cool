@@ -342,6 +342,14 @@ describe('two levels deep', () => {
     expect(popup1.getAttribute('data-nested-open')).toBe('');
     expect(panel1.getAttribute('data-nested-open')).toBe('');
     expect(nestedVar(popup1)).toBe('1');
+    // The Panel's own inline style, not merely what it inherits from its
+    // own Popup through the cascade: a consumer's own CSS recipe (the
+    // "Nested drawers" guide's `scale: calc(1 - 0.05 * var(--drawer-nested,
+    // 0))`) reads this on the Panel itself, the same element
+    // `data-nested-open` is already written on directly, just above, for
+    // exactly this reason: neither should depend on inheritance across
+    // the Popup's own `<dialog>` actually resolving on a given engine.
+    expect(panel1.style.getPropertyValue('--drawer-nested')).toBe('1');
     // The inner itself has nothing nested above it: its own count is a
     // real, written "0", not merely absent (a DOM descendant of popup1
     // would otherwise inherit popup1's own "1" straight through the
@@ -358,6 +366,7 @@ describe('two levels deep', () => {
     expect(popup1.hasAttribute('data-nested-open')).toBe(false);
     expect(panel1.hasAttribute('data-nested-open')).toBe(false);
     expect(nestedVar(popup1)).toBe('0');
+    expect(panel1.style.getPropertyValue('--drawer-nested')).toBe('0');
     expect(popup1.getAttribute('data-phase')).toBe('open');
   });
 
@@ -450,6 +459,72 @@ describe('two levels deep', () => {
     expect(popupAt(1).getAttribute('data-phase')).toBe('open');
   });
 
+  /** One real drag, start to release, on the handle `handleTestId` names:
+   * closes whichever drawer that handle belongs to. Used below both as one
+   * of the inner's own close paths (on `handle-2`) and, after every close
+   * path, to prove the outer (`handle-1`) still responds to a fresh drag
+   * right away. */
+  async function realDragDown(handleTestId: string) {
+    const start = await commands.dragPointerDown(
+      `[data-testid="${handleTestId}"]`,
+      5,
+      5
+    );
+    let y = start.y;
+    for (let i = 0; i < 60; i++) {
+      y += 20;
+      await commands.dragPointerMoveTo(start.x, y);
+      await nextFrame();
+    }
+    await commands.dragPointerUp();
+  }
+
+  it.each([
+    [
+      'the close button',
+      async () => {
+        await userEvent.click(screen.getByTestId('close-2'));
+      }
+    ],
+    [
+      'Escape',
+      async () => {
+        await userEvent.keyboard('{Escape}');
+      }
+    ],
+    ['a real drag', async () => realDragDown('handle-2')]
+  ] as const)(
+    "closing the inner by %s clears the outer's own data-nested-open and --drawer-nested within one frame, and a fresh real drag of the outer still closes it",
+    async (_label, closeInner) => {
+      mockReducedMotion();
+      render(<Level n={1} depth={2} />);
+      await openLevel(1);
+      await openLevel(2);
+      const panel1 = panelAt(1);
+      const popup1 = popupAt(1);
+
+      await closeInner();
+      await expectSettledTo(
+        () => popupAt(2).getAttribute('data-phase'),
+        'closed'
+      );
+      await nextFrame();
+
+      expect(popup1.getAttribute('data-phase')).toBe('open');
+      expect(panel1.hasAttribute('data-nested-open')).toBe(false);
+      expect(panel1.style.getPropertyValue('--drawer-nested')).toBe('0');
+
+      // No extra gesture needed: the very next real drag works, closing
+      // the outer, with no stale state left over from the inner's own
+      // close.
+      await realDragDown('handle-1');
+      await expectSettledTo(
+        () => popup1.getAttribute('data-phase'),
+        'closed'
+      );
+    }
+  );
+
   it('a nested dialog rendered through a React portal (not a DOM descendant of the outer Panel) still stacks above it, inertly, and is still tracked as nested', async () => {
     mockReducedMotion();
     render(<Level n={1} depth={2} portalAt={2} />);
@@ -502,6 +577,12 @@ describe('three levels deep', () => {
     // its own DOM ancestor (level 2, genuinely nested under by level 3)
     // would otherwise leak to it through inheritance (#272).
     expect(nestedVar(popupAt(3))).toBe('0');
+    // The same three counts, read as each Panel's own inline style, not
+    // merely what it inherits from its own Popup: the "Nested drawers"
+    // guide's own scale recipe reads this on the Panel itself.
+    expect(panelAt(1).style.getPropertyValue('--drawer-nested')).toBe('2');
+    expect(panelAt(2).style.getPropertyValue('--drawer-nested')).toBe('1');
+    expect(panelAt(3).style.getPropertyValue('--drawer-nested')).toBe('0');
 
     await userEvent.keyboard('{Escape}');
     await expectSettledTo(
@@ -512,6 +593,11 @@ describe('three levels deep', () => {
     expect(popupAt(2).getAttribute('data-phase')).toBe('open');
     expect(nestedVar(popupAt(2))).toBe('0');
     expect(nestedVar(popupAt(1))).toBe('1');
+    // Closing level 3 updates level 2's own count (nothing left above it)
+    // and level 1's own count (one left above it, level 2), not just
+    // level 2's own direct Popup.
+    expect(panelAt(2).style.getPropertyValue('--drawer-nested')).toBe('0');
+    expect(panelAt(1).style.getPropertyValue('--drawer-nested')).toBe('1');
 
     await userEvent.keyboard('{Escape}');
     await expectSettledTo(
@@ -520,6 +606,7 @@ describe('three levels deep', () => {
     );
     expect(popupAt(1).getAttribute('data-phase')).toBe('open');
     expect(nestedVar(popupAt(1))).toBe('0');
+    expect(panelAt(1).style.getPropertyValue('--drawer-nested')).toBe('0');
 
     await userEvent.keyboard('{Escape}');
     await expectSettledTo(

@@ -169,8 +169,17 @@ const ENDING_STYLE_ATTR = 'data-ending-style';
  * open (#272), alongside `NESTED_COUNT_VAR`: `updateNestedAttrs`, below. */
 const NESTED_OPEN_ATTR = 'data-nested-open';
 /** How many drawers are stacked above this one: `--drawer-nested`, set on
- * the dialog only (the panel does not need its own copy; a consumer reads
- * it from an ancestor custom property the same as any other). */
+ * both the dialog and the panel (#332, a maintainer's real-iPhone report on
+ * the "Nested drawers" guide's own demo: the outer stayed scaled back after
+ * the inner closed, needing a drag to recover). An earlier round set this
+ * only on the dialog, relying on the panel inheriting it through the
+ * cascade, the one thing `data-nested-open`, just above, deliberately
+ * does not rely on, writing itself to both elements directly instead. A
+ * consumer's own CSS recipe (the guide's `scale: calc(1 - 0.05 *
+ * var(--drawer-nested, 0))`) reads this on the panel, the element it
+ * actually styles, so the panel gets its own copy too, the same as the
+ * attribute already does: never dependent on an inherited custom property
+ * repainting a descendant on every engine. */
 const NESTED_COUNT_VAR = '--drawer-nested';
 /** Added to the Panel's own computed transition duration for the enter and
  * exit timeout fallbacks, so a `transitionend` that lands a frame or two
@@ -594,6 +603,7 @@ export function createDrawer(
   function updateNestedAttrs() {
     const count = opts.nestedCount ?? 0;
     dialog.style.setProperty(NESTED_COUNT_VAR, String(count));
+    panel.style.setProperty(NESTED_COUNT_VAR, String(count));
     if (count > 0) {
       dialog.setAttribute(NESTED_OPEN_ATTR, '');
       panel.setAttribute(NESTED_OPEN_ATTR, '');
