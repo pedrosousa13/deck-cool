@@ -90,6 +90,124 @@ function withTransformTransition(
   };
 }
 
+/** The "Nested drawers" guide's own scale recipe, local here the same way
+ * `withTransformTransition` is (#332's own follow-up to #272): blends
+ * continuously toward the discrete, count-based scale-back as
+ * `--drawer-nested-progress` rises from 0 to 1, instead of jumping
+ * straight to it, so a real drag's own effect on `el`'s computed `scale`
+ * is observable frame by frame, and a CSS transition on `scale` itself
+ * carries the discrete jump (a Close tap, Escape, or the cascade) the
+ * same `-nested` demo's own 300ms recipe does. Removed again once the
+ * test is done with it. */
+function withNestedScaleRecipe(
+  el: HTMLElement,
+  durationMs: number
+): () => void {
+  const marker = `data-test-${Math.random().toString(36).slice(2)}`;
+  el.setAttribute(marker, '');
+  const style = document.createElement('style');
+  style.textContent = `
+    [${marker}] {
+      scale: calc(
+        1 - (0.05 * var(--drawer-nested, 0)) * var(--drawer-nested-progress, 0)
+      );
+      transition: scale ${durationMs}ms linear;
+    }
+  `;
+  document.head.append(style);
+  return () => {
+    style.remove();
+    el.removeAttribute(marker);
+  };
+}
+
+/** The computed `scale` CSS property, as a plain number: `el`'s own
+ * recipe (`withNestedScaleRecipe`, above) sets a single, uniform value,
+ * which both Chromium and WebKit serialize as one token through
+ * `getComputedStyle`, never the two- or three-axis form a non-uniform
+ * `scale` would. */
+const readScale = (el: HTMLElement) =>
+  Number.parseFloat(getComputedStyle(el).scale);
+
+/** Waits until a just-attached scroll-driven `animation` (`updateNestedProgress`,
+ * `@drawerdeck/core`) has actually caught up with the live scroll position
+ * it is reading, rather than a fixed `sleep`: both engines need at least one
+ * frame after the `animation`/`animation-timeline`/`animation-range` are
+ * first set, but WebKit, in this harness, needs a variable few hundred
+ * milliseconds more, worse right after another test's own drawers just
+ * tore theirs down. Polls `scale` itself, not a fixed sleep long enough for
+ * the slowest run: once it reads below 1, the catch-up is done (level 2 is
+ * already open and at rest, so nothing here is still genuinely animating a
+ * drag -- the one other reason `scale` would read below 1). */
+async function waitForNestedScale(el: HTMLElement, timeoutMs = 3000) {
+  const start = performance.now();
+  while (performance.now() - start < timeoutMs) {
+    if (readScale(el) < 0.999) return;
+    await sleep(50);
+  }
+}
+
+/** Samples `read()` on every animation frame for about `ms`, each with
+ * its own elapsed time since the first sample: what the acceptance
+ * criteria for #332's own follow-up to #272 ask for directly ("sample the
+ * outer Panel's computed scale every animation frame"), rather than a
+ * handful of hand-picked `sleep`s that could straddle the one frame a
+ * transition actually starts or ends on. */
+async function sampleFrames<T>(
+  ms: number,
+  read: () => T
+): Promise<{ t: number; v: T }[]> {
+  const samples: { t: number; v: T }[] = [];
+  return new Promise((resolve) => {
+    const start = performance.now();
+    function tick() {
+      const t = performance.now() - start;
+      samples.push({ t, v: read() });
+      if (t < ms) requestAnimationFrame(tick);
+      else resolve(samples);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+/** Every `MutationObserver` record for `attr` on `el`, collected from the
+ * moment this is called until `stop()` is: the "no churn" acceptance
+ * criterion for #332's own follow-up to #272 ("the nesting attributes and
+ * variables are never removed and re-added within one update"). A
+ * `MutationObserver` queues one record per actual attribute mutation,
+ * never coalescing a remove immediately followed by a re-add into a
+ * single net no-op: two records for `attr` where the fix expects zero (or
+ * one, for a genuine, single transition) is exactly the regression this
+ * is for. */
+function watchAttr(
+  el: Element,
+  attr: string
+): { records: MutationRecord[]; stop: () => void } {
+  const records: MutationRecord[] = [];
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.attributeName === attr) records.push(m);
+    }
+  });
+  observer.observe(el, {
+    attributes: true,
+    attributeFilter: [attr],
+    attributeOldValue: true
+  });
+  return {
+    records,
+    stop: () => {
+      // Drains whatever is still queued (not yet delivered to the
+      // callback) before disconnecting, so a mutation from the very last
+      // synchronous step before `stop()` is not silently dropped.
+      records.push(
+        ...observer.takeRecords().filter((m) => m.attributeName === attr)
+      );
+      observer.disconnect();
+    }
+  };
+}
+
 /** One level of an N-deep nested stack: `Drawer.Trigger` for level `n + 1`
  * sits inside level `n`'s own `Drawer.Content`, the same place a consumer's
  * demo puts it (the "Nested drawers" guide), so it is only reachable once
@@ -518,10 +636,7 @@ describe('two levels deep', () => {
       // the outer, with no stale state left over from the inner's own
       // close.
       await realDragDown('handle-1');
-      await expectSettledTo(
-        () => popup1.getAttribute('data-phase'),
-        'closed'
-      );
+      await expectSettledTo(() => popup1.getAttribute('data-phase'), 'closed');
     }
   );
 
@@ -1433,4 +1548,221 @@ describe("the outer's own interrupt listeners never react to a modal inner's own
       }
     }
   );
+});
+
+// #332's own follow-up to #272: a maintainer's real-iPhone report on the
+// "Nested drawers" guide's demo found the outer staying scaled back after
+// the inner closed, playing as two sequential 300ms steps instead of one.
+// Root cause: the outer's own `nestedCount` contribution only dropped once
+// the inner's phase actually reached 'closed' (`isOpen`, phase !==
+// 'closed'), well after its own CSS exit had already finished, rather than
+// the moment that exit started. These three describe blocks cover the
+// maintainer's own three acceptance criteria: (a) the discrete attributes
+// move together with the inner's own exit, not after it; (b) a drag on the
+// inner scales the drawer directly behind it continuously, restoring on a
+// release that snaps back; (c) neither ever flips an attribute or a
+// variable off and back on within one update.
+describe("the outer's own scale-back starts together with the inner's own exit, not after it", () => {
+  it('a Close tap on the inner starts the outer\'s own scale within 2 frames of data-phase becoming "closing", finishing within one transition duration of the inner itself', async () => {
+    mockReducedMotion();
+    render(<Level n={1} depth={2} />);
+    await openLevel(1);
+    await openLevel(2);
+
+    const DURATION = 300;
+    const restoreScale = withNestedScaleRecipe(panelAt(1), DURATION);
+    const restoreExit = withTransformTransition(panelAt(2), DURATION);
+    try {
+      // Lets the outer's own scale-back from opening level 2 finish
+      // settling first, so the "before" value sampled below is the
+      // resting nested scale, not still easing into it.
+      await waitForNestedScale(panelAt(1));
+      const nestedScale = readScale(panelAt(1));
+      expect(nestedScale).toBeLessThan(1);
+
+      await userEvent.click(screen.getByTestId('close-2'));
+      // `userEvent.click` resolves only once React has flushed every
+      // layout effect the click's own state update triggered
+      // (`beginExit` sets `data-phase` to 'closing' synchronously, inside
+      // that same click): by now, `contributesNesting` (`Root`'s own
+      // module doc) has already flipped, together with it, in the same
+      // update.
+      expect(popupAt(2).getAttribute('data-phase')).toBe('closing');
+
+      const samples = await sampleFrames(DURATION + 200, () => ({
+        scale: readScale(panelAt(1)),
+        innerPhase: popupAt(2).getAttribute('data-phase')
+      }));
+
+      const movedAt = samples.findIndex(
+        (s) => Math.abs(s.v.scale - nestedScale) > 0.005
+      );
+      expect(movedAt).toBeGreaterThanOrEqual(0);
+      expect(movedAt).toBeLessThanOrEqual(2);
+
+      const outerSettled = samples.find((s) => Math.abs(s.v.scale - 1) < 0.01);
+      const innerClosed = samples.find((s) => s.v.innerPhase === 'closed');
+      expect(outerSettled).toBeDefined();
+      expect(innerClosed).toBeDefined();
+      // Within one transition duration of each other, plus a small
+      // margin for the sampling loop's own frame cadence (a frame can
+      // itself take several milliseconds in a headless browser): the
+      // same margin `@drawerdeck/core`'s own exit timeout fallback
+      // (`TRANSITION_TIMEOUT_MARGIN_MS`) adds to a computed duration.
+      expect(
+        Math.abs((outerSettled?.t ?? 0) - (innerClosed?.t ?? 0))
+      ).toBeLessThanOrEqual(DURATION + 50);
+    } finally {
+      restoreScale();
+      restoreExit();
+    }
+  });
+});
+
+describe('a drag on the inner scales the drawer directly behind it in step', () => {
+  it("a real drag toward closed moves the outer's own scale monotonically with it", async () => {
+    mockReducedMotion();
+    render(<Level n={1} depth={2} />);
+    await openLevel(1);
+    await openLevel(2);
+
+    const restoreScale = withNestedScaleRecipe(panelAt(1), 300);
+    try {
+      await waitForNestedScale(panelAt(1));
+      const atOpenScale = readScale(panelAt(1));
+      expect(atOpenScale).toBeLessThan(1);
+
+      const start = await commands.dragPointerDown(
+        '[data-testid="handle-2"]',
+        5,
+        5
+      );
+      const scales: number[] = [atOpenScale];
+      let y = start.y;
+      for (let i = 0; i < 40; i++) {
+        y += 20;
+        await commands.dragPointerMoveTo(start.x, y);
+        await nextFrame();
+        scales.push(readScale(panelAt(1)));
+      }
+      await commands.dragPointerUp();
+      await expectSettledTo(
+        () => popupAt(2).getAttribute('data-phase'),
+        'closed'
+      );
+
+      // Monotonic: dragging level 2 toward closed only ever scales level
+      // 1 back toward 1 (never scales it further *in*, and never
+      // oscillates), ending noticeably closer to 1 than where it started.
+      for (let i = 1; i < scales.length; i++) {
+        expect(scales[i]).toBeGreaterThanOrEqual(scales[i - 1] - 0.002);
+      }
+      expect(scales[scales.length - 1]).toBeGreaterThan(atOpenScale + 0.01);
+    } finally {
+      restoreScale();
+    }
+  });
+
+  it('a drag released before closing snaps back open, restoring the outer\'s own scale with no special-cased "restore"', async () => {
+    mockReducedMotion();
+    render(<Level n={1} depth={2} />);
+    await openLevel(1);
+    await openLevel(2);
+
+    const restoreScale = withNestedScaleRecipe(panelAt(1), 300);
+    try {
+      await waitForNestedScale(panelAt(1));
+      const atOpenScale = readScale(panelAt(1));
+
+      // Down a fraction of the panel's own height (not a fixed pixel
+      // count, so this still clears the closed threshold regardless of
+      // how tall this particular test run's own viewport makes level
+      // 2's panel), then *back up* to very nearly the position the drag
+      // started at, before ever releasing: decisively closer to open
+      // than closed by the time it lets go, so the release below settles
+      // open regardless of how a real drag's own velocity-projected
+      // throw (#235) reads a release mid-gesture, which a release
+      // straight off a still-partway drag is naturally sensitive to.
+      const dragDistance = Math.max(
+        10,
+        panelAt(2).getBoundingClientRect().height * 0.2
+      );
+      const start = await commands.dragPointerDown(
+        '[data-testid="handle-2"]',
+        5,
+        5
+      );
+      let y = start.y;
+      const steps = 4;
+      for (let i = 0; i < steps; i++) {
+        y += dragDistance / steps;
+        await commands.dragPointerMoveTo(start.x, y);
+        await nextFrame();
+      }
+      const midDragScale = readScale(panelAt(1));
+      expect(midDragScale).toBeGreaterThan(atOpenScale);
+
+      for (let i = 0; i < steps; i++) {
+        y -= dragDistance / steps;
+        await commands.dragPointerMoveTo(start.x, y);
+        await nextFrame();
+      }
+
+      await commands.dragPointerUp();
+      // Level 2 stays open the whole time: nothing here discretely
+      // re-registers `contributesNesting` at all, so there is nothing to
+      // special-case. The scale restoring is the continuous progress
+      // value alone, easing back natively as the released drag's own
+      // throw (#235) settles the scroll position back toward open.
+      await expectSettledTo(
+        () => popupAt(2).getAttribute('data-phase'),
+        'open'
+      );
+      await sleep(300);
+      expect(readScale(panelAt(1))).toBeCloseTo(atOpenScale, 2);
+    } finally {
+      restoreScale();
+    }
+  });
+});
+
+describe('no churn: the nesting attributes and variables are never removed and re-added within one update', () => {
+  it('closing the innermost of three levels never flips data-nested-open on the ones still above it', async () => {
+    mockReducedMotion();
+    render(<Level n={1} depth={3} />);
+    await openLevel(1);
+    await openLevel(2);
+    await openLevel(3);
+
+    // Level 1 still has level 2 nested above it throughout this close
+    // (2 -> 1, never 0): its own `data-nested-open` must never change at
+    // all. Level 2 has nothing left nested above it once level 3 closes
+    // (1 -> 0): exactly one transition, never two (the "removed, then
+    // immediately re-added" shape a stale effect cleanup produced before
+    // this round's own fix).
+    const watchers = {
+      popup1: watchAttr(popupAt(1), 'data-nested-open'),
+      panel1: watchAttr(panelAt(1), 'data-nested-open'),
+      popup2: watchAttr(popupAt(2), 'data-nested-open'),
+      panel2: watchAttr(panelAt(2), 'data-nested-open')
+    };
+
+    await userEvent.keyboard('{Escape}');
+    await expectSettledTo(
+      () => popupAt(3).getAttribute('data-phase'),
+      'closed'
+    );
+    // A real device's own churn landed within a few milliseconds of the
+    // close (this round's own write-up); settling a little longer here
+    // gives any further, slower churn room to show up too, not only
+    // whatever lands inside the first poll.
+    await sleep(200);
+
+    for (const w of Object.values(watchers)) w.stop();
+
+    expect(watchers.popup1.records).toHaveLength(0);
+    expect(watchers.panel1.records).toHaveLength(0);
+    expect(watchers.popup2.records).toHaveLength(1);
+    expect(watchers.panel2.records).toHaveLength(1);
+  });
 });

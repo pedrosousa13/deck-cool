@@ -48,6 +48,26 @@
  * scale-back recipe. This engine does not enforce that on its own (it has
  * no notion of "inner" or "outer" to enforce it with); `@drawerdeck/react`
  * warns about it in development.
+ *
+ * Nesting's own progress, continuously, not only discretely (#332's own
+ * follow-up to #272): `nestedCount` alone only ever changes at a handful
+ * of discrete moments (a drawer starting to open or close), so a
+ * consumer's own scale-back recipe reading just that jumps, instead of
+ * following a drag or a swipe on the nested drawer frame by frame, the
+ * way iOS's own nested sheets and vaul's `onNestedDrag` do.
+ * `progressTimelineName`/`onProgressChange`/`nestedProgressSource`/
+ * `nestedProgressValue` (`DrawerOptions`, below) are the one more number,
+ * each way, this adds for that: this drawer's own live open progress (0
+ * closed to 1 fully open), out through whichever one of the first two
+ * actually resolves, and the one nested child currently relevant to this
+ * drawer's own Panel, in through whichever one of the last two does, so
+ * this drawer can render it as `--drawer-nested-progress` the same way it
+ * already renders `nestedCount` as `--drawer-nested`. Native first: where
+ * a named scroll timeline is supported, no JS runs per frame for either
+ * half, `@drawerdeck/react`'s own `useId()` is what makes each nested
+ * Root's own exposed timeline name unique, and this engine still
+ * discovers nothing of the relationship itself -- only ever renders what
+ * it is handed, exactly as `nestedCount` already does.
  */
 
 /** A snap point: a fraction of the Viewport's extent along the side's axis
@@ -125,6 +145,74 @@ export interface DrawerOptions {
    * "the smallest API" for this engine is a single number in, not a
    * `parent` reference or a DOM query. Defaults to 0. */
   nestedCount?: number;
+  /** This drawer's own open progress (#332's own follow-up to #272),
+   * exposed for whichever ancestor drawer is told to read it
+   * (`nestedProgressSource`, below) to scale back in step with a drag,
+   * not only once the nested state settles. Where the browser supports a
+   * named scroll timeline, exposed as a second one on the Viewport,
+   * alongside this drawer's own `--drawer`, under this name -- read once,
+   * like `side`, since whether this drawer is nested at all is decided
+   * once, by where `@drawerdeck/react` finds it in the tree.
+   * `@drawerdeck/react` generates it from this Root's own `useId()`, one
+   * per nested Root, only while nested; left unset for a drawer that is
+   * not, since nothing would ever read it. */
+  progressTimelineName?: string;
+  /** The fallback half of `progressTimelineName` (#249's own split):
+   * where a named scroll timeline is unsupported (Firefox), this
+   * drawer's own progress, pushed here instead every time it actually
+   * changes -- on a real scroll frame, never per animation frame, since
+   * nothing here runs one -- for a nested parent's own
+   * `nestedProgressValue` (below) to read instead of a timeline it has no
+   * way to consume. Never called where the native timeline resolves. */
+  onProgressChange?(progress: number): void;
+  /** The other fallback half, `onProgressChange`'s own sibling: where the
+   * progress this drawer reports its own `rangePercent` on
+   * `nestedProgressSource` actually ends, in raw scroll percent (0 to
+   * 100) along this drawer's own scroll timeline, 0% at `scrollTop`/
+   * `scrollLeft` 0 and 100% at the Viewport's own maximum scroll
+   * position (`maxScroll`) -- regardless of `side`, since that is what a
+   * scroll timeline's own range always measures against, and
+   * `nestedProgressSource.side`, below, is what a nested parent uses to
+   * turn it into the right end of an `animation-range`. Pushed here
+   * whenever it changes (a `setOptions` call that actually changes
+   * `snapPoints`, or a resize) -- not on every scroll frame, since it
+   * never moves from one. Needed because this drawer's own maximum
+   * scroll position does not always equal where it actually rests open
+   * (snap points nearer than the Viewport's own full scrollable extent
+   * leave slack past them, #332's own follow-up to #272 found this
+   * exactly): without it, a nested parent reading the raw 0%-to-100%
+   * scroll timeline directly would see this drawer's own progress stall
+   * short of 1 even once it is genuinely, fully open. */
+  onProgressRangeChange?(rangePercent: number): void;
+  /** The one nested child currently relevant to this drawer's own Panel
+   * (#332's own follow-up to #272): that child's own
+   * `progressTimelineName`, `side` and `rangePercent` (the last two
+   * straight from `onProgressRangeChange`, above), so this drawer can
+   * read its live open progress -- 0 closed, 1 fully open -- as
+   * `--drawer-nested-progress` on its own Panel, with no JS per frame.
+   * `timeline-scope` lifts the child's own named timeline up to this
+   * drawer's dialog, a shared ancestor of both (nesting renders the
+   * child inside this drawer's own Panel); an `animation` this drawer
+   * sets on its own Panel, timed to that timeline and ranged to
+   * `rangePercent` (`animation-range`, so the animation actually finishes
+   * at the child's own resting open position, not wherever its raw
+   * scroll timeline happens to end), writes the variable directly there
+   * -- the same direct-write discipline `--drawer-nested` already
+   * follows (never left for a descendant to inherit across the dialog
+   * boundary; see `NESTED_COUNT_VAR`'s own comment). `null`, or simply
+   * never set, while nothing is nested: the variable then reads a
+   * literal `0`, written the same direct way. */
+  nestedProgressSource?: {
+    timelineName: string;
+    side: Side;
+    rangePercent: number;
+  } | null;
+  /** The fallback half of `nestedProgressSource` (#249's own split): the
+   * nested child's own progress number, already computed by its own
+   * `onProgressChange` and forwarded here by `@drawerdeck/react`, for
+   * this drawer to write directly. Ignored wherever
+   * `nestedProgressSource`'s own native wiring already applies. */
+  nestedProgressValue?: number;
   onOpenChange?(open: boolean, reason: OpenChangeReason): void;
   onSnapPointChange?(index: number): void;
   onPhaseChange?(phase: Phase): void;
@@ -181,6 +269,12 @@ const NESTED_OPEN_ATTR = 'data-nested-open';
  * attribute already does: never dependent on an inherited custom property
  * repainting a descendant on every engine. */
 const NESTED_COUNT_VAR = '--drawer-nested';
+/** The nested child's own live open progress, 0 (closed) to 1 (fully
+ * open), written directly on the Panel (#332's own follow-up to #272):
+ * see `DrawerOptions.nestedProgressSource`'s own comment for the
+ * mechanism, and `NESTED_COUNT_VAR`'s for why it is a direct write, never
+ * an inherited one. */
+const NESTED_PROGRESS_VAR = '--drawer-nested-progress';
 /** Added to the Panel's own computed transition duration for the enter and
  * exit timeout fallbacks, so a `transitionend` that lands a frame or two
  * late (it does) still arrives before the timeout settles the phase
@@ -217,6 +311,18 @@ function hitAreaClass(side: Side): string {
 }
 function hitAreaKeyframes(side: Side): string {
   return `drawerdeck-hit-area-${side}`;
+}
+/** One `@keyframes` per side (`ensureBackdropReset`, below), the same
+ * reason `hitAreaKeyframes` just above has one: `--drawer-nested-progress`
+ * (`NESTED_PROGRESS_VAR`) needs the same `top`/`left` reversal a scroll
+ * timeline's own 0%-to-100% range needs everywhere else in this file,
+ * since open and closed sit at opposite ends of it for those two sides.
+ * Shared across every drawer of a given side: the one thing that varies
+ * per instance is which named timeline `animation-timeline` points an
+ * `animation` using this rule at (`updateNestedProgress`, below), never
+ * the rule itself. */
+function nestedProgressKeyframes(side: Side): string {
+  return `drawerdeck-nested-progress-${side}`;
 }
 /** The pixel offset of the Viewport's own maximum scroll position (its
  * `scrollHeight - clientHeight`, or the `scrollWidth`/`clientWidth`
@@ -266,7 +372,17 @@ function ensureBackdropReset() {
   mountedDrawers += 1;
   if (resetSheet) return;
   resetSheet = new CSSStyleSheet();
-  let css = `.${RESET_CLASS}::backdrop{background:transparent}`;
+  // Registered once, instance-independent, the same reason the hit area's
+  // own `@keyframes` below are: lets `--drawer-nested-progress` actually
+  // interpolate as an `animation` drives it (#332's own follow-up to
+  // #272), rather than flipping at the animation's own 50% the way an
+  // unregistered custom property's discrete "animation" would (this
+  // engine never needs that in between value, but a browser without
+  // `@property` support just ignores this rule and leaves the direct `'0'`
+  // write `updateNestedProgress` already falls back to in that case).
+  let css =
+    `.${RESET_CLASS}::backdrop{background:transparent}` +
+    `@property ${NESTED_PROGRESS_VAR}{syntax:'<number>';inherits:true;initial-value:0}`;
   for (const side of SIDES) {
     const reversed = side === 'top' || side === 'left';
     const openInset = hitAreaInset(side, `var(${MAX_SCROLL_VAR},0px)`);
@@ -275,14 +391,18 @@ function ensureBackdropReset() {
     // 100% (the scroll end): `bottom`/`right` want 0% clipped away entirely
     // (closed) and 100% at the full hit area (open), `top`/`left` the exact
     // opposite, since open sits at 0 for them (this file's own top
-    // comment).
+    // comment). `--drawer-nested-progress`, just below, wants the exact
+    // same reversal, for the exact same reason: 0 at closed, 1 at open.
     const from = reversed ? openInset : closedInset;
     const to = reversed ? closedInset : openInset;
     css +=
       `@keyframes ${hitAreaKeyframes(side)}{from{clip-path:inset(${from})}` +
       `to{clip-path:inset(${to})}}` +
       `.${hitAreaClass(side)}{animation:${hitAreaKeyframes(side)} 1s linear both;` +
-      `animation-timeline:${SCROLL_TIMELINE_NAME}}`;
+      `animation-timeline:${SCROLL_TIMELINE_NAME}}` +
+      `@keyframes ${nestedProgressKeyframes(side)}{` +
+      `from{${NESTED_PROGRESS_VAR}:${reversed ? 1 : 0}}` +
+      `to{${NESTED_PROGRESS_VAR}:${reversed ? 0 : 1}}}`;
   }
   resetSheet.replaceSync(css);
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, resetSheet];
@@ -406,6 +526,10 @@ export function createDrawer(
    * a `top`/`left` snap point's offset against, and what the non-modal hit
    * area's JS fallback and `--drawer-max-scroll` both read. */
   let maxScroll = 0;
+  /** `onProgressRangeChange`'s own dedupe (`measure`, below): a plain
+   * percent, so unlike `lastProgress`/`lastReportedProgress` elsewhere in
+   * this file, no string formatting is involved. */
+  let lastProgressRangePercent: number | undefined;
   let pendingCloseReason: OpenChangeReason | null = null;
   let scrollEndDebounce: ReturnType<typeof setTimeout> | undefined;
   let destroyed = false;
@@ -599,18 +723,129 @@ export function createDrawer(
    * same as every other data attribute here. Modal or not -- nesting
    * itself does not care, only the native top layer (free, for a modal
    * drawer) and this engine's own non-modal Escape guard
-   * (`onDocumentKeyDown`, below) do. */
+   * (`onDocumentKeyDown`, below) do.
+   *
+   * Guarded by `lastNestedCount` (#332's own follow-up to #272): called
+   * from `setOptions` on *every* call, including one that changed some
+   * other option entirely, so without this it would call
+   * `setAttribute`/`removeAttribute` again for a count that never
+   * actually changed. Harmless on its own -- setting an attribute to the
+   * value it already holds is a no-op -- but `@drawerdeck/react`'s own
+   * registration effect (`Root`'s own module doc) used to report a
+   * nested count of 0 and then, in the very same update, the real one
+   * right after it (a stale cleanup firing unconditionally on every
+   * dependency change, not only on unmount): guarding here too, not only
+   * fixing that effect, is defense in depth against the exact
+   * "removed and re-added within one update" churn the design ruling for
+   * this round forbids. */
+  let lastNestedCount: number | undefined;
   function updateNestedAttrs() {
     const count = opts.nestedCount ?? 0;
+    if (count === lastNestedCount) return;
+    // `data-nested-open` only toggles with the count's own presence (zero
+    // or not), never with every change to the number itself: three
+    // levels deep, the outermost goes from a count of 2 to 1 the moment
+    // the innermost closes, present the whole way through, and calling
+    // `setAttribute` again for a value it already holds would still
+    // queue a mutation record for it (`setAttribute` always does,
+    // whether or not the value actually differs) -- a real, if harmless
+    // on its own, instance of the write #332's own "no churn" ruling
+    // forbids: "written only when its value changes".
+    const wasOpen = (lastNestedCount ?? 0) > 0;
+    lastNestedCount = count;
     dialog.style.setProperty(NESTED_COUNT_VAR, String(count));
     panel.style.setProperty(NESTED_COUNT_VAR, String(count));
-    if (count > 0) {
+    const isOpenNow = count > 0;
+    if (isOpenNow === wasOpen) return;
+    if (isOpenNow) {
       dialog.setAttribute(NESTED_OPEN_ATTR, '');
       panel.setAttribute(NESTED_OPEN_ATTR, '');
     } else {
       dialog.removeAttribute(NESTED_OPEN_ATTR);
       panel.removeAttribute(NESTED_OPEN_ATTR);
     }
+  }
+
+  /** Renders `opts.nestedProgressSource`/`opts.nestedProgressValue` (#332's
+   * own follow-up to #272) as `--drawer-nested-progress` on the Panel: the
+   * live open progress of the one nested child currently relevant to this
+   * drawer, 0 (closed) to 1 (fully open), so a consumer's own CSS recipe
+   * can scale this Panel back in step with a drag on that child, not only
+   * once its nested state (`updateNestedAttrs`, above) settles.
+   *
+   * Native, where a named scroll timeline is supported: `timeline-scope`
+   * lifts the child's own named timeline (`nestedProgressSource.timelineName`)
+   * up to this drawer's own dialog, a shared ancestor of both -- nesting
+   * renders the child inside this drawer's own Panel -- and an `animation`
+   * this drawer sets on its own Panel, timed to that timeline via
+   * `animation-timeline`, writes the variable directly there: no JS runs
+   * per frame, and, like `NESTED_COUNT_VAR`'s own direct write, the Panel
+   * never depends on inheriting it from an ancestor across the dialog
+   * boundary.
+   *
+   * The fallback (`nestedProgressValue`, a plain number `@drawerdeck/react`
+   * forwards from the child's own `onProgressChange`), where a named
+   * scroll timeline is unsupported: written directly, the same way, just
+   * without an `animation` to drive it.
+   *
+   * Guarded by `lastNestedProgressTimelineName`/`lastNestedProgressValue`,
+   * the same reason `updateNestedAttrs` guards `lastNestedCount`: called
+   * from `setOptions` on every call, and, in the native branch,
+   * reassigning the same `animation`/`animation-timeline` values again
+   * would restart the animation, snapping the variable back to its own
+   * `from` value for no reason. */
+  let lastNestedProgressTimelineName: string | null = null;
+  let lastNestedProgressRangePercent: number | null = null;
+  let lastNestedProgressValue: number | undefined;
+  function updateNestedProgress() {
+    if (supportsScrollTimeline) {
+      const source = opts.nestedProgressSource ?? null;
+      const name = source?.timelineName ?? null;
+      const rangePercent = source?.rangePercent ?? null;
+      if (
+        name === lastNestedProgressTimelineName &&
+        rangePercent === lastNestedProgressRangePercent
+      ) {
+        return;
+      }
+      lastNestedProgressTimelineName = name;
+      lastNestedProgressRangePercent = rangePercent;
+      if (source) {
+        dialog.style.setProperty(
+          'timeline-scope',
+          `${SCROLL_TIMELINE_NAME}, ${source.timelineName}`
+        );
+        panel.style.setProperty(
+          'animation',
+          `${nestedProgressKeyframes(source.side)} 1s linear both`
+        );
+        panel.style.setProperty('animation-timeline', source.timelineName);
+        // Scopes the animation to the child's own resting open position,
+        // not its raw scroll timeline's own 0%-to-100% end (this file's
+        // own `onProgressRangeChange` doc): `top`/`left` sit at the
+        // *high* end of their own raw scroll range when closed (this
+        // file's own top comment), so their own open-to-closed span is
+        // the back half of it, `rangePercent` to 100%; `bottom`/`right`
+        // sit at the low end, so theirs is the front half, 0 to
+        // `rangePercent`.
+        const reversedChild = source.side === 'top' || source.side === 'left';
+        panel.style.setProperty(
+          'animation-range',
+          reversedChild ? `${rangePercent}% 100%` : `0% ${rangePercent}%`
+        );
+      } else {
+        dialog.style.setProperty('timeline-scope', SCROLL_TIMELINE_NAME);
+        panel.style.removeProperty('animation');
+        panel.style.removeProperty('animation-timeline');
+        panel.style.removeProperty('animation-range');
+        panel.style.setProperty(NESTED_PROGRESS_VAR, '0');
+      }
+      return;
+    }
+    const value = opts.nestedProgressValue ?? 0;
+    if (value === lastNestedProgressValue) return;
+    lastNestedProgressValue = value;
+    panel.style.setProperty(NESTED_PROGRESS_VAR, String(value));
   }
 
   /** The Viewport's own hit-testable region, non-modal only (see
@@ -656,17 +891,23 @@ export function createDrawer(
   }
   applyModalStyle();
   updateNestedAttrs();
+  updateNestedProgress();
 
   // The timeline plumbing only: a consumer's own `@keyframes` and
   // `animation-timeline: --drawer` on `Drawer.Backdrop` (or any other
   // descendant of the dialog) is what actually dims it (#249). `x` for
   // `left`/`right`, `y` for `bottom`/`top`: the viewport only ever scrolls
-  // along its own axis.
+  // along its own axis. `options.progressTimelineName`, read once (not
+  // through the reactive `opts`, like `side` just above it): whether this
+  // drawer is nested at all, and so whether anything will ever read a
+  // second named timeline off it, is decided once, by where
+  // `@drawerdeck/react` finds it in the tree, never reactively.
   if (supportsScrollTimeline) {
-    viewport.style.setProperty(
-      'scroll-timeline',
-      `${SCROLL_TIMELINE_NAME} ${horizontal ? 'x' : 'y'}`
-    );
+    const axisKeyword = horizontal ? 'x' : 'y';
+    const names = options.progressTimelineName
+      ? `${SCROLL_TIMELINE_NAME} ${axisKeyword}, ${options.progressTimelineName} ${axisKeyword}`
+      : `${SCROLL_TIMELINE_NAME} ${axisKeyword}`;
+    viewport.style.setProperty('scroll-timeline', names);
     dialog.style.setProperty('timeline-scope', SCROLL_TIMELINE_NAME);
   }
 
@@ -706,6 +947,25 @@ export function createDrawer(
     // The scroll range a native dim's `animation-range` covers (closed to
     // the first snap point), once per layout -- never per frame (#249).
     dialog.style.setProperty('--drawer-first-snap', `${scrollForSnap(0)}px`);
+    // `onProgressRangeChange` (#332's own follow-up to #272): where this
+    // drawer's own resting open position (its *last* configured snap
+    // point, the same one `updateContentLock` already calls "the top"
+    // snap point) actually lands along its own raw 0%-to-100% scroll
+    // timeline -- which `maxScroll`, just above, does not itself always
+    // match (snap points nearer than the Viewport's own full scrollable
+    // extent leave slack past them). A plain percent, not a pixel
+    // length: `side` alone decides which end of an `animation-range`
+    // it becomes for a nested parent (`nestedProgressSource`'s own
+    // module doc), so there is nothing reversed-side-specific to compute
+    // here.
+    const rangePercent =
+      maxScroll > 0
+        ? clamp((scrollForSnap(snapPx.length - 1) / maxScroll) * 100, 0, 100)
+        : 100;
+    if (rangePercent !== lastProgressRangePercent) {
+      lastProgressRangePercent = rangePercent;
+      opts.onProgressRangeChange?.(rangePercent);
+    }
   }
 
   /** Positions every `[data-drawer-snap]` marker at its snap point's real
@@ -748,6 +1008,10 @@ export function createDrawer(
   }
 
   let lastProgress: string | undefined;
+  /** `opts.onProgressChange`'s own dedupe, separate from `lastProgress`
+   * just above: a different number, on a different scale (#332's own
+   * follow-up to #272, below). */
+  let lastReportedProgress: number | undefined;
   function updateProgress() {
     const st = viewport[axis.scroll];
     const closedPos = scrollForSnap(-1);
@@ -759,9 +1023,34 @@ export function createDrawer(
     // main thread) when the value is unchanged (#267): clamped at 0 or 1,
     // most of a drag's scroll frames recompute the same value (every frame
     // beyond the first snap point, every frame at rest).
-    if (progress === lastProgress) return;
-    lastProgress = progress;
-    dialog.style.setProperty('--drawer-progress', progress);
+    if (progress !== lastProgress) {
+      lastProgress = progress;
+      dialog.style.setProperty('--drawer-progress', progress);
+    }
+    // `onProgressChange` (#332's own follow-up to #272): the fallback half
+    // of `nestedProgressSource`'s own module doc, called only here, in
+    // the branch that already only runs where a named scroll timeline is
+    // unsupported (`onScroll`'s own call site, below). Deliberately not
+    // `progress`/`lastProgress` just above: those clamp to the *first*
+    // snap point (what the dim recipe wants), while this one runs to the
+    // *last* configured snap point instead -- `updateContentLock`'s own
+    // "top" snap point, the same one `measure`'s own
+    // `onProgressRangeChange` scopes the native branch's
+    // `animation-range` to, and for the exact same reason: this drawer's
+    // own maximum scroll position does not always equal where it
+    // actually rests open (snap points nearer than the Viewport's own
+    // full scrollable extent leave slack past them), so the raw scroll
+    // range alone would stall short of 1 even once this drawer is
+    // genuinely, fully open.
+    if (opts.onProgressChange) {
+      const lastOpenPos = scrollForSnap(snapPx.length - 1);
+      const fullDenom = lastOpenPos - closedPos || (reversed ? -1 : 1);
+      const full = clamp((st - closedPos) / fullDenom, 0, 1);
+      if (full !== lastReportedProgress) {
+        lastReportedProgress = full;
+        opts.onProgressChange(full);
+      }
+    }
   }
 
   /** Locks the content below the top (last configured) snap point: vaul's
@@ -1948,6 +2237,7 @@ export function createDrawer(
     }
     if (previous.modal !== opts.modal) applyModalStyle();
     updateNestedAttrs();
+    updateNestedProgress();
   }
 
   function destroy() {
