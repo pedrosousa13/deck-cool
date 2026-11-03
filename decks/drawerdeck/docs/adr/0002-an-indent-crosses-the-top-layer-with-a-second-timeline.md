@@ -29,22 +29,41 @@ non-null the moment the animation is set up.
 
 ## The mechanism
 
-`@drawerdeck/core`'s own `indent` option takes an element (`null` while
-nothing should indent). While active (from the moment this drawer leaves
-`'closed'` through the moment it returns to it, never only while fully
-`'open'`, the same reason a nested drawer's own contribution to
-`--drawer-nested` stays live through its whole close), the target gets
-`data-drawer-indent`, a `transform-origin` set once, at activation, to the
-viewport's own center in document coordinates (fixing the page-shift bug
-a scrolled-before-opening page would otherwise show: measured at 235px
-with the origin left at the default versus about 1px with this), and a
-registered `--drawer-indent-progress` (`0` closed, `1` fully open), driven
-by a native `animation` bound to the second timeline wherever one
-resolves, or written directly on a real scroll frame where it does not
-(Firefox). `documentElement`'s own shared `timeline-scope` is managed as a
-set, not a single name, since more than one drawer's own indent can be
-live on the page at once, and the page's own original inline value, if
-any, is captured once and restored exactly once the last one clears.
+`@drawerdeck/core`'s own `indent` option takes a ref-like object or an
+element (`null` while nothing should indent). Only one drawer ever indents
+the page at a time -- a single, page-wide owner, not one timeline per
+instance: the first drawer to want it keeps it (`indentOwner`, a plain
+object unique to that instance) until it releases, and every other
+instance's own `updateIndent` gets a chance to claim it the moment that
+happens. With only ever one real owner, every instance shares the same
+timeline name (`--drawer-indent`) instead of each generating its own.
+
+While active (from the moment this drawer leaves `'closed'` through the
+moment it returns to it, never only while fully `'open'`, the same reason
+a nested drawer's own contribution to `--drawer-nested` stays live through
+its whole close), the target gets `data-drawer-indent` (this drawer's own
+`side`, so an adopted stylesheet rule keyed on it can bind the `animation`
+and the `transform-origin`), `data-ending-style` for its whole close (the
+same attribute `Drawer.Panel`'s own entrance and exit recipe reads, so a
+CSS recipe can ease the indent back out through a button close, Escape or
+an outside press, not only a drag, where the real scroll position never
+moves at all), and a registered `--drawer-indent-progress` (`0` closed,
+`1` fully open), driven by a native `animation` bound to the shared
+timeline wherever one resolves, or written directly on a real scroll frame
+where it does not (Firefox). The adopted stylesheet carries two more rules
+for this: `[data-drawer-indent]{transform-origin:var(--drawer-indent-origin)}`,
+where `--drawer-indent-origin` is set once, at activation, to the
+viewport's own center relative to the target's own box (fixing the
+page-shift bug a scrolled-before-opening page would otherwise show:
+measured at 235px with the origin left at the default versus about 1px
+with this), and `:root:has([data-drawer-indent]){timeline-scope:--drawer-indent}`,
+so the shared timeline reaches outside the dialog with no inline write on
+`<html>` at all. Nothing is ever written to the target's own inline
+`style` beyond the three custom properties this owns, so nothing is ever
+saved or restored either: an inline `animation` a consumer already set on
+the target of their own still wins over the adopted stylesheet's rule, the
+same as any inline style beats a stylesheet rule at equal specificity, and
+the indent then does nothing on that element.
 
 Only the outermost open drawer indents the page: `@drawerdeck/react`'s own
 `Drawer.Root` ignores its own `indent` prop entirely while nested inside
@@ -58,8 +77,14 @@ recipes are not meant to stack.
 ADR-0001's other findings (`showModal()`'s own initial focus, the viewport
 resize during an opening scroll, a mouse needing a pointer handler to drag
 a scroll container) are unrelated to this one and still hold. ADR-0001's
-own prototype also predates `timeline-scope` reaching a scroll timeline at
-all outside the element that declares it (`--drawer`, `Drawer.Backdrop`'s
-own dim, already crosses into the dialog's own descendants this way); what
-this ADR adds is crossing the top layer itself, which the prototype never
-tried with a second, un-scoped name.
+own prototype already had `timeline-scope` on `:root`, reaching past the
+element that declares a scroll timeline (`--drawer`, `Drawer.Backdrop`'s
+own dim, a descendant of the dialog, already resolved under exactly that).
+What failed, for the element *outside* the dialog, was not the top layer
+itself: "The mechanism", above, and this ADR's own first bullet point,
+identify the real cause as the dialog's own `timeline-scope` re-declaring
+that very same name for the dim's own benefit, which isolates it from
+anything outside instead of merely exposing it there. What this ADR adds
+is giving the outside target's own named timeline a *second*, distinct
+name the dialog's own `timeline-scope` never lists at all, so nothing
+re-isolates it.
