@@ -252,6 +252,15 @@ export interface DrawerOptions {
    * `setOptions`, like `snapPoints`: a consumer's own ref to the target
    * may not resolve until after this drawer is created.
    *
+   * A ref object (`{ current }`), not only a resolved element: `updateIndent`
+   * reads `.current` itself, fresh, every time it runs, rather than this
+   * engine being handed a snapshot `@drawerdeck/react` resolved once. A
+   * wrapper that mounts in a later commit than the one that first called
+   * `setOptions` -- a ref's own `.current` starting `null` and attaching
+   * after -- is still picked up the next time this drawer's own phase
+   * changes (open, close, a drag), with no extra `setOptions` call needed
+   * for it: `@drawerdeck/react`'s own `RootProps.indent` doc.
+   *
    * Rendered the same way `nestedProgressSource` already renders on this
    * drawer's own Panel (`updateIndent`'s own doc, and this file's own top
    * comment, for the mechanism and why it reaches outside the top layer),
@@ -262,8 +271,15 @@ export interface DrawerOptions {
    * `onProgressChange`'s own `full` already use), driven by a native
    * `animation` bound to this drawer's own second scroll timeline wherever
    * one is supported, or written directly on a real scroll frame where it
-   * is not. */
-  indent?: HTMLElement | null;
+   * is not.
+   *
+   * Only one drawer indents the page at a time, page-wide (`indentOwner`,
+   * below): the first one to start wanting it keeps it until it releases
+   * (its own phase returns to `'closed'`, or `setOptions` drops `indent`
+   * back to `null`), and a second one with `indent` set does nothing in
+   * the meantime -- never two drawers scaling the same, or even two
+   * different, targets back at once. */
+  indent?: HTMLElement | { current: HTMLElement | null } | null;
   onOpenChange?(open: boolean, reason: OpenChangeReason): void;
   onSnapPointChange?(index: number): void;
   onPhaseChange?(phase: Phase): void;
@@ -436,68 +452,50 @@ function hitAreaInset(side: Side, v: string): string {
 let resetSheet: CSSStyleSheet | undefined;
 let mountedDrawers = 0;
 
-/** Names every drawer instance's own indent timeline (#274), so two on the
- * same page never collide on `documentElement`'s shared `timeline-scope`
- * (below): a module-level counter, not `useId()` or anything else
- * `@drawerdeck/react` would have to generate, since this name never needs
- * to cross a component boundary the way a nested Root's own
- * `progressTimelineName` does -- an indent target is this drawer's own
- * concern alone. */
-let nextIndentTimelineId = 0;
+/** The one drawer indenting the page right now, page-wide (#274's review
+ * round): `indentSelf`, each instance's own unique object, identifies the
+ * current owner; `undefined` while nothing is indenting. Only one drawer
+ * ever indents at a time -- the first (so, in practice, the outermost) to
+ * start wanting it -- so every instance shares the same timeline name
+ * (`INDENT_TIMELINE`, just below) instead of each generating its own: with
+ * only ever one real owner, two names would never collide in the first
+ * place. */
+let indentOwner: object | undefined;
+const INDENT_TIMELINE = '--drawer-indent';
 
-/** `documentElement`'s own `timeline-scope`, shared across every drawer
- * with an active indent target at once (#274): more than one can be live
- * on the same page, each needing its own generated name reachable from
- * outside the top layer (this file's own top comment). Managed as a set,
- * not a single name, so one drawer's own add or remove never clobbers
- * another's, or whatever value the page itself had inline before the
- * first one ever touched it -- captured once, here, and put back exactly
- * once the last one clears. */
-let documentIndentTimelineNames: Set<string> | undefined;
-/** The page's own inline `timeline-scope`, captured once, the moment the
- * first drawer's own indent activates, and put back exactly once the
- * last one clears: empty equally for one that was never set and one that
- * was explicitly set to an empty value (never valid CSS), the same
- * "absent" convention every other saved inline property in this file
- * already uses. */
-let documentIndentTimelineScopeOriginal = '';
+/** Every mounted drawer's own `updateIndent`, so releasing the single
+ * `indentOwner`, above, can ask every *other* instance to recheck whether
+ * it should claim it now -- the one notification a page-wide owner needs
+ * that a plain module-level flag does not give for free. Without this, a
+ * second drawer already open with `indent` set, blocked behind the first
+ * one's own ownership, would stay blocked even after the first closes:
+ * nothing of its own (no phase change, no `setOptions` call) would ever
+ * run its `updateIndent` again to notice the owner is gone. Added once, at
+ * creation, and removed at `destroy()`. */
+const indentWaiters = new Set<() => void>();
 
-function writeDocumentIndentTimelineScope() {
-  const base = documentIndentTimelineScopeOriginal
-    ? [documentIndentTimelineScopeOriginal]
-    : [];
-  document.documentElement.style.setProperty(
-    'timeline-scope',
-    [...base, ...(documentIndentTimelineNames ?? [])].join(', ')
-  );
+/** `notifyIndentWaiters`'s own loop body, factored out so `deactivateIndent`
+ * reads as what it does, not how it tells everyone else: calls every other
+ * instance's own `updateIndent`, in the order they were created, so
+ * whichever one still wants the indent claims `indentOwner` for itself the
+ * moment its own turn comes -- any instance after it in the `Set` then
+ * finds the owner already taken again and stays inert, same as before. */
+function notifyIndentWaiters(exclude: () => void) {
+  for (const wake of indentWaiters) {
+    if (wake !== exclude) wake();
+  }
 }
 
-function addDocumentIndentTimelineScope(name: string) {
-  if (!documentIndentTimelineNames) {
-    documentIndentTimelineNames = new Set();
-    documentIndentTimelineScopeOriginal =
-      document.documentElement.style.getPropertyValue('timeline-scope');
-  }
-  documentIndentTimelineNames.add(name);
-  writeDocumentIndentTimelineScope();
-}
-
-function removeDocumentIndentTimelineScope(name: string) {
-  if (!documentIndentTimelineNames) return;
-  documentIndentTimelineNames.delete(name);
-  if (documentIndentTimelineNames.size > 0) {
-    writeDocumentIndentTimelineScope();
-    return;
-  }
-  documentIndentTimelineNames = undefined;
-  if (documentIndentTimelineScopeOriginal) {
-    document.documentElement.style.setProperty(
-      'timeline-scope',
-      documentIndentTimelineScopeOriginal
-    );
-  } else {
-    document.documentElement.style.removeProperty('timeline-scope');
-  }
+/** `opts.indent` itself, resolved to the element it currently names: a ref
+ * object's own `.current`, read fresh on every call, never a value
+ * snapshotted once (`DrawerOptions.indent`'s own doc) -- `updateIndent`
+ * calls this itself, every time it runs, rather than `opts.indent` ever
+ * holding a resolved element `@drawerdeck/react` computed ahead of time. */
+function resolveIndentOption(
+  value: DrawerOptions['indent']
+): HTMLElement | null {
+  if (!value) return null;
+  return value instanceof HTMLElement ? value : value.current;
 }
 
 function ensureBackdropReset() {
@@ -532,7 +530,9 @@ function ensureBackdropReset() {
   let css =
     `.${RESET_CLASS}::backdrop{background:transparent}` +
     `@property ${NESTED_PROGRESS_VAR}{syntax:'<number>';inherits:false;initial-value:0}` +
-    `@property ${INDENT_PROGRESS_VAR}{syntax:'<number>';inherits:false;initial-value:0}`;
+    `@property ${INDENT_PROGRESS_VAR}{syntax:'<number>';inherits:false;initial-value:0}` +
+    `[${INDENT_ATTR}]{transform-origin:var(--drawer-indent-origin)}` +
+    `:root:has([${INDENT_ATTR}]){timeline-scope:${INDENT_TIMELINE}}`;
   for (const side of SIDES) {
     const reversed = side === 'top' || side === 'left';
     const openInset = hitAreaInset(side, `var(${MAX_SCROLL_VAR},0px)`);
@@ -554,6 +554,7 @@ function ensureBackdropReset() {
       `@keyframes ${nestedProgressKeyframes(side)}{` +
       `from{${NESTED_PROGRESS_VAR}:${reversed ? 1 : 0}}` +
       `to{${NESTED_PROGRESS_VAR}:${reversed ? 0 : 1}}}` +
+      `@supports(animation-timeline:scroll()){[${INDENT_ATTR}=${side}]{animation:${indentProgressKeyframes(side)} 1s linear both;animation-timeline:${INDENT_TIMELINE};animation-range:var(--drawer-indent-range)}}` +
       `@keyframes ${indentProgressKeyframes(side)}{` +
       `from{${INDENT_PROGRESS_VAR}:${reversed ? 1 : 0}}` +
       `to{${INDENT_PROGRESS_VAR}:${reversed ? 0 : 1}}}`;
@@ -794,13 +795,13 @@ export function createDrawer(
   // Firefox fallback only.
   const supportsScrollTimeline = CSS.supports('animation-timeline: scroll()');
 
-  // This drawer's own second named scroll timeline (#274), for whichever
-  // element `opts.indent` names: generated once, here, unique across every
-  // drawer instance (`nextIndentTimelineId`'s own comment), never asked of
-  // `@drawerdeck/react` the way a nested Root's own `progressTimelineName`
-  // is -- an indent target is this drawer's own concern alone, never
-  // shared with a sibling or a parent.
-  const indentTimelineName = `--drawer-indent-${nextIndentTimelineId++}`;
+  // This drawer's own identity for the single, page-wide `indentOwner`
+  // (#274, `indentOwner`'s own module doc): a plain object, unique to this
+  // instance, never asked of `@drawerdeck/react` the way a nested Root's
+  // own `progressTimelineName` is -- claiming the indent is this drawer's
+  // own concern alone, never shared with a sibling or a parent.
+  const indentSelf = {};
+  indentWaiters.add(updateIndent);
 
   dialog.classList.add(RESET_CLASS);
   ensureBackdropReset();
@@ -1070,158 +1071,81 @@ export function createDrawer(
   // that should change, called every time something that could affect it
   // does (`setOptions`, every phase change, and once at creation).
   let indentTarget: HTMLElement | null = null;
-  /** Whether `indentTimelineName` has been added to the Viewport's own
-   * `scroll-timeline` property yet (`activateIndent`, below): lazily,
-   * the first time `opts.indent` actually activates, not unconditionally
-   * at creation the way `SCROLL_TIMELINE_NAME` and `progressTimelineName`
-   * are -- a drawer that never uses `indent` would otherwise expose a
-   * second, permanently-unused named timeline on every single instance,
-   * changing what every existing reader of this property (this file's
-   * own tests among them) sees for no reason. */
-  let indentTimelineDeclared = false;
-  /** `target`'s own inline value for each of `INDENT_SAVED_PROPS`, just
-   * before `activateIndent` first touches it, restored by `deactivateIndent`:
-   * an array, indexed the same way, rather than one variable per property,
-   * since `transform-origin` is saved and restored unconditionally while
-   * the other three (the native path's own `animation`/`animation-timeline`/
-   * `animation-range`) only matter where a scroll timeline is supported. */
-  const INDENT_SAVED_PROPS = [
-    'transform-origin',
-    'animation',
-    'animation-timeline',
-    'animation-range'
-  ];
-  const indentSaved = ['', '', '', ''];
-  /** `updateProgress`'s own dedupe for the no-scroll-timeline fallback it
-   * writes directly to `indentTarget`, separate from `lastReportedProgress`
-   * (`opts.onProgressChange`'s own dedupe just above it): the two read the
-   * same number, but reset independently -- `deactivateIndent` resets
-   * this one back to `undefined` so the *next* activation always writes
-   * immediately, and must not disturb a nested parent's own, unrelated
-   * dedupe doing so. */
-  let lastIndentProgressValue: number | undefined;
-  /** Guards `applyIndentAnimation`'s own `setProperty` calls the same
-   * reason `lastNestedProgressTimelineName`/`lastNestedProgressRangePercent`
-   * guard `updateNestedProgress`'s: reassigning the same `animation`/
-   * `animation-range` values again, while already active, would restart
-   * the animation for no reason, snapping the variable back to its own
-   * `from` value. Reset to `undefined` on every `deactivateIndent`, so the
-   * *next* `activateIndent` always re-applies them, even where the range
-   * itself happens to read the same as it did last time this target was
-   * active: `deactivateIndent` always clears the inline `animation`
-   * itself, so a stale guard here would otherwise skip setting it back. */
-  let lastIndentRangePercent: number | undefined;
 
-  /** Sets up `target`'s own `animation`/`animation-timeline`/
-   * `animation-range`, bound to `indentTimelineName`, the same shape
-   * `updateNestedProgress` already gives a nested parent's own Panel, just
-   * ranged to this drawer's own last configured snap point
-   * (`lastProgressRangePercent`, `measure`'s own doc) instead of a nested
-   * child's. Guarded by `lastIndentRangePercent` (above); called again
-   * from `measure()` while already active, so a `setOptions` that actually
-   * changes `snapPoints` while open keeps the range in step, without
-   * restarting the animation for every unrelated `setOptions` call that
-   * does not move it. */
+  /** Sets `target`'s own `--drawer-indent-range` (the adopted stylesheet's
+   * own `animation-range` for it, `ensureBackdropReset`'s own rule) to
+   * this drawer's own last configured snap point (`lastProgressRangePercent`,
+   * `measure`'s own doc), so the native animation actually finishes at
+   * `target`'s own resting open position, not wherever the raw scroll
+   * timeline happens to end -- the same reason `updateNestedProgress`
+   * scopes a nested parent's own `animation-range` to a child's own
+   * `rangePercent`.
+   *
+   * No `animationTimelineResolved`/`getAnimations()` portal check here,
+   * unlike `updateNestedProgress`'s own native branch: that check exists
+   * there because a portaled nested *child*'s own named timeline is lifted
+   * only as far as this drawer's own `dialog`, which a child rendered
+   * through a portal is never a descendant of, so the animation's timeline
+   * can genuinely fail to resolve. The indent's own timeline-scope lives on
+   * `:root` instead (`ensureBackdropReset`'s own `:root:has(...)` rule),
+   * which `target` is always a descendant of, portaled or not, modal or
+   * not -- so an indent target's own animation timeline resolves
+   * unconditionally, and checking for the one case it never actually fails
+   * in is dead work on every activation (confirmed against real Chromium
+   * and WebKit, including through a React portal, in
+   * `packages/react/test/indent.test.tsx`). */
   function applyIndentAnimation(target: HTMLElement) {
     const rangePercent = lastProgressRangePercent ?? 100;
-    if (rangePercent === lastIndentRangePercent) return;
-    lastIndentRangePercent = rangePercent;
     target.style.setProperty(
-      'animation',
-      `${indentProgressKeyframes(side)} 1s linear both`
-    );
-    target.style.setProperty('animation-timeline', indentTimelineName);
-    target.style.setProperty(
-      'animation-range',
+      '--drawer-indent-range',
       reversed ? `${rangePercent}% 100%` : `0% ${rangePercent}%`
     );
-    // `animationTimelineResolved`'s own doc: the same synchronous portal
-    // check `updateNestedProgress` makes, right after setting up the
-    // animation its own `getAnimations()` read is for.
-    if (animationTimelineResolved(target, indentProgressKeyframes(side))) {
-      target.style.removeProperty(INDENT_PROGRESS_VAR);
-    } else {
-      target.style.setProperty(INDENT_PROGRESS_VAR, '1');
-    }
   }
 
-  /** Begins indenting `target`: from the moment this drawer starts
-   * opening, through the end of its own close (`updateIndent`, below,
-   * decides when). Sets `INDENT_ATTR` and the transform-origin
-   * unconditionally -- both matter whether or not a scroll timeline is
-   * supported -- then wires up the native animation where one is, or
-   * writes the fallback value directly (`updateProgress`, below, keeps it
-   * current from there on a real scroll frame) where one is not. */
+  let indentScrollTimeline = '';
   function activateIndent(target: HTMLElement) {
     indentTarget = target;
-    target.setAttribute(INDENT_ATTR, '');
-    // The viewport's own center, in document coordinates, not the
-    // viewport's own top-left or the target's own center: a transform
-    // whose origin sits anywhere else shifts the page visibly once the
-    // page was already scrolled before this drawer opened (#274's own
-    // research measured 235px at the top versus about 1px here).
-    // Restored, below (`deactivateIndent`), once indenting ends, so the
-    // scale eases back around the same point it eased in from.
-    indentSaved[0] = target.style.getPropertyValue(INDENT_SAVED_PROPS[0]);
+    indentOwner = indentSelf;
+    target.setAttribute(INDENT_ATTR, side);
+    const rect = target.getBoundingClientRect();
     target.style.setProperty(
-      INDENT_SAVED_PROPS[0],
-      `${window.scrollX + window.innerWidth / 2}px ` +
-        `${window.scrollY + window.innerHeight / 2}px`
+      '--drawer-indent-origin',
+      `${innerWidth / 2 - rect.left}px ${innerHeight / 2 - rect.top}px`
     );
     if (supportsScrollTimeline) {
-      // Lazily declared (`indentTimelineDeclared`'s own doc), never
-      // added to the dialog's own `timeline-scope` the way
-      // `progressTimelineName` is (this file's own top comment): a name
-      // an indent target needs to reach from outside the top layer must
-      // stay off this drawer's own dialog scope, only on
-      // `documentElement`'s shared one, just below.
-      if (!indentTimelineDeclared) {
-        indentTimelineDeclared = true;
-        const axisKeyword = horizontal ? 'x' : 'y';
-        const current = viewport.style.getPropertyValue('scroll-timeline');
-        viewport.style.setProperty(
-          'scroll-timeline',
-          current
-            ? `${current}, ${indentTimelineName} ${axisKeyword}`
-            : `${indentTimelineName} ${axisKeyword}`
-        );
-      }
-      addDocumentIndentTimelineScope(indentTimelineName);
-      for (let i = 1; i < INDENT_SAVED_PROPS.length; i++) {
-        indentSaved[i] = target.style.getPropertyValue(INDENT_SAVED_PROPS[i]);
-      }
+      indentScrollTimeline = viewport.style.getPropertyValue('scroll-timeline');
+      viewport.style.setProperty(
+        'scroll-timeline',
+        `${indentScrollTimeline}, ${INDENT_TIMELINE} ${horizontal ? 'x' : 'y'}`
+      );
       applyIndentAnimation(target);
     } else {
-      // No native timeline: `updateProgress`'s own fallback branch keeps
-      // this current on every real scroll frame from here on, but the
-      // very first value needs writing now too, not only on the next
-      // frame -- `updateProgress` recomputes it fresh off the live scroll
-      // position either way, so calling it here is simpler than
-      // duplicating its own formula.
+      lastReportedProgress = undefined;
       updateProgress();
     }
   }
 
-  /** Ends indenting `target`, restoring every inline property this engine
-   * itself changed to exactly what it was before (`activateIndent`,
-   * above) -- never removing something a consumer's own CSS had set
-   * inline before this drawer ever touched it. */
   function deactivateIndent(target: HTMLElement) {
     target.removeAttribute(INDENT_ATTR);
-    const count = supportsScrollTimeline ? INDENT_SAVED_PROPS.length : 1;
-    for (let i = 0; i < count; i++) {
-      const saved = indentSaved[i];
-      if (saved) target.style.setProperty(INDENT_SAVED_PROPS[i], saved);
-      else target.style.removeProperty(INDENT_SAVED_PROPS[i]);
-      indentSaved[i] = '';
+    target.removeAttribute(ENDING_STYLE_ATTR);
+    for (const name of [
+      '--drawer-indent-origin',
+      '--drawer-indent-range',
+      INDENT_PROGRESS_VAR
+    ]) {
+      target.style.removeProperty(name);
     }
     if (supportsScrollTimeline) {
-      removeDocumentIndentTimelineScope(indentTimelineName);
-      lastIndentRangePercent = undefined;
+      viewport.style.setProperty('scroll-timeline', indentScrollTimeline);
     }
-    target.style.removeProperty(INDENT_PROGRESS_VAR);
-    lastIndentProgressValue = undefined;
     indentTarget = null;
+    indentOwner = undefined;
+    // Single page-wide owner (`indentOwner`'s own doc): releasing it must
+    // wake every other mounted drawer's own `updateIndent`, or a second one
+    // already open with `indent` set, blocked behind this one, would never
+    // notice the owner is gone until something of its own happened to run
+    // its `updateIndent` again.
+    notifyIndentWaiters(updateIndent);
   }
 
   /** Decides whether `opts.indent` should currently be indenting, and
@@ -1236,8 +1160,11 @@ export function createDrawer(
    * this drawer is already open), and once at creation (a no-op then: the
    * phase starts `'closed'`). */
   function updateIndent() {
-    const target = opts.indent ?? null;
-    const shouldBeActive = target !== null && phase !== 'closed';
+    const target = resolveIndentOption(opts.indent);
+    const shouldBeActive =
+      target !== null &&
+      phase !== 'closed' &&
+      (!indentOwner || indentOwner === indentSelf);
     if (indentTarget && (!shouldBeActive || indentTarget !== target)) {
       deactivateIndent(indentTarget);
     }
@@ -1465,13 +1392,10 @@ export function createDrawer(
       const lastOpenPos = scrollForSnap(snapPx.length - 1);
       const fullDenom = lastOpenPos - closedPos || (reversed ? -1 : 1);
       const full = clamp((st - closedPos) / fullDenom, 0, 1);
-      if (opts.onProgressChange && full !== lastReportedProgress) {
+      if (full !== lastReportedProgress) {
         lastReportedProgress = full;
-        opts.onProgressChange(full);
-      }
-      if (indentTarget && full !== lastIndentProgressValue) {
-        lastIndentProgressValue = full;
-        indentTarget.style.setProperty(INDENT_PROGRESS_VAR, full.toFixed(4));
+        opts.onProgressChange?.(full);
+        indentTarget?.style.setProperty(INDENT_PROGRESS_VAR, `${full}`);
       }
     }
   }
@@ -1748,6 +1672,7 @@ export function createDrawer(
     setPhase('closing');
     panel.setAttribute(ENDING_STYLE_ATTR, '');
     parts.backdrop?.setAttribute(ENDING_STYLE_ATTR, '');
+    indentTarget?.setAttribute(ENDING_STYLE_ATTR, '');
     attachInterruptListeners();
     // Forces the flush that starts this exit's own transition -- the same
     // flush `open()` forces for the entrance's -- so `getAnimations()`
@@ -2681,6 +2606,7 @@ export function createDrawer(
     // `indent` was still open must leave no attribute, inline style,
     // `timeline-scope` entry or animation behind on the target.
     if (indentTarget) deactivateIndent(indentTarget);
+    indentWaiters.delete(updateIndent);
     releaseBackdropReset();
     cancelEnter();
     teardownExit();
