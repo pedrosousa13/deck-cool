@@ -12,7 +12,8 @@
       "guides/style-the-backdrop.md",
       "guides/animate-the-drawer.md",
       "guides/non-modal-drawers.md",
-      "guides/on-screen-keyboard.md"
+      "guides/on-screen-keyboard.md",
+      "guides/nested-drawers.md"
     ]
   },
   { "label": "Compare", "pages": ["compare.md"] }

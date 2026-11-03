@@ -73,6 +73,30 @@ export default defineConfig({
         },
         async dragPointerUp(context) {
           await context.page.mouse.up();
+        },
+        // Real input for the two nested interrupt-listener tests
+        // (`nested.test.tsx`, #332): a hand-dispatched `new Event(type)`
+        // through `dispatchEvent` never goes through the browser's own
+        // dispatch at all, so it cannot prove anything about a real
+        // gesture reaching (or not reaching) a drawer nested above
+        // another. These two go through Playwright instead, the same way
+        // `dragPointerDown` above does.
+        async tapAt(context, selector, offsetX, offsetY) {
+          const frame = await context.frame();
+          const box = await frame.locator(selector).boundingBox();
+          if (!box) {
+            throw new Error(`tapAt: no element matches ${selector}`);
+          }
+          await context.page.touchscreen.tap(box.x + offsetX, box.y + offsetY);
+        },
+        async wheelAt(context, selector, offsetX, offsetY, deltaX, deltaY) {
+          const frame = await context.frame();
+          const box = await frame.locator(selector).boundingBox();
+          if (!box) {
+            throw new Error(`wheelAt: no element matches ${selector}`);
+          }
+          await context.page.mouse.move(box.x + offsetX, box.y + offsetY);
+          await context.page.mouse.wheel(deltaX, deltaY);
         }
       }
     }

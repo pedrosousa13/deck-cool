@@ -387,9 +387,12 @@ describe('closing as soon as the Panel leaves view (#296)', () => {
     // bench measured ~1000ms): comfortably longer than a scripted scroll
     // settles in Chromium or WebKit here, so racing the two down to the
     // millisecond is not something this harness can reproduce reliably.
-    // What it does prove: the close lands with the right reason, and
-    // `scrollend` firing for the very same gesture right behind it is
-    // not a second one (`finishClose`'s own idempotency).
+    // The shrunk root (#332's follow-up) closes the drawer before this
+    // smooth scroll's own native settle even finishes, so `scrollend` for
+    // the very same gesture is dispatched by hand here, standing in for
+    // whichever one the browser eventually fires on its own. What this
+    // proves: the close lands with the right reason, and that later
+    // `scrollend` is not a second one (`finishClose`'s own idempotency).
     fixture = mount({ snapPoints: [0.5, 1] });
     const { viewport, drawer } = fixture;
     drawer.open();
@@ -397,19 +400,11 @@ describe('closing as soon as the Panel leaves view (#296)', () => {
     const onOpenChange = vi.fn();
     drawer.setOptions({ onOpenChange });
 
-    let scrollEndFired = false;
-    viewport.addEventListener(
-      'scrollend',
-      () => {
-        scrollEndFired = true;
-      },
-      { once: true }
-    );
-
     viewport.scrollTo({ top: 0, behavior: 'smooth' });
 
     await expectSettledTo(() => drawer.phase, 'closed');
-    expect(scrollEndFired).toBe(true);
+    viewport.dispatchEvent(new Event('scrollend'));
+    await sleep(50);
     expect(onOpenChange).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
   });
@@ -513,6 +508,56 @@ describe('closing as soon as the Panel leaves view (#296)', () => {
 
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
+  });
+
+  it('closes a swipe iOS momentum left a few pixels short of closed, with no scrollend at all (#332)', async () => {
+    // The decoded iPhone Safari log behind #332's follow-up: a touch
+    // swipe's own momentum can stall at `scrollTop` 2 (closed is 0) and
+    // then emit no more `scroll` events and no `scrollend` at all until
+    // the next touch. A capture-phase listener on `window`, which stops
+    // propagation before the Viewport's own `scrollend` listener (the
+    // target) ever runs, stands in for that: a non-bubbling event still
+    // runs its capture phase down to the target, so this blocks it the
+    // same way the missing event does.
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { viewport, dialog, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    const onOpenChange = vi.fn();
+    drawer.setOptions({ onOpenChange });
+
+    // Resting fully open, and at the smallest configured snap point, must
+    // not read as "gone" under the root this fix shrinks.
+    drawer.snapTo(1);
+    await expectSettledTo(() => drawer.snapIndex, 1);
+    await nextFrame();
+    await nextFrame();
+    expect(drawer.phase).toBe('open');
+    drawer.snapTo(0);
+    await expectSettledTo(() => drawer.snapIndex, 0);
+    await nextFrame();
+    await nextFrame();
+    expect(drawer.phase).toBe('open');
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    const blockScrollend = (event: Event) => event.stopImmediatePropagation();
+    window.addEventListener('scrollend', blockScrollend, { capture: true });
+    try {
+      // Scroll-snap off, inline, the same way a mouse drag's own scroll
+      // writes already do (`onPointerDown`): otherwise the browser's own
+      // snap can resettle this write back toward a snap point before the
+      // assertions below ever read it.
+      viewport.style.scrollSnapType = 'none';
+      viewport.scrollTo({ top: 2, behavior: 'instant' });
+
+      await expectSettledTo(() => drawer.phase, 'closed');
+      expect(dialog.open).toBe(false);
+      expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+    } finally {
+      window.removeEventListener('scrollend', blockScrollend, {
+        capture: true
+      });
+    }
   });
 });
 
