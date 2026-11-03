@@ -321,9 +321,34 @@ export type RootProps = (OpenControlledProps | OpenUncontrolledProps) &
      * Backdrop is optional. Escape and focus-on-close still behave the
      * same either way. Defaults to true. */
     modal?: boolean;
+    /** An opt-in background indent (#274): a ref to, or a direct element
+     * reference for, the consumer's own page wrapper. `@drawerdeck/core`
+     * scales it back in step with this drawer's own open progress while
+     * it is open, through the end of its own close -- `data-drawer-indent`
+     * and a registered `--drawer-indent-progress` (`0` closed, `1` fully
+     * open), with no JS per drag frame where the browser supports a named
+     * scroll timeline. See "A background indent".
+     *
+     * Ignored on a `Drawer.Root` nested inside another one (#272): only
+     * the outermost open drawer indents the page, so a nested Root's own
+     * `indent` prop, if given one, never reaches `@drawerdeck/core` at
+     * all. Nested drawers keep using `--drawer-nested`/
+     * `--drawer-nested-progress` instead; the two recipes are not meant to
+     * stack. */
+    indent?: RefObject<HTMLElement | null> | HTMLElement | null;
     onOpenChange?(open: boolean, info: { reason: OpenChangeReason }): void;
     onSnapPointChange?(index: number): void;
   };
+
+/** `indent`'s own resolution (`RootProps.indent`'s doc): a ref's `.current`,
+ * read fresh every time this is called (never a value captured once at
+ * render, which would always read a ref's `.current` from before the
+ * commit that actually attaches it), or an element handed directly. */
+function resolveIndentTarget(indent: RootProps['indent']): HTMLElement | null {
+  if (!indent) return null;
+  if (indent instanceof Element) return indent;
+  return indent.current ?? null;
+}
 
 /** One drawer: a `<dialog>`, labelled by `Drawer.Title` and described by
  * `Drawer.Description`, holding the scroll-snap viewport the engine (in
@@ -339,6 +364,7 @@ export function Root({
   dismissible = true,
   modal = true,
   side = 'bottom',
+  indent,
   children
 }: RootProps) {
   const [initialOpen] = useState(() => open ?? defaultOpen ?? false);
@@ -669,9 +695,23 @@ export function Root({
       dismissible,
       modal,
       nestedCount,
-      nestedProgressSource
+      nestedProgressSource,
+      // Ignored on a nested Root (#274, this file's own `RootProps.indent`
+      // doc): only the outermost open drawer indents the page. Resolved
+      // fresh on every run, not from a value computed at render (a ref's
+      // own `.current` is not attached yet then): a plain prop read, like
+      // every other option here, just one that may itself be a ref.
+      indent: parentCtx ? null : resolveIndentTarget(indent)
     });
-  }, [snapPoints, dismissible, modal, nestedCount, nestedProgressSource]);
+  }, [
+    snapPoints,
+    dismissible,
+    modal,
+    nestedCount,
+    nestedProgressSource,
+    parentCtx,
+    indent
+  ]);
 
   // Controlled `open`: follows a new value, and returns to it after a close
   // the parent's `onOpenChange` did not take (the parent kept `open` true).
