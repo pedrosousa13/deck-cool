@@ -1470,6 +1470,15 @@ export function createDrawer(
   // this drawer's own Panel (`settleEnter`/`finishEnter`), so every entry
   // it reports already describes that exact element, never a nested
   // drawer's own.
+  //
+  // `rootMargin` shrinks the Viewport by `SETTLE_TOLERANCE` on every side
+  // (#332's follow-up): a real iOS Safari momentum scroll can stall a few
+  // pixels short of closed and never fire `scrollend` again until the
+  // next touch, so a Panel sitting within that same tolerance still
+  // overlapped the unshrunk root and this observer never fired either --
+  // the dialog stayed open and modal while it looked closed. Shrinking the
+  // root by the same tolerance `onScrollEnd` already treats as "close
+  // enough" makes that last sliver count as gone too.
   const panelVisibilityObserver = new IntersectionObserver(
     (entries) => {
       const entry = entries[entries.length - 1];
@@ -1499,7 +1508,7 @@ export function createDrawer(
       pendingCloseReason = null;
       finishClose(reason);
     },
-    { root: viewport }
+    { root: viewport, rootMargin: `-${SETTLE_TOLERANCE}px` }
   );
 
   function onScrollEnd() {
