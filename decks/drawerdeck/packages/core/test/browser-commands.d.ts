@@ -27,18 +27,5 @@ declare module 'vitest/internal/browser' {
     dragPointerMoveTo: (x: number, y: number) => Promise<void>;
     /** Releases the pointer `dragPointerDown` started. */
     dragPointerUp: () => Promise<void>;
-    /** Holds a real touch down at a page point (a Chrome DevTools Protocol
-     * `Input.dispatchTouchEvent`, Chromium only -- `vitest.config.ts`'s own
-     * comment on it, including why this takes a point, not a selector).
-     * Throws on any other browser; the touch guard test (`index.test.ts`,
-     * #332's momentum follow-up) catches that to fall back to a real
-     * `tapAtPoint` there. */
-    holdTouchDown: (x: number, y: number) => Promise<void>;
-    /** Releases the touch `holdTouchDown` started. */
-    releaseHeldTouch: () => Promise<void>;
-    /** A real OS-level touch tap (Playwright's own `page.touchscreen`,
-     * which needs the browser context's `hasTouch` option, already set
-     * above) at a page point. */
-    tapAtPoint: (x: number, y: number) => Promise<void>;
   }
 }
