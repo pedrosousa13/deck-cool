@@ -194,6 +194,12 @@ export function createDeck(
     copies: false,
     slideCount: -1
   };
+  // Whether `settle` has ever run (#333): a natural-rest mount defers its
+  // own first measurement to its first `ResizeObserver` callback, so
+  // `keepPlace`, below, tells its ordinary job -- a later layout change
+  // keeping an already-settled deck at its current index -- apart from
+  // that still-pending first one, which has no settled index to keep yet.
+  let everSettled = false;
 
   const publish = (next: DeckState) => {
     if (
@@ -211,8 +217,16 @@ export function createDeck(
   };
 
   let vertical = options.orientation === 'vertical';
-  // Read afresh for each use: an ancestor's `dir` can change at any time.
-  const axis = () => axisOf(viewport, vertical);
+  // `axisOf` reads the computed `direction` once, to fix `sign` for the
+  // rest of that Axis's life (ADR-0003): read on every call before, so on
+  // every scroll and paint (#333). Cached here instead, and reused until
+  // `vertical` or the direction it was read under could have changed:
+  // dropped, so the next call reads afresh, in `refresh` (a resize, a
+  // slide added or removed, loop or an effect changing), `onDir` (an
+  // ancestor's `dir` attribute) and `setOrientation`. Left unset through a
+  // natural-rest mount (below), so the constructor itself reads nothing.
+  let cachedAxis: Axis | null = null;
+  const axis = () => (cachedAxis ??= axisOf(viewport, vertical));
 
   // The deck's snap alignment, read at each settle from the slide resting at
   // the snap point: a slide that does not snap, as within a page, has none.
@@ -548,6 +562,7 @@ export function createDeck(
     measureSnapPoints(viewport, along, placement, loopOn);
 
   const settle = () => {
+    everSettled = true;
     refreshOwed = false;
     shifted = null;
     userInput = false;
@@ -898,8 +913,10 @@ export function createDeck(
   let pointer = -1;
   let startX = 0;
   let startY = 0;
-  // The axis a drag moves along, fixed when the button is pressed.
-  let dragAxis = axis();
+  // The axis a drag moves along, fixed when the button is pressed: read
+  // only there (`onPointerDown`), never here, so a natural-rest mount
+  // (#333) forces no read before the first drag.
+  let dragAxis: Axis;
   // Where the pointer last was along it.
   let last = 0;
   // How far the pointer has dragged the deck forward, in scroll pixels.
@@ -1297,7 +1314,7 @@ export function createDeck(
     // the current index.
     let target: number | null = null;
     if (relaidOut) {
-      target = move ? wrap(move.target, state.count) : state.index;
+      target = move ? wrapMove(move.target, state.count) : state.index;
     }
     // Quiet ended the move short of its target: a re-snap goes on its way,
     // as the browser may still be scrolling there (`resnap`).
@@ -1450,6 +1467,10 @@ export function createDeck(
 
   const refresh = () => {
     followViewport(0);
+    // A resize, a slide added or removed, loop or an effect changing: any
+    // of them can land here with the writing direction having changed too
+    // (ADR-0003), so the cached Axis (above) is dropped and read afresh.
+    cachedAxis = null;
     const along = axis();
     // Shells mode, leaving it or staying (ADR-0013): `placement` still
     // holds the geometry from before this layout, measured the same way
@@ -1499,6 +1520,17 @@ export function createDeck(
     } finally {
       endRelayout();
     }
+  };
+
+  // Before the engine's own first measurement -- a natural-rest mount
+  // deferred to its first `ResizeObserver` callback (#333) -- `shape` is
+  // still its own unmeasured `''`, and `state` the sentinel it was
+  // constructed with: `step`'s own shortcut for a deck with nothing to
+  // loop, below, reads `state.index` as if it had already settled there.
+  // Measures now instead, the same way that first callback would, so a
+  // step taken before it pays for the read itself, never the mount.
+  const ensureSettled = () => {
+    if (shape === '') refresh();
   };
 
   // `across` lets a looping deck's move run past either end onto the copies
@@ -1568,7 +1600,30 @@ export function createDeck(
     settle();
   };
 
-  if (!timelines) seedPlacedAt(axis(), placedAt, slidesOf(viewport).slides);
+  // A deck that starts resting where the browser already rests a plain
+  // scroller -- index 0, or a non-finite index, which rests the same way
+  // through `restOn`'s own `?? 0` fallback, as core already treats it --
+  // with no loop and no shells or copies rendered yet, needs no
+  // measurement to get there: nothing below would move it. Skipping every
+  // read here lets the first `ResizeObserver` callback (`resizes`, below),
+  // which fires after layout, make the deck's first measurement instead of
+  // this constructor forcing a style and layout pass before the first
+  // paint (#333): its `refresh` finds `shape` still its own unmeasured
+  // `''`, differing from the real one, and calls `keepPlace`, which settles
+  // the deck at whatever its own first measurement finds -- the natural
+  // rest this skipped, or wherever a scroll already moved it in the
+  // meantime, never forced back to it (`keepPlace`'s own `everSettled`
+  // check). A non-zero index, a loop, or shells still measure synchronously
+  // below, to move the viewport before the first paint (the WebKit write
+  // issue, #144).
+  const naturalRest =
+    (!Number.isFinite(options.index) || options.index <= 0) &&
+    !loopOn &&
+    slidesOf(viewport).sets === 0;
+
+  if (!naturalRest && !timelines) {
+    seedPlacedAt(axis(), placedAt, slidesOf(viewport).slides);
+  }
 
   // With one slide per snap point, server HTML already rests here where the
   // browser honours `scroll-initial-target`, and this scroll is a no-op.
@@ -1582,18 +1637,21 @@ export function createDeck(
   // Chromium reports that through `scrollsnapchange`. Created before the
   // mount's own first `settle` (below), which, in shells mode, observes
   // every real slide with it too (ADR-0013): that first settle
-  // runs synchronously, within this very constructor.
+  // runs synchronously, within this very constructor, outside the
+  // natural-rest case above.
   const resizes = new ResizeObserver(refresh);
   resizes.observe(viewport);
-  const beforeStart = axis().position;
+  const beforeStart = naturalRest ? 0 : axis().position;
   // Shells mode only (ADR-0013): whether a buffer set's shell could even be
   // where a dropped write below leaves the deck resting, which is the only
   // way this is wrong -- a deck with no shells rests wherever the browser
   // puts it, same as it always has on main.
-  const shellsAtMount = slidesOf(viewport).sets === 2;
-  placement = measureShells(axis());
-  alignCopies(viewport);
-  restOn(options.index);
+  const shellsAtMount = !naturalRest && slidesOf(viewport).sets === 2;
+  if (!naturalRest) {
+    placement = measureShells(axis());
+    alignCopies(viewport);
+    restOn(options.index);
+  }
 
   // WebKit can silently drop a `scrollLeft` write made before the document's
   // first paint (confirmed in the prototype, #144): the write above takes no
@@ -1641,6 +1699,19 @@ export function createDeck(
       return false;
     }
     if (pressed.size > 0) {
+      // A still-pending first-ever settle (#333): a bare press moves
+      // nothing on its own, so measuring now, before the drag threshold a
+      // move would need, disrupts nothing a later release would otherwise
+      // have to undo -- unless the user has already taken the deck over
+      // some other way (a wheel, a key, a touch the browser now pans) and
+      // that input's own scroll has not reached the engine yet
+      // (`inputPending`): reading now would read the viewport as settled
+      // and forget it is still coming (#208), so this still waits, the
+      // same way it already does below with no press at all.
+      if (!everSettled && !inputPending()) {
+        settle();
+        return true;
+      }
       placeOwed = state.index;
       paint();
       // Where the browser puts the viewport may be a scroll with no end
@@ -1653,7 +1724,20 @@ export function createDeck(
       if (jumping) relaidOut = true;
       return false;
     }
-    restOn(state.index);
+    if (everSettled) {
+      // A later layout change, once the deck has settled at least once,
+      // rests back on its own current index, as ever.
+      restOn(state.index);
+      return true;
+    }
+    // Still the deck's still-pending first-ever settle (#333): nothing
+    // settled yet to rest back on, and, past the same `inputPending` wait
+    // as above, the position read here is already wherever the browser,
+    // or a scroll too quick for `scrolling` to have caught yet, left it --
+    // never forced back to the natural-rest index the constructor skipped
+    // measuring for.
+    if (inputPending()) return false;
+    settle();
     return true;
   };
 
@@ -1666,6 +1750,7 @@ export function createDeck(
   // snap target; Firefox and WebKit put it back at its new start.
   const onDir = (records: MutationRecord[]) => {
     if (records.some(({ target }) => target.contains(viewport))) {
+      cachedAxis = null;
       followViewport(0);
       keepPlace();
     }
@@ -1903,6 +1988,7 @@ export function createDeck(
   // a step from a copy the deck could not jump off still goes the way it is
   // pressed.
   const step = (delta: number) => {
+    ensureSettled();
     // #146: presses faster than the deck settles never let a move reach a
     // rest to jump off a copy or shell at (`jumpOffCopies`), and could run
     // it past the sets the scroll range reaches, where the browser clamps
@@ -1914,7 +2000,7 @@ export function createDeck(
       // Since a new layout, the target counts the old snap points: go on
       // from the slides' snap point it stands for.
       scrollTo(
-        (relaidOut ? wrap(move.target, state.count) : move.target) + delta,
+        (relaidOut ? wrapMove(move.target, state.count) : move.target) + delta,
         true
       );
       return;
@@ -1957,7 +2043,7 @@ export function createDeck(
     next: () => step(1),
     prev: () => step(-1),
     // A target on the copies is the slides' snap point it copies.
-    target: () => (move ? wrap(move.target, state.count) : null),
+    target: () => (move ? wrapMove(move.target, state.count) : null),
     refresh,
     setDrag(enabled) {
       dragEnabled = enabled;
@@ -1966,10 +2052,18 @@ export function createDeck(
       clickToFocus = enabled;
     },
     setOrientation(orientation) {
-      vertical = orientation === 'vertical';
+      const next = orientation === 'vertical';
+      // The same value Root already passed to this same call's own
+      // constructor, as the mount effect that calls this one also does
+      // (#333): nothing to change, and a natural-rest mount has nothing
+      // measured yet for `refresh` to redo.
+      if (next === vertical) return;
+      vertical = next;
+      cachedAxis = null;
       refresh();
     },
     setLoop(enabled) {
+      if (enabled === loopOn) return;
       loopOn = enabled;
       refresh();
     },
@@ -2096,6 +2190,14 @@ const lengthMoved = (a: number, b: number) => Math.abs(a - b) >= 0.01;
  * slides. */
 const wrap = (index: number, count: number) =>
   ((index % count) + count) % count;
+
+// `state.count` is still its sentinel 0 before the engine's first settle
+// (a natural-rest mount, #333): a move a caller started there has no loop
+// to wrap across -- natural rest requires `!loopOn` -- so its own target is
+// already the index to use, and `wrap`'s divide by the sentinel would give
+// `NaN`.
+const wrapMove = (target: number, count: number) =>
+  count > 0 ? wrap(target, count) : target;
 
 /** Where snap point `index` rests. With loop, an index up to a set of slides
  * past either end is on the copies there: -1 is the last slide's copy before

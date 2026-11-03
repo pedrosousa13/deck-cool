@@ -328,8 +328,14 @@ export function Root({
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) throw new Error('Deck.Root must contain a Deck.Viewport');
-    // The first report is where the deck starts, not a change.
-    let settled: number | undefined;
+    // The first report is where the deck starts, not a change. At
+    // `initialIndex` 0 or less, core defers that first report to its own
+    // first measurement (a natural-rest mount, #333), so a press or an
+    // imperative move started before then can settle, and report, first:
+    // known up front here -- core always clamps a non-positive index to 0
+    // -- rather than mistaken for the mount's own report because it
+    // happened to arrive first.
+    let settled: number | undefined = initialIndex <= 0 ? 0 : undefined;
     let focal: number | undefined;
     const engine = createDeck(viewport, {
       index: initialIndex,
@@ -409,6 +415,13 @@ export function Root({
   // took from `onIndexChange` never undoes a move started since, as a press
   // before this render: that move goes on. A deck at rest off it goes to it.
   const previousIndexRef = useRef(index);
+  // Whether `state.count` has been seen non-null before (#333): a
+  // natural-rest mount defers the engine's own first measurement, so
+  // `state.count` can go from null to known on the very same render as a
+  // move the deck itself just started, from the same press that read this
+  // effect's own stale `null` a moment before. `reported` catches that
+  // move once it settles; nothing here needs correcting before then.
+  const measuredRef = useRef(false);
   useLayoutEffect(() => {
     const engine = engineRef.current;
     const moved = index !== previousIndexRef.current;
@@ -420,12 +433,15 @@ export function Root({
     const reported = reportedRef.current;
     reportedRef.current = null;
     if (index !== undefined && state.count !== null && engine) {
-      const to = clampSlide(index, state.count);
-      const target = engine.target();
-      const heading = target ?? state.index;
-      if (to !== heading && (to !== reported || target === null)) {
-        engine.scrollTo(index, moved ? 'direct' : 'short');
+      if (measuredRef.current) {
+        const to = clampSlide(index, state.count);
+        const target = engine.target();
+        const heading = target ?? state.index;
+        if (to !== heading && (to !== reported || target === null)) {
+          engine.scrollTo(index, moved ? 'direct' : 'short');
+        }
       }
+      measuredRef.current = true;
     }
   }, [index, state.index, state.count]);
 

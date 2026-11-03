@@ -5,6 +5,7 @@ import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import {
   expectSettledTo,
+  nextFrame,
   setReducedMotion,
   TestDeck,
   viewportOf,
@@ -42,7 +43,7 @@ let removeStyle = () => {};
 afterEach(() => removeStyle());
 
 describe('Dots', () => {
-  test('one dot per snap point, not per slide', () => {
+  test('one dot per snap point, not per slide', async () => {
     // 2.5 slides in view: 5 slides rest at 4 snap points, the last being
     // the end of the scroll range.
     const style = document.createElement('style');
@@ -51,6 +52,10 @@ describe('Dots', () => {
     removeStyle = () => style.remove();
 
     const { dots } = renderDeck({ viewportClassName: 'peek' });
+    // A natural-rest mount (#333) measures the real snap-point count a
+    // frame after mount, not during it.
+    await nextFrame();
+    await nextFrame();
 
     expect(dots()).toHaveLength(4);
   });

@@ -5,6 +5,7 @@ import { userEvent } from 'vitest/browser';
 import type * as Deck from '@carouseldeck/react';
 import {
   expectSettledTo,
+  nextFrame,
   setReducedMotion,
   sleep,
   TestDeck,
@@ -423,6 +424,11 @@ describe('a controlled deck', () => {
   test('with reduced motion, an index change jumps', async () => {
     await setReducedMotion(true);
     const { viewport } = renderControlled();
+    // The controlled-index effect waits for the engine's own first
+    // measurement before it ever acts; at natural rest (#333) that is a
+    // frame after mount, not during it.
+    await nextFrame();
+    await nextFrame();
 
     act(() => screen.getByRole('button', { name: 'Go to 4' }).click());
 

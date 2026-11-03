@@ -5,6 +5,7 @@ import * as Deck from '@carouseldeck/react';
 import {
   addStyle,
   expectSettledTo,
+  nextFrame,
   pagesOf,
   sleep,
   TestDeck,
@@ -76,6 +77,10 @@ describe('pages of 3 over 10 slides', () => {
   test('dots render one per page and the counter counts pages', async () => {
     addStyle(pagesOf(3));
     const { viewport, next, dots, counter } = renderPagedDeck();
+    // Paged, one snap point is several slides: a natural-rest mount (#333)
+    // measures the real count a frame after mount, not during it.
+    await nextFrame();
+    await nextFrame();
 
     expect(dots()).toHaveLength(4);
     expect(counter()).toBe('1 / 4');
@@ -118,6 +123,10 @@ describe('page size per breakpoint', () => {
     `);
     await page.viewport(400, 600);
     const { dots, counter } = renderPagedDeck();
+    // Paged, one snap point is several slides: a natural-rest mount (#333)
+    // measures the real count a frame after mount, not during it.
+    await nextFrame();
+    await nextFrame();
     expect(dots()).toHaveLength(5);
     expect(counter()).toBe('1 / 5');
 

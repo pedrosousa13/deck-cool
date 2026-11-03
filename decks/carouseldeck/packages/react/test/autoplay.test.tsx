@@ -5,6 +5,7 @@ import { userEvent } from 'vitest/browser';
 import * as Deck from '@carouseldeck/react';
 import {
   gestureScroll,
+  nextFrame,
   parkMouse,
   setReducedMotion,
   sleep,
@@ -852,6 +853,11 @@ describe('the live region', () => {
   test('is off while autoplay rotates, and polite once it stops', async () => {
     const { root } = renderDeck();
     const live = liveRegionOf(root);
+    // A natural-rest mount (#333) measures the real count a frame after
+    // mount: autoplay only starts rotating once it knows there is more
+    // than one slide to rotate through.
+    await nextFrame();
+    await nextFrame();
     expect(live.getAttribute('aria-live')).toBe('off');
     const indexes = watchIndexes(root);
 
