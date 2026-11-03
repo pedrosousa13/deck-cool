@@ -1,7 +1,15 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createDeck, type DeckState } from '@carouseldeck/core';
-import { nextFrame, TestDeck, viewportOf, WIDTH } from './fixtures';
+import * as Deck from '@carouseldeck/react';
+import {
+  addStyle,
+  nextFrame,
+  pagesOf,
+  TestDeck,
+  viewportOf,
+  WIDTH
+} from './fixtures';
 
 // #333: a deck that starts at its own rest -- index 0, no loop, no shells --
 // used to measure layout synchronously in `createDeck`'s constructor, inside
@@ -244,5 +252,26 @@ describe('react: a natural-rest mount reads nothing (#333)', () => {
       '[data-carouseldeck-slide]'
     )[2];
     expect(third.hasAttribute('data-in-view')).toBe(true);
+  });
+
+  // A deck whose snap points are not one per slide (pages) is the accepted
+  // cost of the natural-rest mount above: Dots renders the SSR-safe guess,
+  // one dot per slide, until the engine's own first measurement corrects
+  // it, within the same two frames the core tests above wait out.
+  test('a client deck that pages shows the real Dots count within two frames of mount', async () => {
+    addStyle(pagesOf(2));
+    render(
+      <TestDeck slides={4} viewportClassName="pages" controls={<Deck.Dots />} />
+    );
+    const root = screen.getByRole('region', { name: 'Test deck' });
+    const dots = () =>
+      within(root)
+        .getByRole('group', { name: 'Choose page' })
+        .querySelectorAll('button');
+
+    await nextFrame();
+    await nextFrame();
+
+    expect(dots()).toHaveLength(2);
   });
 });
