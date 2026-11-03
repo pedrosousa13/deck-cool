@@ -1,12 +1,22 @@
 import { fileURLToPath, URL } from 'node:url';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
+import type { BrowserCommandContext } from 'vitest/node';
 
 // The `BrowserCommands` augmentation that types these three below (and the
 // `commands.dragPointerDown(…)` calls in `packages/core/test/fixtures.ts`)
 // lives in `packages/core/test/browser-commands.d.ts`, not here: this file
 // is not part of either package's own `tsconfig`, so an augmentation here
 // would not reach the test files that call them.
+// The CDP session a `holdTouchDown` call opens, kept here (not returned
+// through the command channel, which only carries JSON-serializable
+// values) so the later `releaseHeldTouch` call in the same test can send
+// its own `Input.dispatchTouchEvent` on it. One drawer test at a time ever
+// holds a touch, so a single module-level slot is enough.
+let heldTouchCdp:
+  | Awaited<ReturnType<BrowserCommandContext['context']['newCDPSession']>>
+  | undefined;
+
 export default defineConfig({
   resolve: {
     // One copy of react and react-dom: Vite's own resolution can otherwise
@@ -97,6 +107,53 @@ export default defineConfig({
           }
           await context.page.mouse.move(box.x + offsetX, box.y + offsetY);
           await context.page.mouse.wheel(deltaX, deltaY);
+        },
+        // Holds a real touch down at a page point, for the touch guard on
+        // the early-close margin (`index.test.ts`, #332's momentum
+        // follow-up): `tapAt`, above, is all Playwright's own
+        // `page.touchscreen` offers -- "limited to emulating tap gestures"
+        // (its own doc), a single touchstart+touchend with no control over
+        // what happens between them. Holding one down across an assertion
+        // needs the Chrome DevTools Protocol directly, the same real input
+        // `tap()` itself sends under the hood on Chromium, just not glued
+        // to an immediate release. CDP sessions only exist on Chromium
+        // (`BrowserContext.newCDPSession`'s own doc: "CDP sessions are only
+        // supported on Chromium-based browsers"), so there is no public,
+        // non-dispatch way to hold a touch down in WebKit at all --
+        // `index.test.ts`'s own comment on its WebKit branch explains what
+        // it tests instead. Takes the page point directly, not a selector
+        // `boundingBox` resolves (`tapAt`'s own approach): a `<dialog>`
+        // opened with `showModal()` -- the top layer -- read as not
+        // `isVisible()` to Playwright's own WebKit automation in this
+        // harness, so a locator anywhere inside one, even just for its own
+        // `boundingBox`, cannot be trusted to resolve here at all. The
+        // caller reads the point off the real, live `getBoundingClientRect`
+        // instead (`index.test.ts`'s own comment on that).
+        async holdTouchDown(context, x, y) {
+          heldTouchCdp = await context.context.newCDPSession(context.page);
+          await heldTouchCdp.send('Input.dispatchTouchEvent', {
+            type: 'touchStart',
+            touchPoints: [{ x, y }]
+          });
+        },
+        // Releases the touch `holdTouchDown` started.
+        async releaseHeldTouch() {
+          if (!heldTouchCdp) {
+            throw new Error('releaseHeldTouch: no touch is held');
+          }
+          const cdp = heldTouchCdp;
+          heldTouchCdp = undefined;
+          await cdp.send('Input.dispatchTouchEvent', {
+            type: 'touchEnd',
+            touchPoints: []
+          });
+          await cdp.detach().catch(() => {});
+        },
+        // A real tap (`page.touchscreen.tap`) at a page point directly,
+        // the same reason `holdTouchDown`, above, takes one instead of a
+        // selector.
+        async tapAtPoint(context, x, y) {
+          await context.page.touchscreen.tap(x, y);
         }
       }
     }

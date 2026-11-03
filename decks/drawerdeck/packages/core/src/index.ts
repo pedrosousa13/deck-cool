@@ -249,6 +249,13 @@ const THROW_VELOCITY_SCALE = 200;
 /** How close a scroll position must land to a snap point's to count as
  * resting there. */
 const SETTLE_TOLERANCE = 4;
+/** `panelVisibilityObserver`'s own early-close margin (#332's momentum
+ * follow-up), in pixels: closes a swiped-closed drawer once only this much
+ * of the Panel is left in view, instead of waiting for the last sliver of a
+ * long iOS momentum tail. `earlyClosePx`, below, clamps it down for a
+ * drawer whose smallest configured snap point would otherwise read as
+ * "gone" under it. */
+const CLOSE_EARLY_PX = 32;
 const SCROLLEND_DEBOUNCE_MS = 120;
 /** Clearance `ensureFieldVisible` keeps between a focused keyboard field's
  * own bottom edge and the real visible window's bottom: stops the field
@@ -1027,6 +1034,26 @@ export function createDrawer(
     }
   }
 
+  /** `panelVisibilityObserver`'s own early-close margin (#332's momentum
+   * follow-up), and what the touch-release recheck, below, measures
+   * against: `CLOSE_EARLY_PX`, clamped so it can never read a drawer
+   * resting at a legitimate snap point as gone. The smallest configured
+   * snap point's own forward offset (`snapPx`) is exactly how much of the
+   * Panel stays visible while resting there (this file's own top comment:
+   * a snap point's forward offset is how far the Viewport has scrolled the
+   * Panel into view); once that is under `CLOSE_EARLY_PX + 1`, the margin
+   * backs off to 1px inside it instead, floored at `SETTLE_TOLERANCE` so it
+   * never drops below what `onScrollEnd` itself already treats as "at
+   * closed". Reads the live `snapPx`, so it is only ever accurate right
+   * after a `measure()` -- every call site below calls it from there. */
+  function earlyClosePx(): number {
+    const smallestSnapVisible =
+      snapPx.length > 0 ? Math.min(...snapPx) : Infinity;
+    return smallestSnapVisible < CLOSE_EARLY_PX + 1
+      ? Math.max(SETTLE_TOLERANCE, smallestSnapVisible - 1)
+      : CLOSE_EARLY_PX;
+  }
+
   /** Positions every `[data-drawer-snap]` marker at its snap point's real
    * scroll offset (`scrollForSnap`): index 0 at closed, each configured
    * point after. Closed is not itself a snap target while the drawer is
@@ -1170,6 +1197,7 @@ export function createDrawer(
     // `onOpenChange`.
     if (phase === 'closed') return;
     panelVisibilityObserver.unobserve(panel);
+    observingPanel = false;
     detachKeyboardListeners();
     viewport.style.scrollSnapType = `${horizontal ? 'x' : 'y'} mandatory`;
     // `close()` itself restores focus to whatever had it before `open()`
@@ -1328,7 +1356,11 @@ export function createDrawer(
     // Arms the leave-view close (#296) only now: the entrance has actually
     // settled, so the Panel's own position reflects where it rests open,
     // not wherever a consumer's CSS transform still had it mid-flight.
+    // `ensurePanelVisibilityObserver` first, so a fresh `snapPoints` this
+    // same open picked up is already reflected in the margin it arms with.
+    ensurePanelVisibilityObserver();
     panelVisibilityObserver.observe(panel);
+    observingPanel = true;
     setPhase('open');
     updateContentLock();
   }
@@ -1350,7 +1382,9 @@ export function createDrawer(
     positionMarkers();
     viewport[axis.scroll] = scrollForSnap(snapIndex);
     // Arms the leave-view close (#296): see `settleEnter`, above.
+    ensurePanelVisibilityObserver();
     panelVisibilityObserver.observe(panel);
+    observingPanel = true;
     setPhase('open');
     updateContentLock();
   }
@@ -1471,45 +1505,127 @@ export function createDrawer(
   // it reports already describes that exact element, never a nested
   // drawer's own.
   //
-  // `rootMargin` shrinks the Viewport by `SETTLE_TOLERANCE` on every side
-  // (#332's follow-up): a real iOS Safari momentum scroll can stall a few
-  // pixels short of closed and never fire `scrollend` again until the
-  // next touch, so a Panel sitting within that same tolerance still
-  // overlapped the unshrunk root and this observer never fired either --
-  // the dialog stayed open and modal while it looked closed. Shrinking the
-  // root by the same tolerance `onScrollEnd` already treats as "close
-  // enough" makes that last sliver count as gone too.
-  const panelVisibilityObserver = new IntersectionObserver(
-    (entries) => {
-      const entry = entries[entries.length - 1];
-      if (!entry || entry.isIntersecting) return;
-      // The CSS exit already has its own close path (`beginExit` then
-      // `settleExit`): left to that instead, rather than racing it to
-      // settle the reason. `finishClose`'s own idempotency is the backstop
-      // if this still fires around when that path settles. A mouse drag or
-      // throw still owns the scroll position itself (`onScrollEnd`'s own
-      // guard, above, for the same reason): the Panel leaving view
-      // mid-drag is not the user letting go, and closing here anyway, with
-      // `dragging` left true, does not stop the drag's own later
-      // `onPointerUp` from running its own settle right on top of it,
-      // landing `phase` on a snap point while the dialog this already
-      // closed stays closed underneath it (#322). Left alone, the drag's
-      // own release (or the throw's own end) still reaches `finishClose`
-      // the moment it actually settles at closed.
-      if (
-        cssExiting ||
-        dragging ||
-        throwing ||
-        (phase !== 'open' && phase !== 'closing')
-      ) {
-        return;
-      }
-      const reason = pendingCloseReason ?? 'drag';
-      pendingCloseReason = null;
-      finishClose(reason);
-    },
-    { root: viewport, rootMargin: `-${SETTLE_TOLERANCE}px` }
+  // `rootMargin` shrinks the Viewport by `earlyClosePx()` on every side,
+  // not the flat `SETTLE_TOLERANCE` #332's own follow-up used (this
+  // follow-up, on top of that one): a real iOS Safari momentum scroll
+  // glides for a couple hundred milliseconds after the finger lifts, so
+  // waiting for literally the last pixel waits out that whole tail. Closing
+  // once only `CLOSE_EARLY_PX` of the Panel is left in view -- still well
+  // past `SETTLE_TOLERANCE`, so a Panel genuinely resting at closed still
+  // counts as gone too -- cuts that tail short. `earlyClosePx` clamps the
+  // margin below the smallest configured snap point's own visible size, so
+  // a drawer resting there is never read as closed by mistake. A touch
+  // still down owns the gesture the same way a mouse drag or throw already
+  // does (`dragging`/`throwing`, below): the browser's own momentum is what
+  // this margin is for, not a finger that could still reverse the swipe,
+  // so a touch in progress defers the close until it ends
+  // (`activeTouchCount`, `onTouchEnd`, below), when the scroll position is
+  // checked against this same margin directly.
+  let observingPanel = false;
+  function panelVisibilityCallback(entries: IntersectionObserverEntry[]) {
+    const entry = entries[entries.length - 1];
+    if (!entry || entry.isIntersecting) return;
+    if (activeTouchCount > 0) return;
+    // The CSS exit already has its own close path (`beginExit` then
+    // `settleExit`): left to that instead, rather than racing it to
+    // settle the reason. `finishClose`'s own idempotency is the backstop
+    // if this still fires around when that path settles. A mouse drag or
+    // throw still owns the scroll position itself (`onScrollEnd`'s own
+    // guard, above, for the same reason): the Panel leaving view
+    // mid-drag is not the user letting go, and closing here anyway, with
+    // `dragging` left true, does not stop the drag's own later
+    // `onPointerUp` from running its own settle right on top of it,
+    // landing `phase` on a snap point while the dialog this already
+    // closed stays closed underneath it (#322). Left alone, the drag's
+    // own release (or the throw's own end) still reaches `finishClose`
+    // the moment it actually settles at closed.
+    if (
+      cssExiting ||
+      dragging ||
+      throwing ||
+      (phase !== 'open' && phase !== 'closing')
+    ) {
+      return;
+    }
+    const reason = pendingCloseReason ?? 'drag';
+    pendingCloseReason = null;
+    finishClose(reason);
+  }
+
+  function createPanelVisibilityObserver(marginPx: number) {
+    return new IntersectionObserver(panelVisibilityCallback, {
+      root: viewport,
+      rootMargin: `-${marginPx}px`
+    });
+  }
+
+  let panelVisibilityMarginPx = earlyClosePx();
+  let panelVisibilityObserver = createPanelVisibilityObserver(
+    panelVisibilityMarginPx
   );
+
+  /** Rebuilds `panelVisibilityObserver` with the current `earlyClosePx()`
+   * whenever it has actually changed since the last build: `rootMargin` is
+   * fixed at construction, so a fresh `snapPoints` configuration, or a
+   * resize that changes a fractional snap point's own pixel size, needs a
+   * new observer, not a mutated one. Re-`observe`s the Panel on the
+   * replacement when the old one was already observing it, so a margin
+   * change mid-open does not silently stop arming the close. Called right
+   * after every `measure()` that could run while the Panel is, or is about
+   * to be, observed (`settleEnter`, `finishEnter`, `onResize`,
+   * `setOptions`); a no-op the rest of the time, since the margin rarely
+   * changes. */
+  function ensurePanelVisibilityObserver() {
+    const marginPx = earlyClosePx();
+    if (marginPx === panelVisibilityMarginPx) return;
+    panelVisibilityMarginPx = marginPx;
+    panelVisibilityObserver.disconnect();
+    panelVisibilityObserver = createPanelVisibilityObserver(marginPx);
+    if (observingPanel) panelVisibilityObserver.observe(panel);
+  }
+
+  /** The number of touches currently down on the Viewport: incremented on
+   * `touchstart`, decremented on `touchend`/`touchcancel`. Read by
+   * `panelVisibilityCallback`, above, so a finger still down never closes
+   * the drawer through the momentum tail it has not actually let go of
+   * yet; `onTouchEnd`, below, re-checks the scroll position itself once the
+   * last one lifts. */
+  let activeTouchCount = 0;
+
+  function onTouchStart() {
+    activeTouchCount++;
+  }
+
+  /** The re-check `activeTouchCount` reaching zero runs: a touch held
+   * through the Panel crossing `earlyClosePx()` suppressed
+   * `panelVisibilityCallback`'s own close above, so this closes instead,
+   * the moment the gesture is actually over, if the Panel is still within
+   * that same margin of closed. Mirrors `onScrollEnd`'s own guards
+   * (`dragging`/`throwing`/`cssExiting`, and the phase check) without
+   * touching its `SETTLE_TOLERANCE` logic at all -- a different margin, a
+   * different trigger, the same close. */
+  function onTouchEnd() {
+    activeTouchCount = Math.max(0, activeTouchCount - 1);
+    if (activeTouchCount > 0 || destroyed) return;
+    if (
+      cssExiting ||
+      dragging ||
+      throwing ||
+      (phase !== 'open' && phase !== 'closing')
+    ) {
+      return;
+    }
+    const st = viewport[axis.scroll];
+    const closedPos = scrollForSnap(-1);
+    if (Math.abs(st - closedPos) > earlyClosePx()) return;
+    const reason = pendingCloseReason ?? 'drag';
+    pendingCloseReason = null;
+    finishClose(reason);
+  }
+
+  viewport.addEventListener('touchstart', onTouchStart, { passive: true });
+  viewport.addEventListener('touchend', onTouchEnd, { passive: true });
+  viewport.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
   function onScrollEnd() {
     if (destroyed) return;
@@ -1970,6 +2086,11 @@ export function createDrawer(
     if (phase === 'closed') return;
     measure();
     positionMarkers();
+    // A resize can change a fractional snap point's own pixel size, and so
+    // `earlyClosePx()`'s own clamp: re-arms `panelVisibilityObserver` with
+    // whatever margin that now computes to, same as `settleEnter`/
+    // `finishEnter` do right after their own `measure()`.
+    ensurePanelVisibilityObserver();
     if (!dialog.open) return;
     // Keeps writing a scroll position through a CSS exit, too: the exit
     // moves the Panel with a `transform`, never `scrollTop`/`scrollLeft`,
@@ -2302,6 +2423,9 @@ export function createDrawer(
       measure();
       positionMarkers();
       updateContentLock();
+      // A changed `snapPoints` can change `earlyClosePx()`'s own clamp
+      // too: see `onResize`'s own comment.
+      ensurePanelVisibilityObserver();
     }
     if (previous.modal !== opts.modal) applyModalStyle();
     updateNestedAttrs();
@@ -2319,6 +2443,9 @@ export function createDrawer(
     clearTimeout(scrollEndDebounce);
     cancelAnimationFrame(throwFrame);
     cancelAnimationFrame(progressFrame);
+    viewport.removeEventListener('touchstart', onTouchStart);
+    viewport.removeEventListener('touchend', onTouchEnd);
+    viewport.removeEventListener('touchcancel', onTouchEnd);
     viewport.removeEventListener('scrollend', onScrollEnd);
     viewport.removeEventListener('scroll', onScrollEndDebounce);
     viewport.removeEventListener('scroll', onScroll);
