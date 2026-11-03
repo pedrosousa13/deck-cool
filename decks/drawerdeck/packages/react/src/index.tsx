@@ -321,34 +321,29 @@ export type RootProps = (OpenControlledProps | OpenUncontrolledProps) &
      * Backdrop is optional. Escape and focus-on-close still behave the
      * same either way. Defaults to true. */
     modal?: boolean;
-    /** An opt-in background indent (#274): a ref to, or a direct element
-     * reference for, the consumer's own page wrapper. `@drawerdeck/core`
-     * scales it back in step with this drawer's own open progress while
-     * it is open, through the end of its own close -- `data-drawer-indent`
-     * and a registered `--drawer-indent-progress` (`0` closed, `1` fully
-     * open), with no JS per drag frame where the browser supports a named
-     * scroll timeline. See "A background indent".
+    /** An opt-in background indent (#274): a ref to the consumer's own
+     * page wrapper -- a ref only, never a direct element, so
+     * `@drawerdeck/core` can read `.current` itself, fresh, at the moment
+     * it actually needs it, and so still pick up a wrapper that mounts in
+     * a later commit than this prop's own first `setOptions` call (a ref
+     * whose `.current` starts `null` and attaches after). `@drawerdeck/core`
+     * scales the resolved element back in step with this drawer's own open
+     * progress while it is open, through the end of its own close --
+     * `data-drawer-indent` and a registered `--drawer-indent-progress`
+     * (`0` closed, `1` fully open), with no JS per drag frame where the
+     * browser supports a named scroll timeline. See "A background indent".
      *
-     * Ignored on a `Drawer.Root` nested inside another one (#272): only
-     * the outermost open drawer indents the page, so a nested Root's own
-     * `indent` prop, if given one, never reaches `@drawerdeck/core` at
-     * all. Nested drawers keep using `--drawer-nested`/
-     * `--drawer-nested-progress` instead; the two recipes are not meant to
-     * stack. */
-    indent?: RefObject<HTMLElement | null> | HTMLElement | null;
+     * Only one drawer indents the page at a time, page-wide
+     * (`@drawerdeck/core`'s own `indentOwner`): the first to start wanting
+     * it keeps it until it releases. Ignored outright on a `Drawer.Root`
+     * nested inside another one (#272): a nested Root's own `indent` prop,
+     * if given one, never reaches `@drawerdeck/core` at all -- nested
+     * drawers keep using `--drawer-nested`/`--drawer-nested-progress`
+     * instead; the two recipes are not meant to stack. */
+    indent?: RefObject<HTMLElement | null> | null;
     onOpenChange?(open: boolean, info: { reason: OpenChangeReason }): void;
     onSnapPointChange?(index: number): void;
   };
-
-/** `indent`'s own resolution (`RootProps.indent`'s doc): a ref's `.current`,
- * read fresh every time this is called (never a value captured once at
- * render, which would always read a ref's `.current` from before the
- * commit that actually attaches it), or an element handed directly. */
-function resolveIndentTarget(indent: RootProps['indent']): HTMLElement | null {
-  if (!indent) return null;
-  if (indent instanceof Element) return indent;
-  return indent.current ?? null;
-}
 
 /** One drawer: a `<dialog>`, labelled by `Drawer.Title` and described by
  * `Drawer.Description`, holding the scroll-snap viewport the engine (in
@@ -697,11 +692,15 @@ export function Root({
       nestedCount,
       nestedProgressSource,
       // Ignored on a nested Root (#274, this file's own `RootProps.indent`
-      // doc): only the outermost open drawer indents the page. Resolved
-      // fresh on every run, not from a value computed at render (a ref's
-      // own `.current` is not attached yet then): a plain prop read, like
-      // every other option here, just one that may itself be a ref.
-      indent: parentCtx ? null : resolveIndentTarget(indent)
+      // doc): a nested Root's own indent never reaches the engine at all.
+      // The ref itself, never resolved here: `@drawerdeck/core`'s own
+      // `updateIndent` reads `.current` fresh every time it runs, so a
+      // wrapper that mounts in a later commit than this effect's own last
+      // run is still picked up, the next time this drawer's own phase
+      // changes -- resolving it here, once, the moment this effect runs,
+      // would otherwise freeze it at whatever `.current` read at that one
+      // moment, same as `@drawerdeck/react`'s own earlier round did.
+      indent: parentCtx ? null : (indent ?? null)
     });
   }, [
     snapPoints,
