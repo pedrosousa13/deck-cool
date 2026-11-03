@@ -34,7 +34,7 @@ as carouseldeck's primitives do, besides the props below.
 | `dismissible`                    | `boolean`                                     | `true`     | Whether dragging past the lowest snap point, Escape or an outside press can close the drawer. An outside press never closes a non-modal drawer, regardless of this option.                                                                                                                                                                                                                                                                  |
 | `modal`                          | `boolean`                                     | `true`     | Whether `Drawer.Popup` opens with `showModal()` (the top layer, a focus trap, an inert page) or `show()`: the page behind stays interactive. See "Non-modal drawers". Nested inside another `Drawer.Root`, only `true` is supported: a non-modal drawer may be the outermost level, with modal drawers nested inside it, but not the other way around. `Drawer.Root` warns once in development when this is violated. See "Nested drawers". |
 | `side`                           | `'bottom' \| 'top' \| 'left' \| 'right'`      | `'bottom'` | Which edge the drawer opens from. Read once, on mount: changing it later does not move an already-mounted drawer to the new edge. See "Open from a side".                                                                                                                                                                                                                                                                                   |
-| `indent`                         | a ref, or an element                          |            | An opt-in background indent: scales the consumer's own page wrapper back as the drawer opens. Ignored on a `Drawer.Root` nested inside another one (only the outermost open drawer indents the page). See "A background indent".                                                                                                                                                                                                            |
+| `indent`                         | a ref                                         |            | An opt-in background indent: scales the consumer's own page wrapper back as the drawer opens. Only one drawer indents the page at a time; ignored outright on a `Drawer.Root` nested inside another one. See "A background indent".                                                                                                                                                                                                         |
 
 `reason` is one of `'trigger' | 'drag' | 'escape' | 'outside-press' | 'close-button' | 'programmatic'`.
 
@@ -99,9 +99,12 @@ nothing is open directly above, the same direct-write discipline
 `--drawer-nested` already follows. See "Nested drawers".
 
 `data-drawer-indent`, on the element `Drawer.Root`'s own `indent` prop
-names, is set while this drawer is open, through the end of its own
-close. `--drawer-indent-progress`, on the same element, is this drawer's
-own live open progress (`0` fully closed, `1` fully open), with no JS
-running per drag frame where the browser supports a named scroll timeline,
-even where that element sits outside `Drawer.Popup` entirely. See "A
-background indent".
+names, is set to this drawer's own `side` while it is open, through the
+end of its own close. `--drawer-indent-progress`, on the same element, is
+this drawer's own live open progress (`0` fully closed, `1` fully open),
+with no JS running per drag frame where the browser supports a named
+scroll timeline, even where that element sits outside `Drawer.Popup`
+entirely. `data-ending-style` is also mirrored onto it for the whole
+close, the same attribute `Drawer.Panel`'s own entrance and exit already
+use, so a CSS recipe can ease the indent back out through a button close,
+Escape or an outside press, not only a drag. See "A background indent".
