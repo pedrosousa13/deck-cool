@@ -673,11 +673,12 @@ describe('two levels deep', () => {
     // gets a resolved timeline to animate `--drawer-nested-progress`
     // from, and the Panel would otherwise read its registered
     // `initial-value`, 0, leaving it at its full, unscaled size instead
-    // of the fully nested one. The engine checks for exactly that, two
-    // frames after setting the source up (`nestedProgressFallbackRaf`,
-    // `@drawerdeck/core`), and writes a literal `1` directly where
-    // nothing else ever did: fails on the previous head, reading `0` and
-    // a scale of `1` instead of `0.95`.
+    // of the fully nested one. The engine checks for exactly that right
+    // after setting the source up, synchronously (`updateNestedProgress`,
+    // `@drawerdeck/core`): the nested-progress `CSSAnimation` is on the
+    // Panel, but its own `timeline` reads `null`, so it writes a literal
+    // `1` directly where nothing else ever did: fails on the previous
+    // head, reading `0` and a scale of `1` instead of `0.95`.
     await nextFrame();
     await nextFrame();
     expect(panelAt(1).style.getPropertyValue('--drawer-nested-progress')).toBe(

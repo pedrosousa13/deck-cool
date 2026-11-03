@@ -465,7 +465,6 @@ export function Root({
    * one that is no longer the active source (closed, or superseded by an
    * unusual second one) is stale and must not overwrite a live one. */
   const reportNestedProgressValue = useCallback((id: string, value: number) => {
-    if (!nestedProgressSourcesRef.current.has(id)) return;
     const first = nestedProgressSourcesRef.current.keys().next();
     if (first.done || first.value !== id) return;
     drawerRef.current?.setOptions({ nestedProgressValue: value });
