@@ -2200,6 +2200,26 @@ export function createDrawer(
         // into the empty padding for no reason.
         parts.content.style.paddingBottom = inset > 0 ? `${inset}px` : '';
         parts.content.style.scrollPaddingBottom = inset > 0 ? `${inset}px` : '';
+        // Re-measures now that Content's own box just changed (#274
+        // review): wherever Content is not itself held to a fixed extent
+        // -- flex's own `min-height: 0` is what the "Animate the drawer"
+        // guide's own recipe uses to avoid this, but nothing here assumes
+        // a consumer did -- growing its `padding-bottom` can grow the
+        // Panel's own natural extent too, and so the Viewport's own
+        // `scrollHeight`/`maxScroll`. `measure`'s own `rangePercent`
+        // (`onProgressRangeChange`, and the indent's own `animation-range`,
+        // #274) is computed from exactly that `maxScroll`, once per layout:
+        // left stale here, a nested parent's own `--drawer-nested-progress`
+        // and the indent's own `--drawer-indent-progress` both stall short
+        // of `1` once this drawer reaches its largest, keyboard-expanded
+        // snap point, having been scoped to a narrower range than the one
+        // actually in effect once the keyboard inset changed the layout
+        // under it. `onResize`'s own `measure()` call, for the same
+        // `visualViewport` 'resize' this runs from, fires first (attached
+        // at creation, before this function's own listener,
+        // `attachKeyboardListeners`) -- too early to see this write, which
+        // is why this needs its own, later call, not reliance on that one.
+        measure();
       }
     }
 
