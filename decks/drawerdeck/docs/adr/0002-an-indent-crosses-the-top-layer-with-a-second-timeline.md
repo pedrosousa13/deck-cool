@@ -11,13 +11,13 @@ opposite once two details are right, neither of which the prototype had:
 - The Viewport needs a **second** named scroll timeline, one the dialog
   does not itself list in its own `timeline-scope`. Re-declaring the same
   name there, the way the prototype's own dim timeline already is,
-  isolates it instead -- that re-declaration, not the top layer itself,
-  was the prototype's real cause. `--drawer`, the dim's own name, stays
+  isolates it instead (that re-declaration, not the top layer itself,
+  was the prototype's real cause). `--drawer`, the dim's own name, stays
   scoped to the dialog exactly as before; the indent's own name
   (`@drawerdeck/core`'s own `indentTimelineName`, generated once per
   instance) is deliberately left off it.
 - That second name needs to be in `timeline-scope` on a shared ancestor of
-  both the Viewport and the target element outside the dialog --
+  both the Viewport and the target element outside the dialog.
   `documentElement` always is one, modal or not, portaled or not, so this
   engine uses it directly rather than asking a consumer to declare
   anything of their own.
@@ -30,10 +30,10 @@ non-null the moment the animation is set up.
 ## The mechanism
 
 `@drawerdeck/core`'s own `indent` option takes an element (`null` while
-nothing should indent). While active -- from the moment this drawer leaves
+nothing should indent). While active (from the moment this drawer leaves
 `'closed'` through the moment it returns to it, never only while fully
 `'open'`, the same reason a nested drawer's own contribution to
-`--drawer-nested` stays live through its whole close -- the target gets
+`--drawer-nested` stays live through its whole close), the target gets
 `data-drawer-indent`, a `transform-origin` set once, at activation, to the
 viewport's own center in document coordinates (fixing the page-shift bug
 a scrolled-before-opening page would otherwise show: measured at 235px

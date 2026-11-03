@@ -102,9 +102,9 @@ portaled or not.
 `data-drawer-indent`, `--drawer-indent-progress`, the `animation`
 properties the native path sets, and the entry this drawer's own indent
 added to `documentElement`'s `timeline-scope`, all clear the moment this
-drawer's own phase reaches `'closed'` -- a close button, Escape, a drag or
+drawer's own phase reaches `'closed'` (a close button, Escape, a drag or
 a flick past the closed point, or an unmount while still open, all the
-same. Any inline style the target already had before this drawer's indent
+same). Any inline style the target already had before this drawer's indent
 first touched it (an inline `transform-origin` or `animation` a consumer
 set directly, unlikely but not assumed absent) is restored to exactly
 that value, never simply removed.
