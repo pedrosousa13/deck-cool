@@ -597,10 +597,25 @@ main .home-family .home-more {
    on this site stays inside its own .drawer-demo box. --drawer-indent-progress
    is the engine's own live open progress (0 closed to 1 fully open) of
    the one drawer this stand-in page's own ref was handed, written
-   directly on it; the guide's own recipe. */
+   directly on it; --drawer-indent-on is this guide's own recipe, the only
+   thing transitioned: --drawer-indent-progress is itself native and
+   scroll-driven, so it already eases on a drag or a flick, but never
+   moves the real scroll position at all on a button close, Escape or an
+   outside press -- --drawer-indent-on, set to 0 by data-ending-style (the
+   same attribute the panel's own exit recipe reads, mirrored onto this
+   target for its whole close), is what eases the scale back out through
+   those instead. No transform-origin here: the engine's own adopted
+   stylesheet rule sets it, from this element's own box, to the viewport's
+   own center (the guide's own "The page does not shift" section). */
 .drawer-demo--indent {
   flex-direction: column;
   gap: 16px;
+}
+
+@property --drawer-indent-on {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
 }
 
 .drawer-demo__indent-page {
@@ -609,13 +624,28 @@ main .home-family .home-more {
   padding: 20px;
   border-radius: 12px;
   background-color: var(--ground-raised);
-  scale: calc(1 - 0.08 * var(--drawer-indent-progress, 0));
-  transform-origin: top center;
+  scale: calc(
+    1 - 0.08 * var(--drawer-indent-progress, 0) * var(--drawer-indent-on)
+  );
+}
+
+/* Scoped to the attribute, not the bare class (#274 review): this is what
+   lets opening ease in with no separate data-starting-style rule needed
+   at all -- --drawer-indent-on reads its own registered initial-value, 0,
+   right up until data-drawer-indent first appears, the moment this rule
+   newly matches and sets it to 1, a real, transitionable change the
+   @media block below's own transition eases. */
+.drawer-demo__indent-page[data-drawer-indent] {
+  --drawer-indent-on: 1;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .drawer-demo__indent-page {
-    transition: scale 300ms var(--ease);
+    transition: --drawer-indent-on 300ms var(--ease);
+  }
+
+  .drawer-demo__indent-page[data-drawer-indent][data-ending-style] {
+    --drawer-indent-on: 0;
   }
 }
 

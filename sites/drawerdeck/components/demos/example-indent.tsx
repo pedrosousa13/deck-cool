@@ -36,7 +36,7 @@ export default function Indent() {
                 <Drawer.Content className="drawer-demo__content">
                   <p className="drawer-demo__nested-body">
                     The page behind scales back while this is open, and
-                    eases back out as it closes.
+                    eases back out as it closes, however it closes.
                   </p>
                 </Drawer.Content>
                 <Drawer.Close className="drawer-demo__close">Done</Drawer.Close>
