@@ -419,8 +419,11 @@ export function Root({
   // natural-rest mount defers the engine's own first measurement, so
   // `state.count` can go from null to known on the very same render as a
   // move the deck itself just started, from the same press that read this
-  // effect's own stale `null` a moment before. `reported` catches that
-  // move once it settles; nothing here needs correcting before then.
+  // effect's own stale `null` a moment before. Skip the correction only
+  // while that move is still in flight on this first measured render --
+  // `engine.target()` is not null -- so it is not undone; a parent that
+  // set a new `index` before the first measurement, with nothing moving,
+  // still reaches it here.
   const measuredRef = useRef(false);
   useLayoutEffect(() => {
     const engine = engineRef.current;
@@ -433,7 +436,7 @@ export function Root({
     const reported = reportedRef.current;
     reportedRef.current = null;
     if (index !== undefined && state.count !== null && engine) {
-      if (measuredRef.current) {
+      if (measuredRef.current || engine.target() === null) {
         const to = clampSlide(index, state.count);
         const target = engine.target();
         const heading = target ?? state.index;

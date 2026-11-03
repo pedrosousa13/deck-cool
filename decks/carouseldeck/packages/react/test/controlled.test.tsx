@@ -143,6 +143,25 @@ describe('a controlled deck', () => {
     expect(viewport.scrollLeft).toBe(2 * WIDTH);
   });
 
+  // At natural rest (#333), the engine's first measurement is a frame after
+  // mount, not during it: a parent that sets a new index before then, in a
+  // rerender right after mount, is not a press to leave alone and must
+  // still reach it once the engine measures.
+  test('a parent that sets index before the deck’s first measurement ends there', async () => {
+    const onIndexChange = vi.fn();
+    const { rerender } = render(
+      <TestDeck index={0} onIndexChange={onIndexChange} />
+    );
+    const root = screen.getByRole('region', { name: 'Test deck' });
+    const viewport = viewportOf(root);
+
+    rerender(<TestDeck index={2} onIndexChange={onIndexChange} />);
+
+    await expectSettledTo(() => viewport.scrollLeft, 2 * WIDTH);
+    expect(root.dataset.index).toBe('2');
+    expect(onIndexChange).not.toHaveBeenCalled();
+  });
+
   test('follows index changes from outside, without calling onIndexChange back', async () => {
     const { root, viewport, onIndexChange } = renderControlled();
 
