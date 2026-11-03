@@ -591,6 +591,47 @@ main .home-family .home-more {
   color: var(--text-secondary);
 }
 
+/* The background indent demo (components/demos/example-indent.tsx), on
+   the "A background indent" guide: a self-contained stand-in "page",
+   never the real site chrome around it, the same reason every other demo
+   on this site stays inside its own .drawer-demo box. --drawer-indent-progress
+   is the engine's own live open progress (0 closed to 1 fully open) of
+   the one drawer this stand-in page's own ref was handed, written
+   directly on it; the guide's own recipe. */
+.drawer-demo--indent {
+  flex-direction: column;
+  gap: 16px;
+}
+
+.drawer-demo__indent-page {
+  width: 100%;
+  max-width: 320px;
+  padding: 20px;
+  border-radius: 12px;
+  background-color: var(--ground-raised);
+  scale: calc(1 - 0.08 * var(--drawer-indent-progress, 0));
+  transform-origin: top center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .drawer-demo__indent-page {
+    transition: scale 300ms var(--ease);
+  }
+}
+
+.drawer-demo__indent-page-bar {
+  width: 64px;
+  height: 8px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-pill);
+  background-color: var(--drawerdeck-fill);
+}
+
+.drawer-demo__indent-page-text {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
 /* The docs layout (components/docs-page.tsx): a sidebar, then the article. */
 
 .docs {
