@@ -1,0 +1,54 @@
+/* Minimal, shared styling across the five gesture-bench pages (#340, the
+   same convention drawerdeck's own bench/src/style.css uses for its four):
+   dark background, enough to render legibly at the 800x600 viewport
+   playwright.config.ts sets, so a visual difference between decks is the
+   mechanics, not the CSS. */
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: #0b0b0d;
+  color: #e8e8ea;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+#next,
+#prev {
+  display: inline-block;
+  margin: 12px 6px;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  background: #2c2c2e;
+  color: #fff;
+}
+
+.dots {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+}
+
+.dots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #4a4a4e;
+}
+
+.dots button[aria-current='true'] {
+  background: #e8e8ea;
+}
