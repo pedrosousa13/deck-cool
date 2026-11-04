@@ -18,8 +18,7 @@ function countPerElementReads() {
   const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
   const styleSpy = vi.spyOn(window, 'getComputedStyle');
   const rectCount = (el: Element) =>
-    (rectSpy.mock.instances as unknown[]).filter((inst) => inst === el)
-      .length;
+    (rectSpy.mock.instances as unknown[]).filter((inst) => inst === el).length;
   const styleCount = (el: Element) =>
     styleSpy.mock.calls.filter((call) => call[0] === el).length;
   return {
@@ -93,16 +92,12 @@ function buildLoopingCopies() {
   return { viewport, boxes: [...before, ...slides, ...after] };
 }
 
-// Today's behaviour (measured against main, before #339): a settle reads
-// the same box's rect and style more than once -- in `measureSnapPoints`,
-// again in `writeGeometry`, `writeProgress`, `focalSlide` and
-// `resnap`/`restsOnSnapPoint`'s own `snapRest`, and, with loop, once more in
-// `jumpOffCopies`'s own `snapRest`. Measured runs put the worst box's own
-// count at 5 to 7 rect reads and 6 to 27 style reads, by kind: which box
-// reads worst depends on which one a `.some()` or `.find()` matches first,
-// itself a matter of sub-pixel layout this test does not pin down, so the
-// assertion below only says "more than once", not by how much.
-describe('settle reads a box more than once (today, before #339)', () => {
+// One measurement per settle (#339): each box's rect and style, read at
+// most once, outside the shells-mode paths that must re-read after a write
+// (`measureShells`, `compensateShift`) -- none of these three decks takes
+// one. Before this fix, the worst box's own count ran from 5 to 7 rect
+// reads and 6 to 27 style reads, by kind.
+describe('settle reads each box at most once (#339)', () => {
   test('plain deck', () => {
     const { viewport, boxes } = buildPlain();
     // Index 1 is not a natural rest (#333): the first settle, inside
@@ -111,8 +106,8 @@ describe('settle reads a box more than once (today, before #339)', () => {
     try {
       const reads = countPerElementReads();
       engine.refresh();
-      expect(reads.maxRect(boxes)).toBeGreaterThan(1);
-      expect(reads.maxStyle(boxes)).toBeGreaterThan(1);
+      expect(reads.maxRect(boxes)).toBeLessThanOrEqual(1);
+      expect(reads.maxStyle(boxes)).toBeLessThanOrEqual(1);
       reads.restore();
     } finally {
       engine.destroy();
@@ -126,8 +121,8 @@ describe('settle reads a box more than once (today, before #339)', () => {
     try {
       const reads = countPerElementReads();
       engine.refresh();
-      expect(reads.maxRect(boxes)).toBeGreaterThan(1);
-      expect(reads.maxStyle(boxes)).toBeGreaterThan(1);
+      expect(reads.maxRect(boxes)).toBeLessThanOrEqual(1);
+      expect(reads.maxStyle(boxes)).toBeLessThanOrEqual(1);
       reads.restore();
     } finally {
       engine.destroy();
@@ -146,8 +141,8 @@ describe('settle reads a box more than once (today, before #339)', () => {
     try {
       const reads = countPerElementReads();
       engine.refresh();
-      expect(reads.maxRect(boxes)).toBeGreaterThan(1);
-      expect(reads.maxStyle(boxes)).toBeGreaterThan(1);
+      expect(reads.maxRect(boxes)).toBeLessThanOrEqual(1);
+      expect(reads.maxStyle(boxes)).toBeLessThanOrEqual(1);
       reads.restore();
     } finally {
       engine.destroy();
