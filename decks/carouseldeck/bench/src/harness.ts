@@ -64,6 +64,24 @@ export interface CarouselBenchProbe {
    * timeout), pairing with the `markWindowStart()` that opened the
    * gesture. */
   markWindowEnd(): void;
+  /** `performance.now()` at this gesture's `markWindowStart()` call: the
+   * gesture's own first input event, in the same clock as `settledAt()`
+   * and `lastInputAt()`. `bench.spec.ts` subtracts these directly instead
+   * of timing the gesture from Node with `Date.now()`, which also counts
+   * `settle()`'s own quiet window and polling round trips. `null` before
+   * the first call. */
+  windowStart(): number | null;
+  /** `performance.now()` of the rAF tick whose step last crossed `tick()`'s
+   * own 0.5px noise threshold: the last frame in which the carousel
+   * visibly moved. The same clock as `windowStart()`, so `settledAt() -
+   * windowStart()` is the gesture's settle time with no quiet window,
+   * polling latency or round trip left in it. */
+  settledAt(): number;
+  /** `performance.now()` (`event.timeStamp`) of the most recent touchend,
+   * pointerup, wheel tick or click: the gesture's own last input event --
+   * the point past which the rest of settle time is the library's own
+   * motion, not the scripted gesture. `null` before any such event. */
+  lastInputAt(): number | null;
   /** Whether every rendered dots bar on the page reports the full slide
    * count (#340's mount lessons, generalised to the gesture bench too so
    * `smoke.spec.ts` can wait on it the same way): `dotsSelector`'s own
@@ -123,6 +141,8 @@ export function attachHarness(opts: {
   let last = position();
   let lastStep = 0;
   let lastChangeAt = performance.now();
+  let windowStartAt: number | null = null;
+  let lastInputEventAt: number | null = null;
   let raf: number;
 
   function tick() {
@@ -144,6 +164,21 @@ export function attachHarness(opts: {
     raf = requestAnimationFrame(tick);
   }
   raf = requestAnimationFrame(tick);
+
+  // The gesture's own last input event, in the same clock as lastChangeAt:
+  // motionAfterReleaseMs (bench.spec.ts) needs this page-side timestamp
+  // directly, since the warm-up pass runs with no CDP trace session to read
+  // an input mark back out of. Capture phase, so an adapter's own
+  // `stopPropagation` never hides one of these from the probe.
+  for (const type of ['touchend', 'pointerup', 'wheel', 'click'] as const) {
+    window.addEventListener(
+      type,
+      (e) => {
+        lastInputEventAt = e.timeStamp;
+      },
+      { capture: true, passive: true }
+    );
+  }
 
   // Jank: a main-thread busy loop, at most once per ~250ms, while armed --
   // the same mechanism drawerdeck's harness uses, so every load level means
@@ -211,8 +246,14 @@ export function attachHarness(opts: {
       const [entry] = performance.getEntriesByName('bench-init', 'measure');
       return entry ? entry.duration : null;
     },
-    markWindowStart: () => performance.mark('bench-window-start'),
+    markWindowStart: () => {
+      windowStartAt = performance.now();
+      performance.mark('bench-window-start');
+    },
     markWindowEnd: () => performance.mark('bench-window-end'),
+    windowStart: () => windowStartAt,
+    settledAt: () => lastChangeAt,
+    lastInputAt: () => lastInputEventAt,
     published,
     index
   };

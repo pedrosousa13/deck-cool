@@ -38,13 +38,24 @@ LOADS = [0, 100, 200]
 LOOPS = [False, True]
 VERSIONS_PATH = os.path.join(os.path.dirname(__file__), 'versions.json')
 
-# (scenario, metric key, label, lower-is-better, extractor)
+# (scenario, metric key, label, lower-is-better, extractor, in_summary)
 #
 # `touch-swipe-next` and `touch-flick-three` are the two CDP-touch,
 # `chromiumOnly` scenarios (scenarios.ts): each gets the trace-scored
-# longest-stall/dropped-frames pair plus a plain settle time, the same dual
-# treatment drawerdeck's bench gave its own touch scenario. The other three
-# scenarios (no trusted touch needed) get a settle time only.
+# longest-stall/dropped-frames pair plus settle time and motion after
+# release, the same dual treatment drawerdeck's bench gave its own touch
+# scenario. The other three scenarios (no trusted touch needed) get settle
+# time and motion after release only.
+#
+# `settleMs` (gesture start to last moving frame, settle.ts) still includes
+# the scripted gesture's own duration, the same for every deck in a given
+# scenario -- see RESULTS.md's "Method: settle time and motion after
+# release." `motionAfterReleaseMs` (last moving frame minus the gesture's
+# own last input event) excludes it, so `in_summary` is False on every
+# `settleMs` row: render_summary's at-a-glance winner uses
+# `motionAfterReleaseMs` for these scenarios instead, never settleMs. Both
+# stay in RESULTS.md's own per-scenario tables and per-shard winner table
+# (fairness rule 9, "losses stay visible").
 METRICS = [
     (
         'touch-swipe-next',
@@ -52,6 +63,7 @@ METRICS = [
         'Touch swipe to next slide: longest stall (ms)',
         True,
         lambda r: r['trace']['longestStallMs'] if r.get('trace') else None,
+        True,
     ),
     (
         'touch-swipe-next',
@@ -59,6 +71,7 @@ METRICS = [
         'Touch swipe to next slide: dropped frames (%)',
         True,
         lambda r: r['trace']['droppedPct'] if r.get('trace') else None,
+        True,
     ),
     (
         'touch-swipe-next',
@@ -66,6 +79,15 @@ METRICS = [
         'Touch swipe to next slide: settle time (ms)',
         True,
         lambda r: r['settleMs'],
+        False,
+    ),
+    (
+        'touch-swipe-next',
+        'motionAfterReleaseMs',
+        'Touch swipe to next slide: motion after release (ms)',
+        True,
+        lambda r: r['motionAfterReleaseMs'],
+        True,
     ),
     (
         'touch-flick-three',
@@ -73,6 +95,7 @@ METRICS = [
         'Touch flick three slides: longest stall (ms)',
         True,
         lambda r: r['trace']['longestStallMs'] if r.get('trace') else None,
+        True,
     ),
     (
         'touch-flick-three',
@@ -80,6 +103,7 @@ METRICS = [
         'Touch flick three slides: dropped frames (%)',
         True,
         lambda r: r['trace']['droppedPct'] if r.get('trace') else None,
+        True,
     ),
     (
         'touch-flick-three',
@@ -87,6 +111,15 @@ METRICS = [
         'Touch flick three slides: settle time (ms)',
         True,
         lambda r: r['settleMs'],
+        False,
+    ),
+    (
+        'touch-flick-three',
+        'motionAfterReleaseMs',
+        'Touch flick three slides: motion after release (ms)',
+        True,
+        lambda r: r['motionAfterReleaseMs'],
+        True,
     ),
     (
         'mouse-drag-release',
@@ -94,6 +127,15 @@ METRICS = [
         'Mouse drag and release: settle time (ms)',
         True,
         lambda r: r['settleMs'],
+        False,
+    ),
+    (
+        'mouse-drag-release',
+        'motionAfterReleaseMs',
+        'Mouse drag and release: motion after release (ms)',
+        True,
+        lambda r: r['motionAfterReleaseMs'],
+        True,
     ),
     (
         'wheel-scroll-next',
@@ -101,6 +143,15 @@ METRICS = [
         'Wheel scroll to next slide: settle time (ms)',
         True,
         lambda r: r['settleMs'],
+        False,
+    ),
+    (
+        'wheel-scroll-next',
+        'motionAfterReleaseMs',
+        'Wheel scroll to next slide: motion after release (ms)',
+        True,
+        lambda r: r['motionAfterReleaseMs'],
+        True,
     ),
     (
         'next-button',
@@ -108,6 +159,15 @@ METRICS = [
         'Next button click: settle time (ms)',
         True,
         lambda r: r['settleMs'],
+        False,
+    ),
+    (
+        'next-button',
+        'motionAfterReleaseMs',
+        'Next button click: motion after release (ms)',
+        True,
+        lambda r: r['motionAfterReleaseMs'],
+        True,
     ),
 ]
 
@@ -241,7 +301,7 @@ def render_tables(rows):
     lines = []
     cols = [(load_, loop_) for load_ in LOADS for loop_ in LOOPS]
     col_labels = [f'load={load_} loop={str(loop_).lower()}' for load_, loop_ in cols]
-    for scenario, _metric, label, _lower, pick in METRICS:
+    for scenario, _metric, label, _lower, pick, _summary in METRICS:
         lines.append(f'\n### {label}\n')
         lines.append('| Deck | ' + ' | '.join(col_labels) + ' |')
         lines.append('| --- | ' + ' | '.join('---' for _ in cols) + ' |')
@@ -298,7 +358,7 @@ def render_winner_table(rows):
         + ' | Overall |',
         '| --- | --- | --- | ' + ' | '.join('---' for _ in shard_ids) + ' | --- |',
     ]
-    for scenario, _metric, label, lower, pick in METRICS:
+    for scenario, _metric, label, lower, pick, _summary in METRICS:
         for load_ in LOADS:
             for loop_ in LOOPS:
                 excluded = excluded_decks(rows, scenario, load_, loop_)
@@ -315,8 +375,14 @@ def render_winner_table(rows):
 
 
 def render_summary(rows, bundle_rows):
+    # `in_summary` skips every `settleMs` row (METRICS' own comment): the
+    # at-a-glance winner uses `motionAfterReleaseMs` for those scenarios
+    # instead, since settleMs still carries the scripted gesture's own
+    # duration.
     lines = ['| Scenario / metric | load | loop | Winner |', '| --- | --- | --- | --- |']
-    for scenario, _metric, label, lower, pick in METRICS:
+    for scenario, _metric, label, lower, pick, in_summary in METRICS:
+        if not in_summary:
+            continue
         for load_ in LOADS:
             for loop_ in LOOPS:
                 excluded = excluded_decks(rows, scenario, load_, loop_)

@@ -11,7 +11,7 @@
     "bench": "playwright test -c playwright.config.ts bench.spec.ts",
     "mount-bench": "playwright test -c playwright.config.ts mount.spec.ts",
     "smoke": "playwright test -c playwright.config.ts smoke.spec.ts",
-    "test": "node --test trace.test.ts"
+    "test": "node --test trace.test.ts settle.test.ts"
   },
   "dependencies": {
     "@carouseldeck/react": "workspace:*"

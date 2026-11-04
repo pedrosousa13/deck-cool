@@ -68,6 +68,7 @@ import {
   type Scenario
 } from './scenarios';
 import { makeRng, resolveSeed, shuffle } from './seed';
+import { computeSettle } from './settle';
 import {
   analyzeMotion,
   captureTrace,
@@ -105,7 +106,19 @@ function responded(raf: PassResult['raf']): boolean {
 }
 
 interface PassResult {
+  /** Gesture start to the carousel's last moving frame (settle.ts),
+   * excluding `settle()`'s own quiet window, polling latency and round
+   * trips -- see RESULTS.md's "Method: settle time and motion after
+   * release." */
   settleMs: number;
+  /** The old `Date.now()` wall-clock measure (gesture + settle + every
+   * round trip): kept on raw rows for reference, never reported in a
+   * table (it quantizes under a busy-tick load -- #340/#346's own flaw). */
+  wallSettleMs: number;
+  /** The gesture's own last input event to the carousel's last moving
+   * frame: the part of settle time the library itself controls. `null`
+   * when no qualifying input event was captured. */
+  motionAfterReleaseMs: number | null;
   indexAfter: number | null;
   raf: { frames: number; maxStep: number; travel: number; reversals: number };
   loaf: { count: number; totalBlocking: number } | null;
@@ -143,14 +156,41 @@ async function runPass(
     await scenario.run(page, g);
     await settle(page);
   }
-  const settleMs = Date.now() - began;
+  const wallSettleMs = Date.now() - began;
   await page.evaluate(() => window.__bench.jank(0));
+
+  const timing = await page.evaluate(() => ({
+    windowStart: window.__bench.windowStart(),
+    settledAt: window.__bench.settledAt(),
+    lastInputAt: window.__bench.lastInputAt()
+  }));
+  if (timing.windowStart === null) {
+    // Every scenario calls markWindowStart() before settle() (scenarios.ts);
+    // null here means a scenario regressed, not a real reading.
+    throw new Error(
+      `${scenario.name}: bench-window-start missing -- markWindowStart() must run before settle()`
+    );
+  }
+  const { settleMs, motionAfterReleaseMs } = computeSettle({
+    windowStart: timing.windowStart,
+    settledAt: timing.settledAt,
+    lastInputAt: timing.lastInputAt
+  });
 
   const raf = await page.evaluate(() => ({ ...window.__bench.m }));
   const loaf = await page.evaluate(() => window.__bench.loaf());
   const indexAfter = await page.evaluate(() => window.__bench.index());
 
-  return { settleMs, indexAfter, raf, loaf, trace, events };
+  return {
+    settleMs,
+    wallSettleMs,
+    motionAfterReleaseMs,
+    indexAfter,
+    raf,
+    loaf,
+    trace,
+    events
+  };
 }
 
 for (const scenario of scenarios) {
@@ -188,6 +228,8 @@ for (const scenario of scenarios) {
               rep,
               warmup: true,
               settleMs: warmup.settleMs,
+              wallSettleMs: warmup.wallSettleMs,
+              motionAfterReleaseMs: warmup.motionAfterReleaseMs,
               indexAfter: warmup.indexAfter,
               responded: responded(warmup.raf),
               raf: { ...warmup.raf },
@@ -230,6 +272,8 @@ for (const scenario of scenarios) {
               warmup: false,
               initDurationMs,
               settleMs: scored.settleMs,
+              wallSettleMs: scored.wallSettleMs,
+              motionAfterReleaseMs: scored.motionAfterReleaseMs,
               indexAfter: scored.indexAfter,
               responded: responded(scored.raf),
               raf: { ...scored.raf },

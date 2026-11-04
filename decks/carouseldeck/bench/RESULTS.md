@@ -208,6 +208,47 @@ slide's own transform individually (Keen — found by reading
 scroll it (carouseldeck's native scroll-snap), so one selector convention
 works for all five.
 
+## Method: settle time and motion after release
+
+`settleMs` is `settledAt - windowStart` (`settle.ts`, `src/harness.ts`):
+`windowStart` is `performance.now()` at the gesture's own first input event
+(`scenarios.ts`'s `markWindowStart()`, called right before dispatching it);
+`settledAt` is the `performance.now()` of the rAF tick whose step last
+crossed `harness.ts`'s own 0.5px noise threshold -- the last frame in which
+the carousel visibly moved, already tracked as `lastChangeAt` for
+`idleFor()`'s own quiet-time check. Both are read from the same page in the
+same clock, so `bench.spec.ts` subtracts them directly: no `Date.now()`
+round trip from Node, no `settle()`'s own fixed 100ms wait or its 400ms
+quiet threshold, no `page.waitForFunction` polling latency. `settleMs` still
+includes the scripted gesture's own duration (the touch/mouse/wheel steps
+`scenarios.ts` runs) -- the same duration for every deck at a given
+scenario, so it never favors one library over another, but it does mean
+`settleMs` is not purely a library's own speed.
+
+`motionAfterReleaseMs` is `settledAt` minus the gesture's own _last_ input
+event -- the touchend, pointerup, final wheel tick or click `harness.ts`
+listens for directly (`lastInputAt()`) -- rather than the gesture's first
+one. This excludes the scripted gesture's duration entirely, leaving only
+the part each library actually controls: how long it keeps animating once
+the user's hand is off it. `aggregate.py` and `report.py` report it as its
+own table per scenario, and `aggregate.py`'s `render_summary` (the
+at-a-glance winner `summary.md`) uses it instead of `settleMs` for every
+gesture scenario, for that reason.
+
+The old measure -- `Date.now()` around the whole gesture-plus-settle call,
+in the Node test process -- is kept on raw rows as `wallSettleMs`, but no
+table reports it. It quantized under the 100ms and 200ms busy-tick loads
+(`decks/carouseldeck/bench/src/harness.ts`'s `jank`): `settle()`'s own
+polling is blocked by the main-thread ticks, so many cells landed on the
+same few values regardless of deck -- visible on CI run 41840418415's
+report. `settledAt`/`windowStart`/`lastInputAt` all come from the rAF probe
+and real DOM events, neither of which `page.waitForFunction`'s polling
+cadence can quantize.
+
+Stall, dropped-frame and mount metrics are unaffected: `trace.ts`'s
+`analyzeMotion`/`analyzeMount` already score from the Chromium trace's own
+frame timestamps, never from `settle()`'s wall-clock timing.
+
 ## Method: the mount scenario
 
 New here (drawerdeck has no mount scenario to port). 2 and 20 instances of
