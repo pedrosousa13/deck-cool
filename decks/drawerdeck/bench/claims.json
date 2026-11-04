@@ -1,0 +1,72 @@
+[
+  {
+    "label": "Bundle size (min+gzip, React external)",
+    "scenario": "bundle-size",
+    "metric": "bytes",
+    "load": null,
+    "claim": "win"
+  },
+  {
+    "label": "Dropped frames while dragging, no load",
+    "scenario": "touch-drag-half-full-back",
+    "metric": "droppedPct",
+    "load": 0,
+    "claim": "tie_or_better"
+  },
+  {
+    "label": "Dropped frames while dragging, medium load (100ms busy tick)",
+    "scenario": "touch-drag-half-full-back",
+    "metric": "droppedPct",
+    "load": 100,
+    "claim": "win"
+  },
+  {
+    "label": "Dropped frames while dragging, heavy load (200ms busy tick)",
+    "scenario": "touch-drag-half-full-back",
+    "metric": "droppedPct",
+    "load": 200,
+    "claim": "win"
+  },
+  {
+    "label": "Longest stall while dragging, no load",
+    "scenario": "touch-drag-half-full-back",
+    "metric": "longestStallMs",
+    "load": 0,
+    "claim": "tie_or_better"
+  },
+  {
+    "label": "Flick down closes it: settle time, no load",
+    "scenario": "touch-flick-dismiss",
+    "metric": "settleMs",
+    "load": 0,
+    "claim": "tie_or_better"
+  },
+  {
+    "label": "Flick down closes it: settle time, medium load (100ms busy tick)",
+    "scenario": "touch-flick-dismiss",
+    "metric": "settleMs",
+    "load": 100,
+    "claim": "tie_or_better"
+  },
+  {
+    "label": "Flick down closes it: settle time, heavy load (200ms busy tick)",
+    "scenario": "touch-flick-dismiss",
+    "metric": "settleMs",
+    "load": 200,
+    "claim": "win"
+  },
+  {
+    "label": "Mouse throw: settle time, no load",
+    "scenario": "mouse-drag-throw",
+    "metric": "settleMs",
+    "load": 0,
+    "claim": "win"
+  },
+  {
+    "label": "Open to half: settle time, no load",
+    "scenario": "open-to-half",
+    "metric": "settleMs",
+    "load": 0,
+    "claim": "tie_or_better"
+  }
+]
