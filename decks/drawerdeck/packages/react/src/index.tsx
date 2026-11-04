@@ -326,7 +326,10 @@ export type RootProps = (OpenControlledProps | OpenUncontrolledProps) &
      * `@drawerdeck/core` can read `.current` itself, fresh, at the moment
      * it actually needs it, and so still pick up a wrapper that mounts in
      * a later commit than this prop's own first `setOptions` call (a ref
-     * whose `.current` starts `null` and attaches after). `@drawerdeck/core`
+     * whose `.current` starts `null` and attaches after), at the next
+     * time this drawer opens, not while already open: mounting it mid
+     * open does nothing on its own, with no phase change or `setOptions`
+     * call of its own to notice it. `@drawerdeck/core`
      * scales the resolved element back in step with this drawer's own open
      * progress while it is open, through the end of its own close --
      * `data-drawer-indent` and a registered `--drawer-indent-progress`
@@ -696,9 +699,9 @@ export function Root({
       // The ref itself, never resolved here: `@drawerdeck/core`'s own
       // `updateIndent` reads `.current` fresh every time it runs, so a
       // wrapper that mounts in a later commit than this effect's own last
-      // run is still picked up, the next time this drawer's own phase
-      // changes -- resolving it here, once, the moment this effect runs,
-      // would otherwise freeze it at whatever `.current` read at that one
+      // run is still picked up, the next time this drawer opens.
+      // Resolving it here, once, the moment this effect runs, would
+      // otherwise freeze it at whatever `.current` read at that one
       // moment, same as `@drawerdeck/react`'s own earlier round did.
       indent: parentCtx ? null : (indent ?? null)
     });

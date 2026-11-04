@@ -256,10 +256,11 @@ export interface DrawerOptions {
    * reads `.current` itself, fresh, every time it runs, rather than this
    * engine being handed a snapshot `@drawerdeck/react` resolved once. A
    * wrapper that mounts in a later commit than the one that first called
-   * `setOptions` -- a ref's own `.current` starting `null` and attaching
-   * after -- is still picked up the next time this drawer's own phase
-   * changes (open, close, a drag), with no extra `setOptions` call needed
-   * for it: `@drawerdeck/react`'s own `RootProps.indent` doc.
+   * `setOptions` (a ref's own `.current` starting `null` and attaching
+   * after) is picked up the next time this drawer opens, not while
+   * already open: nothing else here calls `updateIndent` again on a ref
+   * simply attaching, with no phase change or `setOptions` call of its
+   * own. `@drawerdeck/react`'s own `RootProps.indent` doc says the same.
    *
    * Rendered the same way `nestedProgressSource` already renders on this
    * drawer's own Panel (`updateIndent`'s own doc, and this file's own top
@@ -1120,9 +1121,24 @@ export function createDrawer(
       );
       applyIndentAnimation(target);
     } else {
-      lastReportedProgress = undefined;
-      updateProgress();
+      // Seeds the target's own starting value directly (#274 review),
+      // never through `updateProgress`'s own `lastReportedProgress`
+      // dedupe: that dedupe is shared with `opts.onProgressChange`, a
+      // caller this activation has nothing to do with, and resetting it
+      // here (an earlier round did) made `onProgressChange` fire again
+      // with a value it had already reported, the moment this target
+      // started indenting with nothing about the drawer's own progress
+      // having actually changed.
+      target.style.setProperty(INDENT_PROGRESS_VAR, `${computeFullProgress()}`);
     }
+    // A waiter can claim the owner slot while it is itself mid-close
+    // (`updateIndent`'s own fix, above, lets exactly one of them land
+    // here): `beginExit` already set `data-ending-style` on whatever
+    // `indentTarget` existed *then*, which was `null` for a waiter that
+    // had never activated, so the newly claimed target never got it.
+    // Without this, the target eases in instead of out, the instant it is
+    // claimed (#274 review).
+    if (cssExiting) target.setAttribute(ENDING_STYLE_ATTR, '');
   }
 
   function deactivateIndent(target: HTMLElement) {
@@ -1168,7 +1184,21 @@ export function createDrawer(
     if (indentTarget && (!shouldBeActive || indentTarget !== target)) {
       deactivateIndent(indentTarget);
     }
-    if (shouldBeActive && target && indentTarget !== target) {
+    // Re-checked fresh here, not the `shouldBeActive` computed above
+    // (#274 review): `deactivateIndent`, just above, can itself hand
+    // `indentOwner` to a waiting instance synchronously
+    // (`notifyIndentWaiters`), before this line ever runs. Reusing the
+    // stale `shouldBeActive` would let this instance activate anyway,
+    // on a target `indentOwner` already moved off this instance for --
+    // two targets both carrying `data-drawer-indent` at once, and
+    // `indentOwner` left pointing at this instance even though another
+    // one is the one actually holding the target it claimed.
+    if (
+      target !== null &&
+      phase !== 'closed' &&
+      (!indentOwner || indentOwner === indentSelf) &&
+      indentTarget !== target
+    ) {
       activateIndent(target);
     }
   }
@@ -1344,6 +1374,22 @@ export function createDrawer(
     });
   }
 
+  /** The same "last configured snap point" progress `onProgressChange`
+   * and `indentTarget`'s own fallback write both want (`updateProgress`'s
+   * own doc, just below), factored out so `activateIndent`'s own
+   * no-scroll-timeline branch can seed a freshly claimed target with it
+   * directly, without going through `updateProgress`'s own
+   * `lastReportedProgress` dedupe (#274 review: that dedupe is shared
+   * with `opts.onProgressChange`, a caller activation has nothing to do
+   * with). */
+  function computeFullProgress(): number {
+    const st = viewport[axis.scroll];
+    const closedPos = scrollForSnap(-1);
+    const lastOpenPos = scrollForSnap(snapPx.length - 1);
+    const fullDenom = lastOpenPos - closedPos || (reversed ? -1 : 1);
+    return clamp((st - closedPos) / fullDenom, 0, 1);
+  }
+
   let lastProgress: string | undefined;
   /** `opts.onProgressChange`'s own dedupe, separate from `lastProgress`
    * just above: a different number, on a different scale (#332's own
@@ -1380,18 +1426,19 @@ export function createDrawer(
     // range alone would stall short of 1 even once this drawer is
     // genuinely, fully open.
     // The indent's own no-scroll-timeline fallback (#274): the same "last
-    // configured snap point" progress `onProgressChange` already computes,
-    // just written straight to `indentTarget` instead of reported to a
-    // caller, the same split `onProgressChange`/`nestedProgressValue`
-    // (`updateNestedProgress`'s own doc) already makes for a nested
-    // parent. No `supportsScrollTimeline` check needed here, the same
-    // reason the dim write above needs none: this function's own two call
-    // sites (`activateIndent`'s `else` branch, and `onScroll`, below) are
-    // both already gated on it being false.
+    // configured snap point" progress `onProgressChange` already computes
+    // (`computeFullProgress`, above), just written straight to
+    // `indentTarget` instead of reported to a caller, the same split
+    // `onProgressChange`/`nestedProgressValue` (`updateNestedProgress`'s
+    // own doc) already makes for a nested parent. No
+    // `supportsScrollTimeline` check needed here, the same reason the dim
+    // write above needs none: this function's only call site that reaches
+    // this branch is `onScroll`, below, already gated on it being false
+    // (`activateIndent`'s own no-scroll-timeline branch calls
+    // `computeFullProgress` directly instead, `computeFullProgress`'s own
+    // doc).
     if (opts.onProgressChange || indentTarget) {
-      const lastOpenPos = scrollForSnap(snapPx.length - 1);
-      const fullDenom = lastOpenPos - closedPos || (reversed ? -1 : 1);
-      const full = clamp((st - closedPos) / fullDenom, 0, 1);
+      const full = computeFullProgress();
       if (full !== lastReportedProgress) {
         lastReportedProgress = full;
         opts.onProgressChange?.(full);
