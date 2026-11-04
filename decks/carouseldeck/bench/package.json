@@ -1,0 +1,31 @@
+{
+  "name": "@carouseldeck/bench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Interleaved motion, settle and mount bench for @carouseldeck/react against Embla, Keen, Swiper and Splide (#340, ported from decks/drawerdeck/bench, #266/#283).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && vite build -c vite.ssr.config.ts && node scripts/generate-mount-pages.mjs",
+    "preview": "vite preview",
+    "bench": "playwright test -c playwright.config.ts bench.spec.ts",
+    "mount-bench": "playwright test -c playwright.config.ts mount.spec.ts",
+    "smoke": "playwright test -c playwright.config.ts smoke.spec.ts",
+    "test": "node --test trace.test.ts"
+  },
+  "dependencies": {
+    "@carouseldeck/react": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@splidejs/react-splide": "0.7.12",
+    "@splidejs/splide": "4.1.4",
+    "@vitejs/plugin-react": "6.1.2",
+    "embla-carousel-react": "8.6.0",
+    "keen-slider": "6.8.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "swiper": "14.4.0",
+    "vite": "8.3.1"
+  }
+}

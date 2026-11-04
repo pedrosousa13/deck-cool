@@ -1,0 +1,30 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    // trace.test.ts imports trace.ts by its `.ts` extension, the way
+    // `node --test` (no bundler) resolves it.
+    "allowImportingTsExtensions": true,
+    // @splidejs/react-splide@0.7.12's `exports` map has no `types`
+    // condition (only `require`/`import`/`default`), so `moduleResolution:
+    // "bundler"` cannot see its real `dist/types/index.d.ts` through the
+    // package specifier alone, even though the file exists on disk and
+    // `vite build` (esbuild/rolldown, which never reads types) bundles it
+    // fine either way. Not a gate here (this package has no `typecheck`
+    // script), just a local IDE fix.
+    "paths": {
+      "@splidejs/react-splide": [
+        "./node_modules/@splidejs/react-splide/dist/types/index.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "*.ts",
+    "vite.config.ts",
+    "vite.ssr.config.ts",
+    "playwright.config.ts"
+  ]
+}

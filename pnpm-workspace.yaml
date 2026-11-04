@@ -11,6 +11,11 @@ packages:
   - decks/carouseldeck/apps/*
   - decks/carouseldeck/tests/compare
   - decks/carouseldeck/prototypes/scroll-snap
+  # The interleaved GitHub Actions bench (#340, ported from drawerdeck's
+  # #266/#283): a private package so it always measures @carouseldeck/react
+  # via workspace:*, kept out of the deck's own build (verify.mjs's RULES
+  # keeps it out of the deck's own gates too).
+  - decks/carouseldeck/bench
   # drawerdeck, an in-repo deck (#231): its root package, for its scripts and
   # dev dependencies, and its two placeholder packages. bench is the
   # interleaved GitHub Actions bench (#266, #283): a private package so it
