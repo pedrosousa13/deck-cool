@@ -321,6 +321,29 @@ export type RootProps = (OpenControlledProps | OpenUncontrolledProps) &
      * Backdrop is optional. Escape and focus-on-close still behave the
      * same either way. Defaults to true. */
     modal?: boolean;
+    /** An opt-in background indent (#274): a ref to the consumer's own
+     * page wrapper -- a ref only, never a direct element, so
+     * `@drawerdeck/core` can read `.current` itself, fresh, at the moment
+     * it actually needs it, and so still pick up a wrapper that mounts in
+     * a later commit than this prop's own first `setOptions` call (a ref
+     * whose `.current` starts `null` and attaches after), at the next
+     * time this drawer opens, not while already open: mounting it mid
+     * open does nothing on its own, with no phase change or `setOptions`
+     * call of its own to notice it. `@drawerdeck/core`
+     * scales the resolved element back in step with this drawer's own open
+     * progress while it is open, through the end of its own close --
+     * `data-drawer-indent` and a registered `--drawer-indent-progress`
+     * (`0` closed, `1` fully open), with no JS per drag frame where the
+     * browser supports a named scroll timeline. See "A background indent".
+     *
+     * Only one drawer indents the page at a time, page-wide
+     * (`@drawerdeck/core`'s own `indentOwner`): the first to start wanting
+     * it keeps it until it releases. Ignored outright on a `Drawer.Root`
+     * nested inside another one (#272): a nested Root's own `indent` prop,
+     * if given one, never reaches `@drawerdeck/core` at all -- nested
+     * drawers keep using `--drawer-nested`/`--drawer-nested-progress`
+     * instead; the two recipes are not meant to stack. */
+    indent?: RefObject<HTMLElement | null> | null;
     onOpenChange?(open: boolean, info: { reason: OpenChangeReason }): void;
     onSnapPointChange?(index: number): void;
   };
@@ -339,6 +362,7 @@ export function Root({
   dismissible = true,
   modal = true,
   side = 'bottom',
+  indent,
   children
 }: RootProps) {
   const [initialOpen] = useState(() => open ?? defaultOpen ?? false);
@@ -669,9 +693,27 @@ export function Root({
       dismissible,
       modal,
       nestedCount,
-      nestedProgressSource
+      nestedProgressSource,
+      // Ignored on a nested Root (#274, this file's own `RootProps.indent`
+      // doc): a nested Root's own indent never reaches the engine at all.
+      // The ref itself, never resolved here: `@drawerdeck/core`'s own
+      // `updateIndent` reads `.current` fresh every time it runs, so a
+      // wrapper that mounts in a later commit than this effect's own last
+      // run is still picked up, the next time this drawer opens.
+      // Resolving it here, once, the moment this effect runs, would
+      // otherwise freeze it at whatever `.current` read at that one
+      // moment, same as `@drawerdeck/react`'s own earlier round did.
+      indent: parentCtx ? null : (indent ?? null)
     });
-  }, [snapPoints, dismissible, modal, nestedCount, nestedProgressSource]);
+  }, [
+    snapPoints,
+    dismissible,
+    modal,
+    nestedCount,
+    nestedProgressSource,
+    parentCtx,
+    indent
+  ]);
 
   // Controlled `open`: follows a new value, and returns to it after a close
   // the parent's `onOpenChange` did not take (the parent kept `open` true).

@@ -1,5 +1,13 @@
 # Native scrolling is the engine
 
+Amended by [ADR 0002](0002-an-indent-crosses-the-top-layer-with-a-second-timeline.md)
+on 2026-11-03. The prototype's own third finding, below ("A scroll-driven
+animation on the page behind the dialog does not resolve"), does not hold
+in general: ADR-0002 found a second named scroll timeline on the Viewport,
+left out of the dialog's own `timeline-scope` and scoped instead on a
+shared ancestor outside it, does reach across the top layer. Every other
+finding here stands.
+
 vaul is unmaintained: its last release was 1.1.2, in December 2024. Base
 UI's Drawer is the maintained rival, and it drives the drag from pointer
 and touch events on the main thread: `DrawerViewport.tsx` writes

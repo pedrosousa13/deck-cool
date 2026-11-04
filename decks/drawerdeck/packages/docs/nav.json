@@ -13,7 +13,8 @@
       "guides/animate-the-drawer.md",
       "guides/non-modal-drawers.md",
       "guides/on-screen-keyboard.md",
-      "guides/nested-drawers.md"
+      "guides/nested-drawers.md",
+      "guides/background-indent.md"
     ]
   },
   { "label": "Compare", "pages": ["compare.md"] }

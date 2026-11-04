@@ -1398,3 +1398,82 @@ describe('scrolling Content clears the field even when the largest snap point is
     }
   });
 });
+
+describe('onProgressRangeChange and the indent both re-measure once the keyboard inset changes the layout under them (#274 review)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  it("re-applies rangePercent once Content's own padding-bottom grows the Viewport's own maxScroll", async () => {
+    const vv = installFakeViewport();
+    const indentTarget = document.createElement('div');
+    document.body.append(indentTarget);
+    const onProgressRangeChange = vi.fn();
+    try {
+      // `panelHeight: ''` -- unconstrained, auto, the shape a consumer who
+      // never gives the Panel its own explicit height leaves it (nothing
+      // here requires one): Content's own `padding-bottom`, below, then
+      // genuinely grows the Panel's own natural extent, and so the
+      // Viewport's own `scrollHeight`/`maxScroll`, the same way the "A
+      // background indent" guide's own demo (no explicit Panel height
+      // either) does. A Panel pinned to a fixed height, as every other
+      // test in this file gives it, never reproduces this: its own extent
+      // would not move for anything Content's padding does.
+      fixture = mount(
+        { snapPoints: [0.5, 1], indent: indentTarget, onProgressRangeChange },
+        { panelHeight: '' }
+      );
+      const { content, drawer } = fixture;
+
+      // Enough natural content that the Panel ends up taller than its own
+      // largest snap point even before the keyboard -- the slack
+      // `rangePercent` exists to scope `animation-range` around in the
+      // first place (`measure`'s own doc, `@drawerdeck/core`).
+      for (let i = 0; i < 60; i++) {
+        const row = document.createElement('p');
+        row.style.margin = '0';
+        row.style.height = '40px';
+        content.append(row);
+      }
+      const field = appendFieldTo(content);
+
+      drawer.open(0);
+      await expectSettledTo(() => drawer.phase, 'open');
+      field.focus({ preventScroll: true });
+
+      const callsBefore = onProgressRangeChange.mock.calls.length;
+      const percentBefore = onProgressRangeChange.mock.calls.at(-1)?.[0] as
+        number | undefined;
+
+      vv.height = window.innerHeight - 300;
+      vv.resize();
+      await nextFrame();
+
+      expect(drawer.snapIndex).toBe(1);
+      // A fresh `measure()` runs once Content's own `padding-bottom` --
+      // written by the very same `updateKeyboardInset` this `resize`
+      // drives -- just grew `maxScroll`: `rangePercent` (the same
+      // `scrollForSnap(lastIndex)`, now over a larger `maxScroll`) moves
+      // again, to a *smaller* value, rather than staying at whatever it
+      // read before the keyboard changed the layout under it.
+      expect(onProgressRangeChange.mock.calls.length).toBeGreaterThan(
+        callsBefore
+      );
+      const percentAfter = onProgressRangeChange.mock.calls.at(-1)?.[0] as
+        number | undefined;
+      expect(percentAfter).toBeLessThan(percentBefore as number);
+
+      // The indent's own `--drawer-indent-progress`, scoped to that same
+      // percent, reaches exactly `1` at the largest snap point it just
+      // expanded to -- not stall short of it the way the stale range,
+      // left over from before the keyboard, would.
+      await nextFrame();
+      const progress = Number.parseFloat(
+        getComputedStyle(indentTarget).getPropertyValue(
+          '--drawer-indent-progress'
+        )
+      );
+      expect(progress).toBeCloseTo(1, 2);
+    } finally {
+      indentTarget.remove();
+    }
+  });
+});
