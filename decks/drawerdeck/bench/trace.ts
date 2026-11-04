@@ -37,6 +37,11 @@ export interface TraceEvent {
   cat?: string;
   pid: number;
   tid: number;
+  /** Scopes a `PipelineReporter`'s begin (`ph: 'b'`) to its own end
+   * (`ph: 'e'`): Chromium reuses an id once its reporter closes, so
+   * pairing them needs this, not just `ts` order (#345). */
+  id?: string;
+  id2?: { local?: string; global?: string };
   args?: Record<string, unknown>;
 }
 
@@ -78,6 +83,17 @@ interface FrameReporter {
   checkerboarded_needs_raster?: boolean;
   checkerboarded_needs_record?: boolean;
   has_missing_content?: boolean;
+  /** Scopes the dedupe below to one compositor (#345 follow-up): two
+   * reporters from different `layer_tree_host_id`s should never merge just
+   * because they happen to end at the same ts. */
+  layer_tree_host_id?: number;
+}
+
+function isPresented(reporter: FrameReporter): boolean {
+  return (
+    reporter.state === 'STATE_PRESENTED_ALL' ||
+    reporter.state === 'STATE_PRESENTED_PARTIAL'
+  );
 }
 
 /** One gesture's active window (#266 rule 10): from `scenarios.ts`'s
@@ -117,24 +133,76 @@ export interface MotionAnalysis {
 }
 
 interface Frame {
+  /** The `PipelineReporter`'s end ts (#345): when it is shown, for a
+   * presented frame. */
   ts: number;
   reporter: FrameReporter;
 }
 
+/** Pairs each `PipelineReporter`'s begin (`ph: 'b'`, carrying
+ * `args.frame_reporter`) with its own end (`ph: 'e'`, by `id2`/`id` within
+ * the same `pid`/`tid`), and keys the frame on the end `ts` -- for a
+ * presented frame, when it is shown, not when it started (#345: scoring a
+ * frame on its begin credits the vsync it started in, which a busy main
+ * thread can hold well before the one it actually appears in). A begin
+ * with no later end, or an end with no earlier begin -- the trace starts
+ * or stops mid-reporter -- is dropped rather than guessed at, the same
+ * way `activeWindows` drops an unmatched window mark.
+ *
+ * A main-thread update that misses its vsync can fork into a second
+ * reporter (`frame_reporter.frame_type === 'FORKED'`) that carries the
+ * same content to the vsync it actually shows at; both the original and
+ * the forked reporter end at that exact presentation `ts` (confirmed
+ * against run 41798197057's real traces, `diag329/present.py`:
+ * `baseui__touch-drag-half-full-back__load200__rep0__shard-5`'s reporters
+ * beginning at 84.4ms and 284.4ms both end, and the frame they carry
+ * presents, at 301.5ms). Frames are deduped by that end `ts`, so a forked
+ * pair counts as the one frame it shows, not two.
+ *
+ * That dedupe only ever merges *presented* reporters (`STATE_PRESENTED_ALL`
+ * or `STATE_PRESENTED_PARTIAL`) that end at the same ts, on the same
+ * `pid`/`tid`/`layer_tree_host_id` -- a fork's two reporters always share
+ * all three, and nothing else should. A `STATE_DROPPED` or
+ * `STATE_NO_UPDATE_DESIRED` reporter is never merged with anything else
+ * that ends at its ts, even another `DROPPED` or `NO_UPDATE_DESIRED` one:
+ * the real traces in run 41798197057 had 31 `DROPPED`/`DROPPED` groups and
+ * 110 `NO_UPDATE_DESIRED`/`NO_UPDATE_DESIRED` groups sharing an end ts, each
+ * a separate tick, and one `NO_UPDATE_DESIRED`/`PRESENTED_ALL` group
+ * (`vaul`, `touch-flick-dismiss`, `load=100`) where merging on ts alone, in
+ * event order, picked the `NO_UPDATE_DESIRED` reporter and dropped the
+ * presented frame entirely.
+ */
 function pipelineFrames(events: TraceEvent[]): Frame[] {
-  return events
-    .filter(
-      (e) =>
-        e.name === 'PipelineReporter' &&
-        e.ph === 'b' &&
-        (e.args as { frame_reporter?: FrameReporter } | undefined)
-          ?.frame_reporter
-    )
-    .map((e) => ({
-      ts: e.ts,
-      reporter: (e.args as { frame_reporter: FrameReporter }).frame_reporter
-    }))
-    .sort((a, b) => a.ts - b.ts);
+  const open = new Map<string, FrameReporter>();
+  const closed: (Frame & { pid: number; tid: number })[] = [];
+  for (const e of events) {
+    if (e.name !== 'PipelineReporter') continue;
+    const key = `${e.pid}:${e.tid}:${JSON.stringify(e.id2 ?? e.id ?? null)}`;
+    if (e.ph === 'b') {
+      const reporter = (
+        e.args as { frame_reporter?: FrameReporter } | undefined
+      )?.frame_reporter;
+      if (reporter) open.set(key, reporter);
+    } else if (e.ph === 'e') {
+      const reporter = open.get(key);
+      if (reporter) {
+        open.delete(key);
+        closed.push({ ts: e.ts, pid: e.pid, tid: e.tid, reporter });
+      }
+    }
+  }
+
+  const seenPresented = new Set<string>();
+  const frames: Frame[] = [];
+  for (const f of closed) {
+    if (isPresented(f.reporter)) {
+      const dedupeKey = `${f.pid}:${f.tid}:${f.reporter.layer_tree_host_id ?? ''}:${f.ts}`;
+      if (seenPresented.has(dedupeKey)) continue;
+      seenPresented.add(dedupeKey);
+    }
+    frames.push({ ts: f.ts, reporter: f.reporter });
+  }
+  return frames.sort((a, b) => a.ts - b.ts);
 }
 
 /** Pairs every `bench-window-start` mark with the next `bench-window-end`
@@ -237,9 +305,11 @@ function scoreFrames(
  * The per-frame timeline the scorer (`analyzeMotion`) reduces into its
  * summary numbers, exposed on its own (#266: #243 needs frame timestamps
  * against input timestamps, which the summary alone throws away). One entry
- * per `PipelineReporter` frame, in trace order, with its raw clock (`ts`,
- * microseconds, same clock as every other trace event including a
- * `bench-input` mark) and the fields `analyzeMotion` itself reads.
+ * per shown (or dropped, or no-update) frame, deduped and in trace order,
+ * with its presentation clock (`ts`, microseconds, same clock as every
+ * other trace event including a `bench-input` mark -- #345: a
+ * `PipelineReporter`'s end ts, not its begin) and the fields
+ * `analyzeMotion` itself reads.
  */
 export interface FrameTimelineEntry {
   ts: number;
@@ -258,10 +328,11 @@ export function frameTimeline(events: TraceEvent[]): FrameTimelineEntry[] {
 }
 
 /**
- * Reads every `PipelineReporter` begin event with a `frame_reporter`
- * (one per frame that was expected to update), the `bench-input` mark, if
- * present, and this pass's `bench-window-start`/`bench-window-end` marks
- * (#266 rule 10), and scores the motion between the first and last frame.
+ * Reads every `PipelineReporter` begin/end pair with a `frame_reporter`
+ * (one per frame that was expected to update, keyed on when it ends --
+ * #345), the `bench-input` mark, if present, and this pass's
+ * `bench-window-start`/`bench-window-end` marks (#266 rule 10), and scores
+ * the motion between the first and last frame.
  *
  * "Expected" frames: Chromium's own `affects_smoothness` flag was false
  * for a programmatic scroll in the research probe, so the bench decides
