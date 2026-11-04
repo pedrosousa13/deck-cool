@@ -315,6 +315,35 @@ describe('the dim (#249)', () => {
       );
       expect(progressCalls.length).toBe(0);
     });
+
+    it('attaching indent while already open and settled does not re-report a value onProgressChange already got (#274 review)', async () => {
+      // The bug: `activateIndent`'s own no-scroll-timeline branch used to
+      // reset `lastReportedProgress`, `onProgressChange`'s own dedupe,
+      // then call `updateProgress()` -- which, with nothing having
+      // actually scrolled since the last report, recomputed the exact
+      // same value and reported it again anyway.
+      const onProgressChange = vi.fn();
+      const indentTarget = document.createElement('div');
+      document.body.append(indentTarget);
+      try {
+        fixture = mount({ snapPoints: [0.5, 1], onProgressChange });
+        const { drawer } = fixture;
+        drawer.open(1);
+        await expectSettledTo(() => drawer.phase, 'open');
+
+        expect(onProgressChange).toHaveBeenCalledTimes(1);
+        expect(onProgressChange).toHaveBeenLastCalledWith(1);
+
+        drawer.setOptions({ indent: indentTarget });
+
+        expect(onProgressChange).toHaveBeenCalledTimes(1);
+        expect(indentTarget.style.getPropertyValue(
+          '--drawer-indent-progress'
+        )).toBe('1');
+      } finally {
+        indentTarget.remove();
+      }
+    });
   });
 });
 

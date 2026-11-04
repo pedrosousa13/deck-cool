@@ -12,10 +12,12 @@ import {
   type ComponentProps,
   type ReactNode,
   type RefObject,
-  useRef
+  useLayoutEffect,
+  useRef,
+  useState
 } from 'react';
 import { createPortal } from 'react-dom';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { commands, userEvent } from 'vitest/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Drawer from '@drawerdeck/react';
@@ -703,6 +705,102 @@ describe('two non-nested drawers with indent, on separate targets: only one owns
   });
 });
 
+describe('a waiter claims the owner slot mid hand-off, when the owner itself switches target (#274 review)', () => {
+  // The bug: `updateIndent` computed whether this drawer should activate
+  // once, before `deactivateIndent` ran, then reused that stale answer
+  // after. `deactivateIndent` can itself hand the owner slot to a waiter,
+  // synchronously (`notifyIndentWaiters`), so the drawer switching target
+  // went on to activate its own new target anyway, on a slot another
+  // drawer had already claimed a moment earlier in the very same call:
+  // two targets both carrying `data-drawer-indent` at once, and the real
+  // owner (the waiter) left unrecorded in `indentOwner`. If that happened
+  // here, A would wrongly reclaim pageB below, since nothing would be
+  // left recording B as the real owner.
+  it("B claims A's released target; A does not reclaim its own new one on the same tick", async () => {
+    mockReducedMotion();
+    let switchA: ((w: 'pa' | 'pb') => void) | undefined;
+    const Harness = () => {
+      const pageRefA = useRef<HTMLDivElement>(null);
+      const pageRefB = useRef<HTMLDivElement>(null);
+      const [target, setTarget] = useState<'pa' | 'pb'>('pa');
+      // `setTarget` is a `useState` setter: stable for the component's
+      // whole lifetime, so capturing it once, outside the test's own
+      // `render()` call, needs no dependency on it (`nested.test.tsx`'s
+      // own `setOuterOpen` copies the same pattern).
+      useLayoutEffect(() => {
+        switchA = setTarget;
+      }, []);
+      return (
+        <>
+          <div data-testid="page-a" ref={pageRefA} style={{ position: 'relative' }} />
+          <div data-testid="page-b" ref={pageRefB} style={{ position: 'relative' }} />
+          <IndentDrawer
+            id="a"
+            indent={target === 'pa' ? pageRefA : pageRefB}
+            modal={false}
+            side="bottom"
+          />
+          {/* B waits on the same target A starts out owning, the same
+              setup as the "two non-nested drawers" describe above;
+              different side, for the same reason that one gives A and B
+              different sides: a real click on A's own trigger or close
+              button must not land on B's non-modal Viewport instead. */}
+          <IndentDrawer id="b" indent={pageRefA} modal={false} side="top" />
+        </>
+      );
+    };
+    render(<Harness />);
+
+    const pageA = screen.getByTestId('page-a');
+    const pageB = screen.getByTestId('page-b');
+    const restoreA = withIndentRecipe(pageA);
+    const restoreB = withIndentRecipe(pageB);
+    try {
+      await openDrawer('a');
+      await nextFrame();
+      expect(pageA.hasAttribute('data-drawer-indent')).toBe(true);
+
+      await openDrawer('b');
+      await nextFrame();
+      // B is open but still blocked: A owns pageA.
+      expect(pageA.getAttribute('data-drawer-indent')).toBe('bottom');
+
+      // A switches its own indent target away from pageA, releasing it
+      // mid-call: B's own `updateIndent` runs, synchronously, inside
+      // that very release, and claims pageA for itself.
+      act(() => switchA!('pb'));
+      await nextFrame();
+      await nextFrame();
+
+      // Exactly one indented target: pageA (now B's), never both pageA
+      // and pageB at once, and never neither -- `indentOwner` stayed
+      // B's throughout, so A's own re-check right before it would have
+      // activated pageB finds the slot already taken.
+      expect(pageA.getAttribute('data-drawer-indent')).toBe('top');
+      expect(pageB.hasAttribute('data-drawer-indent')).toBe(false);
+      expect(readScale(pageA)).toBeCloseTo(0.95, 2);
+      expect(readScale(pageB)).toBe(1);
+
+      // B releases: A, still wanting pageB the whole time, picks it up on
+      // its own, the same single-owner hand-off the "two non-nested
+      // drawers" describe above already covers.
+      await userEvent.click(screen.getByTestId('close-b'));
+      await expectSettledTo(
+        () => popupOf('b').getAttribute('data-phase'),
+        'closed'
+      );
+      await nextFrame();
+      await nextFrame();
+      expect(pageA.hasAttribute('data-drawer-indent')).toBe(false);
+      expect(pageB.getAttribute('data-drawer-indent')).toBe('bottom');
+      expect(readScale(pageB)).toBeCloseTo(0.95, 2);
+    } finally {
+      restoreA();
+      restoreB();
+    }
+  });
+});
+
 describe('the no-scroll-timeline fallback', () => {
   it('writes --drawer-indent-progress directly, following the open and a real scroll frame', async () => {
     mockReducedMotion();
@@ -944,6 +1042,98 @@ describe('easing with a button close, Escape and an outside press, not only a dr
       expectMonotonicEase(scales, 0.95, 1);
     }
   );
+
+  it('a waiter that claims the owner slot while itself mid-close gets data-ending-style on the target (#274 review)', async () => {
+    // The bug: `activateIndent` never set `data-ending-style` on a target
+    // claimed this way, since `beginExit` (this drawer's own close) had
+    // already run and set it on whatever `indentTarget` existed *then*,
+    // `null` for a waiter that had never activated. The newly claimed
+    // target read the base rule's `--drawer-indent-on: 1` instead, easing
+    // *in* for the rest of that claiming drawer's own close, instead of
+    // continuing to ease out with it.
+    //
+    // A's and B's own panels get different, generous transition
+    // durations here, not the shared `installRecipe()` constant: A's own
+    // close has to still be running when B's own starts (so B is a
+    // genuine, never-activated waiter when its own `beginExit` runs), and
+    // B's own close has to still be running once A's settles and hands
+    // the owner slot over (so the claim itself lands while B is
+    // `cssExiting`). Two real `userEvent.click` round trips apart, not
+    // two scripted timestamps, is the realistic shape of this (a person
+    // closing one drawer right after another), but it also means the gap
+    // between the two clicks is itself real, unpredictable wall-clock
+    // time; both durations are picked generous enough to stay clear of
+    // it either way. Installed only once both are already open, below,
+    // not here: the same rule would also slow down each one's own
+    // entrance, the one thing this test has no need to wait out.
+    const styleEl2 = document.createElement('style');
+    styleEl2.textContent = `
+      [data-testid="panel-a"] { transition: transform 1500ms linear; }
+      [data-testid="panel-a"][data-starting-style],
+      [data-testid="panel-a"][data-ending-style] { transform: translateY(100%); }
+      [data-testid="panel-b"] { transition: transform 6000ms linear; }
+      [data-testid="panel-b"][data-starting-style],
+      [data-testid="panel-b"][data-ending-style] { transform: translateY(100%); }
+    `;
+    const Harness = () => {
+      const pageRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <Page pageRef={pageRef} />
+          {/* Different sides, the same reason the "two non-nested
+              drawers" describe above gives its own two: non-modal and
+              the same side would let one's own Viewport, still clipped
+              to the full screen until a real frame runs, intercept a
+              real click meant for the other's close button. */}
+          <IndentDrawer id="a" indent={pageRef} modal={false} side="bottom" />
+          <IndentDrawer id="b" indent={pageRef} modal={false} side="top" />
+        </>
+      );
+    };
+    render(<Harness />);
+    const page = screen.getByTestId('page');
+
+    try {
+      await userEvent.click(screen.getByTestId('open-a'));
+      await expectSettledTo(
+        () => popupOf('a').getAttribute('data-phase'),
+        'open'
+      );
+      await userEvent.click(screen.getByTestId('open-b'));
+      await expectSettledTo(
+        () => popupOf('b').getAttribute('data-phase'),
+        'open'
+      );
+      document.head.append(styleEl2);
+
+      // A starts closing; B, still a waiter the whole time A has owned
+      // the target, starts closing right after, well before A's own
+      // 1500ms transition could have settled.
+      await userEvent.click(screen.getByTestId('close-a'));
+      expect(popupOf('a').getAttribute('data-phase')).toBe('closing');
+      await userEvent.click(screen.getByTestId('close-b'));
+      expect(popupOf('b').getAttribute('data-phase')).toBe('closing');
+
+      await expectSettledTo(
+        () => popupOf('a').getAttribute('data-phase'),
+        'closed'
+      );
+      // B claimed the target by the time A's own close settled (above),
+      // still well inside its own 6000ms transition: a deterministic
+      // check, not one sampled over real animation frames, for exactly
+      // the fix (`activateIndent` setting `data-ending-style` when
+      // `cssExiting`), with no dependence on frame timing.
+      expect(page.hasAttribute('data-drawer-indent')).toBe(true);
+      expect(popupOf('b').getAttribute('data-phase')).toBe('closing');
+      expect(page.hasAttribute('data-ending-style')).toBe(true);
+      // B's own close still has most of its 6000ms transition left to
+      // run; restoring the target exactly once a close actually settles
+      // is the "close and unmount restore the target exactly" describe
+      // above's own job, not this test's.
+    } finally {
+      styleEl2.remove();
+    }
+  });
 });
 
 describe("transform-origin is the viewport's own center relative to the target's own box, whatever the target's own position (#274 review)", () => {
