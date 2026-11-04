@@ -1,5 +1,9 @@
 # @slidedeck/docs
 
+## 1.5.4
+
+No changes in this release.
+
 ## 1.5.3
 
 ### Patch Changes
