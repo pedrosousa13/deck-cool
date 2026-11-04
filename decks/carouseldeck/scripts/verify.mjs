@@ -113,6 +113,15 @@ const RULES = [
   { match: /^\.changeset\//, steps: ['changeset:check'] },
   { match: /^(?!decks\/carouseldeck\/)/, steps: [] },
   { match: /^decks\/carouseldeck\/packages\//, steps: STEPS },
+  // bench/ is a private, throwaway package (#340, the same choice
+  // drawerdeck's own bench made): not a workspace member this deck's own
+  // build or typecheck reaches (its tsconfig.json is not in
+  // tsconfig.json's references, and its own package.json has no
+  // `typecheck` script), and not part of any published package's
+  // consumer-visible surface. `format:check` and `lint` both glob the
+  // whole deck directory (`prettier --check .`, `eslint .`, from
+  // package.json), so they still read it and need to stay green.
+  { match: /^decks\/carouseldeck\/bench\//, steps: ['format:check', 'lint'] },
   // Every file under e2e/ (specs, helpers, its tsconfig.json), and the
   // playwright config it includes, needs the e2e suite, plus the checks and
   // the build that reach it too: typecheck (the deck's tsconfig.json

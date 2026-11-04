@@ -16,7 +16,11 @@ export default tseslint.config(
       // the scratch files a session writes are linted as project source.
       '.scratch/**',
       // Gitignored output of the throwaway prototype's measure suite (#3).
-      'prototypes/scroll-snap/measure-results/**'
+      'prototypes/scroll-snap/measure-results/**',
+      // Gitignored output of the carousel bench (#340): its own SSR build
+      // and the generated mount pages/results it produces from it.
+      'bench/dist-ssr/**',
+      'bench/results/**'
     ]
   },
   js.configs.recommended,
