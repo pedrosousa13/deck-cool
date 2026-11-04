@@ -1,0 +1,18 @@
+/* Embla ships no CSS of its own: this is its documented viewport/container/
+   slide recipe (Embla's React guide, embla-carousel-react's README; the
+   same recipe as tests/compare/entries/embla.tsx's inline styles, turned
+   into a stylesheet here instead). The viewport clips what overflows past
+   one slide width; the container is the track Embla moves with a
+   `translate3d`; each slide is a fixed 100% of the viewport, one per view. */
+
+.embla-viewport {
+  overflow: hidden;
+}
+
+.embla-container {
+  display: flex;
+}
+
+.embla-slide {
+  flex: 0 0 100%;
+}

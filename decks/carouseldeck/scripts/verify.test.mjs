@@ -179,6 +179,17 @@ test('a path inside the deck no rule matches needs every gate', () => {
   }
 });
 
+test('a change under bench/ needs only format:check and lint', () => {
+  for (const path of [
+    'decks/carouseldeck/bench/package.json',
+    'decks/carouseldeck/bench/scenarios.ts',
+    'decks/carouseldeck/bench/src/harness.ts',
+    'decks/carouseldeck/bench/RESULTS.md'
+  ]) {
+    assert.deepEqual(gateNames([path]), ['format:check', 'lint'], path);
+  }
+});
+
 test('a change to storybook, any file under e2e/, or the playwright config needs the build and the e2e suite', () => {
   for (const path of [
     'decks/carouseldeck/apps/storybook/stories/deck.stories.tsx',

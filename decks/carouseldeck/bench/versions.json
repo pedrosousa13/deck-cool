@@ -1,0 +1,36 @@
+{
+  "embla": {
+    "react": {
+      "npm": "embla-carousel-react",
+      "version": "8.6.0",
+      "releaseDate": "2025-04-04"
+    },
+    "wheelGestures": {
+      "npm": "embla-carousel-wheel-gestures",
+      "version": "8.1.0",
+      "releaseDate": "2025-08-12"
+    }
+  },
+  "keen": {
+    "npm": "keen-slider",
+    "version": "6.8.6",
+    "releaseDate": "2023-07-05"
+  },
+  "swiper": {
+    "npm": "swiper",
+    "version": "14.4.0",
+    "releaseDate": "2026-10-30"
+  },
+  "splide": {
+    "react": {
+      "npm": "@splidejs/react-splide",
+      "version": "0.7.12",
+      "releaseDate": "2022-09-30"
+    },
+    "core": {
+      "npm": "@splidejs/splide",
+      "version": "4.1.4",
+      "releaseDate": "2022-11-09"
+    }
+  }
+}
