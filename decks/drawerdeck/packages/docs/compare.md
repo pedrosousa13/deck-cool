@@ -170,6 +170,19 @@ measured the same 233.3 ms longest stall under heavy load, so this run's
 figure isn't a new regression; the extra frame itself is still open,
 tracked in [#329](https://github.com/pedrosousa13/deck-cool/issues/329).
 
+Chrome DevTools Protocol's `Input.dispatchTouchEvent` reaches the renderer
+only after a main frame ends, so under a busy tick every library's drag
+freezes for that tick, native scroll included: the heavy-load (load=200)
+column above cannot show native scrolling's main advantage over a
+JS-driven drag. Also, the numbers above score a frame on when its
+`PipelineReporter` begins, not when it is shown, which can misplace a
+stall and double-count a frame a busy main thread forks into two
+reporters ([#345](https://github.com/pedrosousa13/deck-cool/issues/345)).
+A fresh bench run after that fix lands will refresh this table; see
+[`decks/drawerdeck/bench/RESULTS.md`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/bench/RESULTS.md)'s
+"Presentation time, not begin time" for the rescored figures this run's
+own saved traces give.
+
 ### Same scenario: dropped frames (%)
 
 | Deck       | load=0        | load=100         | load=200         |

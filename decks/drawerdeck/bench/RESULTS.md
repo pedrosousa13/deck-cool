@@ -82,6 +82,11 @@ comparison page:
     from that scenario's winners and ties, the same treatment rule 11
     gives "not supported". See "React Aria's Sheet never closed on a
     flick" and "Did not close" below.
+13. **A frame is scored on when it is shown, not when it started.** (#345)
+    `trace.ts` keys every frame on its `PipelineReporter`'s end ts -- the
+    moment it presents, for a presented one -- and counts a frame a busy
+    main thread forks into two reporters once, not twice. See
+    "Presentation time, not begin time" below.
 
 ## Versions, with release dates (#266 rule 5)
 
@@ -244,6 +249,56 @@ affected table's "unscoped (legacy)" columns (`aggregate.py`'s and
 `report.py`'s `legacy_pick`, reading `trace.legacy` off the same row) --
 so the change stays visible rather than swapping numbers quietly, and a
 reader can see the old, unfair gap directly.
+
+## Presentation time, not begin time (#345)
+
+#329 found that scoring a frame on its `PipelineReporter`'s begin ts
+(when it started) rather than its end ts (when it is shown) misplaces a
+stall: a busy main thread can hold a frame's commit back long after it
+started, and a held-back frame that then misses its vsync can fork into a
+second `PipelineReporter` (`frame_reporter.frame_type: 'FORKED'`) that
+carries the same content to the vsync it actually shows at, so one shown
+frame was scored as two.
+
+`trace.ts`'s `pipelineFrames` now pairs each reporter's begin with its own
+end, keys the frame on the end ts, and dedupes by that ts: a forked pair
+ends at the exact same ts (the moment they both present), so it collapses
+to the one frame shown, not two. Checked against run 41798197057's own
+saved traces (`baseui__touch-drag-half-full-back__load200__rep0__shard-5`):
+reporters beginning at 84.4ms and 284.4ms both end, and the frame they
+carry presents, at 301.5ms -- scored on begin time, that is a 200.0ms gap
+from the wrong anchor; scored on presentation time, the real gap back to
+the previous shown frame is 248.2ms.
+
+This moves every metric `scoreFrames` derives from `frames`
+(`longestStallMs`, `hitchRatioMsPerS`, `droppedCount`, `droppedPct`,
+`frameCount`, and the `legacy` mirror of each): the same frames feed all
+of them, and a forked pair that used to count as two reporters -- one of
+them a phantom "dropped" or "no update" tick between the fork's two
+begins -- now counts once. `inputToFirstMovedMs` and `checkerboardedFrames`
+share the same `frames` array too, so they would move for the same
+reason; across run 41798197057 they did not (no trace in that run carries
+a `bench-input` mark, and no frame in it is checkerboarded, before or
+after). Nothing outside `trace.ts` is affected: `settleMs`, `opennessAfter`,
+`raf.*`, `loaf.*`, `initDurationMs` and `closed` come from
+`bench.spec.ts`'s own wall-clock and `window.__bench` reads, never from a
+trace.
+
+Rescored, run 41798197057's heavy-load (`load=200`) `touch-drag-half-full-back`
+`longestStallMs` medians:
+
+| Deck       | Before (begin ts) | After (presentation ts) |
+| ---------- | ------------------ | ------------------------ |
+| drawerdeck | 233.3ms             | 231.2ms                  |
+| React Aria | 216.7ms             | 228.6ms                  |
+| Base UI    | 216.7ms             | 243.6ms                  |
+| vaul       | 233.3ms             | 243.6ms                  |
+
+Also note: CDP's `Input.dispatchTouchEvent` reaches the renderer only
+after a main frame ends, so under a busy tick every library's drag
+freezes, native scroll included -- the heavy-load drag cannot show native
+scrolling's main advantage over a JS-driven one. See the comparison
+page's own note next to the stall row.
 
 ## React Aria's Sheet (#283)
 
@@ -576,6 +631,11 @@ left: 0; right: 0; bottom: 0` from the consumer; without it every snap
   (legacy)" columns show what the same trace would have scored before that
   fix, for comparison. See "Traces, for #243" above for how to check a
   stall against frame and input timestamps directly.
+- **`longestStallMs`, `hitchRatioMsPerS`, `droppedCount`, `droppedPct` and
+  `frameCount` are scored on when a frame is shown, not when it started**
+  (#345, above): a busy main thread can hold a frame back well past its
+  own begin ts, and a held-back frame that then forks into two reporters
+  is one shown frame, not two.
 - **LoAF during scenario 1 is dominated by the injected load, not by a
   library's own cost.** All four show zero LoAF entries at load=0 in every
   prior run; the loaded columns are the busy-loop's own cost.
