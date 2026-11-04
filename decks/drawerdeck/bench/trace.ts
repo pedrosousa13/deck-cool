@@ -83,6 +83,17 @@ interface FrameReporter {
   checkerboarded_needs_raster?: boolean;
   checkerboarded_needs_record?: boolean;
   has_missing_content?: boolean;
+  /** Scopes the dedupe below to one compositor (#345 follow-up): two
+   * reporters from different `layer_tree_host_id`s should never merge just
+   * because they happen to end at the same ts. */
+  layer_tree_host_id?: number;
+}
+
+function isPresented(reporter: FrameReporter): boolean {
+  return (
+    reporter.state === 'STATE_PRESENTED_ALL' ||
+    reporter.state === 'STATE_PRESENTED_PARTIAL'
+  );
 }
 
 /** One gesture's active window (#266 rule 10): from `scenarios.ts`'s
@@ -147,10 +158,23 @@ interface Frame {
  * beginning at 84.4ms and 284.4ms both end, and the frame they carry
  * presents, at 301.5ms). Frames are deduped by that end `ts`, so a forked
  * pair counts as the one frame it shows, not two.
+ *
+ * That dedupe only ever merges *presented* reporters (`STATE_PRESENTED_ALL`
+ * or `STATE_PRESENTED_PARTIAL`) that end at the same ts, on the same
+ * `pid`/`tid`/`layer_tree_host_id` -- a fork's two reporters always share
+ * all three, and nothing else should. A `STATE_DROPPED` or
+ * `STATE_NO_UPDATE_DESIRED` reporter is never merged with anything else
+ * that ends at its ts, even another `DROPPED` or `NO_UPDATE_DESIRED` one:
+ * the real traces in run 41798197057 had 31 `DROPPED`/`DROPPED` groups and
+ * 110 `NO_UPDATE_DESIRED`/`NO_UPDATE_DESIRED` groups sharing an end ts, each
+ * a separate tick, and one `NO_UPDATE_DESIRED`/`PRESENTED_ALL` group
+ * (`vaul`, `touch-flick-dismiss`, `load=100`) where merging on ts alone, in
+ * event order, picked the `NO_UPDATE_DESIRED` reporter and dropped the
+ * presented frame entirely.
  */
 function pipelineFrames(events: TraceEvent[]): Frame[] {
   const open = new Map<string, FrameReporter>();
-  const closed: Frame[] = [];
+  const closed: (Frame & { pid: number; tid: number })[] = [];
   for (const e of events) {
     if (e.name !== 'PipelineReporter') continue;
     const key = `${e.pid}:${e.tid}:${JSON.stringify(e.id2 ?? e.id ?? null)}`;
@@ -163,16 +187,22 @@ function pipelineFrames(events: TraceEvent[]): Frame[] {
       const reporter = open.get(key);
       if (reporter) {
         open.delete(key);
-        closed.push({ ts: e.ts, reporter });
+        closed.push({ ts: e.ts, pid: e.pid, tid: e.tid, reporter });
       }
     }
   }
 
-  const byPresentationTs = new Map<number, Frame>();
+  const seenPresented = new Set<string>();
+  const frames: Frame[] = [];
   for (const f of closed) {
-    if (!byPresentationTs.has(f.ts)) byPresentationTs.set(f.ts, f);
+    if (isPresented(f.reporter)) {
+      const dedupeKey = `${f.pid}:${f.tid}:${f.reporter.layer_tree_host_id ?? ''}:${f.ts}`;
+      if (seenPresented.has(dedupeKey)) continue;
+      seenPresented.add(dedupeKey);
+    }
+    frames.push({ ts: f.ts, reporter: f.reporter });
   }
-  return Array.from(byPresentationTs.values()).sort((a, b) => a.ts - b.ts);
+  return frames.sort((a, b) => a.ts - b.ts);
 }
 
 /** Pairs every `bench-window-start` mark with the next `bench-window-end`

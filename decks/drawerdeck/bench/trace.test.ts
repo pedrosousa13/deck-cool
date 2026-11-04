@@ -17,18 +17,27 @@ let nextAutoId = 0;
  * is shown, for a presented one. `presentMs` defaults to `beginMs`, the
  * normal case where a frame shows the same vsync it starts in. `id2`
  * scopes the pair the way Chromium's own id reuse needs: pass the same
- * `id2` to two calls to build a forked pair that ends (shows) together. */
+ * `id2` to two calls to build a forked pair that ends (shows) together.
+ * `opts.pid`/`opts.tid`/`opts.layerTreeHostId` default to `1`/`1`/unset,
+ * and only need overriding to test the dedupe's own scoping (#345
+ * follow-up). */
 function frame(
   beginMs: number,
-  state: 'STATE_PRESENTED_ALL' | 'STATE_DROPPED' | 'STATE_NO_UPDATE_DESIRED',
+  state:
+    | 'STATE_PRESENTED_ALL'
+    | 'STATE_PRESENTED_PARTIAL'
+    | 'STATE_DROPPED'
+    | 'STATE_NO_UPDATE_DESIRED',
   presentMs: number = beginMs,
-  id2: string = `auto-${nextAutoId++}`
+  id2: string = `auto-${nextAutoId++}`,
+  opts: { pid?: number; tid?: number; layerTreeHostId?: number } = {}
 ): TraceEvent[] {
+  const { pid = 1, tid = 1, layerTreeHostId } = opts;
   const base = {
     name: 'PipelineReporter',
     cat: 'cc,benchmark,disabled-by-default-devtools.timeline.frame',
-    pid: 1,
-    tid: 1,
+    pid,
+    tid,
     id2: { local: id2 }
   };
   return [
@@ -36,7 +45,14 @@ function frame(
       ...base,
       ph: 'b',
       ts: beginMs * US_PER_MS,
-      args: { frame_reporter: { state } }
+      args: {
+        frame_reporter: {
+          state,
+          ...(layerTreeHostId === undefined
+            ? {}
+            : { layer_tree_host_id: layerTreeHostId })
+        }
+      }
     },
     { ...base, ph: 'e', ts: presentMs * US_PER_MS }
   ];
@@ -209,4 +225,132 @@ test('two reporters that end at the same presentation time count as one shown fr
   // the fork's two reporters.
   assert.strictEqual(result.longestStallMs, 232);
   assert.strictEqual(result.frameCount, 3);
+});
+
+test('a duplicate group whose first-closed reporter is not presented still counts the presented one (#345 follow-up)', () => {
+  const events: TraceEvent[] = [
+    windowStart(0),
+    ...frame(0, 'STATE_PRESENTED_ALL'),
+    // A no-update reporter and a presented reporter both end at 116; in
+    // event (and trace) order the no-update one closes first. Run
+    // 41798197057's own traces hit this once (vaul, touch-flick-dismiss,
+    // load=100): the no-update reporter must never suppress the presented
+    // frame it happens to share an end ts with.
+    ...frame(16, 'STATE_NO_UPDATE_DESIRED', 116, 'no-update'),
+    ...frame(100, 'STATE_PRESENTED_ALL', 116, 'presented'),
+    ...frame(132, 'STATE_PRESENTED_ALL'),
+    windowEnd(250)
+  ];
+
+  const result = analyzeMotion(events);
+
+  // Three presented frames (0, 116, 132): deduping on ts alone, keeping
+  // whichever reporter closed first, drops the one at 116 and the stall
+  // jumps straight from 0 to 132.
+  assert.strictEqual(result.frameCount, 3);
+  assert.strictEqual(result.longestStallMs, 116);
+});
+
+test('two DROPPED reporters that end at the same ts are not merged into one (#345 follow-up)', () => {
+  const events: TraceEvent[] = [
+    windowStart(0),
+    ...frame(0, 'STATE_PRESENTED_ALL'),
+    ...frame(16, 'STATE_DROPPED', 32, 'dropped-a'),
+    ...frame(20, 'STATE_DROPPED', 32, 'dropped-b'),
+    ...frame(48, 'STATE_PRESENTED_ALL'),
+    windowEnd(100)
+  ];
+
+  const result = analyzeMotion(events);
+
+  // Each dropped reporter is its own missed tick; only a presented
+  // reporter ever merges with another one at the same ts.
+  assert.strictEqual(result.droppedCount, 2);
+  assert.strictEqual(result.frameCount, 4);
+});
+
+test('two presented reporters at the same ts on different layer_tree_host_ids are not merged (#345 follow-up)', () => {
+  const events: TraceEvent[] = [
+    windowStart(0),
+    ...frame(0, 'STATE_PRESENTED_ALL', 0, 'auto', { layerTreeHostId: 1 }),
+    // Same end ts as the frame above, but a different compositor: not the
+    // same shown frame, so the dedupe must not merge them.
+    ...frame(0, 'STATE_PRESENTED_ALL', 0, 'other-host', {
+      layerTreeHostId: 2
+    }),
+    windowEnd(50)
+  ];
+
+  const result = analyzeMotion(events);
+
+  assert.strictEqual(result.frameCount, 2);
+});
+
+test('two overlapping reporters with different ids pair with their own ends, not each other (#345 follow-up)', () => {
+  const events: TraceEvent[] = [
+    windowStart(0),
+    ...frame(0, 'STATE_PRESENTED_ALL', 0, 'a'),
+    // b begins before the previous frame's gap closes, and c begins before
+    // b ends: overlapping lifetimes, each with its own distinct end ts.
+    ...frame(16, 'STATE_PRESENTED_ALL', 48, 'b'),
+    ...frame(32, 'STATE_PRESENTED_ALL', 64, 'c'),
+    windowEnd(100)
+  ];
+
+  const result = analyzeMotion(events);
+
+  // Three distinct presented frames (0, 48, 64): b's and c's overlapping
+  // lifetimes must not get cross-paired with the wrong end.
+  assert.strictEqual(result.frameCount, 3);
+});
+
+test('a reused id2 pairs each begin with its own end, not a stale one (#345 follow-up)', () => {
+  const events: TraceEvent[] = [
+    windowStart(0),
+    ...frame(0, 'STATE_PRESENTED_ALL', 0, '0x1'),
+    // Chromium reuses an id2 once its reporter closes (real traces reuse
+    // '0x1'): this later begin/end pair must pair with its own end, not
+    // the one already consumed above.
+    ...frame(100, 'STATE_PRESENTED_ALL', 116, '0x1'),
+    windowEnd(200)
+  ];
+
+  const result = analyzeMotion(events);
+
+  assert.strictEqual(result.frameCount, 2);
+  assert.strictEqual(result.longestStallMs, 116);
+});
+
+test('an end with no earlier begin, and a begin with no later end, are both dropped (#345 follow-up)', () => {
+  const events: TraceEvent[] = [
+    windowStart(0),
+    // An end with no matching begin: the trace started mid-reporter.
+    {
+      name: 'PipelineReporter',
+      cat: 'cc,benchmark,disabled-by-default-devtools.timeline.frame',
+      pid: 1,
+      tid: 1,
+      id2: { local: 'orphan-end' },
+      ph: 'e',
+      ts: 0
+    },
+    ...frame(16, 'STATE_PRESENTED_ALL'),
+    // A begin with no later end: the trace stopped mid-reporter.
+    {
+      name: 'PipelineReporter',
+      cat: 'cc,benchmark,disabled-by-default-devtools.timeline.frame',
+      pid: 1,
+      tid: 1,
+      id2: { local: 'orphan-begin' },
+      ph: 'b',
+      ts: 200 * US_PER_MS,
+      args: { frame_reporter: { state: 'STATE_PRESENTED_ALL' } }
+    },
+    windowEnd(300)
+  ];
+
+  const result = analyzeMotion(events);
+
+  // Only the one well-paired reporter (at 16) becomes a frame.
+  assert.strictEqual(result.frameCount, 1);
 });
