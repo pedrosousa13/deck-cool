@@ -14,6 +14,7 @@ import { ServerSlidesProvider } from '../src/server-slides';
 import {
   addStyle,
   expectSettledTo,
+  nextFrame,
   pagesOf,
   parkMouse,
   serverThenHydrated,
@@ -180,8 +181,13 @@ describe('useDeck reports the state the built-in controls show', () => {
         canNext: true
       }
     ]
-  ] as const)('%s', (_, props, expected) => {
+  ] as const)('%s', async (_, props, expected) => {
     renderDeck(props);
+    // A natural-rest mount (#333) measures the real state a frame after
+    // mount, not during it; a no-op wait for the other cases here, which
+    // measure synchronously.
+    await nextFrame();
+    await nextFrame();
 
     expect(probed()).toEqual({ ...expected, fits: false });
     const shown = builtIns();
@@ -197,6 +203,10 @@ describe('useDeck reports the state the built-in controls show', () => {
   test('with pages, it counts pages, as Dots and Counter do', async () => {
     addStyle(pagesOf(3));
     renderDeck({ slides: 10, viewportClassName: 'pages' });
+    // Paged, one snap point is several slides: a natural-rest mount (#333)
+    // measures the real count a frame after mount, not during it.
+    await nextFrame();
+    await nextFrame();
     expect(probed()).toEqual({
       index: 0,
       count: 4,
@@ -231,9 +241,11 @@ describe('useDeck reports the state the built-in controls show', () => {
     expect(probed().canNext).toBe(false);
   });
 
-  test('when every slide fits, there is nowhere to go', () => {
+  test('when every slide fits, there is nowhere to go', async () => {
     addStyle(`.fits > * { width: 25%; }`);
     renderDeck({ slides: 4, viewportClassName: 'fits' });
+    await nextFrame();
+    await nextFrame();
 
     expect(probed()).toEqual({
       index: 0,
@@ -328,6 +340,10 @@ describe('a custom control built on useDeck', () => {
     const back = screen.getByRole('button', { name: 'Back' });
     const builtInNext = screen.getByRole('button', { name: 'Next' });
     const status = screen.getByRole('status');
+    // A natural-rest mount (#333) measures the real count a frame after
+    // mount, not during it.
+    await nextFrame();
+    await nextFrame();
     expect(back.getAttribute('aria-disabled')).toBe('true');
     expect(status.textContent).toBe('Photo 1 of 3');
 
@@ -569,6 +585,10 @@ test('with pages of three, slide and focal can differ, and never count a page, a
     expect(probed().slideCount).toBe(10);
   };
 
+  // A natural-rest mount (#333) measures the real state a frame after
+  // mount, not during it.
+  await nextFrame();
+  await nextFrame();
   expectProbeMatchesMarkers();
   expect(probed()).toMatchObject({ index: 0, slide: 0, focal: 0 });
 

@@ -10,6 +10,7 @@ import {
   expectSnaps,
   mouseAt,
   mouseDrag,
+  nextFrame,
   pagesOf,
   placementPath,
   progressOf,
@@ -181,6 +182,10 @@ describe('in a right-to-left document', () => {
       slides: 10,
       viewportClassName: 'pages'
     });
+    // Paged, one snap point is several slides: a natural-rest mount (#333)
+    // measures the real count a frame after mount, not during it.
+    await nextFrame();
+    await nextFrame();
 
     expect(dots()).toHaveLength(4);
     expect(counter()).toBe('1 / 4');

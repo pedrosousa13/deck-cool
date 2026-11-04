@@ -55,6 +55,18 @@ layout shift either way. Where several slides share a snap point, or a deck
 snaps in pages, the first paint may correct after hydration: server HTML can
 only start at a slide.
 
+**A deck at its natural rest measures after layout, not in the layout effect
+(amended for #333).** A deck starting at index 0 or lower, with no loop and no
+shells or copies rendered, is already where the browser rests a plain
+scroller: the layout effect that would otherwise measure and move it there
+measures nothing, and the engine's first `ResizeObserver` callback, which
+fires after the browser's own layout, makes its first measurement instead. So
+mounting one forces no style or layout read before the first paint. A deck
+whose snap points are not one per slide corrects its controls one frame after
+that first paint, on a client render the same as after hydration above; a
+deck with a non-zero index, a loop or shells still measures synchronously, in
+the layout effect, before the first paint.
+
 A second accepted exception: the server cannot measure, so it renders the
 controls as if each slide were a page and the slides overflow. Prev and Next
 always render, and Dots and Counter count one page per slide. Layout shifts

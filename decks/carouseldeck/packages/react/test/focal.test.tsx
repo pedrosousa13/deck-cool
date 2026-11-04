@@ -10,6 +10,7 @@ import {
   expectSettledTo,
   mouseAt,
   mouseDrag,
+  nextFrame,
   pagesOf,
   sleep,
   viewportOf,
@@ -147,6 +148,10 @@ describe('data-focal', () => {
       addStyle(`@media (min-width: 600px) { ${CENTRED} }`);
       await page.viewport(400, 600);
       const { focal, onFocalChange } = renderDeck();
+      // A natural-rest mount (#333) measures the real focal slide a frame
+      // after mount, not during it.
+      await nextFrame();
+      await nextFrame();
       expect(focal()).toEqual([0]);
 
       await page.viewport(800, 600);

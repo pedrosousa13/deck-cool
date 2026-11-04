@@ -9,6 +9,7 @@ import {
   CENTRED,
   expectSettledTo,
   mouseDrag,
+  nextFrame,
   progressOf,
   serverThenHydrated,
   viewportOf,
@@ -108,12 +109,16 @@ describe('--deck-slide-progress', () => {
     await expectSettledTo(progress, [-1, 0, 1, 2, 3]);
   });
 
-  test('is measured from the snap alignment point', () => {
+  test('is measured from the snap alignment point', async () => {
     addStyle(CENTRED);
     const { progress } = renderDeck({
       slides: 7,
       viewportClassName: 'centred'
     });
+    // A natural-rest mount (#333) measures the real alignment point a
+    // frame after mount, not during it.
+    await nextFrame();
+    await nextFrame();
 
     expect(progress()).toEqual(
       closeTo([-1.25, -0.25, 0.75, 1.75, 2.75, 3.75, 4.75])
@@ -122,6 +127,10 @@ describe('--deck-slide-progress', () => {
 
   test('updates during a scroll with no React render', async () => {
     const { viewport, progress, onRender } = renderDeck();
+    // Past the natural-rest mount's own first, deferred settle (#333),
+    // whose render this must not count as the scroll's.
+    await nextFrame();
+    await nextFrame();
     const renders = onRender.mock.calls.length;
 
     const letGo = await mouseDrag(viewport, -WIDTH / 2, {
@@ -277,15 +286,21 @@ describe('--deck-slide-count', () => {
 });
 
 describe('data-in-view', () => {
-  test('marks only the slide in view at rest, before the first paint', () => {
+  test('marks only the slide in view at rest, before the first paint', async () => {
     const { inView } = renderDeck();
+    // A natural-rest mount (#333) writes `data-in-view` at its own first,
+    // deferred settle, a frame after mount, not during it.
+    await nextFrame();
+    await nextFrame();
 
     expect(inView()).toEqual([0]);
   });
 
-  test('marks every slide partly in view', () => {
+  test('marks every slide partly in view', async () => {
     addStyle(CENTRED);
     const { inView } = renderDeck({ slides: 7, viewportClassName: 'centred' });
+    await nextFrame();
+    await nextFrame();
 
     // Slide 3 spans 257px to 343px of the 300px viewport.
     expect(inView()).toEqual([0, 1, 2, 3]);
@@ -293,6 +308,10 @@ describe('data-in-view', () => {
 
   test('follows a scroll, with no React render', async () => {
     const { viewport, inView, onRender } = renderDeck();
+    // Past the natural-rest mount's own first, deferred settle (#333),
+    // whose render this must not count as the scroll's.
+    await nextFrame();
+    await nextFrame();
     const renders = onRender.mock.calls.length;
 
     const letGo = await mouseDrag(viewport, -WIDTH * 0.6, {
@@ -325,6 +344,8 @@ describe('data-in-view', () => {
   test('follows a resize of the viewport', async () => {
     addStyle(`.narrow > * { width: 150px; }`);
     const { viewport, inView } = renderDeck({ viewportClassName: 'narrow' });
+    await nextFrame();
+    await nextFrame();
     expect(inView()).toEqual([0, 1]);
 
     viewport.style.width = `${WIDTH + 150}px`;

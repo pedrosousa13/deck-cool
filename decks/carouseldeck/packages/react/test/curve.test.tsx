@@ -244,6 +244,7 @@ describe('curve', () => {
       TALL
     );
     await nextFrame();
+    await nextFrame();
 
     // Every slide fits, so the deck has nowhere to go.
     expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
@@ -544,7 +545,7 @@ describe('curve under reduced motion', () => {
 describe('the size-a-curve recipe: a radius in pixels from --deck-viewport-step', () => {
   test.each([100, 300])(
     'calc(528 / var(--deck-viewport-step, 176)) resolves to a 528px radius under %dpx slides',
-    (slideWidth) => {
+    async (slideWidth) => {
       const { angles, viewport } = renderDeck(
         {
           viewportStyle: {
@@ -558,6 +559,10 @@ describe('the size-a-curve recipe: a radius in pixels from --deck-viewport-step'
         },
         `.curved > [data-carouseldeck-slide] { width: ${slideWidth}px; }`
       );
+      // A natural-rest mount (#333) measures `--deck-viewport-step` a
+      // frame after mount, not during it.
+      await nextFrame();
+      await nextFrame();
 
       const step = Number(
         viewport.style.getPropertyValue('--deck-viewport-step')

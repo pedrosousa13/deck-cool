@@ -5,6 +5,7 @@ import { userEvent } from 'vitest/browser';
 import type * as Deck from '@carouseldeck/react';
 import {
   expectSettledTo,
+  nextFrame,
   setReducedMotion,
   sleep,
   TestDeck,
@@ -140,6 +141,25 @@ describe('a controlled deck', () => {
     const { viewport } = renderWithRef({ index: 2 });
 
     expect(viewport.scrollLeft).toBe(2 * WIDTH);
+  });
+
+  // At natural rest (#333), the engine's first measurement is a frame after
+  // mount, not during it: a parent that sets a new index before then, in a
+  // rerender right after mount, is not a press to leave alone and must
+  // still reach it once the engine measures.
+  test('a parent that sets index before the deck’s first measurement ends there', async () => {
+    const onIndexChange = vi.fn();
+    const { rerender } = render(
+      <TestDeck index={0} onIndexChange={onIndexChange} />
+    );
+    const root = screen.getByRole('region', { name: 'Test deck' });
+    const viewport = viewportOf(root);
+
+    rerender(<TestDeck index={2} onIndexChange={onIndexChange} />);
+
+    await expectSettledTo(() => viewport.scrollLeft, 2 * WIDTH);
+    expect(root.dataset.index).toBe('2');
+    expect(onIndexChange).not.toHaveBeenCalled();
   });
 
   test('follows index changes from outside, without calling onIndexChange back', async () => {
@@ -423,6 +443,11 @@ describe('a controlled deck', () => {
   test('with reduced motion, an index change jumps', async () => {
     await setReducedMotion(true);
     const { viewport } = renderControlled();
+    // The controlled-index effect waits for the engine's own first
+    // measurement before it ever acts; at natural rest (#333) that is a
+    // frame after mount, not during it.
+    await nextFrame();
+    await nextFrame();
 
     act(() => screen.getByRole('button', { name: 'Go to 4' }).click());
 

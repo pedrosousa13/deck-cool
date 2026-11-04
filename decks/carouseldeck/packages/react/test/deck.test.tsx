@@ -9,6 +9,7 @@ import {
   expectSnaps,
   gestureScroll,
   mouseDrag,
+  nextFrame,
   setReducedMotion,
   sleep,
   TestDeck,
@@ -322,6 +323,11 @@ describe('Prev and Next', () => {
     const removeStyle = styleSheet(`.fits > * { width: 25%; }`);
     try {
       render(<TestDeck viewportClassName="fits" slides={4} />);
+      // A natural-rest mount (#333) measures the real count a frame after
+      // mount, not during it: until then, Prev and Next render as if the
+      // count were still unknown.
+      await nextFrame();
+      await nextFrame();
 
       expect(screen.queryByRole('button', { name: 'Previous' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
@@ -330,8 +336,10 @@ describe('Prev and Next', () => {
     }
   });
 
-  test('both are absent with no slides, so no snap points', () => {
+  test('both are absent with no slides, so no snap points', async () => {
     render(<TestDeck slides={0} />);
+    await nextFrame();
+    await nextFrame();
 
     expect(screen.queryByRole('button', { name: 'Previous' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
@@ -346,6 +354,8 @@ describe('Prev and Next', () => {
       const viewport = container.querySelector<HTMLElement>(
         '[data-carouseldeck-viewport]'
       )!;
+      await nextFrame();
+      await nextFrame();
 
       expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
       viewport.style.width = `${WIDTH / 2}px`;
