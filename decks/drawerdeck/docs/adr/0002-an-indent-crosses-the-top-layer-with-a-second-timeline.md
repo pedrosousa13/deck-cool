@@ -31,7 +31,7 @@ non-null the moment the animation is set up.
 
 `@drawerdeck/core`'s own `indent` option takes a ref-like object or an
 element (`null` while nothing should indent). Only one drawer ever indents
-the page at a time -- a single, page-wide owner, not one timeline per
+the page at a time, a single, page-wide owner, not one timeline per
 instance: the first drawer to want it keeps it (`indentOwner`, a plain
 object unique to that instance) until it releases, and every other
 instance's own `updateIndent` gets a chance to claim it the moment that
@@ -65,10 +65,12 @@ the target of their own still wins over the adopted stylesheet's rule, the
 same as any inline style beats a stylesheet rule at equal specificity, and
 the indent then does nothing on that element.
 
-Only the outermost open drawer indents the page: `@drawerdeck/react`'s own
-`Drawer.Root` ignores its own `indent` prop entirely while nested inside
-another one, through the same context `nestedCount` already uses to find
-its parent, rather than anything `@drawerdeck/core` enforces. Nested
+The first drawer that wants it holds the indent until it releases, the
+same single, page-wide owner "The mechanism", above, already describes:
+`@drawerdeck/react`'s own `Drawer.Root` ignores its own `indent` prop
+entirely while nested inside another one, through the same context
+`nestedCount` already uses to find its parent, rather than anything
+`@drawerdeck/core` enforces. Nested
 drawers keep using `--drawer-nested`/`--drawer-nested-progress`; the two
 recipes are not meant to stack.
 

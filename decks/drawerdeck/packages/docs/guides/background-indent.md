@@ -71,8 +71,8 @@ outside press alike:
   drawer starts opening. Before that, nothing matches `[data-drawer-indent]`
   at all, so this registered property reads its own `initial-value`, `0`.
   The instant the attribute appears, the base rule's `--drawer-indent-on: 1`
-  newly matches on the very same element -- a real, transitionable change,
-  `0` to `1`, declared `transition` and all -- so `--drawer-indent-on` eases
+  newly matches on the very same element, a real, transitionable change,
+  `0` to `1`, declared `transition` and all, so `--drawer-indent-on` eases
   up over 300ms with no separate `data-starting-style` rule needed at all.
 - **Closing**: `data-ending-style`, the same attribute `Drawer.Panel`'s own
   exit recipe reads, is mirrored onto the indent target too, for its whole
@@ -126,7 +126,7 @@ same split every other progress value in this engine makes.
 The page-wide `indent` recipe has exactly one owner at once: whichever
 drawer starts wanting it first keeps it until it releases (closes, or has
 `indent` set back to `null`). A second drawer with `indent` set, while one
-already owns it, does nothing at all -- no attribute, no scale -- until the
+already owns it, does nothing at all (no attribute, no scale) until the
 owner releases, at which point it picks it up on its own, with no extra
 prop or call needed.
 
@@ -139,21 +139,43 @@ compose, and nothing here tries to make them.
 
 ## Two things this recipe does not override
 
-An `animation` a consumer already sets inline on the indent target of
-their own wins over the adopted stylesheet's rule -- inline styles always
-beat a stylesheet at the same specificity -- so the indent then does
-nothing on that element at all while that inline `animation` is present.
-Nothing here detects or warns about this: an indent target with an inline
-`animation` of its own is simply not one the indent can also drive.
+An `animation` a consumer already sets on the indent target of their own,
+inline or through their own stylesheet rule, wins over the adopted
+stylesheet's rule: inline always beats a stylesheet at the same
+specificity, and the engine's own stylesheet rule is not written to win
+against a consumer's own rule of equal specificity either. Either way, the
+indent then does nothing on that element at all while the consumer's own
+`animation` is present. Nothing here detects or warns about this: an
+indent target with an `animation` of its own is simply not one the indent
+can also drive.
 
-A page's own inline `timeline-scope` on `<html>` is not merged with the
-indent's own entry while a drawer is open: `:root:has([data-drawer-indent])`
-(`ensureBackdropReset`'s own rule, in `@drawerdeck/core`) only ever adds the
-indent's own name, through the stylesheet, never touching `<html>`'s own
-inline property at all -- so a page that sets its own inline
-`timeline-scope` on `<html>` keeps exactly that value throughout, with the
-indent's own timeline still resolving from the stylesheet rule
-independently of it.
+A page's own `timeline-scope` on `<html>` is never merged with the
+indent's own entry while a drawer is open, and the two engines this guide
+targets do not agree on what that leaves the page with. `@drawerdeck/core`
+adds its own entry through a stylesheet rule,
+`:root:has([data-drawer-indent]){timeline-scope:--drawer-indent}`
+(`ensureBackdropReset`). Set the page's own `timeline-scope` through a
+stylesheet rule too, and that rule's higher specificity (`:has()` counts
+the specificity of its own argument) wins outright over the page's,
+replacing it rather than merging with it: the page's own named timeline is
+dropped for as long as a drawer is open, in both Chromium and WebKit, while
+the indent itself still resolves correctly. Set it inline on `<html>`
+instead, and the opposite happens in Chromium: an inline value always
+beats a stylesheet rule regardless of specificity, so the indent's own
+entry is the one left out, and the indent silently does nothing (no
+animation, no scale) for as long as that inline value is present. WebKit
+does not show this: the indent still resolves there even with the page's
+own inline value present. A page that needs its own `timeline-scope` to
+keep working everywhere the indent does should not rely on either case.
+
+## A wrapper that mounts after the drawer is already open
+
+`indent` takes a ref, not an element, so a wrapper whose own `.current`
+is still `null` when this drawer first reads it is not a dead end: once
+that ref attaches, it is picked up the next time this drawer opens. It is
+not picked up while already open, before that: mounting the wrapper mid
+open does nothing on its own, since nothing about this drawer's own phase
+or options changed for it to notice.
 
 ## A portal changes nothing
 
@@ -170,10 +192,10 @@ and the target either way. The binding resolves the same, portaled or not.
 and `--drawer-indent-range` all clear the moment this drawer's own phase
 reaches `'closed'` (a close button, Escape, a drag or a flick past the
 closed point, or an unmount while still open, all the same). The consumer's
-own inline styles on the target are never touched in the first place --
-the transform-origin and the native animation both come from the adopted
+own inline styles on the target are never touched in the first place: the
+transform-origin and the native animation both come from the adopted
 stylesheet's own rule, keyed on `data-drawer-indent`'s own presence, never
-written inline on the target -- so there is nothing to save and nothing to
+written inline on the target, so there is nothing to save and nothing to
 restore.
 
 ## The page does not shift when it was already scrolled
@@ -182,7 +204,7 @@ restore.
 (`transform-origin: var(--drawer-indent-origin)`), set once, at the moment
 the indent activates, to the viewport's own center, expressed relative to
 the target's own box (`innerWidth / 2 - rect.left`, `innerHeight / 2 -
-rect.top`, from `target.getBoundingClientRect()` at that moment) -- not
+rect.top`, from `target.getBoundingClientRect()` at that moment), not
 the default, `50% 50%` (the target's own center), which shifts the page
 visibly the moment the page was scrolled before the drawer opened: #274's
 own research measured a 235px shift with the origin left at the default,
