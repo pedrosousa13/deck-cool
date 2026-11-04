@@ -137,18 +137,18 @@ pedrosousa13/deck-cool --failed`: `publish` then finds every version
 **The first publish**, 1.2.0, used the `NPM_TOKEN` secret: npm sets a trusted
 publisher per package, so a package has to exist first. Each of the four
 packages now has a trusted publisher on npmjs.com: GitHub Actions,
-`pedrosousa13` / `deck-cool` / `release.yml`, no environment, and the
-`NPM_TOKEN` secret is gone. But CI cannot publish over OIDC yet: deck-cool
-was created after GitHub's 2026-07-15 cutoff, so its OIDC tokens use the
-immutable subject format (`repo:pedrosousa13@4235827/deck-cool@1410811933:…`),
-and npm's trusted-publishing exchange rejects it with "OIDC token exchange
-error - package not found" (npm/cli#9969, open; tracked in #161). Until it is
-fixed, the `publish` job fails and a release is published by hand, without
-provenance, as 1.2.0 and 1.3.0 were. A run that would publish a package not
-yet on npm still fails at "Check a credential can publish", before anything
-is published.
+`pedrosousa13` / `deck-cool` / `release.yml`, no environment. But CI
+cannot publish over OIDC yet: deck-cool was created after GitHub's
+2026-07-15 cutoff, so its OIDC tokens use the immutable subject format
+(`repo:pedrosousa13@4235827/deck-cool@1410811933:…`), and npm's
+trusted-publishing exchange rejects it with "OIDC token exchange error -
+package not found" (npm/cli#9969, open; tracked in #161). So the repo
+carries the `NPM_TOKEN` secret again, and the `publish` job publishes with
+it, with provenance, as 1.5.4 was. 1.2.0 and 1.3.0, released while no token
+was set, were published by hand, without provenance.
 
-**Publishing by hand**, when the `publish` job fails on OIDC:
+**Publishing by hand**, only when the `publish` job fails (the `NPM_TOKEN`
+secret is missing or expired):
 
 1. Check the npm login first: `npm whoami` prints the maintainer's npm
    account. If it errors or prints another account, the maintainer runs
