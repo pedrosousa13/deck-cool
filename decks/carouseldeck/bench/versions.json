@@ -1,8 +1,15 @@
 {
   "embla": {
-    "npm": "embla-carousel-react",
-    "version": "8.6.0",
-    "releaseDate": "2025-04-04"
+    "react": {
+      "npm": "embla-carousel-react",
+      "version": "8.6.0",
+      "releaseDate": "2025-04-04"
+    },
+    "wheelGestures": {
+      "npm": "embla-carousel-wheel-gestures",
+      "version": "8.1.0",
+      "releaseDate": "2025-08-12"
+    }
   },
   "keen": {
     "npm": "keen-slider",

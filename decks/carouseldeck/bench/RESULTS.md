@@ -105,26 +105,32 @@ there is nothing to carry over.
     frame during the gesture and its settle). `aggregate.py`/`report.py`
     mark a deck "not supported" for a `(scenario, load, loop)` cell when
     `responded` is `false` in most of its scored reps there, and exclude it
-    from that cell's winners and ties. See "Not supported" below for which
-    decks that is, for `wheel-scroll-next`.
+    from that cell's winners and ties. The mechanism stays general (any
+    future rival that genuinely cannot do a gesture still gets this
+    treatment); no deck here currently triggers it for `wheel-scroll-next`
+    -- see "Method: wheel support" below for why all five now respond.
 
 ## Versions, with release dates (rule 5)
 
-| Deck                     | Version                                 | Released   |
-| ------------------------ | --------------------------------------- | ---------- |
-| `@carouseldeck/react`    | this commit (`workspace:*`, unreleased) | -          |
-| `embla-carousel-react`   | 8.6.0                                   | 2025-04-04 |
-| `keen-slider`            | 6.8.6                                   | 2023-07-05 |
-| `swiper`                 | 14.4.0                                  | 2026-10-30 |
-| `@splidejs/react-splide` | 0.7.12                                  | 2022-09-30 |
-| `@splidejs/splide`       | 4.1.4                                   | 2022-11-09 |
+| Deck                            | Version                                 | Released   |
+| ------------------------------- | --------------------------------------- | ---------- |
+| `@carouseldeck/react`           | this commit (`workspace:*`, unreleased) | -          |
+| `embla-carousel-react`          | 8.6.0                                   | 2025-04-04 |
+| `embla-carousel-wheel-gestures` | 8.1.0                                   | 2025-08-12 |
+| `keen-slider`                   | 6.8.6                                   | 2023-07-05 |
+| `swiper`                        | 14.4.0                                  | 2026-10-30 |
+| `@splidejs/react-splide`        | 0.7.12                                  | 2022-09-30 |
+| `@splidejs/splide`              | 4.1.4                                   | 2022-11-09 |
 
 The release dates come from `npm view <pkg> time --json`, read once by hand
 and checked into `versions.json` — so neither this file nor a CI run has to
 hit npm for them. Embla and Keen's versions match what `tests/compare` (the
-comparison-page bundle-size fixture) already pins; Swiper and Splide are new
-to this bench, each the latest version at least a day old (pnpm's own
-`minimumReleaseAge` hold) as of 2026-11-04.
+comparison-page bundle-size fixture) already pins; Swiper, Splide and Embla's
+own Wheel Gestures plugin are new to this bench, each the latest version at
+least a day old (pnpm's own `minimumReleaseAge` hold) as of 2026-11-04.
+`embla-carousel-wheel-gestures@8.1.0`'s own `peerDependencies` ask for
+`embla-carousel: ^8.0.0 || ~8.0.0-rc03`, which `embla-carousel-react@8.6.0`'s
+own `embla-carousel` dependency satisfies.
 
 ## What's here
 
@@ -282,21 +288,39 @@ one seed, written to `results/seed.txt`/`results/mount-seed.txt` and to every
 row's own `seed` field (`BENCH_SEED`; the CI workflow sets it per shard so
 shards differ from each other but each is independently reproducible).
 
-## Not supported
+## Method: wheel support
 
-`wheel-scroll-next` dispatches one wheel/trackpad tick. Carouseldeck responds
-natively (CSS scroll-snap containers scroll on wheel input with no extra
-code); Swiper responds because its own bundled `Mousewheel` module is enabled
-(`modules={[Mousewheel]}`, `mousewheel`, its own documented, non-default way
-to support this — see `src/swiper-app.tsx`'s header comment). Embla, Keen and
-Splide ship no wheel/mousewheel support in their base package (each would
-need a separate plugin package, which the issue's own allowed-dependency
-list for this bench does not include), so they report "not supported" for
-this scenario — the same fairness treatment drawerdeck gave React Aria's
-Sheet for `mouse-drag-throw` (rule 11). This was confirmed empirically in
-this PR's own local pass: `responded: false` for embla, keen and splide at
-`load=0, loop=false`, `responded: true` for carouseldeck and swiper, in every
-rep.
+`wheel-scroll-next` dispatches one wheel/trackpad tick. Carouseldeck
+responds natively (CSS scroll-snap containers scroll on wheel input with no
+extra code). Every rival needed its own documented way to support this, per
+fairness rule 3 (none defaults to on):
+
+- **Swiper** enables its own bundled `Mousewheel` module
+  (`modules={[Mousewheel]}`, `mousewheel` — see `src/swiper-app.tsx`'s header
+  comment).
+- **Splide** sets its own `wheel: true` option
+  (`@splidejs/splide/dist/types/index.d.ts`'s own "Enables navigation by the
+  mouse wheel," off by default — see `src/splide-app.tsx`'s header comment).
+- **Embla** ships no wheel support of its own; its own plugin list names
+  `embla-carousel-wheel-gestures` as the documented way to add it, pinned in
+  `package.json` and passed as a plugin (`useEmblaCarousel({...},
+[WheelGesturesPlugin()])` — see `src/embla-app.tsx`'s header comment).
+- **Keen** ships no wheel support and no separate plugin package either:
+  its own docs' "Scroll wheel controls" example
+  (<https://keen-slider.io/examples#scroll-wheel-controls>) is a plugin
+  function you copy into your own code, not an installable package. Copied
+  verbatim from that example's source
+  (<https://github.com/rcbyr/keen-slider-sandboxes/blob/v6/navigation-controls/scroll-wheel-controls/javascript/index.html>,
+  types added) into `src/keen-app.tsx`'s own `WheelControls` function —
+  this is the docs' own example code, not a library option, which is why it
+  reads differently from the other three adapters' own header comments.
+
+All five decks now respond to this scenario; the "not supported" rule
+(fairness rule 11) stays in `aggregate.py`/`report.py` as general
+infrastructure (a per-`(deck, scenario, load, loop)` majority-of-reps
+check), it just has nothing to catch here anymore. Confirmed empirically:
+this PR's own local pass (below) shows every deck settling on the wheel at
+`load=0, loop=false`, in every rep.
 
 ## Local smoke check
 
@@ -334,18 +358,21 @@ Run on this development machine, shared with other work, 2 reps per cell:
 50 gesture rows (one `(scenario, load=0, loop=false)` slice, all five
 decks, `BENCH_SEED=local-pass`) and the full 80-row mount matrix
 (`BENCH_SEED=local-mount-pass`). Both passed end to end — every scenario
-responded as expected (see "Not supported" above), and `aggregate.py` /
-`aggregate-mount.py` both ran cleanly against this single-shard data,
-confirming the reporting pipeline as well as the bench itself. These numbers
-are from one shared, unquiet machine and 2 reps, not six dedicated CI shards
-at 3+ reps: they prove the plumbing, not a result. Representative rows, median
-of 2:
+responded as expected (see "Method: wheel support" above), and
+`aggregate.py` / `aggregate-mount.py` both ran cleanly against this
+single-shard data, confirming the reporting pipeline as well as the bench
+itself. These numbers are from one shared, unquiet machine and 2 reps, not
+six dedicated CI shards at 3+ reps: they prove the plumbing, not a result.
+Representative rows, median of 2 (the `wheel-scroll-next` row is a separate,
+later re-run, `BENCH_SEED=wheel-fix-pass-2`, after the three wheel-support
+fixes above; every deck responded in every rep, settling on index 1 for
+carouseldeck/embla/swiper and index 2 for keen/splide):
 
-| Scenario                         | carouseldeck | embla         | keen          | swiper | splide |
-| -------------------------------- | ------------ | ------------- | ------------- | ------ | ------ |
-| `touch-swipe-next` settle (ms)   | 2016         | 2592          | 1730          | 1614   | 1724   |
-| `mouse-drag-release` settle (ms) | 1496         | 2104          | 1580          | 1356   | 1500   |
-| `wheel-scroll-next` settle (ms)  | 1038         | not supported | not supported | 1075   | 1047   |
+| Scenario                         | carouseldeck | embla | keen | swiper | splide |
+| -------------------------------- | ------------ | ----- | ---- | ------ | ------ |
+| `touch-swipe-next` settle (ms)   | 2016         | 2592  | 1730 | 1614   | 1724   |
+| `mouse-drag-release` settle (ms) | 1496         | 2104  | 1580 | 1356   | 1500   |
+| `wheel-scroll-next` settle (ms)  | 1280         | 1310  | 1726 | 905    | 1423   |
 
 | Mount cell                                       | carouseldeck | embla | keen | swiper | splide |
 | ------------------------------------------------ | ------------ | ----- | ---- | ------ | ------ |

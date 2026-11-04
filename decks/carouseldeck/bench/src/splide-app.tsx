@@ -12,12 +12,27 @@
 // (`'slide'` is Splide's own default `type`, so the no-loop branch changes
 // nothing); `perPage: 1` is passed explicitly to document the intent
 // alongside `type`, even though it matches Splide's own default.
-// `arrows: false` and `pagination: false` are the two non-default options
-// this adapter sets: Splide renders its own arrow buttons and pagination
-// dots by default (`DEFAULTS.arrows`/`.pagination`, both `true`), which
-// would double up on this bench's own `#next`/`#prev` buttons and
-// `BenchDots` bar inside the same `#viewport` element -- every scenario
-// here drives the bench's own controls, never Splide's.
+// `arrows: false` and `pagination: false` are two of the non-default
+// options this adapter sets: Splide renders its own arrow buttons and
+// pagination dots by default (`DEFAULTS.arrows`/`.pagination`, both
+// `true`), which would double up on this bench's own `#next`/`#prev`
+// buttons and `BenchDots` bar inside the same `#viewport` element -- every
+// scenario here drives the bench's own controls, never Splide's.
+// `wheel: true` is the third: Splide's own `wheel`/`wheelMinThreshold`/
+// `wheelSleep`/`releaseWheel` options
+// (@splidejs/splide/dist/types/index.d.ts, "Enables navigation by the
+// mouse wheel") are its own documented, built-in way to support
+// `wheel-scroll-next` (scenarios.ts), off by default (`DEFAULTS.wheel` is
+// `false`) -- needed for fairness rule 3, the same reason Swiper's own
+// adapter enables its `Mousewheel` module. Splide's own `Wheel` component
+// reads only `e.deltaY`, never `deltaX`, regardless of the carousel's own
+// axis (found by reading its source, `splide.esm.js`'s `onWheel`), which
+// is why `wheel-scroll-next`'s gesture carries a vertical component at
+// all. `wheelSleep: 300` (both default `0`) keeps one gesture reading as
+// one slide move: with no sleep, Splide accepts every single wheel tick in
+// the gesture's own burst with no cooldown between them, and that burst
+// (one real trackpad scroll, or `scenarios.ts`'s own synthetic one) is many
+// ticks, not one.
 //
 // The published/index signal is this bench's own instrumentation, not
 // Splide's: `onMounted`/`onMoved` report `s.length`/`s.index` (the first
@@ -51,7 +66,9 @@ export function SplideApp() {
           type: loop ? 'loop' : 'slide',
           perPage: 1,
           arrows: false,
-          pagination: false
+          pagination: false,
+          wheel: true,
+          wheelSleep: 300
         }}
         onMounted={(s) => setState({ count: s.length, index: s.index })}
         onMoved={(s, newIndex) =>

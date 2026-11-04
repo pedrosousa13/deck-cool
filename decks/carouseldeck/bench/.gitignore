@@ -2,3 +2,4 @@ dist/
 dist-ssr/
 node_modules/
 results/
+__pycache__/

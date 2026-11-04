@@ -333,20 +333,24 @@ def render_summary(rows, bundle_rows):
 def render_versions(versions):
     # Rule 5: each rival's pinned version with its npm release date, read
     # from the checked-in versions.json rather than hitting npm from CI.
+    # embla and splide are each two packages (embla's own React hook plus
+    # the Wheel Gestures plugin fairness rule 3 needs; splide's React
+    # wrapper plus its core) -- each gets one row per package. keen and
+    # swiper are one package each.
     lines = ['\n### Versions\n', '| Deck | Version | Released |', '| --- | --- | --- |']
     lines.append('| carouseldeck | this commit (`workspace:*`, unreleased) | - |')
-    for deck in ('embla', 'keen', 'swiper'):
-        v = versions[deck]
-        lines.append(f"| {deck} | {v['npm']}@{v['version']} | {v['releaseDate']} |")
+
+    def row(label, v):
+        return f"| {label} | {v['npm']}@{v['version']} | {v['releaseDate']} |"
+
+    embla = versions['embla']
+    lines.append(row('embla (react)', embla['react']))
+    lines.append(row('embla (wheel gestures)', embla['wheelGestures']))
+    for deck in ('keen', 'swiper'):
+        lines.append(row(deck, versions[deck]))
     splide = versions['splide']
-    lines.append(
-        f"| splide (react) | {splide['react']['npm']}@{splide['react']['version']} | "
-        f"{splide['react']['releaseDate']} |"
-    )
-    lines.append(
-        f"| splide (core) | {splide['core']['npm']}@{splide['core']['version']} | "
-        f"{splide['core']['releaseDate']} |"
-    )
+    lines.append(row('splide (react)', splide['react']))
+    lines.append(row('splide (core)', splide['core']))
     return '\n'.join(lines)
 
 

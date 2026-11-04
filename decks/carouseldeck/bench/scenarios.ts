@@ -144,13 +144,28 @@ export const scenarios: Scenario[] = [
       await setupAtStart(page);
     },
     async run(page, g) {
-      // One wheel/trackpad tick, scaled to one slide width: a deck with no
-      // wheel/mousewheel support of its own cannot win this scenario
-      // (fairness rule 11, carried from drawerdeck's bench) -- see
-      // RESULTS.md's "Not supported" section for which decks that is.
+      // A burst of small wheel ticks, mostly horizontal with a small
+      // vertical component, 16ms apart -- not one big tick. Found the hard
+      // way (RESULTS.md's "Method: wheel support"): Splide's own `wheel`
+      // option reads only `deltaY`, regardless of the carousel's own axis,
+      // so it needs a non-zero vertical component to respond at all; Keen's
+      // copied wheel-controls example tracks velocity between successive
+      // ticks, so one big synthetic tick (zero elapsed time between
+      // "start" and "move") reads as zero velocity and never settles on
+      // the next slide. The small vertical component is deliberately
+      // dominated by the horizontal one (1/10th), so every deck here that
+      // reads the horizontal axis (carouseldeck's native scroll, Swiper's
+      // Mousewheel, Embla's WheelGesturesPlugin) still reads this as a
+      // horizontal gesture. A deck with no wheel/mousewheel support of its
+      // own still cannot win this scenario (fairness rule 11, carried from
+      // drawerdeck's bench); none of the five decks here currently
+      // triggers that.
       await page.mouse.move(g.cx, g.cy);
       await page.evaluate(() => window.__bench.markWindowStart());
-      await page.mouse.wheel(g.slideWidth * 0.9, 0);
+      for (let i = 0; i < 12; i++) {
+        await page.mouse.wheel(g.slideWidth * 0.1, g.slideWidth * 0.01);
+        await page.waitForTimeout(16);
+      }
     }
   },
   {
