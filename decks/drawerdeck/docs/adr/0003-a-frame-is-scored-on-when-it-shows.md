@@ -38,10 +38,20 @@ carrying `args.frame_reporter`) with its own end (`ph: 'e'`), by `id2`
 within the same `pid`/`tid` -- Chromium reuses an id once its reporter
 closes, so pairing needs this, not just `ts` order. A frame is keyed on
 that end ts: for a presented frame, the moment it is shown. Several
-reporters that end at the exact same ts -- a forked pair -- are deduped
-to the one frame they show, not two. A begin with no later end, or an end
-with no earlier begin, is dropped rather than guessed at, the same way
-`activeWindows` already drops an unmatched window mark (#266 rule 10).
+_presented_ reporters that end at the exact same ts, on the same
+`pid`/`tid`/`layer_tree_host_id` -- a forked pair -- are deduped to the
+one frame they show, not two; a `DROPPED` or `NO_UPDATE_DESIRED` reporter
+is never merged with anything else ending at its ts, even another one of
+the same state, and nothing merges across a different compositor or
+renderer thread (a fairness review of this PR found the first cut merged
+on ts alone, which wrongly collapsed 31 `DROPPED`/`DROPPED` and 110
+`NO_UPDATE_DESIRED`/`NO_UPDATE_DESIRED` groups in run 41798197057's
+traces, and once dropped a presented frame that happened to end at the
+same ts as a `NO_UPDATE_DESIRED` one). A begin with no later end, or an
+end with no earlier begin, is dropped rather than guessed at, the same
+way `activeWindows` already drops an unmatched window mark (#266 rule
+10); a gesture's own active window is now also checked against a frame's
+end ts, the same ts it's scored on, not its begin ts.
 
 This is the one change `trace.ts`'s `pipelineFrames` needed; every metric
 `scoreFrames` derives from its output moves with it, because they share

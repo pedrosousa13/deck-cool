@@ -167,8 +167,9 @@ still reports a tie there, not a drawerdeck win, because that's what
 Overall says. A paired re-run
 ([41220326440](https://github.com/pedrosousa13/deck-cool/actions/runs/41220326440))
 measured the same 233.3 ms longest stall under heavy load, so this run's
-figure isn't a new regression; the extra frame itself is still open,
-tracked in [#329](https://github.com/pedrosousa13/deck-cool/issues/329).
+figure isn't a new regression; the extra frame itself is a measurement
+artifact, not engine work -- see
+[#329's finding](https://github.com/pedrosousa13/deck-cool/issues/329#issuecomment-6628313991).
 
 Chrome DevTools Protocol's `Input.dispatchTouchEvent` reaches the renderer
 only after a main frame ends, so under a busy tick every library's drag

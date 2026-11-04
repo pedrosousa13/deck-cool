@@ -85,8 +85,12 @@ comparison page:
 13. **A frame is scored on when it is shown, not when it started.** (#345)
     `trace.ts` keys every frame on its `PipelineReporter`'s end ts -- the
     moment it presents, for a presented one -- and counts a frame a busy
-    main thread forks into two reporters once, not twice. See
-    "Presentation time, not begin time" below.
+    main thread forks into two reporters once, not twice. A gesture's
+    active window (rule 10) is now checked against that same end ts too,
+    not the begin ts: a frame whose begin lands inside a window but whose
+    end lands after it closes is now scored as outside it, since nothing
+    of it was actually shown while the window was open. See "Presentation
+    time, not begin time" below.
 
 ## Versions, with release dates (#266 rule 5)
 
@@ -261,38 +265,102 @@ carries the same content to the vsync it actually shows at, so one shown
 frame was scored as two.
 
 `trace.ts`'s `pipelineFrames` now pairs each reporter's begin with its own
-end, keys the frame on the end ts, and dedupes by that ts: a forked pair
-ends at the exact same ts (the moment they both present), so it collapses
-to the one frame shown, not two. Checked against run 41798197057's own
-saved traces (`baseui__touch-drag-half-full-back__load200__rep0__shard-5`):
-reporters beginning at 84.4ms and 284.4ms both end, and the frame they
-carry presents, at 301.5ms -- scored on begin time, that is a 200.0ms gap
-from the wrong anchor; scored on presentation time, the real gap back to
-the previous shown frame is 248.2ms.
+end and keys the frame on the end ts. Several reporters that end at that
+same ts dedupe to the one frame they show -- but only among _presented_
+reporters (`STATE_PRESENTED_ALL`/`STATE_PRESENTED_PARTIAL`), scoped to the
+same `pid`/`tid`/`layer_tree_host_id`: a `STATE_DROPPED` or
+`STATE_NO_UPDATE_DESIRED` reporter is never merged with anything else that
+happens to end at its ts, even another `DROPPED` or `NO_UPDATE_DESIRED`
+one, and nothing merges across a different compositor or renderer thread.
+A follow-up review of this PR found the first cut of this dedupe keyed
+purely on ts, picking whichever reporter closed first regardless of
+state: across run 41798197057's 1440 traces that wrongly merged 31
+`DROPPED`/`DROPPED` groups and 110 `NO_UPDATE_DESIRED`/`NO_UPDATE_DESIRED`
+groups into one tick each, and once (vaul, `touch-flick-dismiss`,
+`load=100`) dropped a presented frame outright because a
+`NO_UPDATE_DESIRED` reporter closed first at the same ts. Checked against
+run 41798197057's own saved traces
+(`baseui__touch-drag-half-full-back__load200__rep0__shard-5`): reporters
+beginning at 84.4ms and 284.4ms both end, and the frame they carry
+presents, at 301.5ms -- scored on begin time, that is a 200.0ms gap from
+the wrong anchor; scored on presentation time, the real gap back to the
+previous shown frame is 248.2ms.
+
+A gesture's active window (rule 10) is now checked against a frame's end
+ts too, the same ts it's scored on, not its begin ts. vaul's own heavy-load
+`touch-drag-half-full-back` picks this up at the window's edge: a reporter
+that begins inside the window but presents just after it closes no longer
+counts as a frame shown inside it, which moves its no-load `droppedPct`
+median from 0.0% to 1.8%.
 
 This moves every metric `scoreFrames` derives from `frames`
 (`longestStallMs`, `hitchRatioMsPerS`, `droppedCount`, `droppedPct`,
 `frameCount`, and the `legacy` mirror of each): the same frames feed all
-of them, and a forked pair that used to count as two reporters -- one of
-them a phantom "dropped" or "no update" tick between the fork's two
-begins -- now counts once. `inputToFirstMovedMs` and `checkerboardedFrames`
-share the same `frames` array too, so they would move for the same
-reason; across run 41798197057 they did not (no trace in that run carries
-a `bench-input` mark, and no frame in it is checkerboarded, before or
-after). Nothing outside `trace.ts` is affected: `settleMs`, `opennessAfter`,
-`raf.*`, `loaf.*`, `initDurationMs` and `closed` come from
-`bench.spec.ts`'s own wall-clock and `window.__bench` reads, never from a
-trace.
+of them. The mechanism is not a phantom dropped or no-update tick removed:
+`droppedCount` never goes down from deduping (a `DROPPED` reporter is
+never deduped away -- see above). What moves is `frameCount`, the
+denominator `droppedPct` divides by: a forked pair that used to count as
+two presented frames now counts as one, so `frameCount` shrinks and
+`droppedPct` rises for the same `droppedCount`, for every deck whose
+`touch-drag-half-full-back` traces fork under load. Measured directly
+(comparing the shipped scorer against a diagnostic build that never merges
+anything, over all 1440 traces' `touch-drag-half-full-back` rows):
+deduping collapses 660-675 `baseui` frames per load level, 0-767
+`reactaria` frames, 30-298 `vaul` frames, and 1-8 `drawerdeck` frames, with
+`droppedCount` identical with or without it in every case.
+`inputToFirstMovedMs` and `checkerboardedFrames` share the same `frames`
+array too, so they would move for the same reason; across run
+41798197057 they did not (no trace in that run carries a `bench-input`
+mark, and no frame in it is checkerboarded, before or after). Nothing
+outside `trace.ts` is affected: `settleMs`, `opennessAfter`, `raf.*`,
+`loaf.*`, `initDurationMs` and `closed` come from `bench.spec.ts`'s own
+wall-clock and `window.__bench` reads, never from a trace.
 
-Rescored, run 41798197057's heavy-load (`load=200`) `touch-drag-half-full-back`
-`longestStallMs` medians:
+Rescored against run 41798197057's saved traces, with the dedupe fix above
+applied and re-verified over all 1440 traces -- "Before" is `origin/main`
+before #345 (begin-ts scoring, no dedupe); "After" is this PR, including
+the dedupe fix:
 
-| Deck       | Before (begin ts) | After (presentation ts) |
-| ---------- | ------------------ | ------------------------ |
-| drawerdeck | 233.3ms             | 231.2ms                  |
-| React Aria | 216.7ms             | 228.6ms                  |
-| Base UI    | 216.7ms             | 243.6ms                  |
-| vaul       | 233.3ms             | 243.6ms                  |
+### Touch drag half->full->back: longest stall (ms), before -> after
+
+| Deck       | load=0         | load=100       | load=200       | load=0 legacy  | load=100 legacy | load=200 legacy |
+| ---------- | -------------- | -------------- | -------------- | -------------- | --------------- | --------------- |
+| drawerdeck | 33.3 -> 34.0   | 116.7 -> 121.2 | 233.3 -> 231.2 | 466.6 -> 465.2 | 500.0 -> 498.6  | 566.6 -> 561.1  |
+| vaul       | 166.7 -> 167.0 | 166.7 -> 151.2 | 233.3 -> 243.6 | 166.7 -> 167.0 | 166.7 -> 151.2  | 233.3 -> 243.6  |
+| Base UI    | 33.3 -> 55.1   | 116.7 -> 145.0 | 216.7 -> 243.6 | 166.7 -> 165.7 | 283.3 -> 279.8  | 533.3 -> 517.6  |
+| React Aria | 33.3 -> 33.8   | 116.7 -> 129.8 | 216.7 -> 228.6 | 500.0 -> 500.9 | 575.0 -> 577.1  | 566.6 -> 755.8  |
+
+### Touch drag half->full->back: dropped frames (%), before -> after
+
+| Deck       | load=0     | load=100     | load=200     | load=0 legacy | load=100 legacy | load=200 legacy |
+| ---------- | ---------- | ------------ | ------------ | ------------- | --------------- | --------------- |
+| drawerdeck | 0.0 -> 0.0 | 0.0 -> 0.0   | 0.0 -> 0.0   | 0.0 -> 0.0    | 0.0 -> 0.0      | 0.0 -> 0.0      |
+| vaul       | 0.0 -> 1.8 | 24.1 -> 26.6 | 51.7 -> 55.3 | 1.7 -> 1.7    | 25.0 -> 26.6    | 52.0 -> 55.3    |
+| Base UI    | 0.0 -> 0.0 | 13.4 -> 16.5 | 42.6 -> 48.6 | 0.0 -> 0.0    | 13.4 -> 16.5    | 42.6 -> 48.6    |
+| React Aria | 0.0 -> 0.0 | 22.1 -> 29.9 | 50.0 -> 54.1 | 0.0 -> 0.0    | 22.1 -> 29.9    | 50.0 -> 54.1    |
+
+The at-no-load and medium-load moves are not small: Base UI's longest
+stall moves +21.8ms at load=0 and +28.3ms at load=100, and vaul's moves
+-15.5ms at load=100. React Aria's load=200 legacy (unscoped) column moves
+the most of all, 566.6ms to 755.8ms -- a genuine late presentation, not a
+regression from this fix: shard-4 rep2's own trace moves from 566.6ms to
+755.9ms on the legacy (whole-trace) metric alone, while its _scoped_
+longest stall stays 233.7ms either way, because the gesture's last frame
+now presents at its real, later ts, stretching the unscoped tail gap that
+rule 10's own window scoping was already built to exclude.
+
+Every other scenario's metrics (`settleMs`-based) are untouched by this
+fix, since `trace.ts` never scores them; only `touch-drag-half-full-back`'s
+`longestStallMs` and `droppedPct` move.
+
+The per-shard winner table for `touch-drag-half-full-back`'s longest stall
+also moves, though "Overall" stays `tie` at every load either way:
+at load=0, all six shards agreeing on drawerdeck no longer holds after
+the fix -- shards 1 and 3 still pick drawerdeck, but 2, 4, 5 and 6 now
+pick React Aria; at load=100 the split moves from
+drawerdeck/Base UI to drawerdeck/React Aria; at load=200 it moves from a
+drawerdeck/vaul/Base UI three-way split to a drawerdeck/React Aria split.
+Dropped frames' per-shard winners are unchanged by the fix.
 
 Also note: CDP's `Input.dispatchTouchEvent` reaches the renderer only
 after a main frame ends, so under a busy tick every library's drag
