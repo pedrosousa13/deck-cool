@@ -8,8 +8,19 @@ name: Drawer bench
 # a shard's own run. `report` pools every shard's rows into medians, spread
 # and n per cell, plus a per-shard winner table, and uploads both as an
 # artifact -- never to this repo's working tree, since this workflow has no
-# write permission and no secret.
+# write permission and no secret. `report` then gates drawerdeck's public
+# comparison-page claims (#276, decks/drawerdeck/bench/claims.json) against
+# this same pooled run, and fails the job if one broke.
 on:
+  pull_request:
+    paths:
+      - "decks/drawerdeck/**"
+      - ".github/workflows/drawer-bench.yml"
+  push:
+    branches: [main]
+    paths:
+      - "decks/drawerdeck/**"
+      - ".github/workflows/drawer-bench.yml"
   workflow_dispatch:
     inputs:
       reps_per_shard:
@@ -126,8 +137,36 @@ jobs:
             --out-summary report-out/summary.md
           cat report-out/summary.md >> "$GITHUB_STEP_SUMMARY"
 
+      # Gates drawerdeck's own public comparison-page claims (#276,
+      # decks/drawerdeck/bench/claims.json) against this same pooled run,
+      # re-deriving each claimed cell's Overall verdict with aggregate.py's
+      # own cell_winner/excluded_decks (claims_gate.py imports them; no
+      # second winner/tie rule here). `continue-on-error` so the verdict
+      # still reaches the job summary and the artifact below even when a
+      # claim breaks; "Fail if a claim broke" turns that into the job's own
+      # failure, after both are written.
+      - name: Gate drawerdeck's comparison-page claims (#276)
+        id: gate
+        continue-on-error: true
+        run: |
+          python3 decks/drawerdeck/bench/claims_gate.py report-out/aggregate.jsonl \
+            --bundle decks/drawerdeck/bench/bundle-size.json \
+            --claims decks/drawerdeck/bench/claims.json \
+            --out-md report-out/claims-gate.md \
+            --out-json report-out/claims-gate.json
+
+      - name: Put the claims gate's verdict on the job summary
+        if: always()
+        run: cat report-out/claims-gate.md >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: drawer-bench-report
           path: report-out/
           if-no-files-found: error
+
+      - name: Fail if a claim broke
+        if: steps.gate.outcome == 'failure'
+        run: |
+          echo "::error::drawerdeck's comparison-page claims gate (#276) failed; see the job summary above, or claims-gate.md in the drawer-bench-report artifact, for which claim(s) broke."
+          exit 1
