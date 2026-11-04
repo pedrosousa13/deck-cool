@@ -130,6 +130,9 @@ if __name__ == '__main__':
     print('\n### touch-swipe-next: settle time (ms)\n')
     print(table(rows, 'touch-swipe-next', lambda r: r['settleMs']))
 
+    print('\n### touch-swipe-next: motion after release (ms)\n')
+    print(table(rows, 'touch-swipe-next', lambda r: r['motionAfterReleaseMs']))
+
     print('\n### touch-flick-three: longest stall (ms)\n')
     print(table(
         rows, 'touch-flick-three',
@@ -145,14 +148,26 @@ if __name__ == '__main__':
     print('\n### touch-flick-three: settle time (ms)\n')
     print(table(rows, 'touch-flick-three', lambda r: r['settleMs']))
 
+    print('\n### touch-flick-three: motion after release (ms)\n')
+    print(table(rows, 'touch-flick-three', lambda r: r['motionAfterReleaseMs']))
+
     print('\n### mouse-drag-release: settle time (ms)\n')
     print(table(rows, 'mouse-drag-release', lambda r: r['settleMs']))
+
+    print('\n### mouse-drag-release: motion after release (ms)\n')
+    print(table(rows, 'mouse-drag-release', lambda r: r['motionAfterReleaseMs']))
 
     print('\n### wheel-scroll-next: settle time (ms)\n')
     print(table(rows, 'wheel-scroll-next', lambda r: r['settleMs']))
 
+    print('\n### wheel-scroll-next: motion after release (ms)\n')
+    print(table(rows, 'wheel-scroll-next', lambda r: r['motionAfterReleaseMs']))
+
     print('\n### next-button: settle time (ms)\n')
     print(table(rows, 'next-button', lambda r: r['settleMs']))
+
+    print('\n### next-button: motion after release (ms)\n')
+    print(table(rows, 'next-button', lambda r: r['motionAfterReleaseMs']))
 
     print('\n### touch-swipe-next: LoAF total blocking (ms) / count\n')
     print(table(
