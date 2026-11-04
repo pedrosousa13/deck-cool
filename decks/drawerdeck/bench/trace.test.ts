@@ -10,19 +10,36 @@ import { analyzeMotion, type TraceEvent } from './trace.ts';
 
 const US_PER_MS = 1000;
 
+let nextAutoId = 0;
+
+/** A `PipelineReporter`'s begin/end pair (#345): a begin at `beginMs`
+ * carrying the frame's state, and an end at `presentMs` -- when the frame
+ * is shown, for a presented one. `presentMs` defaults to `beginMs`, the
+ * normal case where a frame shows the same vsync it starts in. `id2`
+ * scopes the pair the way Chromium's own id reuse needs: pass the same
+ * `id2` to two calls to build a forked pair that ends (shows) together. */
 function frame(
-  tsMs: number,
-  state: 'STATE_PRESENTED_ALL' | 'STATE_DROPPED' | 'STATE_NO_UPDATE_DESIRED'
-): TraceEvent {
-  return {
+  beginMs: number,
+  state: 'STATE_PRESENTED_ALL' | 'STATE_DROPPED' | 'STATE_NO_UPDATE_DESIRED',
+  presentMs: number = beginMs,
+  id2: string = `auto-${nextAutoId++}`
+): TraceEvent[] {
+  const base = {
     name: 'PipelineReporter',
-    ph: 'b',
-    ts: tsMs * US_PER_MS,
     cat: 'cc,benchmark,disabled-by-default-devtools.timeline.frame',
     pid: 1,
     tid: 1,
-    args: { frame_reporter: { state } }
+    id2: { local: id2 }
   };
+  return [
+    {
+      ...base,
+      ph: 'b',
+      ts: beginMs * US_PER_MS,
+      args: { frame_reporter: { state } }
+    },
+    { ...base, ph: 'e', ts: presentMs * US_PER_MS }
+  ];
 }
 
 function windowStart(tsMs: number): TraceEvent {
@@ -56,7 +73,7 @@ function presentedRun(
 ): TraceEvent[] {
   const out: TraceEvent[] = [];
   for (let t = startMs; t <= endMs; t += cadenceMs) {
-    out.push(frame(t, 'STATE_PRESENTED_ALL'));
+    out.push(...frame(t, 'STATE_PRESENTED_ALL'));
   }
   return out;
 }
@@ -117,12 +134,12 @@ test('a fast finisher that settles at 150ms then idles does not score a worse st
 test('a real 200ms gap mid-gesture, while the drawer still has to move, scores as a 200ms stall', () => {
   const events: TraceEvent[] = [
     windowStart(0),
-    frame(0, 'STATE_PRESENTED_ALL'),
-    frame(16, 'STATE_PRESENTED_ALL'),
-    frame(100, 'STATE_PRESENTED_ALL'), // the main thread stalls here
-    frame(300, 'STATE_PRESENTED_ALL'), // ...for exactly 200ms
-    frame(316, 'STATE_PRESENTED_ALL'),
-    frame(332, 'STATE_PRESENTED_ALL'), // still well inside the window
+    ...frame(0, 'STATE_PRESENTED_ALL'),
+    ...frame(16, 'STATE_PRESENTED_ALL'),
+    ...frame(100, 'STATE_PRESENTED_ALL'), // the main thread stalls here
+    ...frame(300, 'STATE_PRESENTED_ALL'), // ...for exactly 200ms
+    ...frame(316, 'STATE_PRESENTED_ALL'),
+    ...frame(332, 'STATE_PRESENTED_ALL'), // still well inside the window
     windowEnd(450)
   ];
 
@@ -149,4 +166,47 @@ test('idle time between windows is ignored', () => {
   // nowhere near the ~1850ms gap between the windows.
   assert.ok(result.longestStallMs < 20, `${result.longestStallMs}ms`);
   assert.strictEqual(result.activeWindows.length, 2);
+});
+
+test('a frame the main thread holds back scores the stall from when it is shown, not when it started (#345)', () => {
+  const events: TraceEvent[] = [
+    windowStart(0),
+    ...frame(0, 'STATE_PRESENTED_ALL'), // shows immediately
+    // Begins right on schedule, but a busy main thread holds it back 200ms
+    // before it commits and shows.
+    ...frame(16, 'STATE_PRESENTED_ALL', 216),
+    ...frame(220, 'STATE_PRESENTED_ALL'), // back to normal cadence
+    windowEnd(300)
+  ];
+
+  const result = analyzeMotion(events);
+
+  // The real stall is the 216ms the screen stayed still (0 to 216), not
+  // the 204ms gap between when the held-back frame started (16) and when
+  // the next one started (220): scoring begin times puts the stall in the
+  // wrong place and under-reports it.
+  assert.strictEqual(result.longestStallMs, 216);
+});
+
+test('two reporters that end at the same presentation time count as one shown frame (#345)', () => {
+  const events: TraceEvent[] = [
+    windowStart(0),
+    ...frame(0, 'STATE_PRESENTED_ALL'),
+    // A main-thread update misses its vsync and forks: the original
+    // reporter (begun at 16) and the forked one that carries it to the
+    // next vsync (begun at 216) both end -- present -- at 232.
+    ...frame(16, 'STATE_PRESENTED_ALL', 232, 'fork-original'),
+    ...frame(216, 'STATE_PRESENTED_ALL', 232, 'fork-continuation'),
+    ...frame(248, 'STATE_PRESENTED_ALL'),
+    windowEnd(350)
+  ];
+
+  const result = analyzeMotion(events);
+
+  // One shown frame at 232, not two: the real stall is the 232ms gap from
+  // the frame shown at 0 to the one shown at 232, and the next gap, to
+  // 248, is a normal 16ms frame -- not a second, phantom 0ms gap between
+  // the fork's two reporters.
+  assert.strictEqual(result.longestStallMs, 232);
+  assert.strictEqual(result.frameCount, 3);
 });
