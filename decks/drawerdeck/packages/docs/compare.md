@@ -314,3 +314,13 @@ rival's adapter is checked into
 [`decks/drawerdeck/bench/src/`](https://github.com/pedrosousa13/deck-cool/tree/main/decks/drawerdeck/bench/src),
 and that project's own maintainers are invited to flag a misconfiguration
 there.
+
+Every claim in the "At a glance" table above is also gated, not just
+re-run: [`drawer-bench.yml`](https://github.com/pedrosousa13/deck-cool/blob/main/.github/workflows/drawer-bench.yml)
+runs on every pull request and push to `main` that touches
+`decks/drawerdeck/`, and its `report` job checks each claim against that
+run's own Overall verdict, failing the job if drawerdeck falls behind one
+([#276](https://github.com/pedrosousa13/deck-cool/issues/276); the claim
+list itself,
+[`decks/drawerdeck/bench/claims.json`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/bench/claims.json),
+is checked to match this table exactly).
