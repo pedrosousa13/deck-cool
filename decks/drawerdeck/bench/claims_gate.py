@@ -4,12 +4,13 @@
 # claims, one entry per (scenario, metric, load) cell plus bundle size; a
 # test in sites/drawerdeck/src keeps that file and compare.md's "At a
 # glance" table in agreement. This script re-derives each claimed cell's
-# Overall verdict the same way aggregate.py's own render_summary/
-# render_winner_table do -- `cell_winner` and `excluded_decks`, imported
-# from aggregate.py directly, never a second copy of the winner/tie rule --
-# and fails when a claimed "win" isn't an outright win, or a claimed
-# "tie or better" (#139: within one frame, a tie counts as 0, i.e. met)
-# comes back a clear loss.
+# verdict the same way aggregate.py's own render_summary does for the page
+# -- `drawerdeck_verdict` and `excluded_decks`, imported from aggregate.py
+# directly, never a second copy of the win/tie/loss rule -- and fails when
+# a claimed "win" isn't an outright win, or a claimed "tie or better"
+# (#280's revised 1.0 bar: a tie is what the sharded CI bench reports when
+# its shards disagree, or when the gap sits inside the spread; no metric
+# may be a clear loss) comes back a clear loss.
 #
 # Usage:
 #   python3 claims_gate.py <aggregate.jsonl> --bundle <bundle-size.json> \
@@ -22,7 +23,7 @@ import json
 import sys
 from collections import namedtuple
 
-from aggregate import METRICS, cell_winner, excluded_decks
+from aggregate import METRICS, drawerdeck_verdict, excluded_decks
 
 Verdict = namedtuple('Verdict', ['claim', 'actual', 'ok'])
 
@@ -72,14 +73,16 @@ def actual_for_cell(rows, claim, lookup):
         return 'unknown metric'
     pick, lower = lookup[key]
     excluded = excluded_decks(rows, claim['scenario'], claim['load'])
-    winner, _ = cell_winner(rows, claim['scenario'], claim['load'], pick, lower, excluded)
-    if winner == 'drawerdeck':
+    verdict, leader = drawerdeck_verdict(
+        rows, claim['scenario'], claim['load'], pick, lower, excluded
+    )
+    if verdict == 'win':
         return 'win'
-    if winner == 'tie':
+    if verdict == 'tie':
         return 'tie'
-    if winner in (None, 'n/a'):
+    if verdict == 'n/a':
         return 'missing'
-    return winner  # another deck's name: a clear loss
+    return leader  # a clear loss, named by the rival that actually leads
 
 
 def meets(claim_kind, actual):
@@ -106,9 +109,9 @@ def render_md(verdicts):
     lines = [
         '# Drawerdeck claims gate (#276)\n',
         'Checks every claim in `claims.json` against this run\'s own '
-        'Overall verdict (the same `cell_winner`/`excluded_decks` rules '
-        '`aggregate.py` uses for the comparison page -- no second rule '
-        'here).\n',
+        'drawerdeck verdict (the same `drawerdeck_verdict`/`excluded_decks` '
+        'rules `aggregate.py` uses for the comparison page -- no second '
+        'rule here).\n',
         '| Claim | Claimed | Found | Result |',
         '| --- | --- | --- | --- |',
     ]

@@ -5,6 +5,7 @@
 
 import unittest
 
+from aggregate import drawerdeck_verdict, excluded_decks
 from claims_gate import evaluate
 
 
@@ -82,9 +83,10 @@ class AllClaimsHoldTest(unittest.TestCase):
         self.assertTrue(verdicts[0].ok)
 
     def test_a_tie_passes_a_tie_or_better_claim(self):
-        # Shards disagree on the stall's winner (#139: within one frame
-        # still counts), so aggregate.py's own cell_winner reports "tie" --
-        # which a "tie_or_better" claim accepts.
+        # Shards disagree on the stall's winner, and drawerdeck itself
+        # wins one of them, so aggregate.py's own drawerdeck_verdict
+        # reports "tie" (#280's revised bar) -- which a "tie_or_better"
+        # claim accepts.
         rows = [
             drag_row('drawerdeck', 0, 34.0, 0.0, shard='1'),
             drag_row('reactaria', 0, 34.1, 0.0, shard='1'),
@@ -163,6 +165,81 @@ class ClaimMissingFromTheRunTest(unittest.TestCase):
         verdicts = evaluate(rows, [], [unknown])
         self.assertEqual(verdicts[0].actual, 'unknown metric')
         self.assertFalse(verdicts[0].ok)
+
+
+def settle_pick(r):
+    return r['settleMs']
+
+
+class DrawerdeckVerdictTest(unittest.TestCase):
+    # aggregate.py's own drawerdeck_verdict, exercised directly (#348's
+    # review of #276): cell_winner's generic Overall can read "tie" while
+    # drawerdeck itself is simply behind, so this is the rule every
+    # drawerdeck claim -- the page and the gate alike -- is now judged
+    # against.
+
+    def test_two_rivals_tie_and_drawerdeck_loses_is_a_loss(self):
+        # vaul and baseui swap first and second place shard by shard (a
+        # real tie between the two rivals), but drawerdeck trails both of
+        # them by far more than either rival's own spread, on every
+        # shard. A generic Overall would read "tie" here (the shards
+        # disagree, just not about drawerdeck); drawerdeck's own verdict
+        # must not let that hide an outright loss.
+        rows = [
+            row('vaul', 'mouse-drag-throw', 0, 100, shard='1'),
+            row('baseui', 'mouse-drag-throw', 0, 102, shard='1'),
+            row('drawerdeck', 'mouse-drag-throw', 0, 300, shard='1'),
+            row('vaul', 'mouse-drag-throw', 0, 102, shard='2'),
+            row('baseui', 'mouse-drag-throw', 0, 100, shard='2'),
+            row('drawerdeck', 'mouse-drag-throw', 0, 300, shard='2'),
+            row('vaul', 'mouse-drag-throw', 0, 101, shard='3'),
+            row('baseui', 'mouse-drag-throw', 0, 100.9, shard='3'),
+            row('drawerdeck', 'mouse-drag-throw', 0, 300, shard='3'),
+        ]
+        excluded = excluded_decks(rows, 'mouse-drag-throw', 0)
+        verdict, leader = drawerdeck_verdict(
+            rows, 'mouse-drag-throw', 0, settle_pick, True, excluded
+        )
+        self.assertEqual(verdict, 'loss')
+        self.assertEqual(leader, 'baseui')
+
+    def test_drawerdeck_within_the_leading_deck_s_spread_is_a_tie(self):
+        # vaul alone leads every shard, but drawerdeck's own gap to
+        # vaul's pooled median (6ms) sits inside vaul's own spread across
+        # shards (10ms) -- the same margin rule 7 would call noise for
+        # any other deck.
+        rows = [
+            row('vaul', 'open-to-half', 0, 95, shard='1'),
+            row('drawerdeck', 'open-to-half', 0, 106, shard='1'),
+            row('vaul', 'open-to-half', 0, 100, shard='2'),
+            row('drawerdeck', 'open-to-half', 0, 106, shard='2'),
+            row('vaul', 'open-to-half', 0, 105, shard='3'),
+            row('drawerdeck', 'open-to-half', 0, 106, shard='3'),
+        ]
+        excluded = excluded_decks(rows, 'open-to-half', 0)
+        verdict, leader = drawerdeck_verdict(rows, 'open-to-half', 0, settle_pick, True, excluded)
+        self.assertEqual(verdict, 'tie')
+        self.assertEqual(leader, 'vaul')
+
+    def test_drawerdeck_winning_one_shard_outright_is_a_tie(self):
+        # drawerdeck's pooled median (90) trails vaul's (60) by far more
+        # than vaul's own spread (1ms) -- not within-spread noise -- but
+        # drawerdeck's own rows won shard 2 outright, firsthand evidence
+        # it isn't simply behind (#280's revised bar).
+        rows = [
+            row('vaul', 'mouse-drag-throw', 0, 60, shard='1'),
+            row('drawerdeck', 'mouse-drag-throw', 0, 90, shard='1'),
+            row('vaul', 'mouse-drag-throw', 0, 60, shard='2'),
+            row('drawerdeck', 'mouse-drag-throw', 0, 55, shard='2'),
+            row('vaul', 'mouse-drag-throw', 0, 61, shard='3'),
+            row('drawerdeck', 'mouse-drag-throw', 0, 90, shard='3'),
+        ]
+        excluded = excluded_decks(rows, 'mouse-drag-throw', 0)
+        verdict, leader = drawerdeck_verdict(
+            rows, 'mouse-drag-throw', 0, settle_pick, True, excluded
+        )
+        self.assertEqual(verdict, 'tie')
+        self.assertEqual(leader, 'vaul')
 
 
 if __name__ == '__main__':
