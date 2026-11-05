@@ -4,10 +4,19 @@
 # medians/spread/n per (deck, scenario, load) cell, and separately computes
 # a per-shard winner for each cell -- the winning deck inside that shard's
 # own rows only -- so a reader can see whether the six shards agree before
-# trusting the pooled number. A cell's overall winner is "tie" when the
-# shards disagree with each other, or when the gap between the best and
-# second-best pooled medians is no larger than the best deck's own spread
-# across all shards (the margin could be noise).
+# trusting the pooled number. A cell's overall winner (`cell_winner`) is
+# "tie" when the shards disagree with each other, or when the gap between
+# the best and second-best pooled medians is no larger than the best deck's
+# own spread across all shards (the margin could be noise). That Overall
+# column answers "did the shards agree on a winner", not "how did drawerdeck
+# itself do" -- the two can differ, since a disagreement between two rivals
+# over who comes second says nothing about whether drawerdeck is actually
+# behind both of them (#348's review of #276). `drawerdeck_verdict` answers
+# the second question directly, and is what every drawerdeck claim (the
+# comparison page's "At a glance" table and detailed sections, the job
+# summary's Winner column, and `claims_gate.py`) is judged against, so
+# there is one rule for what drawerdeck itself may claim (#280's revised
+# 1.0 bar).
 #
 # Usage:
 #   python3 aggregate.py <shards-dir> --bundle <bundle-size.json> \
@@ -227,6 +236,65 @@ def cell_winner(rows, scenario, load_, pick, lower_is_better, excluded):
     return ('tie' if tie else best_deck), per_shard_winner
 
 
+def drawerdeck_verdict(rows, scenario, load_, pick, lower_is_better, excluded):
+    # #348's fix to #276/#280: `cell_winner`'s Overall column is "tie"
+    # whenever the shards disagree about anyone's ranking, or the gap
+    # between the pooled top two is inside the leading deck's own spread
+    # -- neither condition says anything about where drawerdeck itself
+    # sits, so drawerdeck could be last and still read as a harmless
+    # "tie". This asks the one question a drawerdeck claim actually needs
+    # answered: is drawerdeck itself winning, tied, or behind.
+    #
+    # Returns (verdict, leader): `leader` is the cell's actual
+    # best-pooled-median deck (drawerdeck on a win, the rival drawerdeck
+    # is being judged against on a tie or a loss, None when nothing
+    # scored).
+    #
+    #   'win'  -- unchanged from today: `cell_winner` itself says
+    #             'drawerdeck' (every shard agreed, and the gap to the
+    #             runner-up cleared drawerdeck's own spread).
+    #   'tie'  -- not that outright win, but either drawerdeck's own gap
+    #             to the leading deck's median sits inside *that leading
+    #             deck's* own spread across shards -- the same spread
+    #             rule 7 (#266) already judges a win's gap against, so a
+    #             margin aggregate.py calls noise for anyone else is
+    #             noise for drawerdeck too -- or drawerdeck's own rows
+    #             won at least one shard outright. Either is firsthand
+    #             evidence drawerdeck isn't simply behind (#280's revised
+    #             bar: "a tie is what the sharded CI bench reports when
+    #             its shards disagree, or when the gap sits inside the
+    #             spread. No metric may be a clear loss.").
+    #   'loss' -- neither of the above: drawerdeck trails the leading
+    #             deck by more than that deck's own spread, and never won
+    #             a single shard.
+    #   'n/a'  -- drawerdeck itself is excluded here (#294/#311 rules
+    #             11/12, "not supported"/"did not close"), or no deck
+    #             scored this cell at all.
+    overall, per_shard_winner = cell_winner(rows, scenario, load_, pick, lower_is_better, excluded)
+    if overall == 'drawerdeck':
+        return 'win', 'drawerdeck'
+    if overall == 'n/a' or 'drawerdeck' in excluded:
+        return 'n/a', None
+
+    pooled = {
+        d: v for d, v in medians(rows, scenario, load_, pick).items() if d not in excluded
+    }
+    drawerdeck_vals = pooled.get('drawerdeck') or []
+    if not drawerdeck_vals:
+        return 'n/a', None
+
+    leader, _gap, leader_med = winner_of(pooled, lower_is_better)
+    if any(winner == 'drawerdeck' for winner in per_shard_winner.values()):
+        return 'tie', leader
+
+    leader_vals = pooled[leader]
+    leader_spread = (max(leader_vals) - min(leader_vals)) if len(leader_vals) > 1 else 0
+    own_gap = abs(st.median(drawerdeck_vals) - leader_med)
+    if own_gap <= leader_spread:
+        return 'tie', leader
+    return 'loss', leader
+
+
 def render_tables(rows):
     lines = []
     for scenario, _metric, label, _lower, pick, legacy_pick in METRICS:
@@ -322,12 +390,20 @@ def render_winner_table(rows):
 
 
 def render_summary(rows, bundle_rows):
+    # The Winner column here is drawerdeck's own verdict (#348/#280), not
+    # `cell_winner`'s generic Overall: a win or a loss is shown by the
+    # deck that actually leads the cell (drawerdeck itself on a win, the
+    # rival drawerdeck trails on a loss), and 'tie' only for the cases
+    # `drawerdeck_verdict` calls a tie. This is the one table the
+    # comparison page's "At a glance" Winner column and `claims_gate.py`
+    # both read, so there is one rule for what counts as a claim.
     lines = ['| Scenario / metric | load | Winner |', '| --- | --- | --- |']
     for scenario, _metric, label, lower, pick, _legacy_pick in METRICS:
         for load_ in LOADS:
             excluded = excluded_decks(rows, scenario, load_)
-            overall, _ = cell_winner(rows, scenario, load_, pick, lower, excluded)
-            lines.append(f'| {label} | {load_} | {overall} |')
+            verdict, leader = drawerdeck_verdict(rows, scenario, load_, pick, lower, excluded)
+            shown = 'tie' if verdict == 'tie' else (leader if leader else 'n/a')
+            lines.append(f'| {label} | {load_} | {shown} |')
     if bundle_rows:
         smallest = min(bundle_rows, key=lambda r: r['bytes'])
         lines.append(
