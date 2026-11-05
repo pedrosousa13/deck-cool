@@ -11,10 +11,16 @@ export interface AtAGlanceRow {
   winner: string;
 }
 
-/** One entry of claims.json, as read off disk (only the fields this module
- * reads; the gate script reads the rest). */
+/** One entry of claims.json, as read off disk. `scenario`, `metric` and
+ * `load` are also what claims_gate.py reads to find the cell; this module
+ * reads them too (#348's review of #276), to catch a `label` that no
+ * longer matches its own (scenario, metric, load) -- the load changing
+ * under an unchanged label, say, or the scenario changing under both. */
 export interface ClaimsFileEntry {
   label: string;
+  scenario: string;
+  metric: string;
+  load: number | null;
   claim: "win" | "tie_or_better";
 }
 
@@ -28,6 +34,58 @@ const NON_BENCH_LABELS = new Set([
   "Built on native `<dialog>` and native scrolling",
   "React versions",
 ]);
+
+/** The exact bolded text compare.md's Winner column uses to name a rival
+ * outright (a clear loss for drawerdeck). Kept in sync by hand with the
+ * table, the same way NON_BENCH_LABELS is. */
+const RIVALS = ["vaul", "Base UI", "React Aria"];
+
+/** compare.md's own "X, <load suffix>" convention for a bench row's
+ * Question column, and aggregate.py's own `label` prefix for each
+ * (scenario, metric) pair it scores (`METRICS` in aggregate.py). Used to
+ * derive what a claims.json entry's `label` ought to read from its own
+ * `scenario`/`metric`/`load`, so a scenario, metric or load that changes
+ * without its label following is caught, not silently reinterpreted. */
+const LOAD_SUFFIX: Record<string, string> = {
+  "0": "no load",
+  "100": "medium load (100ms busy tick)",
+  "200": "heavy load (200ms busy tick)",
+};
+
+const CELL_LABEL_PREFIX: Record<string, string> = {
+  "touch-drag-half-full-back:droppedPct": "Dropped frames while dragging",
+  "touch-drag-half-full-back:longestStallMs": "Longest stall while dragging",
+  "touch-flick-dismiss:settleMs": "Flick down closes it: settle time",
+  "mouse-drag-throw:settleMs": "Mouse throw: settle time",
+  "open-to-half:settleMs": "Open to half: settle time",
+};
+
+/** The label a claims.json entry's own (scenario, metric, load) implies,
+ * or `null` when the (scenario, metric) pair or the load isn't one this
+ * module knows how to render -- an unrecognised cell, not silently
+ * accepted. Bundle size has its own fixed label, no load suffix. */
+export function expectedLabel(
+  entry: Pick<ClaimsFileEntry, "scenario" | "metric" | "load">,
+): string | null {
+  if (entry.scenario === "bundle-size") {
+    return "Bundle size (min+gzip, React external)";
+  }
+  const prefix = CELL_LABEL_PREFIX[`${entry.scenario}:${entry.metric}`];
+  const suffix =
+    entry.load === null ? undefined : LOAD_SUFFIX[String(entry.load)];
+  if (!prefix || !suffix) return null;
+  return `${prefix}, ${suffix}`;
+}
+
+/** Whether a bench row's raw Winner text is one `expectedClaim` can make
+ * sense of: "Tie", drawerdeck bolded, or exactly one rival named and
+ * bolded (a clear loss, which claims.json never lists a claim for). Any
+ * other text -- a typo, an unbolded name, two rivals bolded together --
+ * is unrecognised, not silently read as "no claim". */
+function isRecognizedWinnerText(trimmed: string): boolean {
+  if (trimmed === "Tie" || trimmed === "**drawerdeck**") return true;
+  return RIVALS.some((rival) => trimmed === `**${rival}**`);
+}
 
 function cellsOf(line: string): string[] {
   return line
@@ -50,7 +108,9 @@ export function parseAtAGlance(markdown: string): AtAGlanceRow[] {
   const rest = markdown.slice(start + heading.length);
   const nextHeading = rest.indexOf("\n## ");
   const section = nextHeading === -1 ? rest : rest.slice(0, nextHeading);
-  const lines = section.split("\n").filter((line) => line.trim().startsWith("|"));
+  const lines = section
+    .split("\n")
+    .filter((line) => line.trim().startsWith("|"));
   // lines[0] is the header row, lines[1] the `| --- | ... |` separator.
   return lines.slice(2).map((line) => {
     const cells = cellsOf(line);
@@ -61,7 +121,9 @@ export function parseAtAGlance(markdown: string): AtAGlanceRow[] {
 /** What a Winner cell's raw text claims for drawerdeck, or `null` when it
  * doesn't claim drawerdeck wins or ties this row at all (a rival's own win,
  * or several decks bolded together, as the feature-parity rows show). */
-export function expectedClaim(winnerCell: string): ClaimsFileEntry["claim"] | null {
+export function expectedClaim(
+  winnerCell: string,
+): ClaimsFileEntry["claim"] | null {
   const trimmed = winnerCell.trim();
   if (trimmed === "Tie") return "tie_or_better";
   if (trimmed === "**drawerdeck**") return "win";
@@ -70,18 +132,61 @@ export function expectedClaim(winnerCell: string): ClaimsFileEntry["claim"] | nu
 
 /** Every disagreement between compare.md's "At a glance" table and
  * claims.json, in both directions: a row claiming something claims.json
- * doesn't have, and a claims.json entry with no matching row. Empty means
- * they agree. */
-export function diffClaims(markdown: string, claims: ClaimsFileEntry[]): string[] {
+ * doesn't have, a claims.json entry with no matching row, a claims.json
+ * entry whose label doesn't match its own scenario/metric/load, a
+ * duplicate claims.json entry, and an unrecognised Winner cell on a bench
+ * row. Empty means they agree.
+ *
+ * Duplicate labels are reported once, as their own problem, and then
+ * skipped by every other check below -- not also flagged "no matching
+ * row" or "label doesn't match", which would just be noise about the
+ * same root cause. */
+export function diffClaims(
+  markdown: string,
+  claims: ClaimsFileEntry[],
+): string[] {
   const rows = parseAtAGlance(markdown);
-  const byLabel = new Map(claims.map((claim) => [claim.label, claim]));
-  const matched = new Set<string>();
   const problems: string[] = [];
+
+  const byLabel = new Map<string, ClaimsFileEntry>();
+  const duplicated = new Set<string>();
+  for (const claim of claims) {
+    if (byLabel.has(claim.label)) {
+      duplicated.add(claim.label);
+    } else {
+      byLabel.set(claim.label, claim);
+    }
+  }
+  for (const label of duplicated) {
+    problems.push(`claims.json has more than one entry labelled "${label}"`);
+  }
+
+  for (const claim of claims) {
+    if (duplicated.has(claim.label)) continue;
+    const expected = expectedLabel(claim);
+    if (expected === null) {
+      problems.push(
+        `claims.json's "${claim.label}" names a (scenario, metric, load) this check doesn't recognise (scenario: ${claim.scenario}, metric: ${claim.metric}, load: ${claim.load})`,
+      );
+    } else if (expected !== claim.label) {
+      problems.push(
+        `claims.json's "${claim.label}" entry's own scenario/metric/load imply the label "${expected}", not "${claim.label}"`,
+      );
+    }
+  }
+
+  const matched = new Set<string>();
 
   for (const { label, winner } of rows) {
     if (NON_BENCH_LABELS.has(label)) continue;
+    if (!isRecognizedWinnerText(winner)) {
+      problems.push(
+        `"${label}"'s Winner ("${winner}") is neither drawerdeck, a tie, nor a named rival -- compare.md's table changed shape here`,
+      );
+      continue;
+    }
     const expected = expectedClaim(winner);
-    const claim = byLabel.get(label);
+    const claim = duplicated.has(label) ? undefined : byLabel.get(label);
     if (expected === null) {
       if (claim) {
         problems.push(
@@ -92,15 +197,24 @@ export function diffClaims(markdown: string, claims: ClaimsFileEntry[]): string[
     }
     matched.add(label);
     if (!claim) {
-      problems.push(`"${label}" claims "${expected}" in compare.md's At a glance table but has no entry in claims.json`);
+      if (!duplicated.has(label)) {
+        problems.push(
+          `"${label}" claims "${expected}" in compare.md's At a glance table but has no entry in claims.json`,
+        );
+      }
     } else if (claim.claim !== expected) {
-      problems.push(`"${label}": compare.md's table claims "${expected}", claims.json says "${claim.claim}"`);
+      problems.push(
+        `"${label}": compare.md's table claims "${expected}", claims.json says "${claim.claim}"`,
+      );
     }
   }
 
   for (const claim of claims) {
+    if (duplicated.has(claim.label)) continue;
     if (!matched.has(claim.label)) {
-      problems.push(`claims.json's "${claim.label}" has no matching row in compare.md's At a glance table`);
+      problems.push(
+        `claims.json's "${claim.label}" has no matching row in compare.md's At a glance table`,
+      );
     }
   }
 
