@@ -27,5 +27,17 @@ declare module 'vitest/internal/browser' {
     dragPointerMoveTo: (x: number, y: number) => Promise<void>;
     /** Releases the pointer `dragPointerDown` started. */
     dragPointerUp: () => Promise<void>;
+    /** A real OS-level touch tap (Playwright's own `page.touchscreen`,
+     * which needs the browser context's `hasTouch` option, already set in
+     * `../../vitest.config.ts`): on the element `selector` resolves to, at
+     * `offsetX`/`offsetY` from its own top-left corner. Declared here, not
+     * only in `@drawerdeck/react`'s own copy of this file, since
+     * `keyboard.test.ts`'s own #330 tests (the touchend-focus guard) call
+     * it directly, with no React involved. */
+    tapAt: (
+      selector: string,
+      offsetX: number,
+      offsetY: number
+    ) => Promise<void>;
   }
 }
