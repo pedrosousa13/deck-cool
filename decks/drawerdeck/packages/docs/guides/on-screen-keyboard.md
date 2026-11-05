@@ -96,22 +96,38 @@ side.
 iOS Safari's own response to a focus inside a scrollable area is to scroll
 the _whole page_ so the focused field sits centered in the visible window.
 Since `Drawer.Popup` is `position: fixed`, this can push its own top edge
-above that window for as long as the pan lasts. The engine does not try to
-stop or undo this: while typing, the drawer's own top edge may move up with
-Safari's own pan, the same way React Aria's own `Sheet` already lets happen
-on iOS.
+above that window for as long as the pan lasts.
 
-`--drawer-keyboard-inset` and the scroll-to-clear step above (see "Keeping
-the field clear of the keyboard") still bring the focused field itself back
-above the keyboard regardless, no matter where the pan leaves the Panel:
-the scroll step reads the real visible window from `Drawer.Popup`'s own
-rect plus `visualViewport`'s current `offsetTop`, not `visualViewport`'s
-numbers alone: a real iPhone reports a field's own
-`getBoundingClientRect()` in visual-viewport coordinates during a held pan,
-and the Popup's own rect shifts by the exact same amount, so adding its
-`offsetTop` back cancels that shift. Only the Panel's own top edge is left
-to the browser: the engine applies no transform or translate of its own to
-counter the pan.
+For a modal drawer on touch WebKit (real iOS Safari, and a WKWebView
+wrapper around it), the engine now prevents the pan outright instead of
+letting it happen (#330: a real iPhone found the pan sometimes held at a
+fixed offset for as long as a field stayed focused, instead of settling,
+which left the field off screen the whole time). It locks `<html>` to
+`overflow: hidden` for as long as the drawer is open, and takes over focus
+itself on a `touchend` that lands on a not-yet-focused keyboard field
+inside the Panel, calling `preventDefault()` and `focus({preventScroll:
+true})` before the browser's own tap-to-focus -- and the pan it brings --
+ever runs. A tap on a field that already has focus is left alone, so caret
+placement and text selection inside it are still a real tap's own job. This
+only engages for a modal drawer: a non-modal one shares the page with
+content outside it, so locking the whole page's own scroll is a bigger
+change than it owns.
+
+Everywhere else (a non-modal drawer, a non-WebKit browser, or WebKit with
+no touch), the engine does not try to stop or undo the pan: while typing,
+the drawer's own top edge may move up with Safari's own pan, the same way
+React Aria's own `Sheet` already lets happen on iOS. `--drawer-keyboard-
+inset` and the scroll-to-clear step above (see "Keeping the field clear of
+the keyboard") still bring the focused field itself back above the
+keyboard regardless, no matter where the pan leaves the Panel: the scroll
+step reads the real visible window straight from `visualViewport`'s own
+`offsetTop` and `height`. An earlier version of this read folded in
+`Drawer.Popup`'s own `getBoundingClientRect()` too, reasoning that a fixed,
+inset-0 element's rect during a held pan shifts by exactly `-offsetTop`,
+which adding `offsetTop` back then cancels; #330's own real-device evidence
+found a pan that did not settle the way that cancellation was checked
+against, so the engine now reads `visualViewport`'s own numbers directly
+instead.
 
 Current React Aria (`react-aria` 3.53.1) no longer stops the pan with a
 field transform either: its own `usePreventScroll` sets `overflow: hidden`

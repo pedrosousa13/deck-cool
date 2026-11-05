@@ -632,6 +632,63 @@ function opensKeyboard(el: EventTarget | null): boolean {
   return !NON_TEXT_INPUT_TYPES.has(el.type);
 }
 
+/** True on a touch-capable WebKit engine: real iOS Safari, and a WKWebView
+ * wrapper around it (Brave, `createDrawer`'s own on-screen-keyboard module
+ * doc cites one) -- the only environment #330's "Safari's own focus pan,
+ * prevented for a modal drawer" guard, below, is even a risk in.
+ * `maxTouchPoints > 0` is this file's own touch signal, not `ontouchstart`
+ * sniffing (a touch-less desktop build can still carry that): desktop
+ * Chromium, desktop Safari with no touchscreen and Android Chrome all read
+ * `false` here (`Chrome`/`CriOS`/`CrMo`/`Android` are excluded below even
+ * where the UA also carries an `AppleWebKit` token, which every
+ * Chromium-based browser's own UA does). A Chrome-branded iOS browser
+ * (`CriOS`) also reads `false`: it renders on the same WebKit engine and so
+ * carries the same pan risk in principle, but #330's own real-device
+ * evidence is Safari-specific, and narrowing to it keeps this guard from
+ * reaching further than what it was actually checked against. Not cached
+ * (unlike React Aria's own `isWebKit`/`isIOS`, `platform.mjs`): `open()`
+ * calls this at most once per drawer open, never a hot path, and leaving it
+ * uncached is what lets `keyboard.test.ts`'s own guard tests mock
+ * `navigator.maxTouchPoints` per test instead of only on a module nothing
+ * has imported yet. */
+function isTouchWebKit(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    navigator.maxTouchPoints > 0 &&
+    /AppleWebKit/.test(navigator.userAgent) &&
+    !/Chrome|CriOS|CrMo|Android/.test(navigator.userAgent)
+  );
+}
+
+/** `<html>`'s own `overflow`, locked to `hidden` for as long as any modal
+ * drawer anywhere on the page has #330's pan guard engaged, and restored to
+ * exactly what it was before the first one locked it once the last one
+ * releases: a page-wide resource two nested or sibling modal drawers can
+ * both need at once, the same ref-counted shape React Aria's own
+ * `usePreventScroll` (`preventScrollCount`/`restore`,
+ * `usePreventScroll.mjs`) already uses for the same lock. */
+let htmlOverflowLockCount = 0;
+let htmlOverflowRestore: (() => void) | undefined;
+function lockHtmlOverflowForKeyboard() {
+  if (htmlOverflowLockCount === 0) {
+    const html = document.documentElement;
+    const previous = html.style.overflow;
+    html.style.overflow = 'hidden';
+    htmlOverflowRestore = () => {
+      html.style.overflow = previous;
+    };
+  }
+  htmlOverflowLockCount += 1;
+}
+function unlockHtmlOverflowForKeyboard() {
+  if (htmlOverflowLockCount === 0) return;
+  htmlOverflowLockCount -= 1;
+  if (htmlOverflowLockCount === 0) {
+    htmlOverflowRestore?.();
+    htmlOverflowRestore = undefined;
+  }
+}
+
 /** The longest `transition-duration` a consumer declared on `el`, in
  * milliseconds; 0 when none is declared (so the caller waits for
  * `transitionend` where there is a transition to end, and not at all where
@@ -1506,6 +1563,7 @@ export function createDrawer(
     if (phase === 'closed') return;
     panelVisibilityObserver.unobserve(panel);
     detachKeyboardListeners();
+    detachPanGuard();
     viewport.style.scrollSnapType = `${horizontal ? 'x' : 'y'} mandatory`;
     // `close()` itself restores focus to whatever had it before `open()`
     // called `showModal()` -- closed first, so a consumer's own focus
@@ -2073,6 +2131,16 @@ export function createDrawer(
   // expand-and-scroll behavior just above still bring the focused field
   // itself back above the keyboard; only the Panel's own top edge is left
   // to the browser.
+  //
+  // Amended for #330: a real iPhone found Safari holding that pan at a
+  // fixed `offsetTop` for as long as a field stayed focused, instead of
+  // settling the way this section's own two validated replays do, which
+  // left the field itself off screen for the whole time. For a modal
+  // drawer on touch WebKit, the pan is now prevented before it starts
+  // instead of chased afterward ("Safari's own focus pan, prevented for a
+  // modal drawer", below); `visibleWindow`/`ensureFieldVisible`, just
+  // below, stay as the fallback for everything that guard does not cover
+  // (a non-modal drawer, a non-WebKit browser, or WebKit with no touch).
   let keyboardInset = 0;
   let keyboardListenersAttached = false;
 
@@ -2103,27 +2171,26 @@ export function createDrawer(
    * confirmed one exists, kept only so this has a defined answer rather
    * than reading undefined fields off `undefined`.
    *
-   * Measured from the dialog's own `getBoundingClientRect()`, not
-   * `visualViewport.offsetTop` alone: on a real iPhone (iOS 18.7), a field's
-   * own `getBoundingClientRect()` during a held pan is already reported in
-   * visual-viewport coordinates, not layout-viewport ones, and so is the
-   * fixed, inset-0 dialog's -- it reads `top: -offsetTop`,
-   * `bottom: innerHeight - offsetTop` (the real device logs this section's
-   * own module doc cites: `offsetTop` 336 gives a dialog rect of
-   * `-336..331`, 192 gives `-192..475`). Adding `vv.offsetTop` back to the
-   * dialog's own (already-shifted) top cancels that shift and lands this at
-   * `0`, so the window this returns sits in the same coordinates the
-   * field's own rect does, there or in Chromium/WebKit, where the dialog
-   * never actually moves and this comes out identical to the old, simpler
-   * formula. */
+   * `vv.offsetTop`/`vv.offsetTop + vv.height` directly (#330): #327's own
+   * first version of this folded in the dialog's own
+   * `getBoundingClientRect().top`, reasoning that a fixed, inset-0 dialog's
+   * own rect during a held pan reads `-offsetTop`, which adding
+   * `vv.offsetTop` back then cancels to `0`. A real iPhone (iOS 18.7,
+   * 2026-11-04) found Safari holding a pan at a fixed `offsetTop` for the
+   * whole time a field stayed focused, unlike the two settling replays
+   * that cancellation was checked against, and left the field off screen
+   * regardless: that cancellation depends on the dialog's own rect
+   * tracking the pan exactly, which nothing here can actually verify holds
+   * for every held pan. `visualViewport`'s own numbers alone are what it
+   * already, directly reports as the visible window's own bounds, with
+   * nothing else folded in to possibly disagree with them. */
   function visibleWindow(): { top: number; bottom: number } {
     const vv = window.visualViewport;
     if (!vv) {
       const rect = viewport.getBoundingClientRect();
       return { top: rect.top, bottom: rect.bottom };
     }
-    const top = dialog.getBoundingClientRect().top + vv.offsetTop;
-    return { top, bottom: top + vv.height };
+    return { top: vv.offsetTop, bottom: vv.offsetTop + vv.height };
   }
 
   /** Moves to the largest snap point whenever a keyboard field inside the
@@ -2313,6 +2380,94 @@ export function createDrawer(
       parts.content.style.paddingBottom = '';
       parts.content.style.scrollPaddingBottom = '';
     }
+  }
+
+  // ---------- Safari's own focus pan, prevented for a modal drawer (#330)
+  // ----------
+  // Layer 1 of #330's own fix, ahead of the inset math above: a real
+  // iPhone found Safari holding its own focus-triggered pan at a fixed
+  // `offsetTop` for as long as a field stayed focused, instead of settling
+  // the way the keyboard section's own two validated replays do, leaving
+  // the field off screen the whole time regardless of what
+  // `ensureFieldVisible` did. React Aria's own `usePreventScroll` (mobile
+  // WebKit branch, `usePreventScroll.mjs`) and Base UI's
+  // `DrawerVirtualKeyboardProvider` both already avoid the pan outright
+  // rather than chase it: `overflow: hidden` on `<html>` while open, and a
+  // `touchend` on a keyboard field that is not focused yet takes over the
+  // focus itself before the browser's own default tap-to-focus -- and the
+  // pan that comes with it -- ever runs. This ports only that core: no
+  // off-screen `translateY` on the field around focus (Base UI's own
+  // `overrideGeometryDuringFocus`, and the vaul-derived trick #327 itself
+  // already tried and the maintainer's own ruling dropped, this file's own
+  // on-screen-keyboard module doc above) and no page-wide `touchmove`/
+  // `blur` handling or `HTMLElement.prototype.focus` override (React
+  // Aria's own, each reaching well past one drawer's own Panel). A tap on
+  // a field that already has focus is left alone, `preventDefault` and
+  // all: caret placement and text selection inside it are a real tap's own
+  // job, never this guard's.
+  //
+  // Modal only: a non-modal drawer shares the page with content the user
+  // can still interact with outside it, so locking the whole page's own
+  // scroll for one is a bigger behavior change than this drawer owns. It
+  // keeps relying on Safari's own pan and the `visibleWindow`/
+  // `ensureFieldVisible` fallback above instead, same as before this round.
+  //
+  // Touch and WebKit only (`isTouchWebKit`, module scope above): the pan
+  // this guards against is iOS Safari's own (and a WKWebView wrapper
+  // around it, same engine), so a mouse, a trackpad or a non-WebKit
+  // browser never reaches `onTouchEndKeyboardFocus` at all -- desktop and
+  // Android stay exactly as they were.
+  let panGuardAttached = false;
+
+  /** A keyboard-opening field (`opensKeyboard`) at or inside `node`, scoped
+   * to this drawer's own Panel the same way `focusedKeyboardField` is
+   * (`ownsTarget`, #332): with no portal, a nested drawer's own field is a
+   * real DOM descendant of this Panel too, and is never this drawer's own
+   * to focus. */
+  function keyboardFieldAt(node: Element | null): HTMLElement | null {
+    const field = node?.closest<HTMLElement>('input, textarea') ?? null;
+    if (!field || !panel.contains(field) || !opensKeyboard(field)) {
+      return null;
+    }
+    if (!ownsTarget(field)) return null;
+    return field;
+  }
+
+  /** `preventDefault` stops the browser's own default tap-to-focus (and
+   * the pan it brings) from running at all; the manual, synchronous
+   * `focus({preventScroll: true})` opens the keyboard without it, the same
+   * two steps React Aria's and Base UI's own equivalents both take. A tap
+   * on a field that is not this drawer's own keyboard field (a button, a
+   * link, nothing at all), or on one already focused, does neither: a real
+   * tap's own default handles the second case correctly already (caret
+   * placement, text selection), and the first was never this guard's
+   * concern. */
+  function onTouchEndKeyboardFocus(event: TouchEvent) {
+    const field = keyboardFieldAt(event.target as Element | null);
+    if (!field || document.activeElement === field) return;
+    event.preventDefault();
+    field.focus({ preventScroll: true });
+  }
+
+  /** Called once per `open()` (never mid-open, same as
+   * `attachKeyboardListeners`): a no-op outright for a non-modal drawer or
+   * off `isTouchWebKit`, so neither ever takes the `<html>` lock below. */
+  function attachPanGuard() {
+    if (panGuardAttached || opts.modal === false || !isTouchWebKit()) return;
+    panGuardAttached = true;
+    panel.addEventListener('touchend', onTouchEndKeyboardFocus);
+    lockHtmlOverflowForKeyboard();
+  }
+
+  /** Removed on close and on `destroy()`, same as `detachKeyboardListeners`
+   * (and always paired with it, both call sites below): an open modal
+   * drawer on touch WebKit is the only thing that ever takes the lock
+   * `attachPanGuard` above does. */
+  function detachPanGuard() {
+    if (!panGuardAttached) return;
+    panGuardAttached = false;
+    panel.removeEventListener('touchend', onTouchEndKeyboardFocus);
+    unlockHtmlOverflowForKeyboard();
   }
 
   // No `ownsTarget` needed (#332): same reason as `updateKeyboardInset`
@@ -2561,6 +2716,7 @@ export function createDrawer(
     setPhase('opening');
     attachInterruptListeners();
     attachKeyboardListeners();
+    attachPanGuard();
     // One frame lets the browser actually paint the starting style; only
     // the frame after that removes it, which is what starts a consumer's
     // CSS transition sliding the Panel (and fading the Backdrop) in --
@@ -2679,6 +2835,7 @@ export function createDrawer(
     teardownExit();
     panelVisibilityObserver.disconnect();
     detachKeyboardListeners();
+    detachPanGuard();
     clearTimeout(scrollEndDebounce);
     cancelAnimationFrame(throwFrame);
     cancelAnimationFrame(progressFrame);
