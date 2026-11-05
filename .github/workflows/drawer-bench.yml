@@ -14,12 +14,16 @@ name: Drawer bench
 on:
   pull_request:
     paths:
-      - "decks/drawerdeck/**"
+      - "decks/drawerdeck/packages/core/**"
+      - "decks/drawerdeck/packages/react/**"
+      - "decks/drawerdeck/bench/**"
       - ".github/workflows/drawer-bench.yml"
   push:
     branches: [main]
     paths:
-      - "decks/drawerdeck/**"
+      - "decks/drawerdeck/packages/core/**"
+      - "decks/drawerdeck/packages/react/**"
+      - "decks/drawerdeck/bench/**"
       - ".github/workflows/drawer-bench.yml"
   workflow_dispatch:
     inputs:
@@ -31,8 +35,24 @@ on:
   schedule:
     - cron: "17 6 * * 1" # weekly, Monday
 
+# One run at a time per ref: a second push to the same pull request cancels
+# the one already running (the numbers from an abandoned commit are moot);
+# a push to main never cancels another push to main, so a run there always
+# finishes and uploads its own artifact.
+concurrency:
+  group: drawer-bench-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
+
+env:
+  # The rep count every published run, and claims.json's own claims, are
+  # judged against (#276). A workflow_dispatch with a different count is a
+  # different statistic -- report's own "Skip the gate..." step below
+  # skips the gate rather than comparing it against claims it was never
+  # meant to be judged against.
+  PUBLISHED_REPS_PER_SHARD: "5"
 
 jobs:
   bench:
@@ -81,7 +101,7 @@ jobs:
         env:
           SHARD_ID: shard-${{ matrix.shard }}
           BENCH_SEED: run-${{ github.run_id }}-shard-${{ matrix.shard }}
-          BENCH_REPS: ${{ inputs.reps_per_shard || 5 }}
+          BENCH_REPS: ${{ inputs.reps_per_shard || env.PUBLISHED_REPS_PER_SHARD }}
         run: pnpm exec playwright test -c playwright.config.ts bench.spec.ts
 
       - name: Record the runner, after
@@ -137,16 +157,34 @@ jobs:
             --out-summary report-out/summary.md
           cat report-out/summary.md >> "$GITHUB_STEP_SUMMARY"
 
+      # The gate's own unit tests, against synthetic rows (#276's review):
+      # proves drawerdeck_verdict/cell_winner and the gate's evaluate()
+      # still behave before trusting either against this run's real
+      # numbers below.
+      - name: Test the bench's own aggregation and claims gate
+        working-directory: decks/drawerdeck/bench
+        run: |
+          python3 aggregate_test.py
+          python3 claims_gate_test.py
+
+      - name: Skip the gate for a non-published rep count
+        if: github.event_name == 'workflow_dispatch' && inputs.reps_per_shard != env.PUBLISHED_REPS_PER_SHARD
+        run: |
+          echo "::notice::Skipping the claims gate: this dispatch used reps_per_shard=${{ inputs.reps_per_shard }}, not the published ${{ env.PUBLISHED_REPS_PER_SHARD }} every claim in claims.json is judged against, so a pass or a fail here would not mean what it means on a published run."
+
       # Gates drawerdeck's own public comparison-page claims (#276,
       # decks/drawerdeck/bench/claims.json) against this same pooled run,
-      # re-deriving each claimed cell's Overall verdict with aggregate.py's
-      # own cell_winner/excluded_decks (claims_gate.py imports them; no
-      # second winner/tie rule here). `continue-on-error` so the verdict
-      # still reaches the job summary and the artifact below even when a
-      # claim breaks; "Fail if a claim broke" turns that into the job's own
-      # failure, after both are written.
+      # re-deriving each claimed cell's own verdict with aggregate.py's
+      # own drawerdeck_verdict/excluded_decks (claims_gate.py imports them;
+      # no second win/tie/loss rule here). Skipped on a workflow_dispatch
+      # using a non-published rep count (see the notice above).
+      # `continue-on-error` so the verdict still reaches the job summary
+      # and the artifact below even when a claim breaks; "Fail if a claim
+      # broke" turns that into the job's own failure, after both are
+      # written.
       - name: Gate drawerdeck's comparison-page claims (#276)
         id: gate
+        if: github.event_name != 'workflow_dispatch' || inputs.reps_per_shard == env.PUBLISHED_REPS_PER_SHARD
         continue-on-error: true
         run: |
           python3 decks/drawerdeck/bench/claims_gate.py report-out/aggregate.jsonl \
@@ -155,11 +193,18 @@ jobs:
             --out-md report-out/claims-gate.md \
             --out-json report-out/claims-gate.json
 
+      # `|| true`: this must never fail the job on its own, even if the
+      # gate step above crashed before writing claims-gate.md (or was
+      # skipped) -- RESULTS.md/aggregate.jsonl/summary.md, already on
+      # disk from the aggregate step, must still reach the artifact below.
       - name: Put the claims gate's verdict on the job summary
         if: always()
-        run: cat report-out/claims-gate.md >> "$GITHUB_STEP_SUMMARY"
+        run: cat report-out/claims-gate.md >> "$GITHUB_STEP_SUMMARY" || true
 
+      # if: always(), for the same reason: a crash or a skip in the gate
+      # step must not cost this run its own RESULTS.md/aggregate.jsonl.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
         with:
           name: drawer-bench-report
           path: report-out/
