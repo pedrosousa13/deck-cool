@@ -64,13 +64,35 @@ Formatting is checked, never written by the gate. Run
 ## Releasing
 
 `@drawerdeck/core`, `@drawerdeck/react`, `@drawerdeck/react-18` and
-`@drawerdeck/docs` are publishable, each at `0.1.0-beta.0` (#242). They do not go through
-Changesets' `fixed` group or pre mode, the way carouseldeck's packages do
-(`decks/carouseldeck/AGENTS.md`, "Releasing"): entering pre mode is repo-wide
-in Changesets, so it would turn carouseldeck's own next release into a
-prerelease too, the first time a changeset lands for it. Instead, each
-drawerdeck package's `publishConfig.tag` is `"beta"`, and its version is set
-by hand, not by `changeset version`.
+`@drawerdeck/docs` are publishable, each at `0.1.0-beta.0` (#242), each with
+`publishConfig.tag` `"beta"`. `0.1.0-beta.0` and `0.1.0-beta.1` were hand-set
+versions, not `changeset version`'s doing: entering Changesets' pre mode is
+repo-wide, so it would turn carouseldeck's own next release into a
+prerelease too, the first time a changeset lands for it, and there is no way
+to scope pre mode to one `fixed` group.
+
+From `0.1.0-beta.2` on, drawerdeck has its own `fixed` group in the root
+`.changeset/config.json`, alongside carouseldeck's, and its own changesets:
+**a change a consumer of any of the four packages can see needs one**, the
+same rule as carouseldeck's. Getting another `0.1.0-beta.N` out of
+`changeset version`, rather than it dropping the prerelease and shipping
+`0.1.0` stable, needs Changesets' pre mode: `.changeset/pre.json`, entered
+with `pnpm changeset pre enter beta`. That repo-wide reach is still real with
+`pre.json` committed: any changeset that lands for _any_ package while it is
+there, carouseldeck's included, versions as a prerelease too (`1.5.5-beta.0`,
+not `1.5.5`).
+
+So treat pre mode as a one-release-at-a-time tool, not a standing state:
+enter it in the same PR as the beta's changeset, land it, let the
+"Version Packages" PR version and the maintainer's merge of it publish that
+one `beta.N`, then exit pre mode (`pnpm changeset pre exit`) in its own PR,
+landed on `main` by itself right after, before any other changeset can
+reach it. No carouseldeck changeset may be merged while `.changeset/pre.json`
+exists on `main`; check it is absent before landing one. The next drawerdeck
+beta repeats the same enter-release-exit cycle. Exit the same way, for the
+last time, once drawerdeck is ready to ship `1.0.0`: the next changeset then
+versions as a normal release, with no `-beta.N`, same as carouseldeck's
+always have.
 
 The root `.github/workflows/release.yml` releases every in-repo deck (ADR
 0002 in deck-cool's root `docs/adr/`): `select-mode` publishes whatever
