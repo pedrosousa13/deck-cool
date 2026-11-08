@@ -213,9 +213,10 @@ describe("every page", () => {
     }
   });
 
-  // The compare page cites primary sources: deck-cool's own issues and ADRs (still its own
-  // repo, not the maintainer's profile), and vaul's and Base UI's own repos, so a reader can
-  // check each claim against where it comes from.
+  // Every page may point into deck-cool's own repo, such as a recipe guide's link to its
+  // story's source. The compare page also cites primary sources: deck-cool's own issues and
+  // ADRs (still its own repo, not the maintainer's profile), and vaul's and Base UI's own
+  // repos, so a reader can check each claim against where it comes from.
   const COMPARE_PAGE = "docs/compare/index.html";
   const OWN_REPO = "https://github.com/pedrosousa13/deck-cool/";
   const RIVAL_REPOS = ["https://github.com/emilkowalski/vaul/", "https://github.com/mui/base-ui/"];
@@ -226,7 +227,8 @@ describe("every page", () => {
     (file) => {
       const html = readFileSync(`${OUT}/${file}`, "utf8");
       for (const [, href] of html.matchAll(/href="(https?:\/\/(?:[^/"]+\.)?github\.com[^"]*)"/gi)) {
-        if (file === COMPARE_PAGE && (href.startsWith(OWN_REPO) || RIVAL_REPOS.some((repo) => href.startsWith(repo)))) {
+        if (href.startsWith(OWN_REPO)) continue;
+        if (file === COMPARE_PAGE && RIVAL_REPOS.some((repo) => href.startsWith(repo))) {
           continue;
         }
         expect(href).toBe(REPOSITORY);

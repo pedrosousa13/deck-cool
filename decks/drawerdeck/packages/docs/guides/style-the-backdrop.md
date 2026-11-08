@@ -95,3 +95,5 @@ has not changed:
 Give both rules the same selector and let `@supports` pick one: a browser
 that gains native scroll timelines later starts using the first block
 without a change on your side.
+
+The story is [`Backdrop / Styled Dim`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/backdrop.stories.tsx).

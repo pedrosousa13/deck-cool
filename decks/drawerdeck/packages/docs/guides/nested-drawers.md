@@ -323,3 +323,5 @@ names a CSS `@keyframes` the parent sheet runs while a child is open:
 closer in spirit to drawerdeck's own CSS-only recipe than vaul's JS-driven
 one, though keyed to a named animation rather than a live custom property
 a consumer's own `calc()` can read directly.
+
+The story is [`Nested / Three Levels`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/nested.stories.tsx).

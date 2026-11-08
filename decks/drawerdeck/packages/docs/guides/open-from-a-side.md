@@ -11,7 +11,12 @@ other prop, including `snapPoints`, `dismissible`, `modal`, a controlled
 <!-- demo:example-sides -->
 
 Pick a side above, then press Open: drag or scroll it between half and
-full, the same as the default bottom sheet.
+full, the same as the default bottom sheet. The stories are
+[`Drawer / Bottom`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/drawer.stories.tsx),
+[`Drawer / Top`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/drawer.stories.tsx),
+[`Drawer / Left`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/drawer.stories.tsx)
+and
+[`Drawer / Right`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/drawer.stories.tsx).
 
 ```tsx
 <Drawer.Root side="left" snapPoints={[0.5, 1]}>
@@ -80,3 +85,5 @@ clips the Viewport to the Panel's own currently visible region, flush
 against `side`'s own edge, on every side, driven by the same `--drawer`
 scroll timeline (a horizontal one for `left`/`right`) with the same JS
 fallback where it is unsupported.
+
+The story is [`Drawer / Mouse Drag`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/drawer.stories.tsx).
