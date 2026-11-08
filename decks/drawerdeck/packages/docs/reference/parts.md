@@ -74,7 +74,9 @@ field inside it has focus, scrolling it clear of the keyboard with an
 explicit `Drawer.Content` scroll (`Drawer.Content`'s own `padding-bottom`,
 set to `--drawer-keyboard-inset`, gives it room to scroll into). While
 typing, the drawer's own top edge may move up with Safari's own page pan;
-see "On-screen keyboard".
+a field close enough to Content's own top that the scroll has nothing left
+above it to give gets a `padding-top` on `Drawer.Content` instead, for
+whatever room a held pan demands. See "On-screen keyboard".
 
 `data-nested-open`, on `Drawer.Popup` and `Drawer.Panel`, is set while a
 drawer opened from inside this one (at any depth) is open, and is removed

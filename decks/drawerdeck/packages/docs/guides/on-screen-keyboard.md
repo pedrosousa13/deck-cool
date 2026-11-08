@@ -69,6 +69,15 @@ padding, is for a browser's own native scrolling inside Content, such as
 a field that already has real content below it, rather than scrolling past
 the natural stopping point into the empty padding for no reason.
 
+A field close enough to Content's own top has nothing above it to scroll
+away instead -- `scrollTop` floors at 0 -- so the same check also gives
+Content a `padding-top`, mirroring `padding-bottom` at its own end, for
+whatever room the scroll could not make (#330: a held Safari pan, below,
+can push a field this close to the top above the visible window). Reset
+and re-measured fresh on every `visualViewport` change, so a shrinking pan
+or the keyboard closing never leaves a stale push behind. `scroll-padding-
+top` rides alongside it, the same reason `scroll-padding-bottom` does.
+
 ## Expanding to the largest snap point
 
 Whenever a field inside `Drawer.Panel` has focus and the keyboard opens,
@@ -111,7 +120,12 @@ numbers alone: a real iPhone reports a field's own
 and the Popup's own rect shifts by the exact same amount, so adding its
 `offsetTop` back cancels that shift. Only the Panel's own top edge is left
 to the browser: the engine applies no transform or translate of its own to
-counter the pan.
+counter the pan. Where that scroll step alone cannot reach -- a field close
+enough to Content's own top that there is nothing above it left to scroll
+away, so a pan Safari never un-pans can leave it stuck above the visible
+window for as long as the pan holds -- Content's own `padding-top` (see
+"Keeping the field clear of the keyboard") makes the room instead, whether
+or not Safari ever corrects itself.
 
 Current React Aria (`react-aria` 3.53.1) no longer stops the pan with a
 field transform either: its own `usePreventScroll` sets `overflow: hidden`
