@@ -23,6 +23,16 @@ traps nothing.
 </Drawer.Root>
 ```
 
+## Changing `modal` while open
+
+`modal` takes effect on the next open only. Changing it on an already-open
+`Drawer.Root` never reopens `Drawer.Popup` with the other method: it keeps
+the top layer, the focus trap, the inert page and the hit-area styles it
+opened with, exactly as they were, until it closes and opens again with
+the new value. Closing and reopening it there and then, instead, would
+flicker the Panel and move focus, for a prop a consumer is unlikely to
+flip while the drawer is actually open in the first place.
+
 ## What stays the same
 
 Dragging, snapping, a flick dismissal, the Panel's CSS entrance and exit

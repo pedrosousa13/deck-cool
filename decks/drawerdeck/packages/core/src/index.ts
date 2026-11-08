@@ -155,7 +155,14 @@ export interface DrawerOptions {
    * read from `document`, not the dialog's
    * own `cancel` event, which a non-modal dialog does not fire (#271; see
    * the "Non-modal drawers" guide for why `show()`, not the Popover
-   * API). */
+   * API).
+   *
+   * Takes effect on the next open only (#318): changing it while open
+   * never reopens the dialog with the other method, so it keeps the mode
+   * it opened in -- the dialog's own top layer, focus trap and inert page,
+   * the hit-area styles, and the outside-press and Escape handling above
+   * all stay exactly as they were. The next `open()` picks up the new
+   * value. */
   modal?: boolean;
   /** How many drawers are currently open, stacked above this one (#272):
    * `@drawerdeck/react` is the one that knows this, from its own nested
@@ -744,6 +751,18 @@ export function createDrawer(
         scrollToKey: 'top'
       } as const);
   let opts: DrawerOptions = { dismissible: true, modal: true, ...options };
+  /** `modal` takes effect on the next open only (#318): every modal-
+   * dependent style and check below (`applyModalStyle`, `updateHitArea`,
+   * `onGapClick`, `onDocumentKeyDown`) reads this, frozen at whichever
+   * value `opts.modal` held the moment `open()` last called
+   * `showModal()`/`show()`, never the live `opts.modal` a `setOptions`
+   * call might change while still open -- `showModal()`/`show()` is never
+   * called again until the next `open()`, so the dialog's own top layer,
+   * focus trap and inert page, free with modal, never disagree with these.
+   * `setOptions`, below, only writes it back early while `closed`, so a
+   * change made there still shows correctly before the next open; `open`
+   * itself always resyncs it regardless. */
+  let openedModal = opts.modal !== false;
   let phase: Phase = 'closed';
   let snapIndex = 0;
   /** The configured snap points' "forward" pixel offsets, nearest first:
@@ -951,7 +970,7 @@ export function createDrawer(
   // clipped away from it either, since its own top layer already does the
   // job.
   function applyModalStyle() {
-    const nonModal = opts.modal === false;
+    const nonModal = !openedModal;
     dialog.style.pointerEvents = nonModal ? 'none' : '';
     viewport.style.pointerEvents = 'auto';
     updateHitArea();
@@ -1282,7 +1301,7 @@ export function createDrawer(
    * scroll the open already is, so the region above stays accurate all the
    * way down to closed. */
   function updateHitArea() {
-    if (opts.modal !== false) {
+    if (openedModal) {
       viewport.classList.remove(hitAreaClass(side));
       viewport.style.clipPath = '';
       return;
@@ -2026,7 +2045,7 @@ export function createDrawer(
     // own, so a nested drawer's own DOM, which sits inside the Panel, never
     // sits inside the gap, and a click starting there never bubbles into
     // this listener at all.
-    if (opts.modal === false || !opts.dismissible || phase !== 'open') return;
+    if (!openedModal || !opts.dismissible || phase !== 'open') return;
     beginExit('outside-press');
   }
   gap?.addEventListener('click', onGapClick);
@@ -2039,7 +2058,7 @@ export function createDrawer(
   // event, which only fires for a key press while focus is inside it, is
   // not enough.
   function onDocumentKeyDown(event: KeyboardEvent) {
-    if (opts.modal !== false || event.key !== 'Escape') return;
+    if (openedModal || event.key !== 'Escape') return;
     // A page or in-drawer widget that already called `preventDefault()` on
     // this same Escape keydown (a combobox, a menu, a date picker closing
     // itself first) meant it to stop there (#319): the modal path gets this
@@ -2706,8 +2725,16 @@ export function createDrawer(
     // moves.
     panel.setAttribute(STARTING_STYLE_ATTR, '');
     parts.backdrop?.setAttribute(STARTING_STYLE_ATTR, '');
-    if (opts.modal === false) dialog.show();
+    // `modal` takes effect on this open only (#318): freshly read from
+    // `opts.modal` here, never from whatever it read the last time this
+    // opened, so a `setOptions` call made while closed already takes.
+    // `applyModalStyle` resyncs the dialog's and the Viewport's own styles
+    // to it too, in case the last open (or `setOptions` call) left them at
+    // a different value's styles.
+    openedModal = opts.modal !== false;
+    if (!openedModal) dialog.show();
     else dialog.showModal();
+    applyModalStyle();
     dialog.focus({ preventScroll: true });
     // Forces the recalc the attribute above needs to land as a real,
     // committed value -- not folded into whatever recalc `measure` or the
@@ -2823,7 +2850,19 @@ export function createDrawer(
       positionMarkers();
       updateContentLock();
     }
-    if (previous.modal !== opts.modal) applyModalStyle();
+    // `modal` takes effect on the next open only (#318): while open (or
+    // mid-exit) this drawer keeps the mode it opened in, so a change here
+    // only updates `openedModal` -- and so the dialog's and the Viewport's
+    // own styles, through `applyModalStyle` -- while actually `closed`,
+    // the same phase `open()` itself reads `opts.modal` fresh from next.
+    // While not closed, `opts.modal` above still holds the new value, for
+    // `open()` to pick up once this does close and reopen; `openedModal`,
+    // and so every modal-dependent style and check, stays exactly what it
+    // was.
+    if (previous.modal !== opts.modal && phase === 'closed') {
+      openedModal = opts.modal !== false;
+      applyModalStyle();
+    }
     updateNestedAttrs();
     updateNestedProgress();
     updateIndent();

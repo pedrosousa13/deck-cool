@@ -319,7 +319,12 @@ export type RootProps = (OpenControlledProps | OpenUncontrolledProps) &
      * focus trap, an inert page, and Escape for free) or a non-modal one:
      * the page behind stays interactive, nothing is trapped, and the
      * Backdrop is optional. Escape and focus-on-close still behave the
-     * same either way. Defaults to true. */
+     * same either way. Defaults to true.
+     *
+     * Takes effect on the next open only (#318): changing it while open
+     * keeps the mode it opened in -- the top layer, the focus trap, the
+     * inert page and the hit-area styles all stay as they were -- and the
+     * next open picks up the new value. */
     modal?: boolean;
     /** An opt-in background indent (#274): a ref to the consumer's own
      * page wrapper -- a ref only, never a direct element, so
