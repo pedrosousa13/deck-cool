@@ -2040,6 +2040,14 @@ export function createDrawer(
   // not enough.
   function onDocumentKeyDown(event: KeyboardEvent) {
     if (opts.modal !== false || event.key !== 'Escape') return;
+    // A page or in-drawer widget that already called `preventDefault()` on
+    // this same Escape keydown (a combobox, a menu, a date picker closing
+    // itself first) meant it to stop there (#319): the modal path gets this
+    // for free, from the browser's own close-watcher honoring a prevented
+    // keydown before it ever fires `cancel`; this listener, reading
+    // `document` directly rather than a native dismiss event, has to check
+    // it itself.
+    if (event.defaultPrevented) return;
     // Escape closes only the topmost drawer (#272): a modal drawer nested
     // above this one never touches this listener at all (it yields to the
     // browser's own close-watcher stack, in `onCancel`, above), but the

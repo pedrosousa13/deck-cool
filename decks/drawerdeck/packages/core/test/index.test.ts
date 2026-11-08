@@ -1193,3 +1193,77 @@ describe('non-modal (#271)', () => {
     });
   });
 });
+
+describe('Escape yields to a page or in-drawer widget that already handled it (#319)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  it('a page keydown handler that preventDefaults Escape keeps a non-modal drawer open', async () => {
+    const field = document.createElement('input');
+    document.body.append(field);
+    field.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') event.preventDefault();
+    });
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    field.focus();
+    expect(document.activeElement).toBe(field);
+
+    await userEvent.keyboard('{Escape}');
+
+    await sleep(300);
+    expect(drawer.phase).toBe('open');
+    field.remove();
+  });
+
+  it('without preventDefault, a real Escape still closes a non-modal drawer', async () => {
+    const field = document.createElement('input');
+    document.body.append(field);
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    field.focus();
+    expect(document.activeElement).toBe(field);
+
+    await userEvent.keyboard('{Escape}');
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    field.remove();
+  });
+
+  it('an in-drawer keydown handler that preventDefaults Escape keeps a modal drawer open', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { content, drawer } = fixture;
+    const field = document.createElement('input');
+    content.append(field);
+    field.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') event.preventDefault();
+    });
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    field.focus();
+    expect(document.activeElement).toBe(field);
+
+    await userEvent.keyboard('{Escape}');
+
+    await sleep(300);
+    expect(drawer.phase).toBe('open');
+  });
+
+  it('without preventDefault, a real Escape still closes a modal drawer', async () => {
+    fixture = mount({ snapPoints: [0.5] });
+    const { content, drawer } = fixture;
+    const field = document.createElement('input');
+    content.append(field);
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    field.focus();
+    expect(document.activeElement).toBe(field);
+
+    await userEvent.keyboard('{Escape}');
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+  });
+});
