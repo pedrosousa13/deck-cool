@@ -2073,6 +2073,17 @@ export function createDrawer(
   // expand-and-scroll behavior just above still bring the focused field
   // itself back above the keyboard; only the Panel's own top edge is left
   // to the browser.
+  //
+  // A real iPhone (iOS 18.7) still found a gap in that scroll-and-expand
+  // behavior (#330): a field close enough to the top of a freshly expanded
+  // Panel has nothing above it inside Content left to scroll away, so a
+  // held pan that pushes it above the visible window -- the same real
+  // device logged a run where `offsetTop` never settled back down, unlike
+  // a second run a few seconds apart where it did -- leaves the field
+  // stuck off-screen for as long as the pan holds. The pan itself is still
+  // left alone, exactly as above; `ensureFieldVisible`, below, now also
+  // gives Content a `padding-top` for the room `scrollTop` could not,
+  // mirroring the `padding-bottom` it already gives Content's own end.
   let keyboardInset = 0;
   let keyboardListenersAttached = false;
 
@@ -2193,19 +2204,42 @@ export function createDrawer(
    * whenever the drawer's largest snap point is itself below 1, so a check
    * against the field's own real rect, not Content's box model, is what
    * this uses instead. A no-op when the field is already visible, so this
-   * never fights a user's own scroll once it is. */
+   * never fights a user's own scroll once it is.
+   *
+   * A field close enough to Content's own top has nothing above it left to
+   * scroll away -- `scrollTop` floors at 0 -- so a held Safari pan that
+   * pushes it above the visible window (#330: a real iPhone kept a 396px
+   * pan through the whole interaction, with no further `visualViewport`
+   * event left to retry against) stays stuck there no matter how far past
+   * 0 the scroll above tries to go. Content's own `padding-top`, reset and
+   * re-measured fresh on every call so a shrinking pan or the keyboard
+   * closing never leaves a stale push behind, makes the room `scrollTop`
+   * could not: the same trick `padding-bottom` already plays at Content's
+   * own end, mirrored at its start. `scroll-padding-top` rides alongside
+   * it, the same reason `scroll-padding-bottom` already does. */
   function ensureFieldVisible() {
     const field = focusedKeyboardField();
     const content = parts.content;
     if (!field || !content) return;
+    content.style.paddingTop = '';
+    content.style.scrollPaddingTop = '';
     const visible = visibleWindow();
-    const rect = field.getBoundingClientRect();
+    let rect = field.getBoundingClientRect();
     const overflowBottom =
       rect.bottom - (visible.bottom - KEYBOARD_FIELD_MARGIN);
     if (overflowBottom > 0) {
       content.scrollTop += overflowBottom;
     } else if (rect.top < visible.top) {
       content.scrollTop -= visible.top - rect.top;
+    }
+    rect = field.getBoundingClientRect();
+    // No `KEYBOARD_FIELD_MARGIN` here, matching the scroll branch just
+    // above it replaces: that one only ever corrects flush to `visible.top`
+    // too, the margin being a bottom-edge-only design choice from the start.
+    const overflowTop = visible.top - rect.top;
+    if (overflowTop > 0) {
+      content.style.paddingTop = `${overflowTop}px`;
+      content.style.scrollPaddingTop = `${overflowTop}px`;
     }
   }
 
@@ -2298,9 +2332,9 @@ export function createDrawer(
 
   /** Removed on close and on `destroy()`: an open drawer is the only thing
    * that ever needs to know about the keyboard. Also resets the inset (the
-   * CSS var and Content's own `scroll-padding-bottom`) straight to
-   * neutral; the Viewport itself needs no reset, since nothing here ever
-   * wrote to it. */
+   * CSS var and Content's own `scroll-padding-bottom`, plus `ensureFieldVisible`'s
+   * own `padding-top`/`scroll-padding-top`, #330) straight to neutral; the
+   * Viewport itself needs no reset, since nothing here ever wrote to it. */
   function detachKeyboardListeners() {
     if (!keyboardListenersAttached) return;
     keyboardListenersAttached = false;
@@ -2312,6 +2346,8 @@ export function createDrawer(
     if (parts.content) {
       parts.content.style.paddingBottom = '';
       parts.content.style.scrollPaddingBottom = '';
+      parts.content.style.paddingTop = '';
+      parts.content.style.scrollPaddingTop = '';
     }
   }
 

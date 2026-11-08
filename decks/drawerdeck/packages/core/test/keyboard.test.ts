@@ -401,6 +401,97 @@ describe("Safari's own pan, left alone (real iPhone replays, iOS 18.7)", () => {
   });
 });
 
+describe('a held Safari pan with no scroll room above the field (#330)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  // Found checking #327 on a real iPhone (iOS 18.7): the same build passed
+  // once and failed once tapping Message -- the first field inside
+  // Content, closest to the Panel's own top, well within reach at the
+  // drawer's default 0.5 snap on drawer.deck.cool's own on-screen-keyboard
+  // demo. Unlike `appendFieldPastTheFold`'s own field above, there is
+  // nothing above this one inside Content for `scrollTop` to give away, so
+  // `appendFieldTo`'s own prepend (Content's very top) stands in for it.
+
+  it("09:21's own failure replayed: a pan that never settles still clears the field, Content's own padding-top making the room scrollTop could not", async () => {
+    const width = window.innerWidth;
+    const iH0 = window.innerHeight;
+    const iH = 702; // vv height (306) plus offsetTop (396): the pan alone reveals the full layout viewport, the same relationship run 2 and run 4 above log.
+    try {
+      await page.viewport(width, iH);
+      const vv = installFakeViewport();
+      fixture = mount({ snapPoints: [0.5, 1] });
+      const { content, drawer } = fixture;
+      const field = appendFieldTo(content);
+
+      drawer.open(0);
+      await expectSettledTo(() => drawer.phase, 'open');
+      await userEvent.click(field);
+
+      // The field focuses and the keyboard opens, the pan landing in the
+      // same step: `vv` 306, `offsetTop` 396.
+      vv.height = 306;
+      vv.offsetTop = 396;
+      vv.resize();
+      await nextFrame();
+
+      expect(drawer.snapIndex).toBe(1);
+      const visible = visibleWindow(vv);
+      let rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+      expect(content.style.paddingTop).not.toBe('');
+
+      // 09:21's own failure: the pan never settled, with no further
+      // `visualViewport` event left to retry against -- a second,
+      // identical read must still find the field clear, not just the one
+      // taken right after the expand.
+      rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+    } finally {
+      await page.viewport(width, iH0);
+    }
+  });
+
+  it("09:37's own pass replayed: un-panning within the same interaction leaves the field just as clear, with the earlier padding-top gone", async () => {
+    const width = window.innerWidth;
+    const iH0 = window.innerHeight;
+    const iH = 702;
+    try {
+      await page.viewport(width, iH);
+      const vv = installFakeViewport();
+      fixture = mount({ snapPoints: [0.5, 1] });
+      const { content, drawer } = fixture;
+      const field = appendFieldTo(content);
+
+      drawer.open(0);
+      await expectSettledTo(() => drawer.phase, 'open');
+      await userEvent.click(field);
+
+      vv.height = 306;
+      vv.offsetTop = 396;
+      vv.resize();
+      await nextFrame();
+      expect(drawer.snapIndex).toBe(1);
+
+      // Within 34ms, the real device's own pan settles back to `offsetTop`
+      // 0, `vvH` 292, the keyboard staying up throughout.
+      vv.height = 292;
+      vv.offsetTop = 0;
+      vv.scroll();
+      await nextFrame();
+
+      expect(content.style.paddingTop).toBe('');
+      const visible = visibleWindow(vv);
+      const rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+    } finally {
+      await page.viewport(width, iH0);
+    }
+  });
+});
+
 describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', () => {
   beforeEach(() => mockReducedMotion());
 
