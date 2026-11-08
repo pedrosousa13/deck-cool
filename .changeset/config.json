@@ -9,6 +9,12 @@
       "@carouseldeck/react",
       "@carouseldeck/react-18",
       "@carouseldeck/docs"
+    ],
+    [
+      "@drawerdeck/core",
+      "@drawerdeck/react",
+      "@drawerdeck/react-18",
+      "@drawerdeck/docs"
     ]
   ],
   "linked": [],
