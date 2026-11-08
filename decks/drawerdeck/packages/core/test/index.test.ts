@@ -1267,3 +1267,83 @@ describe('Escape yields to a page or in-drawer widget that already handled it (#
     await expectSettledTo(() => drawer.phase, 'closed');
   });
 });
+
+describe('modal takes effect on the next open only (#318)', () => {
+  beforeEach(() => mockReducedMotion());
+
+  function appendBehindInput() {
+    const input = document.createElement('input');
+    Object.assign(input.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '50px',
+      height: '50px'
+    });
+    document.body.append(input);
+    return input;
+  }
+
+  it('non-modal to modal while open: keeps show(), the non-modal hit-area style and outside-press, then opens modal next', async () => {
+    fixture = mount({ snapPoints: [0.5], modal: false });
+    const { dialog, viewport, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(dialog.matches(':modal')).toBe(false);
+    expect(dialog.style.pointerEvents).toBe('none');
+
+    drawer.setOptions({ modal: true });
+
+    // Still the dialog it opened as: `showModal()` is never called mid-open,
+    // so the top layer, the focus trap and the inert page never arrive
+    // either.
+    expect(dialog.matches(':modal')).toBe(false);
+    expect(dialog.style.pointerEvents).toBe('none');
+
+    // The outside press still yields to the page, not the new `modal: true`
+    // value: a real click there keeps reaching the gap/page the way it did
+    // before `setOptions`, so it still does not close the drawer.
+    const gap = viewport.querySelector('[data-drawer-gap]')!;
+    gap.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(300);
+    expect(drawer.phase).toBe('open');
+
+    drawer.close();
+    await expectSettledTo(() => drawer.phase, 'closed');
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    expect(dialog.matches(':modal')).toBe(true);
+    expect(dialog.style.pointerEvents).toBe('');
+  });
+
+  it('modal to non-modal while open: keeps showModal(), the modal hit-area style and the inert page, then opens non-modal next', async () => {
+    const behind = appendBehindInput();
+    fixture = mount({ snapPoints: [0.5] });
+    const { dialog, drawer } = fixture;
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(dialog.matches(':modal')).toBe(true);
+    expect(dialog.style.pointerEvents).toBe('');
+
+    drawer.setOptions({ modal: false });
+
+    // Still the dialog it opened as: `show()` is never called mid-open, so
+    // the top layer, the focus trap and the inert page never leave either.
+    expect(dialog.matches(':modal')).toBe(true);
+    expect(dialog.style.pointerEvents).toBe('');
+    behind.focus();
+    expect(document.activeElement).not.toBe(behind);
+
+    drawer.close();
+    await expectSettledTo(() => drawer.phase, 'closed');
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    expect(dialog.matches(':modal')).toBe(false);
+    expect(dialog.style.pointerEvents).toBe('none');
+    behind.focus();
+    expect(document.activeElement).toBe(behind);
+    behind.remove();
+  });
+});
