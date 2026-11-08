@@ -490,6 +490,98 @@ describe('a held Safari pan with no scroll room above the field (#330)', () => {
       await page.viewport(width, iH0);
     }
   });
+
+  it('clears the padding-top left from a held pan once the pan settles and the keyboard closes in the same visualViewport event (#330 review)', async () => {
+    const width = window.innerWidth;
+    const iH0 = window.innerHeight;
+    const iH = 702;
+    try {
+      await page.viewport(width, iH);
+      const vv = installFakeViewport();
+      fixture = mount({ snapPoints: [0.5, 1] });
+      const { content, drawer } = fixture;
+      const field = appendFieldTo(content);
+
+      drawer.open(0);
+      await expectSettledTo(() => drawer.phase, 'open');
+      await userEvent.click(field);
+
+      vv.height = 306;
+      vv.offsetTop = 396;
+      vv.resize();
+      await nextFrame();
+      expect(content.style.paddingTop).not.toBe('');
+
+      // Done is tapped and the pan settles in the same step: unlike
+      // 09:37's own replay just above, `offsetTop` and the inset both land
+      // at 0 together here (the full layout viewport visible again, no
+      // keyboard left to cover any of it) -- `active` in
+      // `updateKeyboardInset` reads false for this very event, with no
+      // later one left to clean up after it.
+      vv.height = iH;
+      vv.offsetTop = 0;
+      vv.resize();
+      await nextFrame();
+
+      expect(content.style.paddingTop).toBe('');
+      expect(content.style.scrollPaddingTop).toBe('');
+    } finally {
+      await page.viewport(width, iH0);
+    }
+  });
+
+  it('recomputes the padding-top on a plain field switch, with no visualViewport event of its own to follow it (#330 review)', async () => {
+    const width = window.innerWidth;
+    const iH0 = window.innerHeight;
+    const iH = 702;
+    try {
+      await page.viewport(width, iH);
+      const vv = installFakeViewport();
+      fixture = mount({ snapPoints: [0.5, 1] });
+      const { content, drawer } = fixture;
+      const field = appendFieldTo(content);
+      // Far enough down the form to sit inside the still-held pan's own
+      // visible window already, at Content's own untouched `scrollTop: 0`
+      // -- unlike `field`, this one never needs any padding-top of its own
+      // to clear it.
+      const laterField = document.createElement('input');
+      laterField.type = 'text';
+      // `display: block`, not the input's own inline-block default: two
+      // adjacent inline-level boxes share a single line, so `marginTop`
+      // moves the whole line (and so `field` too) rather than stacking
+      // this one below it.
+      laterField.style.display = 'block';
+      laterField.style.marginTop = '460px';
+      content.append(laterField);
+
+      drawer.open(0);
+      await expectSettledTo(() => drawer.phase, 'open');
+      await userEvent.click(field);
+
+      vv.height = 306;
+      vv.offsetTop = 396;
+      vv.resize();
+      await nextFrame();
+      expect(content.style.paddingTop).not.toBe('');
+
+      // Tabbing (or a consumer's own `focus()` call) to the next field:
+      // the pan stays held exactly where it is, so nothing here fires a
+      // `visualViewport` event at all -- `updateKeyboardInset` never runs.
+      laterField.focus({ preventScroll: true });
+      await nextFrame();
+
+      const visible = visibleWindow(vv);
+      const rect = laterField.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+      // `field`'s own padding-top must not linger now that `laterField`,
+      // the one actually focused, needs none of it.
+      expect(content.style.paddingTop).toBe('');
+      expect(content.style.scrollPaddingTop).toBe('');
+    } finally {
+      await page.viewport(width, iH0);
+    }
+  });
 });
 
 describe('Brave’s shrinking layout viewport (real iPhone replay, WKWebView)', () => {
@@ -750,23 +842,43 @@ describe('scrolling the focused field into view, clear of the keyboard (#327)', 
 
   it('clears both padding-bottom and scroll-padding-bottom once the keyboard closes', async () => {
     const vv = installFakeViewport();
-    fixture = mount({ snapPoints: [0.5] });
+    // A second snap point, not just `[0.5]`: expanding to it is what lands
+    // `field` -- at Content's own top -- flush with the dialog's own top
+    // edge, the only way a pan on top of the keyboard, below, can push it
+    // above the visible window at all.
+    fixture = mount({ snapPoints: [0.5, 1] });
     const { content, drawer } = fixture;
+    const field = appendFieldTo(content);
 
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
+    field.focus({ preventScroll: true });
 
     vv.height = window.innerHeight - 200;
     vv.resize();
     await nextFrame();
+    expect(drawer.snapIndex).toBe(1);
     expect(content.style.paddingBottom).toBe('200px');
     expect(content.style.scrollPaddingBottom).toBe('200px');
 
+    // A pan on top of the keyboard, pushing `field` -- nothing above it
+    // inside Content to scroll away -- above the visible window too
+    // (#330 review): both paddings are set at once, not just
+    // `padding-bottom`.
+    vv.offsetTop = 150;
+    vv.resize();
+    await nextFrame();
+    expect(content.style.paddingTop).not.toBe('');
+    expect(content.style.scrollPaddingTop).not.toBe('');
+
     vv.height = window.innerHeight;
+    vv.offsetTop = 0;
     vv.resize();
     await nextFrame();
     expect(content.style.paddingBottom).toBe('');
     expect(content.style.scrollPaddingBottom).toBe('');
+    expect(content.style.paddingTop).toBe('');
+    expect(content.style.scrollPaddingTop).toBe('');
   });
 });
 
@@ -1181,8 +1293,12 @@ describe('cleanup', () => {
     const vv = installFakeViewport();
     const addSpy = vi.spyOn(vv, 'addEventListener');
     const removeSpy = vi.spyOn(vv, 'removeEventListener');
-    fixture = mount({ snapPoints: [0.5] });
+    // A second snap point, not just `[0.5]`: see the padding-top test
+    // above, in "scrolling the focused field into view" -- the same reason
+    // it needs one to ever reach a padded-top state at all (#330 review).
+    fixture = mount({ snapPoints: [0.5, 1] });
     const { dialog, panel, content, drawer } = fixture;
+    const field = appendFieldTo(content);
     addSpy.mockClear(); // drop the engine's own, unrelated permanent listener.
 
     drawer.open();
@@ -1191,6 +1307,17 @@ describe('cleanup', () => {
       'resize',
       'scroll'
     ]);
+    field.focus({ preventScroll: true });
+
+    // Both a keyboard inset and a pan on top of it, same as the
+    // padding-top test above: `field`, at Content's own top, needs both
+    // `padding-bottom` and `padding-top` at once.
+    vv.height = window.innerHeight - 200;
+    vv.offsetTop = 150;
+    vv.resize();
+    await nextFrame();
+    expect(content.style.paddingTop).not.toBe('');
+    expect(content.style.scrollPaddingTop).not.toBe('');
 
     drawer.close();
     await expectSettledTo(() => drawer.phase, 'closed');
@@ -1206,6 +1333,8 @@ describe('cleanup', () => {
     expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
     expect(content.style.paddingBottom).toBe('');
     expect(content.style.scrollPaddingBottom).toBe('');
+    expect(content.style.paddingTop).toBe('');
+    expect(content.style.scrollPaddingTop).toBe('');
     expect(panel.style.transform).toBe('');
     expect(panel.style.translate).toBe('');
 
@@ -1229,10 +1358,21 @@ describe('cleanup', () => {
 
   it('removes the visualViewport listeners on destroy, and leaves no inline style behind', async () => {
     const vv = installFakeViewport();
-    fixture = mount({ snapPoints: [0.5] });
+    // A second snap point, not just `[0.5]`: same reason as the two tests
+    // above (#330 review).
+    fixture = mount({ snapPoints: [0.5, 1] });
     const { dialog, panel, content, drawer } = fixture;
+    const field = appendFieldTo(content);
     drawer.open();
     await expectSettledTo(() => drawer.phase, 'open');
+    field.focus({ preventScroll: true });
+
+    vv.height = window.innerHeight - 200;
+    vv.offsetTop = 150;
+    vv.resize();
+    await nextFrame();
+    expect(content.style.paddingTop).not.toBe('');
+    expect(content.style.scrollPaddingTop).not.toBe('');
 
     const removeSpy = vi.spyOn(vv, 'removeEventListener');
     drawer.destroy(); // idempotent: afterEach's own unmount() calling it again, and removing the dialog, is a no-op on top of this.
@@ -1247,6 +1387,8 @@ describe('cleanup', () => {
     expect(dialog.style.getPropertyValue('--drawer-keyboard-inset')).toBe('');
     expect(content.style.paddingBottom).toBe('');
     expect(content.style.scrollPaddingBottom).toBe('');
+    expect(content.style.paddingTop).toBe('');
+    expect(content.style.scrollPaddingTop).toBe('');
     expect(panel.style.transform).toBe('');
     expect(panel.style.translate).toBe('');
 
@@ -1566,5 +1708,79 @@ describe('onProgressRangeChange and the indent both re-measure once the keyboard
     } finally {
       indentTarget.remove();
     }
+  });
+
+  it("re-applies rangePercent once Content's own padding-top grows the Viewport's own maxScroll (#330 review)", async () => {
+    const vv = installFakeViewport();
+    const onProgressRangeChange = vi.fn();
+    // `panelHeight: ''` -- the test above's own reason: only an
+    // unconstrained Panel lets Content's own padding move `maxScroll` at
+    // all, `padding-top` exactly as much as `padding-bottom`.
+    fixture = mount(
+      { snapPoints: [0.5, 1], onProgressRangeChange },
+      { panelHeight: '' }
+    );
+    const { content, drawer } = fixture;
+
+    // Same reason as the test above: enough natural content that the
+    // Panel is already taller than its own largest snap point before the
+    // keyboard. `appendFieldTo` prepends the field, so it sits at
+    // Content's own top, same as the rest of this describe block's own
+    // field -- nothing above it for `scrollTop` to give away.
+    for (let i = 0; i < 60; i++) {
+      const row = document.createElement('p');
+      row.style.margin = '0';
+      row.style.height = '40px';
+      content.append(row);
+    }
+    const field = appendFieldTo(content);
+
+    drawer.open(0);
+    await expectSettledTo(() => drawer.phase, 'open');
+    field.focus({ preventScroll: true });
+
+    const callsBefore = onProgressRangeChange.mock.calls.length;
+    const percentBefore = onProgressRangeChange.mock.calls.at(-1)?.[0] as
+      number | undefined;
+
+    // A pan, not a keyboard inset: `height` and `offsetTop` move together
+    // so `inset` itself stays `0` (no `padding-bottom` at all here), the
+    // same relationship the #330 replays above log, isolating what
+    // `padding-top` alone does to `maxScroll`.
+    vv.height = window.innerHeight - 300;
+    vv.offsetTop = 300;
+    vv.resize();
+    await nextFrame();
+
+    expect(drawer.snapIndex).toBe(1);
+    expect(content.style.paddingBottom).toBe('');
+    expect(content.style.paddingTop).not.toBe('');
+    // The same re-measure the padding-bottom test above proves, now for
+    // `padding-top`: growing it just grew the Panel's own natural extent
+    // (and so the Viewport's own `maxScroll`) exactly as growing
+    // `padding-bottom` does, so `rangePercent` must move again rather than
+    // stay at whatever it read before the keyboard changed the layout.
+    expect(onProgressRangeChange.mock.calls.length).toBeGreaterThan(
+      callsBefore
+    );
+    const percentAfter = onProgressRangeChange.mock.calls.at(-1)?.[0] as
+      number | undefined;
+    expect(percentAfter).toBeLessThan(percentBefore as number);
+
+    // A second event that leaves the pan exactly where it was: the
+    // shortfall `ensureFieldVisible` computes comes out the same
+    // `padding-top` it already wrote, so this must not call `measure()`
+    // again (#330 review) -- the same "write, and so re-measure, only on a
+    // change" rule `padding-bottom` already follows. `--drawer-max-scroll`
+    // is `measure()`'s own first, unconditional write, so a spy on it
+    // catches an extra call even where `rangePercent` itself -- diffed a
+    // second time inside `measure()` -- would not.
+    const maxScrollVar = '--drawer-max-scroll';
+    const setPropertySpy = vi.spyOn(fixture.viewport.style, 'setProperty');
+    vv.scroll();
+    await nextFrame();
+    expect(
+      setPropertySpy.mock.calls.filter(([name]) => name === maxScrollVar)
+    ).toHaveLength(0);
   });
 });

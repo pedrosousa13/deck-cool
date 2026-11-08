@@ -2083,8 +2083,24 @@ export function createDrawer(
   // stuck off-screen for as long as the pan holds. The pan itself is still
   // left alone, exactly as above; `ensureFieldVisible`, below, now also
   // gives Content a `padding-top` for the room `scrollTop` could not,
-  // mirroring the `padding-bottom` it already gives Content's own end.
+  // mirroring the `padding-bottom` it already gives Content's own end. A
+  // follow-up review of that first cut (#330 review) found three more
+  // gaps: a `visualViewport` event that takes both the inset and the pan
+  // to zero in one step left the padding behind, since `updateKeyboardInset`
+  // only ever called `ensureFieldVisible` while one of them was still
+  // active; switching focus to a different field, with no `visualViewport`
+  // event to follow it, left the previous field's padding behind too; and
+  // nothing re-measured after it changed, the same way `padding-bottom`
+  // does. Fixed by calling `ensureFieldVisible` on every `visualViewport`
+  // event regardless of whether either is still active, by also calling it
+  // from a `focusin` listener on the Panel, and by giving `padding-top` the
+  // same diff-and-`measure()` treatment `padding-bottom` already has.
   let keyboardInset = 0;
+  /** The `padding-top`/`scroll-padding-top` `ensureFieldVisible` last wrote
+   * to Content, in pixels: what it diffs a freshly computed shortfall
+   * against before writing or calling `measure()` again, the same role
+   * `keyboardInset` plays for `padding-bottom`. */
+  let keyboardPaddingTop = 0;
   let keyboardListenersAttached = false;
 
   /** The focused element, if it is inside the Panel and would itself keep
@@ -2211,20 +2227,26 @@ export function createDrawer(
    * pushes it above the visible window (#330: a real iPhone kept a 396px
    * pan through the whole interaction, with no further `visualViewport`
    * event left to retry against) stays stuck there no matter how far past
-   * 0 the scroll above tries to go. Content's own `padding-top`, reset and
-   * re-measured fresh on every call so a shrinking pan or the keyboard
-   * closing never leaves a stale push behind, makes the room `scrollTop`
-   * could not: the same trick `padding-bottom` already plays at Content's
-   * own end, mirrored at its start. `scroll-padding-top` rides alongside
-   * it, the same reason `scroll-padding-bottom` already does. */
+   * 0 the scroll above tries to go. Content's own `padding-top` makes the
+   * room `scrollTop` could not: the same trick `padding-bottom` already
+   * plays at Content's own end, mirrored at its start. `scroll-padding-top`
+   * rides alongside it, the same reason `scroll-padding-bottom` already
+   * does. Diffed against `keyboardPaddingTop` and written only on a change,
+   * the same as `padding-bottom` in `updateKeyboardInset`, and followed by
+   * `measure()` for the same reason: growing Content's own padding can grow
+   * the Panel's own natural extent too (#330 review). This also means the
+   * field's own rect, read below, can already have the *previous* call's
+   * padding-top baked into it -- switching focus to a field that needs
+   * less of it, or none, must still land on the right answer -- so the
+   * shortfall is computed as if that padding were zero (`+ keyboardPaddingTop`
+   * below) rather than by resetting the style and re-reading the rect, which
+   * would force an extra layout for no reason. */
   function ensureFieldVisible() {
     const field = focusedKeyboardField();
     const content = parts.content;
     if (!field || !content) return;
-    content.style.paddingTop = '';
-    content.style.scrollPaddingTop = '';
     const visible = visibleWindow();
-    let rect = field.getBoundingClientRect();
+    const rect = field.getBoundingClientRect();
     const overflowBottom =
       rect.bottom - (visible.bottom - KEYBOARD_FIELD_MARGIN);
     if (overflowBottom > 0) {
@@ -2232,14 +2254,20 @@ export function createDrawer(
     } else if (rect.top < visible.top) {
       content.scrollTop -= visible.top - rect.top;
     }
-    rect = field.getBoundingClientRect();
+    const rectAfterScroll = field.getBoundingClientRect();
     // No `KEYBOARD_FIELD_MARGIN` here, matching the scroll branch just
     // above it replaces: that one only ever corrects flush to `visible.top`
     // too, the margin being a bottom-edge-only design choice from the start.
-    const overflowTop = visible.top - rect.top;
-    if (overflowTop > 0) {
-      content.style.paddingTop = `${overflowTop}px`;
-      content.style.scrollPaddingTop = `${overflowTop}px`;
+    const overflowTop = Math.max(
+      0,
+      Math.round(visible.top - rectAfterScroll.top + keyboardPaddingTop)
+    );
+    if (overflowTop !== keyboardPaddingTop) {
+      keyboardPaddingTop = overflowTop;
+      content.style.paddingTop = overflowTop > 0 ? `${overflowTop}px` : '';
+      content.style.scrollPaddingTop =
+        overflowTop > 0 ? `${overflowTop}px` : '';
+      measure();
     }
   }
 
@@ -2304,12 +2332,38 @@ export function createDrawer(
       }
     }
 
-    if (!active) return;
-    // Covers the expand just above and every other reason the visible
-    // window just moved (a fresh pan, a Brave-style shrink step, the
-    // drawer already resting at its largest snap point): whatever just
-    // changed, if the focused field is still outside it, this brings it
-    // back in.
+    // `maybeExpandForKeyboard` alone stays behind `active`: expanding the
+    // snap point only ever makes sense while a keyboard is genuinely open.
+    // `ensureFieldVisible`, below, runs regardless: an event that takes
+    // `inset` and `vv.offsetTop` to zero together (Done and a settling pan
+    // in the same step, say) is itself the path that must clear a stale
+    // `padding-top` (#330 review) -- gating it the same way would leave
+    // that stuck instead. Covers the expand just above and every other
+    // reason the visible window just moved (a fresh pan, a Brave-style
+    // shrink step, the drawer already resting at its largest snap point):
+    // whatever just changed, if the focused field is still outside it,
+    // this brings it back in.
+    if (active) maybeExpandForKeyboard();
+    ensureFieldVisible();
+  }
+
+  /** `ensureFieldVisible`'s own other caller (#330 review): a `focusin`
+   * inside the Panel switches which field it has to answer for, with no
+   * `visualViewport` event of its own to follow -- the keyboard was already
+   * open and stays open, nothing about its own height or the page's pan
+   * changes, so `updateKeyboardInset` never runs on a plain field switch.
+   * Reuses the exact same two calls `updateKeyboardInset` makes once the
+   * keyboard is active, rather than a second way of answering "is the
+   * focused field visible": that question has one answer in this file, not
+   * one per caller. Guarded by `keyboardInset`/`vv.offsetTop`, the same
+   * "active" check `updateKeyboardInset` computes fresh each time it runs,
+   * so a focus landing before the keyboard has actually opened (the usual
+   * case: this fires the moment a tap focuses the field, before any pan or
+   * resize reports it) still waits for that event, exactly as it does
+   * today, rather than expanding the snap point early. */
+  function onKeyboardFocusIn() {
+    const vv = window.visualViewport;
+    if (!vv || !(keyboardInset > 0 || vv.offsetTop > 0)) return;
     maybeExpandForKeyboard();
     ensureFieldVisible();
   }
@@ -2319,6 +2373,8 @@ export function createDrawer(
   // (`visualViewport` is not even a node), so neither this function nor its
   // listeners below take an event parameter to read one from. It calls
   // `focusedKeyboardField`, which is scoped, for what it reads instead.
+  // `onKeyboardFocusIn`'s own `focusin` is scoped by the same function too,
+  // not by its own event target.
   function attachKeyboardListeners() {
     if (keyboardListenersAttached || !window.visualViewport) return;
     keyboardListenersAttached = true;
@@ -2328,6 +2384,7 @@ export function createDrawer(
     // module doc): only a `window` 'resize' fires at every step of that
     // animation, so this needs it to converge instead of freezing.
     window.addEventListener('resize', updateKeyboardInset);
+    panel.addEventListener('focusin', onKeyboardFocusIn);
   }
 
   /** Removed on close and on `destroy()`: an open drawer is the only thing
@@ -2341,7 +2398,9 @@ export function createDrawer(
     window.visualViewport?.removeEventListener('resize', updateKeyboardInset);
     window.visualViewport?.removeEventListener('scroll', updateKeyboardInset);
     window.removeEventListener('resize', updateKeyboardInset);
+    panel.removeEventListener('focusin', onKeyboardFocusIn);
     keyboardInset = 0;
+    keyboardPaddingTop = 0;
     dialog.style.removeProperty('--drawer-keyboard-inset');
     if (parts.content) {
       parts.content.style.paddingBottom = '';
