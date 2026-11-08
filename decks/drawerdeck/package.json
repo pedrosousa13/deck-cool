@@ -11,6 +11,7 @@
     "test:react-18": "pnpm --filter @drawerdeck/react-18... build && tsc -p packages/react-18/tsconfig.test.json && vitest run -c vitest.react-18.config.ts",
     "test:react-19": "pnpm --filter @drawerdeck/react-18... build && tsc -p packages/react-18/tsconfig.test-react-19.json && vitest run -c vitest.react-19.config.ts",
     "build": "pnpm --filter \"./**\" --filter \"!drawerdeck\" --filter \"!@drawerdeck/bench\" build",
+    "storybook": "pnpm --filter @drawerdeck/storybook dev",
     "test:packages": "node scripts/verify-packaging.mjs",
     "verify": "node scripts/verify.mjs"
   },
