@@ -52,7 +52,7 @@
 // 363/`offsetTop` 263, then `innerHeight` stepping down from 595 to 363
 // over the run's own ~15 `window` 'resize' events, with no further
 // `visualViewport` event at all).
-import { page, userEvent } from 'vitest/browser';
+import { commands, page, userEvent } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Side } from '../src/index';
 import {
@@ -60,6 +60,7 @@ import {
   mockReducedMotion,
   mount,
   nextFrame,
+  realMouseDrag,
   sleep,
   unmount,
   type Fixture
@@ -1475,5 +1476,369 @@ describe('onProgressRangeChange and the indent both re-measure once the keyboard
     } finally {
       indentTarget.remove();
     }
+  });
+});
+
+/** Overrides `dialog`'s own `getBoundingClientRect()` to report `top`
+ * (every other field left at the real, current rect): what the two "held
+ * pan" replays just below use in place of an actual iPhone pan, which
+ * nothing in a headless Chromium or WebKit can produce -- the dialog, a
+ * real `position: fixed; inset: 0` element, never actually moves for a
+ * fake `visualViewport`, so `dialog.getBoundingClientRect().top` reads `0`
+ * throughout every replay above this point too, same as before #330. That
+ * makes #327's own `visibleWindow()` (`dialog.getBoundingClientRect().top
+ * + vv.offsetTop`) collapse to plain `vv.offsetTop` in every one of them,
+ * identical to #330's own fix -- so neither replay could tell the two
+ * formulas apart without this. The mocked value does not try to guess what
+ * a real device's own rect would read during the specific held pan #330's
+ * evidence describes (nothing here can verify that, the new
+ * `visibleWindow()` doc says why); it only has to disagree with
+ * `-offsetTop`, proving the fixed formula no longer depends on the dialog's
+ * own rect agreeing with it. Restored by `vi.restoreAllMocks()` in
+ * `afterEach`. */
+function mockDialogRectTop(dialog: HTMLDialogElement, top: number) {
+  const real = dialog.getBoundingClientRect.bind(dialog);
+  vi.spyOn(dialog, 'getBoundingClientRect').mockImplementation(() => {
+    const r = real();
+    return new DOMRect(r.left, top, r.width, r.height);
+  });
+}
+
+describe("a held pan outliving #327's own cancellation assumption (#330)", () => {
+  beforeEach(() => mockReducedMotion());
+
+  it('09:21 replay: keeps the field inside the real visible window through a pan Safari never un-pans from after the expand', async () => {
+    // #330's own original body: "vv 306 / offsetTop 396, then the engine
+    // expands to snap 1. Safari never un-pans: offsetTop stays 396" --
+    // the fail run from the same real-device check #327's own PR records
+    // the pass run of (run 2/run 4, above). `iH` is not itself logged; 750
+    // (comfortably past `396 + 306`) keeps a genuine, nonzero
+    // `--drawer-keyboard-inset` in play, the same shape "today's replay",
+    // below, has.
+    const width = window.innerWidth;
+    const iH0 = window.innerHeight;
+    const iH = 750;
+    try {
+      await page.viewport(width, iH);
+      const vv = installFakeViewport();
+      vv.height = iH;
+      fixture = mount({ snapPoints: [1] }, { panelHeight: '100%' });
+      const { dialog, viewport, content, drawer } = fixture;
+      content.style.boxSizing = 'border-box';
+      const field = appendFieldPastTheFold(content);
+
+      drawer.open();
+      await expectSettledTo(() => drawer.phase, 'open');
+      const rectBaseline = snapshotRect(viewport);
+      const scrollBaseline = snapshotScroll(viewport);
+
+      await userEvent.click(field);
+      // Deliberately not `-396` (what #327's own cancellation would
+      // predict): a rect the old formula's assumption did not see coming,
+      // the same way #330's own evidence found the real pan not settling
+      // the way the two replays it was checked against did.
+      mockDialogRectTop(dialog, 250);
+      vv.height = 306;
+      vv.offsetTop = 396;
+      vv.resize();
+      await nextFrame();
+      expect(snapshotRect(viewport)).toEqual(rectBaseline);
+      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
+      expect(effectiveInset(dialog)).toBe(Math.max(0, iH - 396 - 306));
+
+      // Held, not settling: a second read, well after the first, must
+      // still find the field inside the real visible window.
+      vv.scroll();
+      await nextFrame();
+      const visible = visibleWindow(vv);
+      const rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+      expect(drawer.phase).toBe('open');
+    } finally {
+      await page.viewport(width, iH0);
+    }
+  });
+
+  it("today's replay: keeps the field inside the real visible window through a pan held at offsetTop 286, height 310", async () => {
+    // The maintainer's own iPhone (Safari, iOS 18.7 UA), 2026-11-04,
+    // drawerdeck at main 1a14e3e, drawer at the 0.5 snap, tapping Subject
+    // or Message: `visualViewport` height drops to about 310, `offsetTop`
+    // goes from 0 to 286 (Subject) or 357 (Message), the engine expands to
+    // the largest snap, and Safari holds `offsetTop` at 286 for the whole
+    // 3 seconds the field stayed focused -- never un-panning the way run 2
+    // and run 4 (above) both eventually do. The expand step itself is
+    // covered by "always expanding to the largest snap point", below; this
+    // isolates the held-pan math #330's own second acceptance criterion is
+    // about. `iH` 667 matches run 2's own device.
+    const width = window.innerWidth;
+    const iH0 = window.innerHeight;
+    const iH = 667;
+    try {
+      await page.viewport(width, iH);
+      const vv = installFakeViewport();
+      vv.height = iH;
+      fixture = mount({ snapPoints: [1] }, { panelHeight: '100%' });
+      const { dialog, viewport, content, drawer } = fixture;
+      content.style.boxSizing = 'border-box';
+      const field = appendFieldPastTheFold(content);
+
+      drawer.open();
+      await expectSettledTo(() => drawer.phase, 'open');
+      const rectBaseline = snapshotRect(viewport);
+      const scrollBaseline = snapshotScroll(viewport);
+
+      await userEvent.click(field);
+      mockDialogRectTop(dialog, 250);
+      vv.height = 310;
+      vv.offsetTop = 286;
+      vv.resize();
+      await nextFrame();
+      expect(snapshotRect(viewport)).toEqual(rectBaseline);
+      expect(snapshotScroll(viewport)).toEqual(scrollBaseline);
+      expect(effectiveInset(dialog)).toBe(Math.max(0, iH - 286 - 310));
+
+      // Held for the real device's own three seconds: a later read must
+      // still find the field inside the real visible window, not just the
+      // very first one.
+      await sleep(50);
+      vv.scroll();
+      await nextFrame();
+      const visible = visibleWindow(vv);
+      const rect = field.getBoundingClientRect();
+      expect(rect.top).toBeGreaterThanOrEqual(visible.top - 1);
+      expect(rect.bottom).toBeLessThanOrEqual(visible.bottom + 1);
+      expect(drawer.phase).toBe('open');
+    } finally {
+      await page.viewport(width, iH0);
+    }
+  });
+});
+
+/** True in this test's own browser project when #330's own pan guard is
+ * gated on (touch + WebKit, `isTouchWebKit` in `../src/index.ts`, mocked
+ * touch-capable by this describe block's own `beforeEach`, just below): the
+ * Playwright WebKit instance's own UA carries `AppleWebKit`/`Safari` with no
+ * `Chrome` token, so it reads `true` once touch is mocked on; the Chromium
+ * instance's own UA carries a `Chrome` token, so it reads `false`
+ * regardless -- this file's own stand-in for "desktop", the way #330's own
+ * acceptance criteria mean it. */
+function isWebKitProject(): boolean {
+  return (
+    navigator.maxTouchPoints > 0 &&
+    /AppleWebKit/.test(navigator.userAgent) &&
+    !/Chrome|CriOS|CrMo|Android/.test(navigator.userAgent)
+  );
+}
+
+describe("Safari's own focus pan, prevented for a modal drawer (#330)", () => {
+  beforeEach(() => {
+    mockReducedMotion();
+    // Playwright's own WebKit instance reports `maxTouchPoints: 0` even
+    // with `../../vitest.config.ts`'s own `contextOptions: { hasTouch:
+    // true }` (only its Chromium instance picks that option up); mocked on
+    // here so `isTouchWebKit` reads the same "touch-capable" signal a real
+    // iPhone gives, in both instances, and the UA difference between them
+    // -- not this -- is what actually decides `isWebKitProject()`, above.
+    // Restored by the file's own top-level `afterEach`
+    // (`vi.restoreAllMocks()`).
+    vi.spyOn(navigator, 'maxTouchPoints', 'get').mockReturnValue(1);
+  });
+
+  it('a touchend on a not-yet-focused keyboard field focuses it, locking <html> to overflow: hidden on WebKit only', async () => {
+    const htmlBaseline = document.documentElement.style.overflow;
+    fixture = mount({}, { panelHeight: '300px' });
+    const { dialog, panel, drawer } = fixture;
+    panel.setAttribute('data-testid', 'panel-330');
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.setAttribute('data-testid', 'field-330');
+    fixture.content.append(field);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    expect(document.activeElement).not.toBe(field);
+
+    await commands.tapAt('[data-testid="field-330"]', 10, 10);
+    await nextFrame();
+    expect(document.activeElement).toBe(field);
+    expect(document.documentElement.style.overflow).toBe(
+      isWebKitProject() ? 'hidden' : htmlBaseline
+    );
+    void dialog;
+  });
+
+  it('a touchend on a field that already has focus does not call preventDefault, leaving caret placement to the real tap', async () => {
+    fixture = mount({}, { panelHeight: '300px' });
+    const { panel, drawer } = fixture;
+    panel.setAttribute('data-testid', 'panel-330b');
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.value = 'hello there';
+    field.setAttribute('data-testid', 'field-330b');
+    fixture.content.append(field);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    field.focus({ preventScroll: true });
+    expect(document.activeElement).toBe(field);
+
+    let defaultPrevented: boolean | undefined;
+    const onTouchEnd = (event: TouchEvent) => {
+      defaultPrevented = event.defaultPrevented;
+    };
+    document.addEventListener('touchend', onTouchEnd);
+    try {
+      await commands.tapAt('[data-testid="field-330b"]', 10, 10);
+      await nextFrame();
+      expect(defaultPrevented).toBe(false);
+      expect(document.activeElement).toBe(field);
+    } finally {
+      document.removeEventListener('touchend', onTouchEnd);
+    }
+  });
+
+  it('a touchend on a button still clicks', async () => {
+    fixture = mount({}, { panelHeight: '300px' });
+    const { panel, drawer } = fixture;
+    panel.setAttribute('data-testid', 'panel-330c');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Go';
+    button.setAttribute('data-testid', 'button-330c');
+    fixture.content.append(button);
+    const onClick = vi.fn();
+    button.addEventListener('click', onClick);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    await commands.tapAt('[data-testid="button-330c"]', 10, 10);
+    await nextFrame();
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('a non-modal drawer never locks <html> overflow, on any browser', async () => {
+    const htmlBaseline = document.documentElement.style.overflow;
+    fixture = mount({ modal: false }, { panelHeight: '300px' });
+    const { panel, drawer } = fixture;
+    panel.setAttribute('data-testid', 'panel-330d');
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.setAttribute('data-testid', 'field-330d');
+    fixture.content.append(field);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+
+    await commands.tapAt('[data-testid="field-330d"]', 10, 10);
+    await nextFrame();
+    expect(document.documentElement.style.overflow).toBe(htmlBaseline);
+  });
+
+  it('restores <html> overflow exactly on a programmatic close', async () => {
+    const htmlBaseline = document.documentElement.style.overflow;
+    fixture = mount({}, { panelHeight: '300px' });
+    const { panel, drawer } = fixture;
+    panel.setAttribute('data-testid', 'panel-330e');
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.setAttribute('data-testid', 'field-330e');
+    fixture.content.append(field);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    await commands.tapAt('[data-testid="field-330e"]', 10, 10);
+    await nextFrame();
+
+    drawer.close();
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(document.documentElement.style.overflow).toBe(htmlBaseline);
+  });
+
+  it('restores <html> overflow exactly on Escape', async () => {
+    const htmlBaseline = document.documentElement.style.overflow;
+    fixture = mount({}, { panelHeight: '300px' });
+    const { panel, drawer } = fixture;
+    panel.setAttribute('data-testid', 'panel-330f');
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.setAttribute('data-testid', 'field-330f');
+    fixture.content.append(field);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    await commands.tapAt('[data-testid="field-330f"]', 10, 10);
+    await nextFrame();
+
+    // A real Escape keypress (Playwright's own, through `userEvent`), not
+    // a hand-dispatched `KeyboardEvent`: a modal drawer's own Escape
+    // handling is the browser's native close-watcher stack, which only a
+    // real keypress drives (`sides.test.ts`'s own "closes on a real Escape
+    // keypress" already establishes this for the engine's own `close()`
+    // path; this test is only about the lock this round adds on top of
+    // it).
+    await userEvent.keyboard('{Escape}');
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(document.documentElement.style.overflow).toBe(htmlBaseline);
+  });
+
+  it('restores <html> overflow exactly on a drag closing the drawer, the same native scroll a touch swipe drives', async () => {
+    const htmlBaseline = document.documentElement.style.overflow;
+    // `snapPoints: [0.5, 1]`, the default `panelHeight` (tall enough for a
+    // real drag to have scroll range along), opened at the second snap
+    // point: the exact shape `index.test.ts`'s own "still closes on a drag
+    // to closed" test already proves closes this way.
+    fixture = mount({ snapPoints: [0.5, 1] });
+    const { viewport, panel, drawer } = fixture;
+    panel.setAttribute('data-testid', 'panel-330h');
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.setAttribute('data-testid', 'field-330h');
+    fixture.content.append(field);
+
+    drawer.open(1);
+    await expectSettledTo(() => drawer.phase, 'open');
+    await commands.tapAt('[data-testid="field-330h"]', 10, 10);
+    await nextFrame();
+
+    // A real drag (Playwright's own `page.mouse`, via `realMouseDrag`) to
+    // `scrollTop` 0, the same close path `index.test.ts`'s own "still
+    // closes on a drag to closed" test drives: this engine closes on the
+    // Viewport's own native scroll regardless of what moved it, a mouse
+    // drag or a touch swipe alike. Pressed at `y: 200`, clear of the field
+    // itself (sitting at Content's own top, `y` near `0`): `onPointerDown`
+    // ignores a press landing on an `input` (so a drag never fights normal
+    // text-field interaction), which would otherwise swallow this one.
+    await realMouseDrag(
+      panel,
+      viewport,
+      { x: 10, y: 200 },
+      (scrollTop) => scrollTop <= 0,
+      { step: 12 }
+    );
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(document.documentElement.style.overflow).toBe(htmlBaseline);
+  });
+
+  it('restores <html> overflow exactly on destroy() mid-open', async () => {
+    const htmlBaseline = document.documentElement.style.overflow;
+    fixture = mount({}, { panelHeight: '300px' });
+    const { panel, drawer, dialog } = fixture;
+    panel.setAttribute('data-testid', 'panel-330g');
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.setAttribute('data-testid', 'field-330g');
+    fixture.content.append(field);
+
+    drawer.open();
+    await expectSettledTo(() => drawer.phase, 'open');
+    await commands.tapAt('[data-testid="field-330g"]', 10, 10);
+    await nextFrame();
+
+    drawer.destroy();
+    dialog.remove();
+    fixture = undefined;
+    expect(document.documentElement.style.overflow).toBe(htmlBaseline);
   });
 });
