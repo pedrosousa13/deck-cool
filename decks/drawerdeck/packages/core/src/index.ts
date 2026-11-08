@@ -2334,17 +2334,18 @@ export function createDrawer(
 
     // `maybeExpandForKeyboard` alone stays behind `active`: expanding the
     // snap point only ever makes sense while a keyboard is genuinely open.
-    // `ensureFieldVisible`, below, runs regardless: an event that takes
-    // `inset` and `vv.offsetTop` to zero together (Done and a settling pan
-    // in the same step, say) is itself the path that must clear a stale
-    // `padding-top` (#330 review) -- gating it the same way would leave
-    // that stuck instead. Covers the expand just above and every other
+    // `ensureFieldVisible`, below, also runs while a `padding-top` is still
+    // set: an event that takes `inset` and `vv.offsetTop` to zero together
+    // (Done and a settling pan in the same step, say) is itself the path
+    // that must clear it (#330 review). With neither, it would only read
+    // layout on every desktop resize while a field has focus. Covers the
+    // expand just above and every other
     // reason the visible window just moved (a fresh pan, a Brave-style
     // shrink step, the drawer already resting at its largest snap point):
     // whatever just changed, if the focused field is still outside it,
     // this brings it back in.
     if (active) maybeExpandForKeyboard();
-    ensureFieldVisible();
+    if (active || keyboardPaddingTop > 0) ensureFieldVisible();
   }
 
   /** `ensureFieldVisible`'s own other caller (#330 review): a `focusin`
