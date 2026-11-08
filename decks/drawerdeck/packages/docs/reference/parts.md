@@ -108,3 +108,12 @@ entirely. `data-ending-style` is also mirrored onto it for the whole
 close, the same attribute `Drawer.Panel`'s own entrance and exit already
 use, so a CSS recipe can ease the indent back out through a button close,
 Escape or an outside press, not only a drag. See "A background indent".
+
+## Storybook
+
+A few of the props above have their own story, in this repo's storybook
+(`decks/drawerdeck`, `pnpm storybook`), past what a guide already demos:
+`Drawer / Snap Points` (`snapPoints`, uncontrolled), `Drawer / Controlled`
+(a controlled `open` and `snapPoint` together), `Drawer / Scrolling
+Content` (`Drawer.Content`, locked below the top snap point) and `Drawer /
+Non Dismissible` (`dismissible={false}`).

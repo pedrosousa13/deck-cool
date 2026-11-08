@@ -36,3 +36,6 @@ This is the beta API proposed in #234. `@drawerdeck/core` and
 `@drawerdeck/react` left the placeholder stage in #240, so the demo above is
 live. Drag or scroll it between half and full, and close it with Escape, an
 outside press or Done.
+
+The story is `Drawer / Basic Use`, in this repo's storybook
+(`decks/drawerdeck`, `pnpm storybook`).
