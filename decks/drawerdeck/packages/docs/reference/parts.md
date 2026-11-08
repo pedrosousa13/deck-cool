@@ -111,9 +111,13 @@ Escape or an outside press, not only a drag. See "A background indent".
 
 ## Storybook
 
-A few of the props above have their own story, in this repo's storybook
-(`decks/drawerdeck`, `pnpm storybook`), past what a guide already demos:
-`Drawer / Snap Points` (`snapPoints`, uncontrolled), `Drawer / Controlled`
-(a controlled `open` and `snapPoint` together), `Drawer / Scrolling
-Content` (`Drawer.Content`, locked below the top snap point) and `Drawer /
-Non Dismissible` (`dismissible={false}`).
+A few of the props above have their own story, past what a guide already
+demos:
+[`Drawer / Snap Points`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/drawer.stories.tsx)
+(`snapPoints`, uncontrolled),
+[`Drawer / Controlled`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/drawer.stories.tsx)
+(a controlled `open` and `snapPoint` together),
+[`Drawer / Scrolling Content`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/drawer.stories.tsx)
+(`Drawer.Content`, locked below the top snap point) and
+[`Drawer / Non Dismissible`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/drawer.stories.tsx)
+(`dismissible={false}`).

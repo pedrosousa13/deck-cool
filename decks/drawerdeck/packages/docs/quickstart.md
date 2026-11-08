@@ -37,5 +37,4 @@ This is the beta API proposed in #234. `@drawerdeck/core` and
 live. Drag or scroll it between half and full, and close it with Escape, an
 outside press or Done.
 
-The story is `Drawer / Basic Use`, in this repo's storybook
-(`decks/drawerdeck`, `pnpm storybook`).
+The story is [`Drawer / Basic Use`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/apps/storybook/stories/drawer.stories.tsx).

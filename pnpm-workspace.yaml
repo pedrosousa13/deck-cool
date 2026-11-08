@@ -20,8 +20,8 @@ packages:
   # dev dependencies, and its packages. apps/* is its storybook (#278, named
   # after carouseldeck's own). bench is the interleaved GitHub Actions bench
   # (#266, #283): a private package so it always measures @drawerdeck/react
-  # via workspace:*, kept out of the deck's own build (decks/drawerdeck/package.json's
-  # build script excludes it by name).
+  # via workspace:*, kept out of the deck's own build
+  # (decks/drawerdeck/package.json's build script excludes it by name).
   - decks/drawerdeck
   - decks/drawerdeck/packages/*
   - decks/drawerdeck/apps/*
