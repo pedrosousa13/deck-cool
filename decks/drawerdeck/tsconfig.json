@@ -5,6 +5,7 @@
     { "path": "./packages/core/tsconfig.test.json" },
     { "path": "./packages/react" },
     { "path": "./packages/react/tsconfig.test.json" },
-    { "path": "./packages/react-18" }
+    { "path": "./packages/react-18" },
+    { "path": "./apps/storybook" }
   ]
 }

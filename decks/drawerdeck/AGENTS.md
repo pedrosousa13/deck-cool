@@ -18,10 +18,25 @@ It runs every gate in order and stops at the first failure: `lint`,
 `typecheck`, `test` (vitest, in Chromium and WebKit via Playwright: install
 them once with `pnpm exec playwright install chromium webkit`),
 `test:react-18` (the same tests on React 18, against `@drawerdeck/react-18`'s
-build), `test:react-19` (the same, on React 19), `build` and `test:packages`
-(publint and attw on the packed tarballs, and that `@drawerdeck/react`'s and
-`@drawerdeck/react-18`'s built modules start with `'use client'`). The list
-lives in `scripts/verify.mjs`.
+build), `test:react-19` (the same, on React 19), `build` (every package,
+`@drawerdeck/storybook` among them: the check that the storybook still
+compiles) and `test:packages` (publint and attw on the packed tarballs, and
+that `@drawerdeck/react`'s and `@drawerdeck/react-18`'s built modules start
+with `'use client'`). The list lives in `scripts/verify.mjs`.
+
+## The storybook
+
+`apps/storybook` (`@drawerdeck/storybook`, #278) holds a recipe story per
+guide: basic use, snap points, a controlled open and snap state, scrolling
+content, `dismissible={false}`, a styled Backdrop dim, a mouse drag, each
+side, and nested drawers. `pnpm --dir decks/drawerdeck storybook` runs it,
+at http://localhost:6007; from `decks/drawerdeck/`, `pnpm storybook`. It
+runs the packages' source, not their built `dist` (`.storybook/main.ts`'s
+own alias), so editing a story or the source reflects without a rebuild.
+Not part of `pnpm verify`'s own gates beyond `build`, which packs it the
+same as every other package: a true end-to-end suite against it, the way
+`decks/carouseldeck/apps/storybook` gets from carouseldeck's own
+`test:e2e`, is follow-up work.
 
 ## The bench
 
