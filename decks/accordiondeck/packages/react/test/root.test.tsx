@@ -1,4 +1,4 @@
-import { act, StrictMode, useState, type ReactNode } from 'react';
+import { act, StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot, hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -783,6 +783,7 @@ describe('disabled', () => {
     expect(trigger(c, 'b').getAttribute('aria-disabled')).toBe('true');
     expect(trigger(c, 'a').hasAttribute('aria-disabled')).toBe(false);
     await click(trigger(c, 'b'));
+    await later();
     expect(openIds(c)).toEqual([]);
   });
 
@@ -813,5 +814,266 @@ describe('disabled', () => {
     await later();
     expect(onValueChange.mock.calls).toEqual([[['b']]]);
     expect(openIds(c)).toEqual(['b']);
+  });
+});
+
+describe('a value no Item is mounted for', () => {
+  const ids = ['a', 'b'];
+
+  it('is kept by a click, uncontrolled', async () => {
+    const onValueChange = vi.fn();
+    const c = await mount(
+      <Group
+        multiple
+        ids={ids}
+        defaultValue={['a', 'z']}
+        onValueChange={onValueChange}
+      />
+    );
+    await click(trigger(c, 'b'));
+    await later();
+    expect(onValueChange.mock.calls).toEqual([[['a', 'z', 'b']]]);
+    await click(trigger(c, 'a'));
+    await later();
+    expect(onValueChange.mock.calls[1]).toEqual([['z', 'b']]);
+  });
+
+  it('is kept by a click, controlled', async () => {
+    const onChange = vi.fn();
+    const c = await mount(
+      <Controlled multiple ids={ids} initial={['a', 'z']} onChange={onChange} />
+    );
+    await click(trigger(c, 'b'));
+    await later();
+    await click(trigger(c, 'a'));
+    await later();
+    expect(onChange.mock.calls).toEqual([[['a', 'z', 'b']], [['z', 'b']]]);
+  });
+
+  it('is kept by an open and a close nobody caused, uncontrolled', async () => {
+    const onValueChange = vi.fn();
+    const c = await mount(
+      <Group
+        multiple
+        ids={ids}
+        defaultValue={['a', 'z']}
+        onValueChange={onValueChange}
+      />
+    );
+    await outsideAct(() => {
+      item(c, 'b').open = true;
+    });
+    await outsideAct(() => {
+      item(c, 'a').open = false;
+    });
+    expect(onValueChange.mock.calls).toEqual([[['a', 'z', 'b']], [['z', 'b']]]);
+  });
+
+  it('is kept by an open and a close nobody caused, controlled', async () => {
+    const onChange = vi.fn();
+    const c = await mount(
+      <Controlled multiple ids={ids} initial={['a', 'z']} onChange={onChange} />
+    );
+    await outsideAct(() => {
+      item(c, 'b').open = true;
+    });
+    await outsideAct(() => {
+      item(c, 'a').open = false;
+    });
+    expect(onChange.mock.calls).toEqual([[['a', 'z', 'b']], [['z', 'b']]]);
+  });
+});
+
+describe('single mode with Items that move', () => {
+  it('opens the first in document order after a reorder that does not render the Root', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onValueChange = vi.fn();
+    let reorder!: (ids: string[]) => void;
+    function Reorder() {
+      const [ids, setIds] = useState(['a', 'b', 'c']);
+      useEffect(() => {
+        reorder = setIds;
+      }, []);
+      return <Items ids={ids} />;
+    }
+    const c = await mount(
+      <Accordion.Root value={['c', 'b']} onValueChange={onValueChange}>
+        <Reorder />
+      </Accordion.Root>
+    );
+    expect(openIds(c)).toEqual(['b']);
+    await act(async () => reorder(['c', 'b', 'a']));
+    await later();
+    expect(openIds(c)).toEqual(['c']);
+    expect(trigger(c, 'c').getAttribute('aria-expanded')).toBe('true');
+    expect(trigger(c, 'b').getAttribute('aria-expanded')).toBe('false');
+    expect(onValueChange).not.toHaveBeenCalled();
+    await click(trigger(c, 'a'));
+    await later();
+    expect(onValueChange.mock.calls).toEqual([[['a']]]);
+  });
+});
+
+describe('the record of what was reported', () => {
+  it('is cleared when the parent moves the value, in a Root', async () => {
+    const onChange = vi.fn();
+    let setValue!: (value: string[]) => void;
+    function Declining() {
+      const [value, set] = useState(['a']);
+      useEffect(() => {
+        setValue = set;
+      }, []);
+      return <Group value={value} onValueChange={onChange} />;
+    }
+    const c = await mount(<Declining />);
+    await outsideAct(() => {
+      item(c, 'b').open = true;
+    });
+    expect(onChange.mock.calls).toEqual([[['b']]]);
+    await act(async () => setValue(['c']));
+    await act(async () => setValue(['a']));
+    await later();
+    await outsideAct(() => {
+      item(c, 'b').open = true;
+    });
+    expect(onChange.mock.calls).toEqual([[['b']], [['b']]]);
+    expect(openIds(c)).toEqual(['a']);
+  });
+
+  it('is cleared when the parent moves open, in a standalone Item', async () => {
+    const onOpenChange = vi.fn();
+    let setOpen!: (open: boolean) => void;
+    function Declining() {
+      const [open, set] = useState(false);
+      useEffect(() => {
+        setOpen = set;
+      }, []);
+      return (
+        <Accordion.Item id="x" open={open} onOpenChange={onOpenChange}>
+          <Accordion.Trigger>x</Accordion.Trigger>
+          <Accordion.Panel>p</Accordion.Panel>
+        </Accordion.Item>
+      );
+    }
+    const c = await mount(<Declining />);
+    await outsideAct(() => {
+      item(c, 'x').open = true;
+    });
+    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    await act(async () => setOpen(true));
+    await act(async () => setOpen(false));
+    await later();
+    await outsideAct(() => {
+      item(c, 'x').open = true;
+    });
+    expect(onOpenChange.mock.calls).toEqual([[true], [true]]);
+    expect(item(c, 'x').open).toBe(false);
+  });
+});
+
+describe('a toggle of a nested Item', () => {
+  const part = (id: string, ...inside: ReactNode[]) => ({
+    id,
+    children: (
+      <>
+        <Accordion.Trigger>{id}</Accordion.Trigger>
+        <Accordion.Panel>{inside}</Accordion.Panel>
+      </>
+    )
+  });
+
+  it("is not the outer Root's to adopt", async () => {
+    const log: string[] = [];
+    const seen = (id: string) => (event: { target: EventTarget }) =>
+      log.push(`${id} sees ${(event.target as Element).id}`);
+    const inner = part('inner-1');
+    const x = part(
+      'x',
+      <Accordion.Root>
+        <Accordion.Item value="1" {...inner} onToggle={seen('inner-1')} />
+      </Accordion.Root>
+    );
+    const y = part('y');
+    const c = await mount(
+      <Accordion.Root multiple onValueChange={() => log.push('change')}>
+        <Accordion.Item value="x" {...x} defaultOpen onToggle={seen('x')} />
+        <Accordion.Item value="y" {...y} onToggle={seen('y')} />
+      </Accordion.Root>
+    );
+    await later();
+    log.length = 0;
+    await outsideAct(() => {
+      item(c, 'inner-1').open = true;
+      item(c, 'y').open = true;
+    });
+    // WebKit on React 18 fires the same toggles again afterwards.
+    expect(log.slice(0, 4)).toEqual([
+      'inner-1 sees inner-1',
+      'x sees inner-1',
+      'y sees y',
+      'change'
+    ]);
+  });
+
+  it("is not the outer standalone Item's to adopt", async () => {
+    const log: string[] = [];
+    const seen = (id: string) => (event: { target: EventTarget }) =>
+      log.push(`${id} sees ${(event.target as Element).id}`);
+    const c = await mount(
+      <Accordion.Item
+        id="outer"
+        onOpenChange={() => log.push('outer opens')}
+        onToggle={seen('outer')}
+      >
+        <Accordion.Trigger>outer</Accordion.Trigger>
+        <Accordion.Panel>
+          <Accordion.Item id="inner" onToggle={seen('inner')}>
+            <Accordion.Trigger>inner</Accordion.Trigger>
+            <Accordion.Panel>p</Accordion.Panel>
+          </Accordion.Item>
+        </Accordion.Panel>
+      </Accordion.Item>
+    );
+    await later();
+    log.length = 0;
+    await outsideAct(() => {
+      item(c, 'inner').open = true;
+      item(c, 'outer').open = true;
+    });
+    expect(log.slice(0, 4)).toEqual([
+      'inner sees inner',
+      'outer sees inner',
+      'outer sees outer',
+      'outer opens'
+    ]);
+  });
+});
+
+describe('an Item inside a Root without a value', () => {
+  it('warns, renders, and takes no part in the value', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onValueChange = vi.fn();
+    const c = await mount(
+      <Accordion.Root defaultValue={['a']} onValueChange={onValueChange}>
+        <Accordion.Item id="a" value="a">
+          <Accordion.Trigger>a</Accordion.Trigger>
+          <Accordion.Panel>p</Accordion.Panel>
+        </Accordion.Item>
+        <Accordion.Item id="n">
+          <Accordion.Trigger>n</Accordion.Trigger>
+          <Accordion.Panel>p</Accordion.Panel>
+        </Accordion.Item>
+      </Accordion.Root>
+    );
+    expect(item(c, 'n')).not.toBeNull();
+    expect(
+      warn.mock.calls.filter((call) =>
+        /Accordion\.Item.*`value`/.test(String(call[0]))
+      )
+    ).toHaveLength(1);
+    await click(trigger(c, 'n'));
+    await later();
+    expect(openIds(c)).toEqual(['a']);
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 });
