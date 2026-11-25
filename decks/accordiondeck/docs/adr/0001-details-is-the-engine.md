@@ -68,6 +68,13 @@ wrong tag.
   Two `open` items mounted in one group open the first in Chromium and
   Firefox and neither in WebKit, so the state cannot have two owners.
   `disabled`.
+- **Trigger**: sets `aria-expanded` on the `<summary>`. The server
+  renders it from the starting state, and React keeps it in step from
+  hydration on. Before hydration a native toggle leaves it stale until
+  hydration corrects it. Without it, Safari 27.2 with VoiceOver says only
+  "expanded" or "collapsed" on a toggle from the summary, and nothing on a
+  toggle from a heading inside it (#361). `level` renders the Trigger's
+  text in an `<h1>` to `<h6>` inside the summary.
 - **Panel**: always rendered, with no lazy mode, because find-in-page and
   opening before hydration need the content in the DOM. Padding goes on the
   Panel, not on `::details-content`. No `aria-controls` and no
@@ -96,10 +103,12 @@ before hydration leaves a mismatch that `hydrateRoot` does not patch. So:
   button or checkbox inside a Trigger keeps its own behaviour.
 - **`toggle` carries the opens nobody can prevent**: find-in-page,
   fragment navigation, clicks before hydration. Switching items in a group
-  fires two `toggle` events in one task, with microtasks between them. So
-  Root reads the whole group at the first one and diffs it against `value`,
-  and the second finds nothing new. A parsed `open` also fires `toggle` on
-  load.
+  fires two `toggle` events in one task, in either order: a switch React
+  makes closes the old Item first, and one the browser makes opens the new
+  Item first (#363). So Root reads the whole group at each `toggle` and
+  diffs it against what it last reported. It does not report a diff again
+  while the parent has not answered it, which also covers the toggles its
+  own write-back causes. A parsed `open` also fires `toggle` on load.
 - **A declined change is written back.** When a controlled parent does not
   take the new value, Root writes `open` back. After a find-in-page open,
   that closes the item with the match again, and the docs say so.
@@ -148,6 +157,29 @@ blocked by its go/no-go. It checks, on real devices and screen readers:
 3. **The state model above**, in Chromium, Firefox and WebKit: a declined
    change, a click before hydration, a group switch, find-in-page.
 4. **Find-in-page in real Safari 26.2**, in a named group.
+
+### Results
+
+Ruled a go on 2026-11-25. The maintainer delegated the rulings below and
+asked to proceed as if the iPhone checks pass.
+
+- **Headings hold up on macOS.** In Safari 27.2 and Chrome 157 with
+  VoiceOver (macOS 27.2.1), a heading inside the summary is a level-3
+  heading both in heading navigation and in the rotor. So Trigger takes
+  `level`.
+- **Expanded state needs `aria-expanded` in Safari.** Without it, Safari
+  announces a toggle only as "expanded" or "collapsed" from the summary,
+  and says nothing from a heading. With it, Safari says "Shipping expanded
+  summary" from both, and nothing is announced twice. Chrome announces the
+  state either way. So Trigger sets `aria-expanded` (delegated ruling).
+- **Find-in-page works in Safari 27.2.** Find and fragment links open the
+  match's Item, close its open sibling and scroll to the match. The 26.2
+  scroll bug does not occur.
+- **The state model holds** in Chromium 153, Firefox 155 and WebKit 26.6,
+  with the dedupe rule above (#363).
+- **Not yet verified:** iOS VoiceOver, NVDA, JAWS, and text fragments
+  (`#:~:text=`) in Safari. These are filed as #373, and
+  the docs make no claim about them until it passes.
 
 Rejected:
 
