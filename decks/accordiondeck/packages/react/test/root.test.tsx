@@ -1006,13 +1006,14 @@ describe('a toggle of a nested Item', () => {
       item(c, 'inner-1').open = true;
       item(c, 'y').open = true;
     });
-    // WebKit on React 18 fires the same toggles again afterwards.
+    // React 18 in WebKit calls the onToggle handlers a second time; the report must still come once.
     expect(log.slice(0, 4)).toEqual([
       'inner-1 sees inner-1',
       'x sees inner-1',
       'y sees y',
       'change'
     ]);
+    expect(log.filter((e) => e === 'change')).toEqual(['change']);
   });
 
   it("is not the outer standalone Item's to adopt", async () => {
@@ -1046,6 +1047,8 @@ describe('a toggle of a nested Item', () => {
       'outer sees outer',
       'outer opens'
     ]);
+    // React 18 in WebKit calls the onToggle handlers a second time; the report must still come once.
+    expect(log.filter((e) => e === 'outer opens')).toEqual(['outer opens']);
   });
 });
 
