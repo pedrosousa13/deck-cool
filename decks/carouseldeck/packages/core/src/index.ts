@@ -1535,10 +1535,8 @@ export function createDeck(
       clearShells(slidesOf(viewport).slides, placedAt);
       if (timelines) forgetPlaced();
     }
-    // Shared with `settle` below (#339), so its own first read of a box
-    // already read here (`alignCopies`) is not read again: cleared on the
-    // `keepPlace` and paint-only branches instead, each a rarer path this
-    // sharing is not worth the risk on.
+    // Shared with `settle` below (#339), so a box `alignCopies` reads here
+    // is not read again there.
     const snapshot = ahead ?? { reads: cachedReads() };
     try {
       alignCopies(viewport, snapshot.reads);
