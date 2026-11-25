@@ -318,8 +318,10 @@ export function touchPoint({ viewport }: Fixture) {
  * Cancels the tap's own click, so the touch never reads as a press on the
  * Gap. */
 export async function fingerDown(fixture: Fixture) {
-  fixture.viewport.addEventListener('touchend', (event) =>
-    event.preventDefault()
+  fixture.viewport.addEventListener(
+    'touchend',
+    (event) => event.preventDefault(),
+    { once: true }
   );
   if (isChromium) {
     const { x, y } = touchPoint(fixture);
@@ -334,6 +336,13 @@ export async function liftFinger(fixture: Fixture) {
     const { x, y } = touchPoint(fixture);
     await commands.tapAtPoint(x, y);
   }
+}
+
+/** Lifts a finger `fingerDown` still holds, for an `afterEach`: a test that
+ * failed before its own `liftFinger` would otherwise leave the touch down
+ * for the next one. */
+export async function dropFinger() {
+  if (isChromium) await commands.releaseHeldTouch().catch(() => {});
 }
 
 /** Stops every `scrollend` before the Viewport's own listener sees it, as

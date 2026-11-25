@@ -3,6 +3,7 @@ import { commands } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   blockScrollend,
+  dropFinger,
   expectSettledTo,
   fingerDown,
   glide,
@@ -25,7 +26,8 @@ import {
 
 let fixture: Fixture | undefined;
 let unblock: (() => void) | undefined;
-afterEach(() => {
+afterEach(async () => {
+  await dropFinger();
   unblock?.();
   unblock = undefined;
   if (fixture) unmount(fixture);
@@ -163,6 +165,20 @@ describe('closing early after a swipe (#334)', () => {
       await expectSettledTo(() => drawer.phase, 'open');
       expect(onOpenChange).not.toHaveBeenCalled();
     });
+  });
+
+  it('case 3: a tap that never scrolls leaves nothing armed for a later keyboard, scrollbar or snapTo scroll toward closed', async () => {
+    const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+    await fingerDown(fixture!);
+    await liftFinger(fixture!);
+    // No glide follows a tap: wait out whatever the lift armed.
+    await sleep(300);
+
+    await glide(viewport, [300, 160, 80, 31]);
+    await sleep(100);
+
+    expect(drawer.phase).toBe('open');
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   describe('case 4: tracking the touches', () => {

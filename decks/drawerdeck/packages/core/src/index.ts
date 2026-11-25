@@ -318,10 +318,13 @@ const THROW_VELOCITY_SCALE = 200;
 /** How close a scroll position must land to a snap point's to count as
  * resting there. */
 const SETTLE_TOLERANCE = 4;
-/** `onEarlyCloseScroll`'s own margin (#334), in pixels: closes a swiped
+/** `armEarlyClose`'s own margin (#334), in pixels: closes a swiped
  * drawer once a glide toward closed leaves this much or less of the Panel
  * in view. `earlyClosePx` clamps it for a small snap point. */
 const CLOSE_EARLY_PX = 32;
+/** How long a touch lift waits for the glide's first scroll event before
+ * `armEarlyClose` gives up: a tap fires none. */
+const EARLY_CLOSE_WINDOW_MS = 100;
 const SCROLLEND_DEBOUNCE_MS = 120;
 /** Clearance `ensureFieldVisible` keeps between a focused keyboard field's
  * own bottom edge and the real visible window's bottom: stops the field
@@ -1890,8 +1893,8 @@ export function createDrawer(
   // drawer's own.
   //
   // This observer only reports a Panel that is gone entirely. The last few
-  // pixels of a touch swipe's glide close earlier, from the scroll check a
-  // touch lift arms (`onEarlyCloseScroll`, below): a root shrunk by
+  // pixels of a touch swipe's glide close earlier, from the observer a
+  // touch lift arms (`armEarlyClose`, below): a root shrunk by
   // `SETTLE_TOLERANCE` also closed under a held finger at 3 px (#334).
   const panelVisibilityObserver = new IntersectionObserver(
     (entries) => {
@@ -1918,9 +1921,7 @@ export function createDrawer(
       ) {
         return;
       }
-      const reason = pendingCloseReason ?? 'drag';
-      pendingCloseReason = null;
-      finishClose(reason);
+      finishScrollClose();
     },
     { root: viewport }
   );
@@ -1928,13 +1929,20 @@ export function createDrawer(
   // ---------- closing early, from a swipe's glide (#334) ----------
   // Once a touch swipe lifts, iOS Safari keeps gliding for a few hundred
   // milliseconds, and the last pixels of it are barely visible: the page
-  // behind stays inert for all of it. The last touch to lift arms a check
-  // on the scroll events the glide fires, which closes the drawer once it
-  // is within `earlyClosePx()` of closed and still moving toward it. Only a
-  // lift arms it, so a held finger, a wheel and a trackpad never reach it,
-  // and the native scroll path runs no JS at all until then. `touchstart`,
-  // `scrollend`, a wheel, a close and `destroy` disarm it.
-  let earlyCloseDistance = 0;
+  // behind stays inert for all of it. The last touch to lift arms an
+  // observer on the Panel whose root stops `earlyClosePx()` short of the
+  // closed edge: the Panel leaving it means no more than that is in view,
+  // and, because it only reports a crossing, that the glide is moving
+  // toward closed. The browser does the measuring, so no scroll event runs
+  // JS that reads layout. Only a lift arms it, so a held finger, a wheel
+  // and a trackpad never reach it. A lift that no scroll follows (a tap)
+  // disarms it again after `EARLY_CLOSE_WINDOW_MS`, so it covers the
+  // glide that follows the lift and nothing else: not a later key, a
+  // scrollbar drag or a `snapTo`. `touchstart`, a wheel (one that lands
+  // inside that window counts as a scroll), `scrollend`, a close and
+  // `destroy` disarm it too.
+  let earlyCloseObserver: IntersectionObserver | undefined;
+  let earlyCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** `CLOSE_EARLY_PX`, kept under the smallest snap point's own visible
    * size: a glide that comes to rest there is not closing. */
@@ -1943,31 +1951,80 @@ export function createDrawer(
     return Math.max(SETTLE_TOLERANCE, smallest - 1);
   }
 
-  function distanceToClosed(): number {
-    return Math.abs(viewport[axis.scroll] - scrollForSnap(-1));
+  /** Whether a scroll that reached closed may close the drawer. `closing`
+   * already passed its own dismissible check, at whichever call site
+   * started it (`close()`, Escape, the outside press): only a spontaneous
+   * native settle at closed from `open` needs it checked here. */
+  function scrollMayClose() {
+    return phase === 'closing' || (phase === 'open' && opts.dismissible);
   }
 
-  function onEarlyCloseScroll() {
-    const distance = distanceToClosed();
-    const toward = distance < earlyCloseDistance;
-    earlyCloseDistance = distance;
-    if (
-      !toward ||
-      distance > earlyClosePx() ||
-      dragging ||
-      throwing ||
-      cssExiting ||
-      !(phase === 'closing' || (phase === 'open' && opts.dismissible))
-    ) {
-      return;
-    }
+  /** The close a scroll that reached closed ends in. */
+  function finishScrollClose() {
     const reason = pendingCloseReason ?? 'drag';
     pendingCloseReason = null;
     finishClose(reason);
   }
 
   function disarmEarlyClose() {
-    viewport.removeEventListener('scroll', onEarlyCloseScroll);
+    earlyCloseObserver?.disconnect();
+    earlyCloseObserver = undefined;
+    clearTimeout(earlyCloseTimer);
+    viewport.removeEventListener('scroll', onGlideStart);
+  }
+
+  /** The glide the lift armed for has begun: it stays armed until
+   * `scrollend`. */
+  function onGlideStart() {
+    clearTimeout(earlyCloseTimer);
+  }
+
+  function armEarlyClose() {
+    disarmEarlyClose();
+    // `top right bottom left`: the edge closed sits at is the one pulled in.
+    const inset = `-${earlyClosePx() + 1}px`;
+    const none = '0px';
+    const margin = horizontal
+      ? reversed
+        ? `${none} ${none} ${none} ${inset}`
+        : `${none} ${inset} ${none} ${none}`
+      : reversed
+        ? `${inset} ${none} ${none} ${none}`
+        : `${none} ${none} ${inset} ${none}`;
+    // Only a Panel that was out of the margin can cross it: a lift already
+    // inside (a slow release near a small snap point, snapping back open)
+    // waits until the Panel has been seen outside it again. Read here, once,
+    // not from the observer's first report: that can arrive after the
+    // glide has already moved.
+    let outside =
+      Math.abs(viewport[axis.scroll] - scrollForSnap(-1)) > earlyClosePx();
+    earlyCloseObserver = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[entries.length - 1];
+        if (!entry) return;
+        if (entry.isIntersecting) {
+          outside = true;
+          return;
+        }
+        if (
+          !outside ||
+          dragging ||
+          throwing ||
+          cssExiting ||
+          !scrollMayClose()
+        ) {
+          return;
+        }
+        finishScrollClose();
+      },
+      { root: viewport, rootMargin: margin }
+    );
+    earlyCloseObserver.observe(panel);
+    viewport.addEventListener('scroll', onGlideStart, {
+      passive: true,
+      once: true
+    });
+    earlyCloseTimer = setTimeout(disarmEarlyClose, EARLY_CLOSE_WINDOW_MS);
   }
 
   /** `touchstart`, `touchend` and `touchcancel` alike: `event.touches`
@@ -1975,12 +2032,8 @@ export function createDrawer(
    * drift when a touched element is removed mid-touch or two fingers land
    * in one `touchstart`. */
   function onTouchChange(event: TouchEvent) {
-    if (event.touches.length > 0) {
-      disarmEarlyClose();
-      return;
-    }
-    earlyCloseDistance = distanceToClosed();
-    viewport.addEventListener('scroll', onEarlyCloseScroll, { passive: true });
+    if (event.touches.length > 0) disarmEarlyClose();
+    else armEarlyClose();
   }
   viewport.addEventListener('touchstart', onTouchChange, { passive: true });
   viewport.addEventListener('touchend', onTouchChange, { passive: true });
@@ -2006,17 +2059,8 @@ export function createDrawer(
     const closedPos = scrollForSnap(-1);
     const atClosed = Math.abs(st - closedPos) <= SETTLE_TOLERANCE;
 
-    if (
-      atClosed &&
-      // `closing` already passed its own dismissible check, at whichever
-      // call site started it (`close()`, Escape, the outside press): only
-      // a spontaneous native settle at closed from `open` needs it checked
-      // here.
-      (phase === 'closing' || (phase === 'open' && opts.dismissible))
-    ) {
-      const reason = pendingCloseReason ?? 'drag';
-      pendingCloseReason = null;
-      finishClose(reason);
+    if (atClosed && scrollMayClose()) {
+      finishScrollClose();
       return;
     }
 

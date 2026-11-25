@@ -1,6 +1,7 @@
 import { userEvent } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  dropFinger,
   expectSettledTo,
   fingerDown,
   liftFinger,
@@ -39,7 +40,8 @@ function withTransformTransition(
 }
 
 let fixture: Fixture | undefined;
-afterEach(() => {
+afterEach(async () => {
+  await dropFinger();
   if (fixture) unmount(fixture);
   fixture = undefined;
   vi.restoreAllMocks();
@@ -339,9 +341,9 @@ describe('the dim (#249)', () => {
         drawer.setOptions({ indent: indentTarget });
 
         expect(onProgressChange).toHaveBeenCalledTimes(1);
-        expect(
-          indentTarget.style.getPropertyValue('--drawer-indent-progress')
-        ).toBe('1');
+        expect(indentTarget.style.getPropertyValue(
+          '--drawer-indent-progress'
+        )).toBe('1');
       } finally {
         indentTarget.remove();
       }

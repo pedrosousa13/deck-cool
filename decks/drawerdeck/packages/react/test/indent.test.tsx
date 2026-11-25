@@ -732,16 +732,8 @@ describe('a waiter claims the owner slot mid hand-off, when the owner itself swi
       }, []);
       return (
         <>
-          <div
-            data-testid="page-a"
-            ref={pageRefA}
-            style={{ position: 'relative' }}
-          />
-          <div
-            data-testid="page-b"
-            ref={pageRefB}
-            style={{ position: 'relative' }}
-          />
+          <div data-testid="page-a" ref={pageRefA} style={{ position: 'relative' }} />
+          <div data-testid="page-b" ref={pageRefB} style={{ position: 'relative' }} />
           <IndentDrawer
             id="a"
             indent={target === 'pa' ? pageRefA : pageRefB}

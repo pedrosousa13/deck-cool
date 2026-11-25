@@ -16,6 +16,18 @@ let heldTouchCdp:
   | Awaited<ReturnType<BrowserCommandContext['context']['newCDPSession']>>
   | undefined;
 
+/** Lifts the touch `holdTouchDown` holds, if any; whether there was one. */
+async function liftHeldTouch() {
+  if (!heldTouchCdp) return false;
+  const cdp = heldTouchCdp;
+  heldTouchCdp = undefined;
+  await cdp
+    .send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    .catch(() => {});
+  await cdp.detach().catch(() => {});
+  return true;
+}
+
 export default defineConfig({
   resolve: {
     // One copy of react and react-dom: Vite's own resolution can otherwise
@@ -117,6 +129,9 @@ export default defineConfig({
         // point, not a selector: a Locator inside a `showModal()` dialog
         // does not resolve reliably in WebKit here.
         async holdTouchDown(context, x, y) {
+          // A test that failed between this and `releaseHeldTouch` left its
+          // touch down: lift it before this one overwrites the session.
+          await liftHeldTouch();
           heldTouchCdp = await context.context.newCDPSession(context.page);
           await heldTouchCdp.send('Input.dispatchTouchEvent', {
             type: 'touchStart',
@@ -125,16 +140,9 @@ export default defineConfig({
         },
         // Lifts the touch `holdTouchDown` started.
         async releaseHeldTouch() {
-          if (!heldTouchCdp) {
+          if (!(await liftHeldTouch())) {
             throw new Error('releaseHeldTouch: no touch is held');
           }
-          const cdp = heldTouchCdp;
-          heldTouchCdp = undefined;
-          await cdp.send('Input.dispatchTouchEvent', {
-            type: 'touchEnd',
-            touchPoints: []
-          });
-          await cdp.detach().catch(() => {});
         },
         // A real tap at a page point (a touchstart straight followed by a
         // touchend), for the engines that cannot hold one.
