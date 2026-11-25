@@ -1,4 +1,11 @@
-import { act, StrictMode, useEffect, useState, type ReactNode } from 'react';
+import {
+  act,
+  StrictMode,
+  memo,
+  useEffect,
+  useState,
+  type ReactNode
+} from 'react';
 import { createRoot, hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -1077,6 +1084,78 @@ describe('an Item inside a Root without a value', () => {
     await click(trigger(c, 'n'));
     await later();
     expect(openIds(c)).toEqual(['a']);
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('an Item that unmounts', () => {
+  it('hands the one open place to the next Item in value', async () => {
+    const onValueChange = vi.fn();
+    const hide: { current: (show: boolean) => void } = { current: () => {} };
+    function Maybe() {
+      const [show, setShow] = useState(true);
+      useEffect(() => {
+        hide.current = setShow;
+      }, []);
+      return show ? (
+        <Accordion.Item id="a" value="a">
+          <Accordion.Trigger>a</Accordion.Trigger>
+          <Accordion.Panel>p</Accordion.Panel>
+        </Accordion.Item>
+      ) : null;
+    }
+    const Stable = memo(function Stable({ id }: { id: string }) {
+      return (
+        <Accordion.Item id={id} value={id}>
+          <Accordion.Trigger>{id}</Accordion.Trigger>
+          <Accordion.Panel>p</Accordion.Panel>
+        </Accordion.Item>
+      );
+    });
+    const c = await mount(
+      <Accordion.Root
+        alwaysOneOpen
+        value={['a', 'b']}
+        onValueChange={onValueChange}
+      >
+        <Maybe />
+        <Stable id="b" />
+        <Stable id="c" />
+      </Accordion.Root>
+    );
+    expect(openIds(c)).toEqual(['a']);
+    await act(async () => hide.current(false));
+    await later();
+    expect(openIds(c)).toEqual(['b']);
+    expect(trigger(c, 'b').getAttribute('aria-expanded')).toBe('true');
+    await outsideAct(() => {
+      item(c, 'c').open = true;
+    });
+    expect(onValueChange.mock.calls).toEqual([[['c']]]);
+  });
+});
+
+describe('an Item inside a single Root without a value', () => {
+  it('takes no name, so find-in-page opening it leaves the open Item alone', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onValueChange = vi.fn();
+    const c = await mount(
+      <Accordion.Root defaultValue={['a']} onValueChange={onValueChange}>
+        <Accordion.Item id="a" value="a">
+          <Accordion.Trigger>a</Accordion.Trigger>
+          <Accordion.Panel>p</Accordion.Panel>
+        </Accordion.Item>
+        <Accordion.Item id="n">
+          <Accordion.Trigger>n</Accordion.Trigger>
+          <Accordion.Panel>p</Accordion.Panel>
+        </Accordion.Item>
+      </Accordion.Root>
+    );
+    expect(item(c, 'n').getAttribute('name')).toBeNull();
+    await outsideAct(() => {
+      item(c, 'n').open = true;
+    });
+    expect(item(c, 'a').open).toBe(true);
     expect(onValueChange).not.toHaveBeenCalled();
   });
 });

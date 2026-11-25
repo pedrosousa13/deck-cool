@@ -270,8 +270,9 @@ function RootItem({
         open,
         disabled: root.disabled || disabled,
         locked: root.alwaysOneOpen && open,
-        // The Root's, which is none in multiple mode.
-        name: root.name,
+        // The Root's, which is none in multiple mode. An Item the Root does
+        // not track stays out of the browser's group for it.
+        name: hasValue ? root.name : undefined,
         requestChange: (next) => {
           if (value !== undefined) root.requestChange(value, next);
         },
@@ -709,17 +710,23 @@ export function Root({
     [valueWith, report]
   );
 
-  const register = useCallback((entry: Entry) => {
-    entries.current.add(entry);
-    return () => {
-      entries.current.delete(entry);
-    };
-  }, []);
-
   const refresh = useCallback(() => {
     const { value, multiple } = live.current;
     setFirstOpen(multiple || value.length < 2 ? undefined : expected()[0]);
   }, [expected]);
+
+  // An Item that leaves may have been the first in `value`, and no other
+  // Item commits to notice, so unregistering refreshes too.
+  const register = useCallback(
+    (entry: Entry) => {
+      entries.current.add(entry);
+      return () => {
+        entries.current.delete(entry);
+        refresh();
+      };
+    },
+    [refresh]
+  );
 
   // Mounted after every Item's own effect: hydration adopts what the DOM
   // holds, or under always one open with no Item open, restores `value`.
