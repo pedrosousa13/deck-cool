@@ -1,0 +1,16 @@
+{
+  "name": "accordiondeck-prototype",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway prototype for #361/#363. Never merged to main.",
+  "scripts": {
+    "serve": "node serve.mjs",
+    "check": "node check.mjs"
+  },
+  "dependencies": {
+    "esbuild": "0.25.12",
+    "playwright": "1.63.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}

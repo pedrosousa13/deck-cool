@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>accordiondeck prototype</title>
+<style>
+  body { font: 17px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
+  section { border-top: 3px solid #888; margin-top: 2rem; padding-top: .5rem; }
+  .how { background: #fff8d6; color: #222; padding: .5rem .75rem; border-radius: 6px; }
+  details { border: 1px solid #aaa; border-radius: 6px; margin: .5rem 0; }
+  summary { padding: .6rem .75rem; cursor: pointer; }
+  summary h3 { display: inline; margin: 0; font-size: 1em; }
+  details > div, details > p { margin: 0; padding: .5rem .75rem .75rem; }
+  summary a, summary button { margin-left: .75rem; font: inherit; }
+  @media (prefers-color-scheme: dark) { body { background: #1c1c1e; color: #eee; } a { color: #6cf; } }
+</style>
+</head>
+<body>
+<h1>accordiondeck prototype</h1>
+<p>Five variants of the native details element, for #361. Each section says what to listen for.
+Variant headings below are h2, so they do not mix with the h3 headings inside the summaries.</p>
+
+<section id="v1">
+  <h2>Variant 1: heading inside the summary</h2>
+  <p class="how">Listen for: is each "Shipping", "Returns", "Warranty" announced as a heading (and in the headings list), and is it still announced as expandable and as expanded or collapsed?</p>
+  <details id="v1-1"><summary id="v1-s1"><h3>Shipping</h3></summary><div>We ship in two days.</div></details>
+  <details id="v1-2"><summary id="v1-s2"><h3>Returns</h3></summary><div>Return within thirty days.</div></details>
+  <details id="v1-3"><summary id="v1-s3"><h3>Warranty</h3></summary><div>Two years of cover.</div></details>
+</section>
+
+<section id="v2">
+  <h2>Variant 2: plain summary</h2>
+  <p class="how">Listen for: the baseline. Is "Shipping" announced as expandable, and is expanded or collapsed announced on toggle? No heading is expected.</p>
+  <details id="v2-1"><summary id="v2-s1">Shipping</summary><div>We ship in two days.</div></details>
+  <details id="v2-2"><summary id="v2-s2">Returns</summary><div>Return within thirty days.</div></details>
+  <details id="v2-3"><summary id="v2-s3">Warranty</summary><div>Two years of cover.</div></details>
+</section>
+
+<section id="v3">
+  <h2>Variant 3: heading plus aria-expanded on the summary</h2>
+  <p class="how">Listen for: the same as variant 1. Then: does adding aria-expanded make iOS VoiceOver announce expanded and collapsed where variant 1 stayed silent? Is anything announced twice?</p>
+  <details id="v3-1"><summary id="v3-s1"><h3>Shipping</h3></summary><div>We ship in two days.</div></details>
+  <details id="v3-2"><summary id="v3-s2"><h3>Returns</h3></summary><div>Return within thirty days.</div></details>
+  <details id="v3-3"><summary id="v3-s3"><h3>Warranty</h3></summary><div>Two years of cover.</div></details>
+  <script>
+    for (const d of document.querySelectorAll('#v3 details')) {
+      const s = d.querySelector('summary');
+      s.setAttribute('aria-expanded', String(d.open));
+      d.addEventListener('toggle', () => s.setAttribute('aria-expanded', String(d.open)));
+    }
+  </script>
+</section>
+
+<section id="v4">
+  <h2>Variant 4: named group of five</h2>
+  <p class="how">Use find-in-page (Safari: Find on Page) for "marmalade", "quokka", "zephyr", "tamarind", "obsidian". Item 1 is open. Listen for and watch: does the match open its item, close the open one, and scroll to the match? Also try the fragment links below.</p>
+  <p>
+    Fragment links:
+    <a href="#word-quokka">quokka</a>,
+    <a href="#word-zephyr">zephyr</a>,
+    <a href="#word-tamarind">tamarind</a>,
+    <a href="#word-obsidian">obsidian</a>
+  </p>
+  <details name="g" id="v4-1" open><summary id="v4-s1">Item one</summary><div style="min-height:12rem">Open on load. The word here is <span id="word-marmalade">marmalade</span>.</div></details>
+  <details name="g" id="v4-2"><summary id="v4-s2">Item two</summary><div style="min-height:12rem">The word here is <span id="word-quokka">quokka</span>.</div></details>
+  <details name="g" id="v4-3"><summary id="v4-s3">Item three</summary><div style="min-height:12rem">The word here is <span id="word-zephyr">zephyr</span>.</div></details>
+  <details name="g" id="v4-4"><summary id="v4-s4">Item four</summary><div style="min-height:12rem">The word here is <span id="word-tamarind">tamarind</span>.</div></details>
+  <details name="g" id="v4-5"><summary id="v4-s5">Item five</summary><div style="min-height:12rem">The word here is <span id="word-obsidian">obsidian</span>.</div></details>
+</section>
+
+<section id="v5">
+  <h2>Variant 5: a link and a button inside the summary</h2>
+  <p class="how">Listen for: how is the summary announced with a link and a button inside it? Activate the link and the button: neither should open the item. Activate the title text: it should.</p>
+  <details id="v5-1">
+    <summary id="v5-s1">Account <a id="v5-link" href="#v5">help link</a> <button id="v5-button" type="button">a button</button></summary>
+    <div id="v5-linked">Panel content.</div>
+  </details>
+</section>
+</body>
+</html>
