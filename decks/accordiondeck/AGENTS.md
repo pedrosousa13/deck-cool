@@ -26,8 +26,10 @@ start with `'use client'`). The list lives in `scripts/verify.mjs`.
 The unit tests run in all three engines because ADR 0001 records `<details>`
 behaving differently in each.
 
-`@accordiondeck/react` has `Item`, `Trigger` and `Panel` (#365); Root and the
-groups are the next issue. `@accordiondeck/react-18` builds the same source,
+`@accordiondeck/react` has `Item`, `Trigger` and `Panel` (#365) and `Root`
+(#366); the keys are the next issue. Root finds its Items by registration
+(each Item registers with the nearest Root), and its always-one-open prop is
+`alwaysOneOpen`. `@accordiondeck/react-18` builds the same source,
 and `@accordiondeck/docs` is still a placeholder. All three are private at
 `0.0.0`. The v1 work is in the milestone
 accordion.deck.cool, map #360. There is no `@accordiondeck/core`: the browser
