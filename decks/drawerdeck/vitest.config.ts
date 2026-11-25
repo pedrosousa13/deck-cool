@@ -10,17 +10,19 @@ import type { BrowserCommandContext } from 'vitest/node';
 // would not reach the test files that call them.
 // The CDP session `holdTouchDown` opens, kept here (the command channel
 // only carries JSON) so the later `releaseHeldTouch` of the same test can
-// send its own `Input.dispatchTouchEvent` on it. One test at a time holds a
-// touch.
-let heldTouchCdp:
-  | Awaited<ReturnType<BrowserCommandContext['context']['newCDPSession']>>
-  | undefined;
+// send its own `Input.dispatchTouchEvent` on it. Test files run in parallel,
+// each in its own browser session, so the sessions are keyed by `sessionId`:
+// within one session one test at a time holds a touch.
+const heldTouchCdps = new Map<
+  string,
+  Awaited<ReturnType<BrowserCommandContext['context']['newCDPSession']>>
+>();
 
-/** Lifts the touch `holdTouchDown` holds, if any; whether there was one. */
-async function liftHeldTouch() {
-  if (!heldTouchCdp) return false;
-  const cdp = heldTouchCdp;
-  heldTouchCdp = undefined;
+/** Lifts the touch `holdTouchDown` holds in a session, if any; whether there was one. */
+async function liftHeldTouch(sessionId: string) {
+  const cdp = heldTouchCdps.get(sessionId);
+  if (!cdp) return false;
+  heldTouchCdps.delete(sessionId);
   await cdp
     .send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     .catch(() => {});
@@ -131,16 +133,17 @@ export default defineConfig({
         async holdTouchDown(context, x, y) {
           // A test that failed between this and `releaseHeldTouch` left its
           // touch down: lift it before this one overwrites the session.
-          await liftHeldTouch();
-          heldTouchCdp = await context.context.newCDPSession(context.page);
-          await heldTouchCdp.send('Input.dispatchTouchEvent', {
+          await liftHeldTouch(context.sessionId);
+          const cdp = await context.context.newCDPSession(context.page);
+          heldTouchCdps.set(context.sessionId, cdp);
+          await cdp.send('Input.dispatchTouchEvent', {
             type: 'touchStart',
             touchPoints: [{ x, y }]
           });
         },
         // Lifts the touch `holdTouchDown` started.
-        async releaseHeldTouch() {
-          if (!(await liftHeldTouch())) {
+        async releaseHeldTouch(context) {
+          if (!(await liftHeldTouch(context.sessionId))) {
             throw new Error('releaseHeldTouch: no touch is held');
           }
         },
