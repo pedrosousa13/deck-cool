@@ -15,6 +15,11 @@
       "@drawerdeck/react",
       "@drawerdeck/react-18",
       "@drawerdeck/docs"
+    ],
+    [
+      "@accordiondeck/react",
+      "@accordiondeck/react-18",
+      "@accordiondeck/docs"
     ]
   ],
   "linked": [],

@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "types": ["node"],
+    "paths": { "@accordiondeck/react": ["./src/index.ts"] },
+    "tsBuildInfoFile": "dist/.tsbuildinfo.test"
+  },
+  "include": ["src", "test"]
+}

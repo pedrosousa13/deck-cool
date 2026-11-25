@@ -26,6 +26,10 @@ packages:
   - decks/drawerdeck/packages/*
   - decks/drawerdeck/apps/*
   - decks/drawerdeck/bench
+  # accordiondeck, an in-repo deck (#364): its root package, for its scripts
+  # and dev dependencies, and its three packages.
+  - decks/accordiondeck
+  - decks/accordiondeck/packages/*
 # wrangler deploy runs without esbuild's and workerd's install scripts: the
 # Worker has no code to bundle or run, only static assets.
 allowBuilds:
