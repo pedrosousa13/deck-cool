@@ -11,7 +11,7 @@ import { join } from 'node:path';
  * @param {string} repoRoot
  * @returns {{ path: string, manifest: Record<string, any> }[]}
  */
-export const publishablePackages = (repoRoot) => {
+export const deckPackages = (repoRoot) => {
   const packages = readdirSync(join(repoRoot, 'packages'), {
     withFileTypes: true
   })
@@ -24,7 +24,7 @@ export const publishablePackages = (repoRoot) => {
       return { path, manifest };
     });
   if (packages.length === 0) {
-    throw new Error(`No publishable packages found under ${repoRoot}packages/`);
+    throw new Error(`No packages found under ${repoRoot}packages/`);
   }
   return packages;
 };

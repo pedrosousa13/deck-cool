@@ -13,7 +13,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
-import { publishablePackages } from './workspace-packages.mjs';
+import { deckPackages } from './workspace-packages.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -40,7 +40,7 @@ const passes = (args) => {
   }
 };
 
-const packages = publishablePackages(repoRoot);
+const packages = deckPackages(repoRoot);
 const failures = [];
 
 // Build the packages the tarballs are packed from.

@@ -16,7 +16,7 @@ const STEPS = [
   'lint',
   'typecheck',
   'test',
-  // The drawer package's tests again, on React 18, against
+  // The react package's tests again, on React 18, against
   // @accordiondeck/react-18's build.
   'test:react-18',
   // The same, on React 19.
