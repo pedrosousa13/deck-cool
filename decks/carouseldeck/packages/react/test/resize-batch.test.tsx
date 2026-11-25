@@ -192,13 +192,19 @@ const frame = () =>
 /** Decks on `viewports`, each destroyed and removed with the test. */
 function mount(
   viewports: HTMLElement[],
-  { loop = false, onChange = (_: number, __: DeckState) => {} } = {}
+  {
+    loop = false,
+    onChange
+  }: {
+    loop?: boolean;
+    onChange?: (deck: number, state: DeckState) => void;
+  } = {}
 ) {
   const engines = viewports.map((viewport, i) =>
     createDeck(viewport, {
       index: 0,
       loop,
-      onChange: (state) => onChange(i, state)
+      onChange: (state) => onChange?.(i, state)
     })
   );
   onTestFinished(() => {
