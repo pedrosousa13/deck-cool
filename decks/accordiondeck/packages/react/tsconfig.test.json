@@ -4,7 +4,7 @@
     "composite": true,
     "noEmit": true,
     "types": ["node"],
-    "paths": { "@accordiondeck/react": ["./src/index.ts"] },
+    "paths": { "@accordiondeck/react": ["./src/index.tsx"] },
     "tsBuildInfoFile": "dist/.tsbuildinfo.test"
   },
   "include": ["src", "test"]

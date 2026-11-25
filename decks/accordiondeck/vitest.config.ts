@@ -13,7 +13,7 @@ export default defineConfig({
       {
         find: /^@accordiondeck\/react$/,
         replacement: fileURLToPath(
-          new URL('./packages/react/src/index.ts', import.meta.url)
+          new URL('./packages/react/src/index.tsx', import.meta.url)
         )
       }
     ]

@@ -26,14 +26,19 @@ start with `'use client'`). The list lives in `scripts/verify.mjs`.
 The unit tests run in all three engines because ADR 0001 records `<details>`
 behaving differently in each.
 
-All three packages are placeholders (#364): each exports nothing but a
-`version` constant (the docs ship one page), with one smoke test. The v1
-work is in the milestone accordion.deck.cool, map #360. There is no
-`@accordiondeck/core`: the browser is the engine (ADR 0001, "The packages").
+`@accordiondeck/react` has `Item`, `Trigger` and `Panel` (#365); Root and the
+groups are the next issue. `@accordiondeck/react-18` builds the same source,
+and `@accordiondeck/docs` is still a placeholder. All three are private at
+`0.0.0`. The v1 work is in the milestone
+accordion.deck.cool, map #360. There is no `@accordiondeck/core`: the browser
+is the engine (ADR 0001, "The packages").
 
-`@accordiondeck/react-18` builds `@accordiondeck/react`'s source for React 18. Today that is a plain Vite build with a `'use client'` banner. When the
-primitives use a React 19-only API, give it the shims
-`decks/drawerdeck/packages/react-18/` has.
+`@accordiondeck/react-18` builds `@accordiondeck/react`'s source for React 18:
+a Vite build with a `'use client'` banner, and `src/with-ref.ts`, which gives
+each component `ref` through `forwardRef`, since React 18 does not pass `ref`
+as a prop. When the source uses another React 19-only API (`use`, a context as
+its own provider), add the `react` shim `decks/drawerdeck/packages/react-18/`
+has.
 
 Formatting is checked, never written by the gate. Run
 `pnpm exec prettier --write <files>` on the files you changed.
