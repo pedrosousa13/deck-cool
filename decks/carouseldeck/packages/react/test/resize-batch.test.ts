@@ -36,11 +36,7 @@ function instrument() {
       return original.apply(this, args);
     } as never);
   };
-  const getter = <T extends object>(
-    target: T,
-    name: string,
-    event: Event
-  ) => {
+  const getter = <T extends object>(target: T, name: string, event: Event) => {
     const descriptor = Object.getOwnPropertyDescriptor(target, name)!;
     vi.spyOn(target, name as never, 'get').mockImplementation(function (
       this: unknown
