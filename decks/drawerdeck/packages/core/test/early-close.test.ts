@@ -465,4 +465,24 @@ describe('closing early after a swipe (#334)', () => {
     expect(dialog.open).toBe(false);
     expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
   });
+
+  it('case 4: a touched element removed mid-touch does not hold the stall close off', async () => {
+    const { viewport, content, drawer, onOpenChange } = await openAt(
+      [0.5, 1],
+      0
+    );
+    // Hand-dispatched in both engines: a removed element's `touchend` goes
+    // to the detached node and never reaches the Viewport.
+    const touched = document.createElement('div');
+    content.append(touched);
+    touched.dispatchEvent(touchEvent('touchstart', 1));
+    touched.remove();
+
+    viewport.scrollTo({ top: 2, behavior: 'instant' });
+    await sleep(400);
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+  });
 });

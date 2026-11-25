@@ -1911,24 +1911,31 @@ export function createDrawer(
   // where it rests now. A report is a crossing, so nothing runs per scroll
   // event.
   let touching = false;
+  let touchTarget: Node | null = null;
   let stallTimer: ReturnType<typeof setTimeout> | undefined;
   const panelVisibilityObserver = new IntersectionObserver(
     (entries) => {
       const entry = entries[entries.length - 1];
       if (!entry) return;
       clearTimeout(stallTimer);
-      if (entry.isIntersecting || touching) return;
+      if (entry.isIntersecting || fingerHeld()) return;
       // The CSS exit already has its own close path (`beginExit` then
       // `settleExit`), a mouse drag or throw still owns the scroll position
       // itself (`onScrollEnd`'s own guard, below: #322), and a phase that is
       // not open or closing has nothing to close: `scrollMayCloseNow`
       // checks all of it when the wait ends.
       stallTimer = setTimeout(() => {
-        if (scrollMayCloseNow()) finishScrollClose();
+        if (!fingerHeld() && scrollMayCloseNow()) finishScrollClose();
       }, EARLY_CLOSE_WINDOW_MS);
     },
     { root: viewport, rootMargin: closedEdgeMargin(SETTLE_TOLERANCE + 1) }
   );
+
+  /** A touched element removed mid-touch sends its `touchend` to the
+   * detached node, never to the Viewport: that touch is over. */
+  function fingerHeld() {
+    return touching && !!touchTarget?.isConnected;
+  }
 
   /** A `rootMargin` that pulls in only the edge closed sits at, by `px`.
    * `top right bottom left`. */
@@ -1956,7 +1963,7 @@ export function createDrawer(
   // down, `scrollend`, new snap points that move its margin, a close and
   // `destroy` end it sooner. The stall catch above is not: it stays.
   let earlyCloseObserver: IntersectionObserver | undefined;
-  let earlyCloseTimers: ReturnType<typeof setTimeout>[] = [];
+  let earlyCloseTimer: ReturnType<typeof setTimeout> | undefined;
   let earlyCloseBandPx = 0;
 
   /** `CLOSE_EARLY_PX`, kept under the smallest snap point's own visible
@@ -1990,15 +1997,18 @@ export function createDrawer(
   function disarmEarlyClose() {
     earlyCloseObserver?.disconnect();
     earlyCloseObserver = undefined;
-    for (const timer of earlyCloseTimers) clearTimeout(timer);
-    earlyCloseTimers = [];
+    clearTimeout(earlyCloseTimer);
     viewport.removeEventListener('scroll', onGlideStart);
   }
 
   /** The glide the lift armed for has begun: the observer stays until the
-   * lifetime ends. */
+   * lifetime ends, which began with the lift, at most the window ago. */
   function onGlideStart() {
-    clearTimeout(earlyCloseTimers[0]);
+    clearTimeout(earlyCloseTimer);
+    earlyCloseTimer = setTimeout(
+      disarmEarlyClose,
+      EARLY_CLOSE_LIFETIME_MS - EARLY_CLOSE_WINDOW_MS
+    );
   }
 
   function armEarlyClose() {
@@ -2032,10 +2042,7 @@ export function createDrawer(
       once: true
     });
     // Only a glide that has begun by the window's end is watched.
-    earlyCloseTimers = [
-      setTimeout(disarmEarlyClose, EARLY_CLOSE_WINDOW_MS),
-      setTimeout(disarmEarlyClose, EARLY_CLOSE_LIFETIME_MS)
-    ];
+    earlyCloseTimer = setTimeout(disarmEarlyClose, EARLY_CLOSE_WINDOW_MS);
   }
 
   /** `touchstart`, `touchend` and `touchcancel` alike: `event.touches`
@@ -2044,6 +2051,7 @@ export function createDrawer(
    * in one `touchstart`. */
   function onTouchChange(event: TouchEvent) {
     touching = event.touches.length > 0;
+    if (event.type === 'touchstart') touchTarget = event.target as Node | null;
     clearTimeout(stallTimer);
     if (touching) disarmEarlyClose();
     else {
@@ -2855,6 +2863,7 @@ export function createDrawer(
     // has nothing left to transition from -- the removal a frame later
     // just lands on the same computed value, and the entrance never
     // moves.
+    clearTimeout(stallTimer);
     panel.setAttribute(STARTING_STYLE_ATTR, '');
     parts.backdrop?.setAttribute(STARTING_STYLE_ATTR, '');
     // `modal` takes effect on this open only (#318): freshly read from
