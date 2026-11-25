@@ -25,9 +25,9 @@ export const version = '0.0.0';
 declare const process: { env: { NODE_ENV?: string } };
 
 /**
- * A part's `render` prop, as drawerdeck's parts take it: a `ReactElement` to
- * clone the part's own props onto, or a function given them to build one.
- * Without it, the part renders its own default tag.
+ * A part's `render` prop: a `ReactElement` to clone the part's own props
+ * onto, or a function given them to build one. Without it, the part renders
+ * its own default tag.
  */
 export type RenderProp =
   ReactElement | ((props: Record<string, unknown>) => ReactElement);
@@ -50,10 +50,12 @@ function useComposedRefs<T>(
 }
 
 /** `className` concatenates, `style` merges, and an event handler (`onX`)
- * calls both; every other key in `b` wins. */
+ * calls both, `a`'s first, or `b`'s first for a key in `last`; every other
+ * key in `b` wins. */
 function mergeProps(
   a: Record<string, unknown>,
-  b: Record<string, unknown>
+  b: Record<string, unknown>,
+  last: readonly string[] = []
 ): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...a, ...b };
   for (const key of Object.keys(a)) {
@@ -69,9 +71,10 @@ function mergeProps(
       typeof av === 'function' &&
       typeof bv === 'function'
     ) {
+      const [first, second] = last.includes(key) ? [bv, av] : [av, bv];
       merged[key] = (...args: unknown[]) => {
-        (av as (...a: unknown[]) => void)(...args);
-        (bv as (...a: unknown[]) => void)(...args);
+        (first as (...a: unknown[]) => void)(...args);
+        (second as (...a: unknown[]) => void)(...args);
       };
     }
   }
@@ -81,11 +84,13 @@ function mergeProps(
 /** Renders one primitive as `tag`, or onto `render`: a function gets this
  * part's own computed props (including its `ref`) to build an element with;
  * a `ReactElement` is cloned, merging its own props and composing its own
- * `ref` with the part's. */
+ * `ref` with the part's. A handler named in `last` runs after the
+ * element's own, so it sees what that one did to the event. */
 function useRenderPart(
   tag: string,
   render: RenderProp | undefined,
-  { ref, ...props }: Record<string, unknown> & { ref?: Ref<unknown> }
+  { ref, ...props }: Record<string, unknown> & { ref?: Ref<unknown> },
+  last?: readonly string[]
 ): ReactElement {
   const elementProps =
     render !== undefined && typeof render !== 'function'
@@ -97,13 +102,9 @@ function useRenderPart(
     return createElement(tag, { ...props, ref: composed });
   if (typeof render === 'function') return render({ ...props, ref: composed });
   return cloneElement(render as ReactElement<Record<string, unknown>>, {
-    ...mergeProps(props, elementProps!),
+    ...mergeProps(props, elementProps!, last),
     ref: composed
   });
-}
-
-function warn(message: string) {
-  console.warn(message);
 }
 
 interface ItemContextValue {
@@ -123,7 +124,7 @@ function useItemContext(part: string): ItemContextValue {
 
 export interface ItemProps extends Omit<ComponentProps<'details'>, 'open'> {
   render?: RenderProp;
-  /** The Item's name in a Root's `value`. */
+  /** The Item's name in a Root's `value`. The Item itself does not use it. */
   value?: string;
   /** Controls the Item: it is open while this is true. */
   open?: boolean;
@@ -144,7 +145,9 @@ export interface ItemProps extends Omit<ComponentProps<'details'>, 'open'> {
 export function Item({
   render,
   ref,
-  value,
+  // Not for the DOM: the Root decides how it reads an Item's value.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  value: _value,
   open: openProp,
   defaultOpen = false,
   onOpenChange,
@@ -194,31 +197,41 @@ export function Item({
     [settle]
   );
 
+  /** A change the DOM holds and React has not rendered: reported once while
+   * the parent has not answered, but the DOM is reconciled either way. */
+  const adopt = useCallback(
+    (next: boolean) => {
+      if (next === live.current.open) return;
+      const last = reported.current;
+      if (last && last.next === next && last.against === live.current.open) {
+        settle();
+        return;
+      }
+      requestChange(next, true);
+    },
+    [settle, requestChange]
+  );
+
   // A passive effect: React 18 warns about a layout effect on the server.
   // Hydration adopts what the DOM holds: a click before hydration opened it
   // with nobody to tell.
   useEffect(() => {
     const el = itemRef.current;
-    if (el && el.open !== live.current.open) requestChange(el.open, true);
-  }, [requestChange]);
+    if (el) adopt(el.open);
+  }, [adopt]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
     const el = itemRef.current;
     if (el && el.tagName !== 'DETAILS')
-      warn(
+      console.warn(
         `Accordion.Item: it must render a <details>, and it rendered a <${el.tagName.toLowerCase()}>. Check its \`render\` prop.`
       );
   }, []);
 
   const handleToggle: NonNullable<ItemProps['onToggle']> = (event) => {
     onToggle?.(event);
-    const next = event.currentTarget.open;
-    if (next === live.current.open) return;
-    const last = reported.current;
-    if (last && last.next === next && last.against === live.current.open)
-      return;
-    requestChange(next, true);
+    adopt(event.currentTarget.open);
   };
 
   const context: ItemContextValue = { open, disabled, itemRef, requestChange };
@@ -226,7 +239,6 @@ export function Item({
     <ItemContext.Provider value={context}>
       {useRenderPart('details', render, {
         ...rest,
-        'data-value': value,
         open,
         // The DOM can hold what the server's HTML did not: a click before
         // hydration.
@@ -248,8 +260,9 @@ export interface TriggerProps extends ComponentProps<'summary'> {
   level?: Level;
 }
 
-/** The Item's `<summary>`. A consumer's `onClick` runs first and can cancel
- * the change with `preventDefault()`. */
+/** The Item's `<summary>`. A consumer's `onClick`, the Trigger's own or its
+ * `render` element's, runs first and can cancel the change with
+ * `preventDefault()`. */
 export function Trigger({
   render,
   ref,
@@ -267,38 +280,43 @@ export function Trigger({
     const el = triggerRef.current;
     if (!el) return;
     if (el.tagName !== 'SUMMARY')
-      warn(
+      console.warn(
         `Accordion.Trigger: it must render a <summary>, and it rendered a <${el.tagName.toLowerCase()}>. Check its \`render\` prop.`
       );
     else if (el.parentElement !== ctx.itemRef.current)
-      warn(
+      console.warn(
         'Accordion.Trigger: its <summary> must be the direct child of the Accordion.Item. A <summary> inside another element is hidden, and the browser shows its default one.'
       );
   }, [ctx.itemRef]);
 
-  return useRenderPart('summary', render, {
-    ...rest,
-    'aria-expanded': ctx.open,
-    'aria-disabled': ctx.disabled ? true : undefined,
-    ref: useComposedRefs(triggerRef, ref),
-    onClick: (event: MouseEvent<HTMLElement>) => {
-      onClick?.(event);
-      if (event.defaultPrevented) return;
-      // A link, button or checkbox inside the Trigger keeps its own
-      // behaviour: only the summary itself is ours.
-      const target = event.target as Element;
-      const nearest = target.closest(
-        'a[href],button,input,select,textarea,label,summary'
-      );
-      if (nearest !== event.currentTarget) return;
-      event.preventDefault();
-      if (!ctx.disabled) ctx.requestChange(!ctx.open);
+  return useRenderPart(
+    'summary',
+    render,
+    {
+      ...rest,
+      'aria-expanded': ctx.open,
+      'aria-disabled': ctx.disabled ? true : undefined,
+      ref: useComposedRefs(triggerRef, ref),
+      onClick: (event: MouseEvent<HTMLElement>) => {
+        onClick?.(event);
+        if (event.defaultPrevented) return;
+        // A link, button or checkbox inside the Trigger keeps its own
+        // behaviour: only the summary itself is ours.
+        const target = event.target as Element;
+        const nearest = target.closest(
+          'a[href],button,input,select,textarea,label,summary'
+        );
+        if (nearest !== event.currentTarget) return;
+        event.preventDefault();
+        if (!ctx.disabled) ctx.requestChange(!ctx.open);
+      },
+      children:
+        level === undefined
+          ? children
+          : createElement(`h${level}`, null, children)
     },
-    children:
-      level === undefined
-        ? children
-        : createElement(`h${level}`, null, children)
-  });
+    ['onClick']
+  );
 }
 
 export interface PanelProps extends ComponentProps<'div'> {

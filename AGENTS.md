@@ -67,9 +67,10 @@ root with `pnpm --dir decks/accordiondeck <script>`, and
 `pnpm --dir decks/accordiondeck verify` before landing a change to it. Its
 own ADRs are at `decks/accordiondeck/docs/adr/`, numbered on their own.
 `decks/accordiondeck/AGENTS.md` covers what's specific to working in it. It
-is set up (#364) but has no behaviour yet: `@accordiondeck/react`,
-`@accordiondeck/react-18` and `@accordiondeck/docs` are private placeholders
-at `0.0.0`. The v1 work is in the milestone accordion.deck.cool, map #360.
+is set up (#364). `Item`, `Trigger` and `Panel` exist (#365); Root is next.
+`@accordiondeck/react`, `@accordiondeck/react-18` and `@accordiondeck/docs`
+are still private, at `0.0.0`. The v1 work is in the milestone
+accordion.deck.cool, map #360.
 
 ## Releasing a deck
 

@@ -1,3 +1,4 @@
+// A copy of decks/drawerdeck/packages/react-18/src/with-ref.ts: fixes belong in both.
 import { forwardRef, type FunctionComponent, type ReactNode } from 'react';
 
 const REACT_ELEMENT = Symbol.for('react.element');

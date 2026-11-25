@@ -27,8 +27,9 @@ The unit tests run in all three engines because ADR 0001 records `<details>`
 behaving differently in each.
 
 `@accordiondeck/react` has `Item`, `Trigger` and `Panel` (#365); Root and the
-groups are the next issue. `@accordiondeck/react-18` and `@accordiondeck/docs`
-are still placeholders at `0.0.0`. The v1 work is in the milestone
+groups are the next issue. `@accordiondeck/react-18` builds the same source,
+and `@accordiondeck/docs` is still a placeholder. All three are private at
+`0.0.0`. The v1 work is in the milestone
 accordion.deck.cool, map #360. There is no `@accordiondeck/core`: the browser
 is the engine (ADR 0001, "The packages").
 

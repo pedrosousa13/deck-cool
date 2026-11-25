@@ -1,7 +1,8 @@
-import { act, useState, type ReactNode } from 'react';
+import { act, StrictMode, useState, type ReactNode } from 'react';
 import { createRoot, hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { userEvent } from 'vitest/browser';
 import * as Accordion from '@accordiondeck/react';
 
 (
@@ -109,9 +110,15 @@ describe('structure', () => {
     expect(c.querySelector('#body')!.textContent).toBe('Hidden words');
   });
 
-  it('gives Item a value attribute for the Root to read', async () => {
+  it('does not put value on the details', async () => {
     const c = await mount(<Basic value="a" />);
-    expect(details(c).getAttribute('data-value')).toBe('a');
+    expect(details(c).hasAttribute('value')).toBe(false);
+    expect(details(c).hasAttribute('data-value')).toBe(false);
+  });
+
+  it("passes a consumer's own data-value through", async () => {
+    const c = await mount(<Basic value="a" data-value="mine" />);
+    expect(details(c).getAttribute('data-value')).toBe('mine');
   });
 });
 
@@ -230,7 +237,7 @@ describe('controlled', () => {
     expect(summary(c).getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('writes open back when the parent declines a click', async () => {
+  it('keeps it closed when the parent declines a click', async () => {
     const onChange = vi.fn();
     const c = await mount(<Parent decline onChange={onChange} />);
     await click(summary(c));
@@ -240,7 +247,7 @@ describe('controlled', () => {
     expect(summary(c).getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('writes open back when the parent declines a close', async () => {
+  it('keeps it open when the parent declines a close', async () => {
     const onChange = vi.fn();
     const c = await mount(<Parent decline initial onChange={onChange} />);
     await click(summary(c));
@@ -288,6 +295,69 @@ describe('the click', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
+  it('lets a checkbox inside the Trigger toggle, not the Item', async () => {
+    const onOpenChange = vi.fn();
+    const c = await mount(
+      <Accordion.Item onOpenChange={onOpenChange}>
+        <Accordion.Trigger>
+          <input type="checkbox" />
+        </Accordion.Trigger>
+      </Accordion.Item>
+    );
+    const box = c.querySelector('input')!;
+    await click(box);
+    await later();
+    expect(box.checked).toBe(true);
+    expect(details(c).open).toBe(false);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('lets a label with an input inside the Trigger work, not the Item', async () => {
+    const onOpenChange = vi.fn();
+    const c = await mount(
+      <Accordion.Item onOpenChange={onOpenChange}>
+        <Accordion.Trigger>
+          <label>
+            <input type="checkbox" /> agree
+          </label>
+        </Accordion.Trigger>
+      </Accordion.Item>
+    );
+    await click(c.querySelector('label')!);
+    await later();
+    expect(c.querySelector('input')!.checked).toBe(true);
+    expect(details(c).open).toBe(false);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps a link when the click lands on a span inside it', async () => {
+    const onOpenChange = vi.fn();
+    const c = await mount(
+      <Accordion.Item onOpenChange={onOpenChange}>
+        <Accordion.Trigger>
+          <a href="#elsewhere">
+            <span id="inner">link</span>
+          </a>
+        </Accordion.Trigger>
+      </Accordion.Item>
+    );
+    await click(c.querySelector('#inner')!);
+    await later();
+    expect(location.hash).toBe('#elsewhere');
+    expect(details(c).open).toBe(false);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('toggles the Item from a click on the level heading', async () => {
+    const onOpenChange = vi.fn();
+    const c = await mount(<Basic level={2} onOpenChange={onOpenChange} />);
+    await click(summary(c).querySelector('h2')!);
+    expect(details(c).open).toBe(true);
+    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    await click(summary(c).querySelector('h2')!);
+    expect(details(c).open).toBe(false);
+  });
+
   it('does nothing when a child already prevented the event', async () => {
     const onOpenChange = vi.fn();
     const c = await mount(
@@ -318,6 +388,41 @@ describe('the click', () => {
     await later();
     expect(details(c).open).toBe(false);
     expect(onOpenChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('the click, with a render element', () => {
+  it('does nothing when the element own onClick prevents it', async () => {
+    const onOpenChange = vi.fn();
+    const c = await mount(
+      <Accordion.Item onOpenChange={onOpenChange}>
+        <Accordion.Trigger
+          render={<summary onClick={(event) => event.preventDefault()} />}
+        >
+          More
+        </Accordion.Trigger>
+      </Accordion.Item>
+    );
+    await click(summary(c));
+    await later();
+    expect(details(c).open).toBe(false);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('still runs the element onClick, once, and then opens', async () => {
+    const onElement = vi.fn();
+    const onOpenChange = vi.fn();
+    const c = await mount(
+      <Accordion.Item onOpenChange={onOpenChange}>
+        <Accordion.Trigger render={<summary onClick={onElement} />}>
+          More
+        </Accordion.Trigger>
+      </Accordion.Item>
+    );
+    await click(summary(c));
+    expect(onElement).toHaveBeenCalledOnce();
+    expect(details(c).open).toBe(true);
+    expect(onOpenChange.mock.calls).toEqual([[true]]);
   });
 });
 
@@ -356,6 +461,24 @@ describe('opens nobody can prevent', () => {
     });
     await vi.waitFor(() => expect(details(c).open).toBe(false));
     await later();
+    expect(onChange.mock.calls).toEqual([[true]]);
+    expect(summary(c).getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('are written back again when the parent has not answered a repeat', async () => {
+    const onChange = vi.fn();
+    const c = await mount(<Parent decline onChange={onChange} />);
+    await outsideAct(() => {
+      details(c).open = true;
+    });
+    await vi.waitFor(() => expect(details(c).open).toBe(false));
+    await outsideAct(() => {
+      details(c).open = true;
+    });
+    await vi.waitFor(() => expect(details(c).open).toBe(false));
+    await later();
+    // The dedupe rule: the same change is not reported twice while the
+    // parent has not answered it.
     expect(onChange.mock.calls).toEqual([[true]]);
     expect(summary(c).getAttribute('aria-expanded')).toBe('false');
   });
@@ -420,6 +543,19 @@ describe('before hydration', () => {
     expect(onChange.mock.calls).toEqual([[true]]);
   });
 
+  it('adopts a click once under StrictMode', async () => {
+    const onOpenChange = vi.fn();
+    const c = await serverRendered(
+      <StrictMode>
+        <Basic onOpenChange={onOpenChange} />
+      </StrictMode>,
+      (container) => summary(container).click()
+    );
+    await later();
+    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    expect(details(c).open).toBe(true);
+  });
+
   it('does not call onOpenChange when nothing differs', async () => {
     const onOpenChange = vi.fn();
     await serverRendered(<Basic defaultOpen onOpenChange={onOpenChange} />);
@@ -437,7 +573,8 @@ describe('disabled', () => {
     await later();
     expect(details(c).open).toBe(false);
     expect(onOpenChange).not.toHaveBeenCalled();
-    summary(c).focus();
+    expect(summary(c).tabIndex).toBeGreaterThanOrEqual(0);
+    await userEvent.tab();
     expect(document.activeElement).toBe(summary(c));
   });
 
