@@ -445,8 +445,11 @@ export function createDeck(
   // placers' own keyframes to the fresh geometry. A passthrough on the JS
   // path.
   const measureShells = (along: Axis): Placement | null => {
-    const max = along.max();
     const { sets, stacked, slides } = slidesOf(viewport);
+    // Read before the writes below, and only where they follow: a deck
+    // outside shells mode writes nothing here, so it reads nothing either
+    // (#339) -- `layoutShells` answers null for it.
+    const max = sets === 2 ? along.max() : 0;
     // An axis change leaves `placedAt`'s own offset along the old axis
     // (ADR-0013, #154): forgotten here, before `layoutShells` reads it
     // below, so it is never subtracted along the new one.
@@ -565,8 +568,14 @@ export function createDeck(
   const snapPoints = (along: Axis, reads: Reads = liveReads): Geometry =>
     measureSnapPoints(viewport, along, placement, loopOn, reads);
 
-  const settle = (reads: Reads & { forgetRects?(): void } = cachedReads()) => {
+  // Where the last settle left the viewport, read before it wrote anything
+  // (#339), for `refresh`'s `relaidAt`: null while a settle runs, and left
+  // so by one that rests off a snap point (`resnap`), whose own scroll the
+  // viewport must be read after.
+  let settledAt: number | null = null;
+  const settle = (reads: Settled = cachedReads(), primed?: Axis) => {
     everSettled = true;
+    settledAt = null;
     refreshOwed = false;
     shifted = null;
     userInput = false;
@@ -616,7 +625,7 @@ export function createDeck(
     // below (`jumpOffCopies`), moves every box on screen, so it forgets
     // the cached rects itself, right after, so nothing after it reads one
     // that is now stale.
-    const along = memoizeAxis(raw);
+    const along = primed ?? memoizeAxis(raw);
     try {
       alignCopies(viewport, reads);
       if (previous && placement) compensateShift(previous, raw);
@@ -635,6 +644,7 @@ export function createDeck(
         slide === -1
           ? 'start'
           : along.snapAlign(run.boxes[run.first + slide], reads);
+      settledAt = along.position;
       writeGeometry(viewport, along, run, reads);
       paint(along, reads);
       publish({
@@ -658,7 +668,7 @@ export function createDeck(
   const jumpOffCopies = (
     along: Axis,
     geometry: Geometry,
-    reads: Reads & { forgetRects?(): void } = liveReads
+    reads: Settled = liveReads
   ) => {
     if (geometry.length === 0) return;
     const at = along.position;
@@ -1495,12 +1505,16 @@ export function createDeck(
     resume();
   };
 
-  const refresh = () => {
+  // `primed` is a resize's own reads (#339), taken by `prime` before any
+  // deck wrote: every box the settle below reads is already in it. Without
+  // it, `refresh` reads as it goes.
+  const relayout = (primed?: Primed) => {
     followViewport(0);
     // A resize, a slide added or removed, loop or an effect changing: any
     // of them can land here with the writing direction having changed too
-    // (ADR-0003), so the cached Axis (above) is dropped and read afresh.
-    cachedAxis = null;
+    // (ADR-0003), so the cached Axis (above) is dropped and read afresh
+    // (`prime` already did, for a primed one).
+    if (!primed) cachedAxis = null;
     const along = axis();
     // Shells mode, leaving it or staying (ADR-0013): `placement` still
     // holds the geometry from before this layout, measured the same way
@@ -1524,7 +1538,7 @@ export function createDeck(
     // already read here (`alignCopies`) is not read again: cleared on the
     // `keepPlace` and paint-only branches instead, each a rarer path this
     // sharing is not worth the risk on.
-    const reads = cachedReads();
+    const reads = primed?.reads ?? cachedReads();
     try {
       alignCopies(viewport, reads);
       if (previous && placement) compensateShift(previous, along);
@@ -1537,11 +1551,13 @@ export function createDeck(
       const next = shapeOf(viewport);
       if (next !== shape) {
         shape = next;
-        if (keepPlace()) return;
+        if (keepPlace(reads, primed?.along)) return;
       }
       if (!scrolling && !move && drag !== 'dragging' && !inputPending()) {
-        settle(reads);
-        relaidAt = axis().position;
+        settle(reads, primed?.along);
+        // Where the settle read it before writing, unless its own scroll
+        // moved it: then read now, after that write, on purpose.
+        relaidAt = settledAt ?? axis().position;
         awaitQuiet();
       } else {
         paint();
@@ -1555,6 +1571,39 @@ export function createDeck(
     } finally {
       endRelayout();
     }
+  };
+
+  const refresh = () => relayout();
+
+  // What a resize's settle reads, read ahead of every deck's writes (#339):
+  // the axis, with its view, max and position, every box's rect and style,
+  // and so the snap points. Only for a deck whose settle would read nothing
+  // after a write of its own -- no shells (their re-measure reads right
+  // after its own spacer writes) and no copies (`alignCopies` may write one
+  // before `snapPoints` reads it) -- and that would settle at all, as
+  // `relayout` decides; any other deck reads as it goes, in its own write
+  // phase.
+  const prime = (): Primed | null => {
+    const { first, sets, boxes } = slidesOf(viewport);
+    if (
+      first > 0 ||
+      sets > 0 ||
+      scrolling ||
+      move ||
+      drag === 'dragging' ||
+      inputPending()
+    ) {
+      return null;
+    }
+    cachedAxis = null;
+    const along = memoizeAxis(axis());
+    const reads = cachedReads();
+    snapPoints(along, reads);
+    for (const box of boxes) {
+      reads.rect(box);
+      reads.style(box);
+    }
+    return { along, reads };
   };
 
   // Before the engine's own first measurement -- a natural-rest mount
@@ -1627,12 +1676,19 @@ export function createDeck(
 
   // Rests the viewport, instantly, on snap point `index`, clamped, and
   // settles.
-  const restOn = (index: number) => {
-    const along = axis();
-    const { points } = snapPoints(along);
+  // `reads` and `primed` are a resize's own snapshot (#339), where
+  // `refresh` read every box before any deck wrote: used as is by the
+  // settle, which a scroll made here first leaves stale, so its rects are
+  // dropped and read afresh -- a read after a write, on purpose.
+  const restOn = (index: number, reads?: Settled, primed?: Axis) => {
+    const along = primed ?? axis();
+    const { points } = snapPoints(along, reads);
     const to = points[clamp(index, points.length)] ?? 0;
-    if (Math.abs(along.position - to) >= 1) along.scrollTo(to, 'instant');
-    settle();
+    if (Math.abs(along.position - to) >= 1) {
+      along.scrollTo(to, 'instant');
+      reads?.forgetRects?.();
+    }
+    settle(reads, primed);
   };
 
   // A deck that starts resting where the browser already rests a plain
@@ -1674,7 +1730,17 @@ export function createDeck(
   // every real slide with it too (ADR-0013): that first settle
   // runs synchronously, within this very constructor, outside the
   // natural-rest case above.
-  const resizes = new ResizeObserver(refresh);
+  let primed: Primed | null = null;
+  const resizes = observeResizes(viewport.ownerDocument, {
+    read: () => {
+      primed = prime();
+    },
+    write: () => {
+      const taken = primed;
+      primed = null;
+      relayout(taken ?? undefined);
+    }
+  });
   resizes.observe(viewport);
   const beforeStart = naturalRest ? 0 : axis().position;
   // Shells mode only (ADR-0013): whether a buffer set's shell could even be
@@ -1727,7 +1793,7 @@ export function createDeck(
   // fewer snap points, the deck rests on the last, and reports it. Returns
   // whether the deck has kept its place, or will once the pointer lets go
   // or the scroll ends, so nothing settles before then.
-  const keepPlace = () => {
+  const keepPlace = (reads?: Settled, primed?: Axis) => {
     if (drag === 'dragging') return false;
     if (move) {
       relaidOut = true;
@@ -1744,7 +1810,7 @@ export function createDeck(
       // and forget it is still coming (#208), so this still waits, the
       // same way it already does below with no press at all.
       if (!everSettled && !inputPending()) {
-        settle();
+        settle(reads, primed);
         return true;
       }
       placeOwed = state.index;
@@ -1762,7 +1828,7 @@ export function createDeck(
     if (everSettled) {
       // A later layout change, once the deck has settled at least once,
       // rests back on its own current index, as ever.
-      restOn(state.index);
+      restOn(state.index, reads, primed);
       return true;
     }
     // Still the deck's still-pending first-ever settle (#333): nothing
@@ -1772,7 +1838,7 @@ export function createDeck(
     // never forced back to the natural-rest index the constructor skipped
     // measuring for.
     if (inputPending()) return false;
-    settle();
+    settle(reads, primed);
     return true;
   };
 
@@ -3035,6 +3101,88 @@ const liveReads: Reads = {
   rect: (el) => el.getBoundingClientRect(),
   style: (el) => getComputedStyle(el)
 };
+/** A settle's own reads, as `cachedReads` makes them. */
+type Settled = Reads & { forgetRects?(): void };
+/** What a resize's read phase took for its write phase (#339). */
+interface Primed {
+  along: Axis;
+  reads: Settled;
+}
+
+/**
+ * A deck's two halves of one resize (#339): `read` takes every layout read
+ * the deck's relayout needs, `write` relays out from them.
+ */
+interface ResizeWork {
+  read(): void;
+  write(): void;
+}
+const resizeSchedulers = new WeakMap<
+  Document,
+  { observer: ResizeObserver; owners: Map<Element, ResizeWork> }
+>();
+/**
+ * One `ResizeObserver` per document, shared by every deck on it (#339). Each
+ * deck's own observer used to fire one after another, so one deck's writes
+ * (custom properties, scroll) dirtied style before the next deck read
+ * layout: a forced style recalc per deck. Here one delivery runs every
+ * affected deck's `read`, then every one's `write`. A deck observes through
+ * the returned object as it would through a `ResizeObserver`; the shared one
+ * disconnects with its last deck.
+ */
+function observeResizes(doc: Document, work: ResizeWork) {
+  let shared = resizeSchedulers.get(doc);
+  if (!shared) {
+    const owners = new Map<Element, ResizeWork>();
+    // `reportError` is what an observer callback's own throw comes to: one
+    // deck's must not stop the others'.
+    const run = (decks: Set<ResizeWork>, phase: keyof ResizeWork) => {
+      for (const deck of decks) {
+        // A deck destroyed since the delivery began has nothing left to do.
+        if (![...owners.values()].includes(deck)) continue;
+        try {
+          deck[phase]();
+        } catch (error) {
+          reportError(error);
+        }
+      }
+    };
+    const observer = new ResizeObserver((entries) => {
+      const decks = new Set<ResizeWork>();
+      for (const { target } of entries) {
+        const deck = owners.get(target);
+        if (deck) decks.add(deck);
+      }
+      run(decks, 'read');
+      run(decks, 'write');
+    });
+    shared = { observer, owners };
+    resizeSchedulers.set(doc, shared);
+  }
+  const { observer, owners } = shared;
+  return {
+    observe(el: Element) {
+      owners.set(el, work);
+      observer.observe(el);
+    },
+    unobserve(el: Element) {
+      if (owners.get(el) !== work) return;
+      owners.delete(el);
+      observer.unobserve(el);
+    },
+    disconnect() {
+      for (const [el, owner] of owners) {
+        if (owner !== work) continue;
+        owners.delete(el);
+        observer.unobserve(el);
+      }
+      if (owners.size === 0) {
+        observer.disconnect();
+        resizeSchedulers.delete(doc);
+      }
+    }
+  };
+}
 function cachedReads(): Reads & { forgetRects(): void } {
   let rects = new Map<Element, DOMRect>();
   const styles = new Map<Element, CSSStyleDeclaration>();
@@ -3171,20 +3319,35 @@ function axisOf(viewport: HTMLElement, vertical: boolean): Axis {
 }
 
 /**
- * `along`, with `view()` and `max()` cached for as long as this lives
- * (#339): neither changes from anything a settle itself writes outside
+ * `along`, with `view()`, `max()` and `position` cached for as long as this
+ * lives (#339): none changes from anything a settle itself writes outside
  * shells mode -- shells' own re-measure (`measureShells`, `compensateShift`)
  * reads the raw axis instead, exactly because its own write can move them.
- * `position` stays live, through the prototype: a scroll this same settle
- * makes (`jumpOffCopies`) must still read where it lands.
+ * Only a scroll through this axis (`scrollTo`, or setting `position`) drops
+ * the cached `position`, so a scroll this same settle makes
+ * (`jumpOffCopies`) is read where it lands.
  */
 function memoizeAxis(along: Axis): Axis {
   let view: Span | null = null;
   let max: number | null = null;
-  return Object.assign(Object.create(along) as Axis, {
-    view: () => (view ??= along.view()),
-    max: () => (max ??= along.max())
-  });
+  let position: number | null = null;
+  return Object.create(along, {
+    view: { value: () => (view ??= along.view()) },
+    max: { value: () => (max ??= along.max()) },
+    position: {
+      get: () => (position ??= along.position),
+      set: (to: number) => {
+        position = null;
+        along.position = to;
+      }
+    },
+    scrollTo: {
+      value: (to: number, behavior: ScrollBehavior) => {
+        position = null;
+        along.scrollTo(to, behavior);
+      }
+    }
+  }) as Axis;
 }
 
 /** How far the viewport would scroll to put `slide` at the alignment point
