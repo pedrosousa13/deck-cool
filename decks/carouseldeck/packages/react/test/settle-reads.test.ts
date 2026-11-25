@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, onTestFinished, test, vi } from 'vitest';
 import { COPY, createDeck } from '@carouseldeck/core';
 
 // #339: one `settle()` reads the same box's rect and computed style several
@@ -21,10 +21,13 @@ function countPerElementReads() {
     (rectSpy.mock.instances as unknown[]).filter((inst) => inst === el).length;
   const styleCount = (el: Element) =>
     styleSpy.mock.calls.filter((call) => call[0] === el).length;
+  // Restored whether the test passes or fails.
+  onTestFinished(() => {
+    vi.restoreAllMocks();
+  });
   return {
     maxRect: (boxes: Element[]) => Math.max(0, ...boxes.map(rectCount)),
-    maxStyle: (boxes: Element[]) => Math.max(0, ...boxes.map(styleCount)),
-    restore: () => vi.restoreAllMocks()
+    maxStyle: (boxes: Element[]) => Math.max(0, ...boxes.map(styleCount))
   };
 }
 
@@ -108,7 +111,6 @@ describe('settle reads each box at most once (#339)', () => {
       engine.refresh();
       expect(reads.maxRect(boxes)).toBeLessThanOrEqual(1);
       expect(reads.maxStyle(boxes)).toBeLessThanOrEqual(1);
-      reads.restore();
     } finally {
       engine.destroy();
       viewport.remove();
@@ -123,7 +125,6 @@ describe('settle reads each box at most once (#339)', () => {
       engine.refresh();
       expect(reads.maxRect(boxes)).toBeLessThanOrEqual(1);
       expect(reads.maxStyle(boxes)).toBeLessThanOrEqual(1);
-      reads.restore();
     } finally {
       engine.destroy();
       viewport.remove();
@@ -143,7 +144,6 @@ describe('settle reads each box at most once (#339)', () => {
       engine.refresh();
       expect(reads.maxRect(boxes)).toBeLessThanOrEqual(1);
       expect(reads.maxStyle(boxes)).toBeLessThanOrEqual(1);
-      reads.restore();
     } finally {
       engine.destroy();
       viewport.remove();

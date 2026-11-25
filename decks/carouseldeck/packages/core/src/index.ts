@@ -2523,10 +2523,7 @@ interface Placement {
  * rest. `width`/`height` is the content box under the default `box-sizing`,
  * so its padding and border are added back; `border-box` counts them
  * already. */
-function borderBoxSize(
-  style: CSSStyleDeclaration,
-  dimension: 'width' | 'height'
-): number {
+function borderBoxSize(style: Style, dimension: 'width' | 'height'): number {
   const base = parseFloat(style[dimension]) || 0;
   if (style.boxSizing === 'border-box') return base;
   const sides =
@@ -3081,21 +3078,55 @@ function pageOwner(
  * the way the deck runs. */
 type Span = [start: number, end: number];
 
+/** The computed style a settle reads, and nothing else. */
+const STYLE = [
+  'width',
+  'height',
+  'boxSizing',
+  'columnGap',
+  'rowGap',
+  'scrollSnapAlign',
+  'scrollSnapType',
+  'scrollMargin',
+  'marginTop',
+  'marginRight',
+  'marginBottom',
+  'marginLeft',
+  'paddingTop',
+  'paddingRight',
+  'paddingBottom',
+  'paddingLeft',
+  'borderTopWidth',
+  'borderRightWidth',
+  'borderBottomWidth',
+  'borderLeftWidth',
+  'scrollMarginTop',
+  'scrollMarginRight',
+  'scrollMarginBottom',
+  'scrollMarginLeft',
+  'scrollPaddingTop',
+  'scrollPaddingRight',
+  'scrollPaddingBottom',
+  'scrollPaddingLeft'
+] as const;
+type Style = Pick<CSSStyleDeclaration, (typeof STYLE)[number]>;
+
 /**
  * One settle's own snapshot of layout (#339): `measureSnapPoints`,
  * `writeGeometry`, `writeProgress`, `focalSlide` and `resnap` each used to
  * read a box's rect or computed style afresh, several times over for the
- * same box. `rect` and `style` cache the first read of each; a style is a
- * live object (a later read of a different property off the same one is
- * never stale), but a rect is a snapshot, so a scroll this same settle makes
- * (`jumpOffCopies`) must drop every cached one before anything reads on.
- * `liveReads` is the default for every call site outside a settle -- a
+ * same box. `rect` and `style` cache the first read of each, as values: a
+ * computed style's declaration is live, and reading a property off it after
+ * a write forces a style recalc, the cost one resize delivery batches away
+ * (`observeResizes`). A rect is a snapshot too, so a scroll this same settle
+ * makes (`jumpOffCopies`) must drop every cached one before anything reads
+ * on. `liveReads` is the default for every call site outside a settle -- a
  * press, a step, a scroll's own `arrived` check -- each of which already
  * reads only the one box its own moment needs.
  */
 interface Reads {
   rect(el: Element): DOMRect;
-  style(el: Element): CSSStyleDeclaration;
+  style(el: Element): Style;
 }
 const liveReads: Reads = {
   rect: (el) => el.getBoundingClientRect(),
@@ -3185,7 +3216,7 @@ function observeResizes(doc: Document, work: ResizeWork) {
 }
 function cachedReads(): Reads & { forgetRects(): void } {
   let rects = new Map<Element, DOMRect>();
-  const styles = new Map<Element, CSSStyleDeclaration>();
+  const styles = new Map<Element, Style>();
   return {
     rect(el) {
       let rect = rects.get(el);
@@ -3198,7 +3229,10 @@ function cachedReads(): Reads & { forgetRects(): void } {
     style(el) {
       let style = styles.get(el);
       if (!style) {
-        style = getComputedStyle(el);
+        const live = getComputedStyle(el);
+        style = Object.fromEntries(
+          STYLE.map((name) => [name, live[name]])
+        ) as Style;
         styles.set(el, style);
       }
       return style;
@@ -3236,7 +3270,7 @@ interface Axis {
    * axis's start and end, in pixels; a percentage is of `size`, and `auto`
    * is none. */
   insets(
-    style: CSSStyleDeclaration,
+    style: Style,
     property: 'scrollPadding' | 'scrollMargin' | 'margin',
     size: number
   ): Span;
@@ -3245,7 +3279,7 @@ interface Axis {
   vertical: boolean;
   /** The viewport's `columnGap` (horizontal) or `rowGap` (vertical), in
    * pixels; `normal` is 0. */
-  gap(style: CSSStyleDeclaration): number;
+  gap(style: Style): number;
   /** 1 for horizontal LTR or vertical, -1 for horizontal RTL: the
    * physical direction a logical (along-the-axis) distance runs in.
    * `place` (ADR-0013) multiplies a logical translate by it to get the
