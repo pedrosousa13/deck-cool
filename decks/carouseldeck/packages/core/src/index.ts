@@ -1578,7 +1578,9 @@ export function createDeck(
   // the axis, with its view, max and position, every box's rect and style,
   // and so the snap points. Only for a deck whose settle would read nothing
   // after a write of its own -- no shells (their re-measure reads right
-  // after its own spacer writes) and no copies (`alignCopies` may write one
+  // after its own spacer writes, and a deck still holding `placement` may
+  // be leaving them, its relayout stripping what they wrote onto the
+  // slides) and no copies (`alignCopies` may write one
   // before `snapPoints` reads it) -- and that would settle at all, as
   // `relayout` decides, which includes no pointer held down, whose own
   // paint reads live; any other deck reads as it goes, in its own write
@@ -1588,6 +1590,7 @@ export function createDeck(
     if (
       first > 0 ||
       sets > 0 ||
+      placement ||
       scrolling ||
       move ||
       drag === 'dragging' ||

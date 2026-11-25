@@ -1,7 +1,13 @@
 import { describe, expect, onTestFinished, test } from 'vitest';
 import { render } from '@testing-library/react';
 import { COPY, createDeck, type DeckState } from '@carouseldeck/core';
-import { addStyle, CENTRED, TestDeck, viewportOf } from './fixtures';
+import {
+  addStyle,
+  CENTRED,
+  placementPath,
+  TestDeck,
+  viewportOf
+} from './fixtures';
 
 // #339: every deck on a page used to own a `ResizeObserver`, so its first
 // delivery ran the decks one after another, and each deck's writes (custom
@@ -336,6 +342,61 @@ describe('decks share one resize delivery (#339)', () => {
     await frame();
     await frame();
     expect(settled).toBeGreaterThan(0);
+  });
+
+  test('a deck leaving shells mode reads no slide still placed by them', async () => {
+    // The shells are gone and the deck's `placement` is not yet: the slides
+    // still carry the translate the shells gave them, which this delivery's
+    // own relayout strips. A read taken before that is of a layout that is
+    // no more.
+    addStyle(CENTRED);
+    placementPath('js');
+    // The markup a looping deck renders for shells, as a plain DOM tree.
+    const { container, unmount } = render(
+      <TestDeck loop viewportClassName="centred" />
+    );
+    const viewport = viewportOf(container).cloneNode(true) as HTMLElement;
+    unmount();
+    document.body.append(viewport);
+    const engine = createDeck(viewport, {
+      index: 2,
+      loop: true,
+      onChange: () => {}
+    });
+    onTestFinished(() => {
+      engine.destroy();
+      viewport.remove();
+    });
+    await frame();
+    await frame();
+    viewport
+      .querySelectorAll('[data-carouseldeck-shell], [data-carouseldeck-spacer]')
+      .forEach((el) => el.remove());
+    const slides = [
+      ...viewport.querySelectorAll<HTMLElement>('[data-carouseldeck-slide]')
+    ];
+    for (const slide of slides) slide.style.translate = '250px';
+    const placedReads: Element[] = [];
+    const original = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (
+        slides.includes(this as HTMLElement) &&
+        (this as HTMLElement).style.translate !== ''
+      ) {
+        placedReads.push(this);
+      }
+      return original.call(this);
+    };
+    onTestFinished(() => {
+      Element.prototype.getBoundingClientRect = original;
+    });
+    viewport.style.height = '20px';
+    await frame();
+    await frame();
+    expect(slides.map((slide) => slide.style.translate)).toEqual(
+      slides.map(() => '')
+    );
+    expect(placedReads).toEqual([]);
   });
 
   test('a deck inside a curved deck settles on the curve, as a live relayout does', async () => {
