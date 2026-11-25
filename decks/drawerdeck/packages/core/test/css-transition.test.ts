@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   expectSettledTo,
   mount,
+  touchEvent,
   sleep,
   unmount,
   type Fixture
@@ -364,7 +365,7 @@ describe('interrupting the entrance or the exit', () => {
     drawer.open();
     expect(panel.hasAttribute('data-starting-style')).toBe(true);
 
-    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    viewport.dispatchEvent(touchEvent('touchstart', 1));
 
     expect(panel.hasAttribute('data-starting-style')).toBe(false);
     expect(drawer.phase).toBe('open');
@@ -424,7 +425,7 @@ describe('interrupting the entrance or the exit', () => {
     drawer.close('close-button');
     expect(drawer.phase).toBe('closing');
 
-    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    viewport.dispatchEvent(touchEvent('touchstart', 1));
 
     // An interruption never cancels a close (#268's design ruling): the
     // dialog is closed now, not reopened.
@@ -496,7 +497,7 @@ describe('interrupting the entrance or the exit', () => {
     // already detached the listeners and called this a no-op.
     expect(translateY(getComputedStyle(panel).transform)).not.toBe(0);
 
-    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    viewport.dispatchEvent(touchEvent('touchstart', 1));
 
     expect(translateY(getComputedStyle(panel).transform)).toBe(0);
     expect(drawer.phase).toBe('open');
@@ -517,7 +518,7 @@ describe('interrupting the entrance or the exit', () => {
     // Still mid-flight, easing back down toward translateY(100%).
     expect(translateY(getComputedStyle(panel).transform)).not.toBe(0);
 
-    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    viewport.dispatchEvent(touchEvent('touchstart', 1));
 
     expect(drawer.phase).toBe('closed');
     expect(dialog.open).toBe(false);
@@ -532,7 +533,7 @@ describe('interrupting the entrance or the exit', () => {
 
     // Not mid-entrance or mid-exit: a touch is just a touch.
     expect(() =>
-      viewport.dispatchEvent(new Event('touchstart', { bubbles: true }))
+      viewport.dispatchEvent(touchEvent('touchstart', 1))
     ).not.toThrow();
     expect(drawer.phase).toBe('open');
   });
@@ -550,7 +551,7 @@ describe('interrupting the entrance or the exit', () => {
     // entrance's own CSSTransition, which queues a `transitionend` a
     // listener reading only `event.target` could mistake for the exit's
     // own, started right after it in the same tick.
-    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    viewport.dispatchEvent(touchEvent('touchstart', 1));
     expect(drawer.phase).toBe('open');
 
     drawer.close('close-button');
@@ -735,7 +736,7 @@ describe('interrupting the entrance and the exit with the scroll-timeline dim ap
     // Mid-entrance: the interrupt finishes the Backdrop's own `opacity`
     // transition. The bug finished the scroll-driven dim right along with
     // it, detaching it from the scroll position for good.
-    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    viewport.dispatchEvent(touchEvent('touchstart', 1));
     expect(drawer.phase).toBe('open');
     expect(dimFinish).not.toHaveBeenCalled();
     // Lets the finished entrance transition's own (late, asynchronous)
@@ -751,7 +752,7 @@ describe('interrupting the entrance and the exit with the scroll-timeline dim ap
     // (#268's design ruling), tearing this CSSAnimation down along with
     // everything else the dialog owns, so the spy itself cannot keep
     // proving anything past this point.
-    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    viewport.dispatchEvent(touchEvent('touchstart', 1));
     expect(drawer.phase).toBe('closed');
     expect(dimFinish).not.toHaveBeenCalled();
 

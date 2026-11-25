@@ -1,7 +1,10 @@
 import { userEvent } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  dropFinger,
   expectSettledTo,
+  fingerDown,
+  liftFinger,
   mockReducedMotion,
   mount,
   mouseDrag,
@@ -37,7 +40,8 @@ function withTransformTransition(
 }
 
 let fixture: Fixture | undefined;
-afterEach(() => {
+afterEach(async () => {
+  await dropFinger();
   if (fixture) unmount(fixture);
   fixture = undefined;
   vi.restoreAllMocks();
@@ -416,12 +420,9 @@ describe('closing as soon as the Panel leaves view (#296)', () => {
     // bench measured ~1000ms): comfortably longer than a scripted scroll
     // settles in Chromium or WebKit here, so racing the two down to the
     // millisecond is not something this harness can reproduce reliably.
-    // The shrunk root (#332's follow-up) closes the drawer before this
-    // smooth scroll's own native settle even finishes, so `scrollend` for
-    // the very same gesture is dispatched by hand here, standing in for
-    // whichever one the browser eventually fires on its own. What this
-    // proves: the close lands with the right reason, and that later
-    // `scrollend` is not a second one (`finishClose`'s own idempotency).
+    // What it does prove: the close lands with the right reason, and
+    // `scrollend` firing for the very same gesture right behind it is
+    // not a second one (`finishClose`'s own idempotency).
     fixture = mount({ snapPoints: [0.5, 1] });
     const { viewport, drawer } = fixture;
     drawer.open();
@@ -429,11 +430,19 @@ describe('closing as soon as the Panel leaves view (#296)', () => {
     const onOpenChange = vi.fn();
     drawer.setOptions({ onOpenChange });
 
+    let scrollEndFired = false;
+    viewport.addEventListener(
+      'scrollend',
+      () => {
+        scrollEndFired = true;
+      },
+      { once: true }
+    );
+
     viewport.scrollTo({ top: 0, behavior: 'smooth' });
 
     await expectSettledTo(() => drawer.phase, 'closed');
-    viewport.dispatchEvent(new Event('scrollend'));
-    await sleep(50);
+    expect(scrollEndFired).toBe(true);
     expect(onOpenChange).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
   });
@@ -556,7 +565,7 @@ describe('closing as soon as the Panel leaves view (#296)', () => {
     drawer.setOptions({ onOpenChange });
 
     // Resting fully open, and at the smallest configured snap point, must
-    // not read as "gone" under the root this fix shrinks.
+    // not read as "gone".
     drawer.snapTo(1);
     await expectSettledTo(() => drawer.snapIndex, 1);
     await nextFrame();
@@ -577,6 +586,10 @@ describe('closing as soon as the Panel leaves view (#296)', () => {
       // snap can resettle this write back toward a snap point before the
       // assertions below ever read it.
       viewport.style.scrollSnapType = 'none';
+      // A swipe: the finger lifts, and the glide it leaves stalls at 2.
+      // Only a lift arms the early close (#334).
+      await fingerDown(fixture);
+      await liftFinger(fixture);
       viewport.scrollTo({ top: 2, behavior: 'instant' });
 
       await expectSettledTo(() => drawer.phase, 'closed');

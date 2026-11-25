@@ -39,5 +39,15 @@ declare module 'vitest/internal/browser' {
       offsetX: number,
       offsetY: number
     ) => Promise<void>;
+    /** Holds a real touch down at a page point (a CDP
+     * `Input.dispatchTouchEvent`, Chromium only: it throws elsewhere). */
+    holdTouchDown: (x: number, y: number) => Promise<void>;
+    /** Lifts the touch `holdTouchDown` started. */
+    releaseHeldTouch: () => Promise<void>;
+    /** A real touch tap at a page point: a `touchstart` then a `touchend`,
+     * in every engine. */
+    tapAtPoint: (x: number, y: number) => Promise<void>;
+    /** A real wheel scroll at a page point. */
+    wheelAtPoint: (x: number, y: number, deltaY: number) => Promise<void>;
   }
 }
