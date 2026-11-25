@@ -4,8 +4,8 @@ deck.cool is the umbrella for a family of small, unstyled React packages, each n
 
 ## Vocabulary
 
-- **Deck**: one package in the family (carouseldeck, playdeck, pagedeck, drawerdeck). Its site lives here, and its source lives either here or in its own repo.
-- **In-repo deck**: a deck whose source lives in this repo, under `decks/<deck>/`. slidedeck is the first, renamed carouseldeck as it moves in; drawerdeck is the second, set up directly here (#231). See ADR 0002.
+- **Deck**: one package in the family (carouseldeck, playdeck, pagedeck, drawerdeck, accordiondeck). Its site lives here, and its source lives either here or in its own repo.
+- **In-repo deck**: a deck whose source lives in this repo, under `decks/<deck>/`. slidedeck is the first, renamed carouseldeck as it moves in; drawerdeck is the second, set up directly here (#231); accordiondeck is the third, also set up directly here. See ADR 0002.
   _Avoid_: internal deck, monorepo deck
 - **Outside deck**: a deck whose source still lives in its own repo. Its site follows its releases through a bump PR (ADR 0001).
   _Avoid_: external deck, remote deck
@@ -218,6 +218,59 @@ fade, curve and stack are effects, not separate engines. Stack orders the
 slides and ships no appearance (ADR-0012).
 _Avoid_: transition mode, render mode
 
+## accordiondeck
+
+A headless accordion and collapsible for React, built on `<details>` and
+`<summary>`: the browser opens and closes items, keeps a group to one open
+item, and opens a closed item for find-in-page and fragment links, before
+any JavaScript runs. The React package adds what the element lacks.
+
+### Language
+
+**Item**:
+One `<details>`: a Trigger and its Panel. An Item with no Root is a
+**collapsible**.
+_Avoid_: section, disclosure (except as the APG pattern's name)
+
+**Collapsible**:
+An Item on its own, outside any Root. Not a separate primitive.
+_Avoid_: disclosure component
+
+**Root** (inside accordiondeck):
+The group of Items that form one accordion. It holds its value, moves focus
+between its Triggers and, in single mode, names the group.
+_Avoid_: accordion container, group
+
+**Trigger**:
+The `<summary>` that opens and closes its Item.
+_Avoid_: header, toggle, button
+
+**Panel**:
+The content of an Item, shown while the Item is open.
+_Avoid_: content, body, region
+
+**Value**:
+The list of open Items in a Root, by each Item's `value`. Always a list,
+in both modes.
+_Avoid_: open state, expanded items
+
+**Single** / **multiple**:
+A Root's two modes. Single keeps at most one Item open, natively; multiple
+lets any number open.
+_Avoid_: exclusive, type
+
+**Always one open**:
+A single-mode Root whose open Item cannot be closed by its own Trigger, only
+by opening another. Not a promise that an Item is always open: a Root may
+start with none.
+_Avoid_: non-collapsible, required
+
+**Before hydration**:
+The time between the first paint and React taking over. Items already open
+and close then; the rules only React enforces (always one open, disabled)
+do not hold until it ends.
+_Avoid_: no-JS mode, SSR mode
+
 ## Standing decisions
 
 Made by the maintainer on 2026-10-08.
@@ -235,7 +288,7 @@ Made by the maintainer on 2026-10-08.
   Cloudflare's free certificate covers one subdomain level (`*.deck.cool`), so no deck gets a second level such as `docs.page.deck.cool`.
 
 - **Dark by default.** slidedeck.pages.dev's Apple-style layout is the starting point: the system SF font stack, a 980px measure, a 52px translucent bar, pill buttons and 28px tiles.
-- **The packages ship no CSS, and the sites say so.** No site shows off shared tokens or a type scale.
+- **The packages apply no styles, and the sites say so.** A deck may ship an opt-in stylesheet, every rule in `:where()` and every tunable value a token, as carouseldeck's theme and accordiondeck's motion stylesheet do (amended by the maintainer on 2026-11-25). No site shows off shared tokens or a type scale.
 - **Favicons are round 2**: one card shape, arranged a different way per deck, on a dark `#1c1c1e` tile. Files in `design/favicons/`.
 
   | Deck         | Arrangement                                                                    | Accent                  |
