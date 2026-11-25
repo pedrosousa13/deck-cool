@@ -1,5 +1,7 @@
-import { describe, expect, onTestFinished, test, vi } from 'vitest';
-import { createDeck } from '@carouseldeck/core';
+import { describe, expect, onTestFinished, test } from 'vitest';
+import { render } from '@testing-library/react';
+import { COPY, createDeck, type DeckState } from '@carouseldeck/core';
+import { addStyle, CENTRED, TestDeck, viewportOf } from './fixtures';
 
 // #339: every deck on a page used to own a `ResizeObserver`, so its first
 // delivery ran the decks one after another, and each deck's writes (custom
@@ -39,52 +41,52 @@ function instrument(viewports: () => HTMLElement[]) {
       }
       el = owners.get(target as object);
     }
-    return viewports().findIndex((viewport) => !!el && viewport.contains(el));
+    // The innermost viewport holding it, for a deck inside another.
+    return viewports().reduce(
+      (found, viewport, i) => (!!el && viewport.contains(el) ? i : found),
+      -1
+    );
   };
   const log = (kind: Event['kind'], target: unknown) => {
     if (inDelivery > 0) events.push({ kind, deck: deckOf(target) });
   };
-  const wrap = <T extends object>(
-    target: T,
-    name: keyof T & string,
-    kind: Event['kind']
-  ) => {
-    const original = target[name] as unknown as (...args: unknown[]) => unknown;
-    vi.spyOn(target, name as never).mockImplementation(function (
-      this: unknown,
-      ...args: unknown[]
-    ) {
-      log(kind, this);
-      return original.apply(this, args);
-    } as never);
-  };
-  const accessor = <T extends object>(
-    target: T,
+  // Patched by hand, and put back by hand: a spy on an accessor that a
+  // failing test leaves behind would log into every later test.
+  const restores: (() => void)[] = [];
+  const patch = (
+    target: object,
     name: string,
-    access: 'get' | 'set',
-    kind: Event['kind']
+    part: 'value' | 'get' | 'set',
+    kind: Event['kind'],
+    after?: (result: unknown, self: unknown) => unknown
   ) => {
-    const original = Object.getOwnPropertyDescriptor(target, name)![access] as (
+    const descriptor = Object.getOwnPropertyDescriptor(target, name)!;
+    const original = descriptor[part] as (
       this: unknown,
       ...args: unknown[]
     ) => unknown;
-    (
-      vi.spyOn as (...args: unknown[]) => {
-        mockImplementation(f: unknown): void;
+    Object.defineProperty(target, name, {
+      ...descriptor,
+      [part]: function (this: unknown, ...args: unknown[]) {
+        log(kind, args[0] instanceof Element ? args[0] : this);
+        const result = original.apply(this, args);
+        return after ? after(result, args[0]) : result;
       }
-    )(target, name, access).mockImplementation(function (
-      this: unknown,
-      ...args: unknown[]
-    ) {
-      log(kind, this);
-      return original.apply(this, args);
     });
+    restores.push(() => Object.defineProperty(target, name, descriptor));
   };
-  const computed = window.getComputedStyle.bind(window);
-  vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
-    log('read', el);
-    const style = computed(el, pseudo);
-    return new Proxy(style, {
+  const wrap = (target: object, name: string, kind: Event['kind']) =>
+    patch(target, name, 'value', kind);
+  const accessor = (
+    target: object,
+    name: string,
+    part: 'get' | 'set',
+    kind: Event['kind']
+  ) => patch(target, name, part, kind);
+  // The declaration is live: reading a property off it after a write forces
+  // a recalc as surely as a rect does, so each property read is logged too.
+  patch(window, 'getComputedStyle', 'value', 'read', (style, el) => {
+    return new Proxy(style as CSSStyleDeclaration, {
       get(target, property) {
         const value = Reflect.get(target, property, target);
         if (typeof value === 'function') return value.bind(target);
@@ -138,9 +140,24 @@ function instrument(viewports: () => HTMLElement[]) {
   // into, and slow, every later test.
   onTestFinished(() => {
     window.ResizeObserver = Native;
-    vi.restoreAllMocks();
+    restores.forEach((restore) => restore());
   });
   return events;
+}
+
+/** A looping deck's viewport, rendering copies (not shells): a copy of the
+ * five slides before them, and another after (ADR-0009). */
+function buildCopies() {
+  const viewport = build();
+  const copies = (set: 'before' | 'after') =>
+    [...viewport.children].map((slide) => {
+      const copy = slide.cloneNode(true) as HTMLElement;
+      copy.setAttribute(COPY, set);
+      return copy;
+    });
+  viewport.prepend(...copies('before'));
+  viewport.append(...copies('after'));
+  return viewport;
 }
 
 function build() {
@@ -173,9 +190,16 @@ const frame = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 /** Decks on `viewports`, each destroyed and removed with the test. */
-function mount(viewports: HTMLElement[]) {
-  const engines = viewports.map((viewport) =>
-    createDeck(viewport, { index: 0, onChange: () => {} })
+function mount(
+  viewports: HTMLElement[],
+  { loop = false, onChange = (_: number, __: DeckState) => {} } = {}
+) {
+  const engines = viewports.map((viewport, i) =>
+    createDeck(viewport, {
+      index: 0,
+      loop,
+      onChange: (state) => onChange(i, state)
+    })
   );
   onTestFinished(() => {
     engines.forEach((engine) => engine.destroy());
@@ -184,11 +208,25 @@ function mount(viewports: HTMLElement[]) {
   return engines;
 }
 
-/** A read of `deck`'s after the first write of any deck. */
-const readsAfterAWrite = (events: Event[]) => {
+/**
+ * What one delivery owes (#339): no deck outside `optedOut` reads after any
+ * deck's first write, and an opted-out deck, which reads live where it
+ * writes, does nothing before the last write of every other deck.
+ */
+function expectBatched(events: Event[], optedOut: number[]) {
+  const live = (e: Event) => optedOut.includes(e.deck);
   const firstWrite = events.findIndex((e) => e.kind === 'write');
-  return events.slice(firstWrite).filter((e) => e.kind === 'read');
-};
+  const lateReads = events
+    .slice(firstWrite)
+    .filter((e) => e.kind === 'read' && !live(e));
+  expect(lateReads.map((e) => e.deck)).toEqual([]);
+  const lastWrite = events
+    .map((e) => e.kind === 'write' && !live(e))
+    .lastIndexOf(true);
+  const early = events.slice(0, lastWrite).filter(live);
+  expect(early.map((e) => e.deck)).toEqual([]);
+  expect(events.filter(live).length).toBeGreaterThan(0);
+}
 
 describe('decks share one resize delivery (#339)', () => {
   test('20 decks mounting read layout before any of them writes', async () => {
@@ -200,6 +238,110 @@ describe('decks share one resize delivery (#339)', () => {
     await frame();
     expect(events.filter((e) => e.kind === 'read').length).toBeGreaterThan(0);
     expect(events.filter((e) => e.kind === 'write').length).toBeGreaterThan(0);
-    expect(readsAfterAWrite(events)).toEqual([]);
+    expect(
+      events
+        .slice(events.findIndex((e) => e.kind === 'write'))
+        .filter((e) => e.kind === 'read')
+        .map((e) => e.deck)
+    ).toEqual([]);
+  });
+
+  test('a loop deck and a shells deck among 20 write after every other deck', async () => {
+    addStyle(CENTRED);
+    const COPIES = 6;
+    const SHELLS = 13;
+    const viewports: HTMLElement[] = [];
+    const events = instrument(() => viewports);
+    const plain = (count: number) => {
+      const added = Array.from({ length: count }, build);
+      viewports.push(...added);
+      mount(added, { loop: false });
+    };
+    plain(COPIES);
+    const copies = buildCopies();
+    viewports.push(copies);
+    mount([copies], { loop: true });
+    plain(SHELLS - COPIES - 1);
+    const { container } = render(<TestDeck loop viewportClassName="centred" />);
+    viewports.push(viewportOf(container));
+    plain(DECKS - SHELLS - 1);
+    await frame();
+    await frame();
+    expect(viewports).toHaveLength(DECKS);
+    expect(
+      viewports[SHELLS].querySelector('[data-carouseldeck-shell]')
+    ).not.toBe(null);
+    expectBatched(events, [COPIES, SHELLS]);
+  });
+
+  test('a pressed deck writes after every other deck', async () => {
+    const viewports: HTMLElement[] = [];
+    const events = instrument(() => viewports);
+    viewports.push(...Array.from({ length: 6 }, build));
+    mount(viewports);
+    viewports[0].dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerId: 1,
+        pointerType: 'mouse',
+        button: 0,
+        isPrimary: true,
+        bubbles: true
+      })
+    );
+    await frame();
+    await frame();
+    expectBatched(events, [0]);
+  });
+
+  test('two decks on one element both get its resizes', async () => {
+    const viewport = build();
+    const changes = [0, 0];
+    mount([viewport, viewport], {
+      onChange: (i) => {
+        changes[i]++;
+      }
+    });
+    await frame();
+    await frame();
+    const before = [...changes];
+    // Two slides' worth more room: fewer places the deck can rest.
+    viewport.style.width = `${2 * WIDTH}px`;
+    await frame();
+    await frame();
+    expect(changes.map((count, i) => count > before[i])).toEqual([true, true]);
+  });
+
+  test('a deck inside a curved deck settles on the curve, as a live relayout does', async () => {
+    // Slide 1 of the outer deck scales as its progress grows, as a curve
+    // draws on a slide's content (ADR-0008): the outer deck's own write
+    // moves the nested deck's boxes without resizing them, so a snapshot
+    // read before it is stale by the time the nested deck settles.
+    addStyle(
+      '.outer > :nth-child(2) { scale: calc(1 - 0.5 * var(--deck-slide-progress, 0)); }'
+    );
+    const outer = build();
+    outer.className = 'outer';
+    const nested = build();
+    outer.children[1].append(nested);
+    const geometry = () => ({
+      step: nested.style.getPropertyValue('--deck-viewport-step'),
+      progress: [...nested.children].map((slide) =>
+        (slide as HTMLElement).style.getPropertyValue('--deck-slide-progress')
+      )
+    });
+    // What the nested deck has written when it publishes its first settle,
+    // read then: a later settle of its own would correct a stale one.
+    let published: (DeckState & ReturnType<typeof geometry>) | null = null;
+    const engines = mount([outer, nested], {
+      onChange: (i, state) => {
+        if (i === 1) published ??= { ...state, ...geometry() };
+      }
+    });
+    await frame();
+    await frame();
+    engines[1].refresh();
+    expect(published).not.toBeNull();
+    expect(published).toMatchObject(geometry());
+    expect(geometry().step).not.toBe('100');
   });
 });
