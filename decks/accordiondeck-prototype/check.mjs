@@ -44,13 +44,13 @@ async function open(browser, html) {
 }
 const shell = (inner) => `<!doctype html><html><body><div id="root">${inner}</div></body></html>`;
 const dom = (page) => page.evaluate(() => [...document.querySelectorAll('#root details')].map((d) => d.id + (d.open ? '+' : '-')).join(' '));
-const ctl = (page) => page.evaluate(() => ({ calls: window.__ctl.calls, value: window.__ctl.getValue?.(), errors: window.__ctl.errors, btn: window.__ctl.buttonClicks }));
+const ctl = (page) => page.evaluate(() => ({ calls: window.__ctl.calls, probe: window.__ctl.probe, value: window.__ctl.getValue?.(), errors: window.__ctl.errors, btn: window.__ctl.buttonClicks }));
 async function mounted(browser, { variant = 'group', initial = ['a'], ctl: c = {} } = {}) {
   const page = await open(browser, shell(''));
   await page.addScriptTag({ content: clientJs });
   await page.evaluate((o) => window.mountClient(o), { variant, initial, ctl: c });
   await wait(page);
-  await page.evaluate(() => { window.__ctl.calls.length = 0; window.__tl.length = 0; });
+  await page.evaluate(() => { window.__ctl.calls.length = 0; window.__ctl.probe.length = 0; window.__tl.length = 0; });
   return page;
 }
 
@@ -63,19 +63,19 @@ add('1a baseline, no handler: DOM diverges from state (expected)', async (b) => 
   const d = await dom(p); const c = await ctl(p);
   return { pass: d === 'a- b+ c-' && eq(c.value, ['a']), detail: `dom "${d}", state ${j(c.value)}` };
 });
-add('1b declined click: DOM matches state', async (b) => {
+add('1b prevented click: DOM and state stay matched', async (b) => {
   const p = await mounted(b, { ctl: { decline: true } });
   await p.click('#sb'); await wait(p);
   const d = await dom(p); const c = await ctl(p);
   return { pass: d === 'a+ b- c-' && eq(c.value, ['a']) && eq(c.calls, [['b']]), detail: `dom "${d}", state ${j(c.value)}, onValueChange ${j(c.calls)}` };
 });
-add('1c declined Enter and Space: DOM matches state', async (b) => {
+add('1c prevented Enter and Space: DOM and state stay matched', async (b) => {
   const p = await mounted(b, { ctl: { decline: true } });
   await p.focus('#sb'); await p.keyboard.press('Enter'); await wait(p);
   const d1 = await dom(p);
   await p.keyboard.press('Space'); await wait(p);
   const d2 = await dom(p); const c = await ctl(p);
-  return { pass: d1 === 'a+ b- c-' && d2 === d1 && c.calls.length === 2, detail: `after Enter "${d1}", after Space "${d2}", calls ${j(c.calls)}` };
+  return { pass: d1 === 'a+ b- c-' && d2 === d1 && eq(c.calls, [['b'], ['b']]), detail: `after Enter "${d1}", after Space "${d2}", calls ${j(c.calls)}` };
 });
 add('1d accepted click: DOM and state follow', async (b) => {
   const p = await mounted(b);
@@ -83,11 +83,11 @@ add('1d accepted click: DOM and state follow', async (b) => {
   const d = await dom(p); const c = await ctl(p);
   return { pass: d === 'a- b+ c-' && eq(c.value, ['b']) && eq(c.calls, [['b']]), detail: `dom "${d}", state ${j(c.value)}, calls ${j(c.calls)}` };
 });
-add('1e declined fragment open is written back', async (b) => {
+add('1e declined fragment open is written back, reported once', async (b) => {
   const p = await mounted(b, { ctl: { decline: true } });
   await p.evaluate(() => { location.hash = '#deep-c'; }); await wait(p, 300);
   const d = await dom(p); const c = await ctl(p);
-  return { pass: d === 'a+ b- c-' && eq(c.value, ['a']) && c.calls.length >= 1, detail: `dom "${d}", state ${j(c.value)}, calls ${j(c.calls)}` };
+  return { pass: d === 'a+ b- c-' && eq(c.value, ['a']) && eq(c.calls, [['c']]), detail: `dom "${d}", state ${j(c.value)}, calls ${j(c.calls)}` };
 });
 
 add('2a click before hydration, then hydrateRoot: DOM unchanged, adopted', async (b) => {
@@ -101,7 +101,7 @@ add('2a click before hydration, then hydrateRoot: DOM unchanged, adopted', async
   await p.evaluate(() => window.hydrate({ variant: 'group', initial: ['a'], ctl: {} })); await wait(p, 300);
   const after = await dom(p); const c = await ctl(p);
   const hydToggles = await p.evaluate(() => window.__tl.map((t) => t.id + ':' + t.ev));
-  const pass = initial === 'a+ b- c-' && before === 'a- b+ c-' && after === before && eq(c.calls, [['b']]) && eq(c.value, ['b']) && c.errors.length === 0;
+  const pass = initial === 'a+ b- c-' && before === 'a- b+ c-' && after === before && eq(c.calls, [['b']]) && eq(c.value, ['b']) && c.errors.length === 0 && p.consoleErrors.length === 0;
   return { pass, detail: `ssr "${initial}", after click "${before}" (toggles ${j(preToggles)}), after hydrate "${after}" (toggles ${j(hydToggles)}), adopted ${j(c.calls)}, state ${j(c.value)}, recoverable errors ${c.errors.length}, console ${p.consoleErrors.length}` };
 });
 add('2b parsed open fires toggle on load', async (b) => {
@@ -111,7 +111,7 @@ add('2b parsed open fires toggle on load', async (b) => {
   return { pass: t.includes('a:closed>open'), detail: `toggles on load ${j(t)}` };
 });
 
-add('3a group switch: two toggles, one task, group settled at the first', async (b) => {
+add('3a React-driven switch (prevented click): event order, one call', async (b) => {
   const p = await mounted(b);
   await p.click('#sb'); await wait(p);
   const t = await p.evaluate(() => window.__tl); const c = await ctl(p); const d = await dom(p);
@@ -125,11 +125,14 @@ add('3b non-adjacent switch (b to c, a closed): one call per switch', async (b) 
   return { pass: d === 'a- b- c+' && eq(c.calls, [['b'], ['c']]), detail: `dom "${d}", calls ${j(c.calls)}` };
 });
 
-add('4a fragment navigation into a closed panel (React group)', async (b) => {
+add('4a fragment into closed item, open sibling (browser-driven group switch, handler)', async (b) => {
   const p = await mounted(b);
   await p.evaluate(() => { location.hash = '#deep-c'; }); await wait(p, 300);
-  const d = await dom(p); const c = await ctl(p); const t = await p.evaluate(() => window.__tl.map((x) => x.id + ':' + x.ev));
-  return { pass: d === 'a- b- c+' && eq(c.calls, [['c']]) && eq(c.value, ['c']), detail: `dom "${d}", state ${j(c.value)}, calls ${j(c.calls)}, toggles ${j(t)}` };
+  const d = await dom(p); const c = await ctl(p); const tl = await p.evaluate(() => window.__tl);
+  const t = tl.map((x) => x.id + ':' + x.ev);
+  // Root's own read at each toggle (c.probe), not only the capture listener's.
+  const pass = d === 'a- b- c+' && eq(c.calls, [['c']]) && eq(c.value, ['c']) && tl.length === 2 && tl[0].group === 'a- b- c+' && c.probe.length === 2 && c.probe.every((x) => eq(x.opens, ['c']));
+  return { pass, detail: `dom "${d}", state ${j(c.value)}, calls ${j(c.calls)}, order ${j(t)}, same task ${tl[0]?.task === tl[1]?.task}, DOM at first toggle "${tl[0]?.group}", Root read at each toggle ${j(c.probe)}` };
 });
 add('4b fragment navigation on index.html variant 4 (native)', async (b) => {
   const p = await open(b, indexHtml);
@@ -144,17 +147,17 @@ add('4b fragment navigation on index.html variant 4 (native)', async (b) => {
 
 add('5a link, button and prevented child inside a Trigger do not toggle; title does', async (b) => {
   const p = await mounted(b, { variant: 'summary', initial: [] });
-  const open = () => p.evaluate(() => document.getElementById('x').open);
+  const isOpen = () => p.evaluate(() => document.getElementById('x').open);
   await p.click('#lnk'); await wait(p);
-  const afterLink = await open(); const hash = await p.evaluate(() => location.hash);
+  const afterLink = await isOpen(); const hash = await p.evaluate(() => location.hash);
   await p.click('#btn'); await wait(p);
-  const afterBtn = await open(); const c1 = await ctl(p);
+  const afterBtn = await isOpen(); const c1 = await ctl(p);
   await p.click('#stop'); await wait(p);
-  const afterStop = await open();
+  const afterStop = await isOpen();
   await p.click('#label'); await wait(p);
-  const afterLabel = await open();
+  const afterLabel = await isOpen();
   await p.click('#label'); await wait(p);
-  const afterLabel2 = await open(); const c2 = await ctl(p);
+  const afterLabel2 = await isOpen(); const c2 = await ctl(p);
   const pass = !afterLink && hash === '#elsewhere' && !afterBtn && c1.btn === 1 && !afterStop && afterLabel && !afterLabel2 && eq(c2.calls, [['x'], []]);
   return { pass, detail: `link open=${afterLink} hash=${hash}; button open=${afterBtn} clicks=${c1.btn}; prevented child open=${afterStop}; title open=${afterLabel} then ${afterLabel2}; calls ${j(c2.calls)}` };
 });
@@ -164,10 +167,10 @@ add('5b same, native, on index.html variant 5 (no script)', async (b) => {
   await p.click('#v5-link'); await wait(p);
   const l = await isOpen(); const hash = await p.evaluate(() => location.hash);
   await p.click('#v5-button'); await wait(p);
-  const bt = await isOpen();
+  const bt = await isOpen(); const clicks = await p.evaluate(() => window.__v5Clicks);
   await p.click('#v5-s1', { position: { x: 8, y: 8 } }); await wait(p);
   const s = await isOpen();
-  return { pass: !l && !bt && s, detail: `link open=${l} hash=${hash}; button open=${bt}; summary text open=${s}` };
+  return { pass: !l && hash === '#v5' && !bt && clicks === 1 && s, detail: `link open=${l} hash=${hash}; button open=${bt} clicks=${clicks}; summary text open=${s}` };
 });
 add('6 index.html variant 3 keeps aria-expanded in sync', async (b) => {
   const p = await open(b, indexHtml);

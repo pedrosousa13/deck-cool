@@ -4,8 +4,12 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 // ctl: { calls: [], decline: bool, naive: bool, buttonClicks: number }
-function Root({ ids, name, value, onValueChange, naive, children }) {
+function Root({ ids, name, value, onValueChange, naive, probe, children }) {
   const rootRef = useRef(null);
+  // The last diff reported and the value it was reported against. While the parent has
+  // not answered (value unchanged), the same diff is not reported again, including the
+  // toggles the write-back itself causes.
+  const reported = useRef(null);
   const valueRef = useRef(value);
   valueRef.current = value;
 
@@ -34,19 +38,23 @@ function Root({ ids, name, value, onValueChange, naive, children }) {
     const nearest = e.target.closest('a[href],button,input,select,textarea,label,summary');
     if (nearest !== e.currentTarget) return;
     e.preventDefault();
+    reported.current = null;
     const id = e.currentTarget.parentElement.id;
     onValueChange(valueRef.current.includes(id) ? [] : [id]);
     settle();
   };
 
   // toggle carries the opens nobody can prevent. Read the whole group at the first one.
-  const onToggle = () => {
+  const onToggle = (e) => {
     if (naive) return;
     const opens = domOpen().slice(0, 1);
-    if (!same(opens, valueRef.current)) {
-      onValueChange(opens);
-      settle();
-    }
+    probe?.push({ id: e.currentTarget.id, opens });
+    if (same(opens, valueRef.current)) return;
+    const r = reported.current;
+    if (r && same(opens, r.opens) && same(valueRef.current, r.value)) return;
+    reported.current = { opens, value: valueRef.current };
+    onValueChange(opens);
+    settle();
   };
 
   return (
@@ -56,8 +64,7 @@ function Root({ ids, name, value, onValueChange, naive, children }) {
           name,
           open: value.includes(id),
           onToggle,
-          suppressHydrationWarning: true,
-          summaryProps: { onClick },
+          triggerProps: { onClick },
         }),
       )}
     </div>
@@ -74,10 +81,10 @@ export function App({ variant, ctl, initial }) {
   };
   if (variant === 'summary') {
     return (
-      <Root ids={['x']} name="solo" value={value} onValueChange={onValueChange} naive={ctl.naive}>
+      <Root ids={['x']} name="solo" value={value} onValueChange={onValueChange} naive={ctl.naive} probe={ctl.probe}>
         {(id, p) => (
           <details key={id} id={id} name={p.name} open={p.open} onToggle={p.onToggle} suppressHydrationWarning>
-            <summary id="sx" {...p.summaryProps}>
+            <summary id="sx" {...p.triggerProps}>
               <span id="label">Title</span>{' '}
               <a id="lnk" href="#elsewhere">link</a>{' '}
               <button id="btn" type="button" onClick={() => { ctl.buttonClicks = (ctl.buttonClicks ?? 0) + 1; }}>btn</button>{' '}
@@ -90,10 +97,10 @@ export function App({ variant, ctl, initial }) {
     );
   }
   return (
-    <Root ids={['a', 'b', 'c']} name="g" value={value} onValueChange={onValueChange} naive={ctl.naive}>
+    <Root ids={['a', 'b', 'c']} name="g" value={value} onValueChange={onValueChange} naive={ctl.naive} probe={ctl.probe}>
       {(id, p) => (
         <details key={id} id={id} name={p.name} open={p.open} onToggle={p.onToggle} suppressHydrationWarning>
-          <summary id={'s' + id} {...p.summaryProps}>{id}</summary>
+          <summary id={'s' + id} {...p.triggerProps}>{id}</summary>
           <div>panel {id} <span id={'deep-' + id}>word {id}</span></div>
         </details>
       )}

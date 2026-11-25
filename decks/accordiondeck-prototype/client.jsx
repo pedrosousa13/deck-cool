@@ -2,7 +2,7 @@ import React from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { App } from './app.jsx';
 
-const ctl = (window.__ctl = { calls: [], decline: false, naive: false, buttonClicks: 0, errors: [] });
+const ctl = (window.__ctl = { calls: [], decline: false, naive: false, buttonClicks: 0, errors: [], probe: [] });
 const el = () => document.getElementById('root');
 window.mountClient = (opts) => {
   Object.assign(ctl, opts.ctl);

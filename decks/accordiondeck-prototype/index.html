@@ -76,6 +76,10 @@ Variant headings below are h2, so they do not mix with the h3 headings inside th
     <summary id="v5-s1">Account <a id="v5-link" href="#v5">help link</a> <button id="v5-button" type="button">a button</button></summary>
     <div id="v5-linked">Panel content.</div>
   </details>
+  <script>
+    window.__v5Clicks = 0;
+    document.getElementById('v5-button').addEventListener('click', () => { window.__v5Clicks++; });
+  </script>
 </section>
 </body>
 </html>
