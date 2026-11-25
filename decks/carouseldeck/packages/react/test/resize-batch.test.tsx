@@ -317,6 +317,27 @@ describe('decks share one resize delivery (#339)', () => {
     expect(changes.map((count, i) => count > before[i])).toEqual([true, true]);
   });
 
+  test('a deck that observes an element another deck already watches still gets its first delivery', async () => {
+    // The browser sends no first notification for an element it already
+    // observes, so a deck mounting later on one a deck watches (an inner
+    // deck remounted on a slide) measured never.
+    const viewport = build();
+    mount([viewport]);
+    await frame();
+    await frame();
+    let settled = 0;
+    const second = createDeck(viewport, {
+      index: 0,
+      onChange: () => {
+        settled++;
+      }
+    });
+    onTestFinished(() => second.destroy());
+    await frame();
+    await frame();
+    expect(settled).toBeGreaterThan(0);
+  });
+
   test('a deck inside a curved deck settles on the curve, as a live relayout does', async () => {
     // Slide 1 of the outer deck scales as its progress grows, as a curve
     // draws on a slide's content (ADR-0008): the outer deck's own write

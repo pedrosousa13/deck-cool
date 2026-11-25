@@ -3235,6 +3235,11 @@ function observeResizes(work: ResizeWork) {
     observe(el: Element) {
       const watchers = owners.get(el) ?? new Set<ResizeWork>();
       owners.set(el, watchers.add(work));
+      // The browser sends no first notification for an element it already
+      // observes, so one a deck already watches is observed afresh: every
+      // owner gets one, the ones watching already a relayout that finds
+      // nothing moved.
+      if (watchers.size > 1) observer.unobserve(el);
       observer.observe(el);
     },
     unobserve: forget,
