@@ -12,6 +12,7 @@ import {
   popupOf,
   sleep,
   TestDrawer,
+  touchEvent,
   viewportOf
 } from './fixtures';
 
@@ -215,9 +216,7 @@ describe('interrupted mid-exit, an interruption never cancels a close (#268)', (
     expect(midY).toBeGreaterThan(0);
 
     const viewport = viewportOf(document.body);
-    act(() =>
-      viewport.dispatchEvent(new Event('touchstart', { bubbles: true }))
-    );
+    act(() => viewport.dispatchEvent(touchEvent('touchstart', 1)));
 
     await expectSettledTo(() => popup.getAttribute('data-phase'), 'closed');
     expect(popup.open).toBe(false);
@@ -258,9 +257,7 @@ describe('interrupted mid-exit, an interruption never cancels a close (#268)', (
     expect(midY).toBeGreaterThan(0);
 
     const viewport = viewportOf(document.body);
-    act(() =>
-      viewport.dispatchEvent(new Event('touchstart', { bubbles: true }))
-    );
+    act(() => viewport.dispatchEvent(touchEvent('touchstart', 1)));
 
     // Before #268's fix, an interruption here cancelled the exit, putting
     // `state.phase` back to `open`; the controlled-`open` effect (still

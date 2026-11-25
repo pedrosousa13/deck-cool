@@ -286,3 +286,81 @@ export async function realMouseDragPastClosed(
     panel.style.position = previousPosition;
   }
 }
+
+/** True in Chromium: the only engine that can hold a real touch down
+ * (`commands.holdTouchDown`, a CDP session). */
+export const isChromium = navigator.userAgent.includes('Chrome');
+
+/** Where a point of this test frame lands on the page the input commands
+ * (`commands.holdTouchDown`, `tapAtPoint`, `wheelAtPoint`) drive: the
+ * runner scales its test frame, so the frame's own coordinates are not the
+ * page's. */
+export function pagePoint(x: number, y: number) {
+  const frame = window.frameElement?.getBoundingClientRect();
+  if (!frame) return { x, y };
+  return {
+    x: frame.left + (x * frame.width) / window.innerWidth,
+    y: frame.top + (y * frame.height) / window.innerHeight
+  };
+}
+
+/** The page point a test's touch lands on: just inside the Viewport's own
+ * bottom edge, over the Panel as long as the drawer rests with a few pixels
+ * of it showing. */
+export function touchPoint({ viewport }: Fixture) {
+  const rect = viewport.getBoundingClientRect();
+  return pagePoint(rect.left + 10, rect.bottom - 5);
+}
+
+/** Puts a finger down on the Panel and keeps it there: a real held touch in
+ * Chromium. WebKit cannot hold one, so nothing happens there until
+ * `liftFinger`'s tap, which sends the whole touchstart and touchend at once.
+ * Cancels the tap's own click, so the touch never reads as a press on the
+ * Gap. */
+export async function fingerDown(fixture: Fixture) {
+  fixture.viewport.addEventListener('touchend', (event) =>
+    event.preventDefault()
+  );
+  if (isChromium) {
+    const { x, y } = touchPoint(fixture);
+    await commands.holdTouchDown(x, y);
+  }
+}
+
+/** Lifts the finger `fingerDown` put down (a whole tap in WebKit). */
+export async function liftFinger(fixture: Fixture) {
+  if (isChromium) await commands.releaseHeldTouch();
+  else {
+    const { x, y } = touchPoint(fixture);
+    await commands.tapAtPoint(x, y);
+  }
+}
+
+/** Stops every `scrollend` before the Viewport's own listener sees it, as
+ * a real iOS momentum scroll that stalls never fires one. Returns the
+ * restore. */
+export function blockScrollend(): () => void {
+  const block = (event: Event) => event.stopImmediatePropagation();
+  window.addEventListener('scrollend', block, { capture: true });
+  return () =>
+    window.removeEventListener('scrollend', block, { capture: true });
+}
+
+/** Writes each scroll position in turn, a frame apart: the glide a finger
+ * leaves behind when it lifts. */
+export async function glide(viewport: HTMLElement, positions: number[]) {
+  for (const top of positions) {
+    viewport.scrollTo({ top, behavior: 'instant' });
+    await nextFrame();
+    await nextFrame();
+  }
+}
+
+/** A hand-dispatched touch event that bubbles and reports `fingers` touches
+ * still down, the one thing the engine reads off it (`TouchEvent.touches`):
+ * neither engine here can construct a `Touch`. */
+export function touchEvent(type: string, fingers: number): Event {
+  return Object.assign(new Event(type, { bubbles: true }), {
+    touches: { length: fingers }
+  });
+}

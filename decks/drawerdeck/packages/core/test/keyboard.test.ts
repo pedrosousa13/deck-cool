@@ -62,6 +62,7 @@ import {
   nextFrame,
   realMouseDrag,
   sleep,
+  touchEvent,
   unmount,
   type Fixture
 } from './fixtures';
@@ -872,7 +873,7 @@ describe('the exit runs its full declared duration with no jump in the Panel (#3
     // A real touch grabbing the viewport: an interruption never cancels a
     // close (#268's design ruling), it just stops waiting for the
     // transition.
-    viewport.dispatchEvent(new Event('touchstart', { bubbles: true }));
+    viewport.dispatchEvent(touchEvent('touchstart', 1));
 
     expect(drawer.phase).toBe('closed');
     expect(onOpenChange).toHaveBeenCalledWith(false, 'close-button');

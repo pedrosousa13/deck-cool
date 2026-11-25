@@ -93,3 +93,11 @@ export const panelOf = (root: ParentNode) =>
   root.querySelector<HTMLElement>('[data-drawerdeck-panel]')!;
 export const contentOf = (root: ParentNode) =>
   root.querySelector<HTMLElement>('[data-drawerdeck-content]')!;
+
+/** A hand-dispatched touch event that bubbles and reports `fingers` touches
+ * still down, the one thing the engine reads off it (`TouchEvent.touches`). */
+export function touchEvent(type: string, fingers: number): Event {
+  return Object.assign(new Event(type, { bubbles: true }), {
+    touches: { length: fingers }
+  });
+}

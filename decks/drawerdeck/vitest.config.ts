@@ -1,12 +1,21 @@
 import { fileURLToPath, URL } from 'node:url';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
+import type { BrowserCommandContext } from 'vitest/node';
 
 // The `BrowserCommands` augmentation that types these three below (and the
 // `commands.dragPointerDown(…)` calls in `packages/core/test/fixtures.ts`)
 // lives in `packages/core/test/browser-commands.d.ts`, not here: this file
 // is not part of either package's own `tsconfig`, so an augmentation here
 // would not reach the test files that call them.
+// The CDP session `holdTouchDown` opens, kept here (the command channel
+// only carries JSON) so the later `releaseHeldTouch` of the same test can
+// send its own `Input.dispatchTouchEvent` on it. One test at a time holds a
+// touch.
+let heldTouchCdp:
+  | Awaited<ReturnType<BrowserCommandContext['context']['newCDPSession']>>
+  | undefined;
+
 export default defineConfig({
   resolve: {
     // One copy of react and react-dom: Vite's own resolution can otherwise
@@ -97,6 +106,40 @@ export default defineConfig({
           }
           await context.page.mouse.move(box.x + offsetX, box.y + offsetY);
           await context.page.mouse.wheel(deltaX, deltaY);
+        },
+        async wheelAtPoint(context, x, y, deltaY) {
+          await context.page.mouse.move(x, y);
+          await context.page.mouse.wheel(0, deltaY);
+        },
+        // Holds a real touch down at a page point (#334): Playwright's
+        // `touchscreen` can only tap, and only Chromium offers a CDP
+        // session, so there is no way to hold a touch in WebKit. Takes a page
+        // point, not a selector: a Locator inside a `showModal()` dialog
+        // does not resolve reliably in WebKit here.
+        async holdTouchDown(context, x, y) {
+          heldTouchCdp = await context.context.newCDPSession(context.page);
+          await heldTouchCdp.send('Input.dispatchTouchEvent', {
+            type: 'touchStart',
+            touchPoints: [{ x, y }]
+          });
+        },
+        // Lifts the touch `holdTouchDown` started.
+        async releaseHeldTouch() {
+          if (!heldTouchCdp) {
+            throw new Error('releaseHeldTouch: no touch is held');
+          }
+          const cdp = heldTouchCdp;
+          heldTouchCdp = undefined;
+          await cdp.send('Input.dispatchTouchEvent', {
+            type: 'touchEnd',
+            touchPoints: []
+          });
+          await cdp.detach().catch(() => {});
+        },
+        // A real tap at a page point (a touchstart straight followed by a
+        // touchend), for the engines that cannot hold one.
+        async tapAtPoint(context, x, y) {
+          await context.page.touchscreen.tap(x, y);
         }
       }
     }

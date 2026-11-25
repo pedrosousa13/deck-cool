@@ -318,6 +318,10 @@ const THROW_VELOCITY_SCALE = 200;
 /** How close a scroll position must land to a snap point's to count as
  * resting there. */
 const SETTLE_TOLERANCE = 4;
+/** `onEarlyCloseScroll`'s own margin (#334), in pixels: closes a swiped
+ * drawer once a glide toward closed leaves this much or less of the Panel
+ * in view. `earlyClosePx` clamps it for a small snap point. */
+const CLOSE_EARLY_PX = 32;
 const SCROLLEND_DEBOUNCE_MS = 120;
 /** Clearance `ensureFieldVisible` keeps between a focused keyboard field's
  * own bottom edge and the real visible window's bottom: stops the field
@@ -1580,6 +1584,7 @@ export function createDrawer(
     // already-`closed` phase and is a no-op, rather than a second
     // `onOpenChange`.
     if (phase === 'closed') return;
+    disarmEarlyClose();
     panelVisibilityObserver.unobserve(panel);
     detachKeyboardListeners();
     detachPanGuard();
@@ -1884,14 +1889,10 @@ export function createDrawer(
   // it reports already describes that exact element, never a nested
   // drawer's own.
   //
-  // `rootMargin` shrinks the Viewport by `SETTLE_TOLERANCE` on every side
-  // (#332's follow-up): a real iOS Safari momentum scroll can stall a few
-  // pixels short of closed and never fire `scrollend` again until the
-  // next touch, so a Panel sitting within that same tolerance still
-  // overlapped the unshrunk root and this observer never fired either --
-  // the dialog stayed open and modal while it looked closed. Shrinking the
-  // root by the same tolerance `onScrollEnd` already treats as "close
-  // enough" makes that last sliver count as gone too.
+  // This observer only reports a Panel that is gone entirely. The last few
+  // pixels of a touch swipe's glide close earlier, from the scroll check a
+  // touch lift arms (`onEarlyCloseScroll`, below): a root shrunk by
+  // `SETTLE_TOLERANCE` also closed under a held finger at 3 px (#334).
   const panelVisibilityObserver = new IntersectionObserver(
     (entries) => {
       const entry = entries[entries.length - 1];
@@ -1921,10 +1922,73 @@ export function createDrawer(
       pendingCloseReason = null;
       finishClose(reason);
     },
-    { root: viewport, rootMargin: `-${SETTLE_TOLERANCE}px` }
+    { root: viewport }
   );
 
+  // ---------- closing early, from a swipe's glide (#334) ----------
+  // Once a touch swipe lifts, iOS Safari keeps gliding for a few hundred
+  // milliseconds, and the last pixels of it are barely visible: the page
+  // behind stays inert for all of it. The last touch to lift arms a check
+  // on the scroll events the glide fires, which closes the drawer once it
+  // is within `earlyClosePx()` of closed and still moving toward it. Only a
+  // lift arms it, so a held finger, a wheel and a trackpad never reach it,
+  // and the native scroll path runs no JS at all until then. `touchstart`,
+  // `scrollend`, a wheel, a close and `destroy` disarm it.
+  let earlyCloseDistance = 0;
+
+  /** `CLOSE_EARLY_PX`, kept under the smallest snap point's own visible
+   * size: a glide that comes to rest there is not closing. */
+  function earlyClosePx(): number {
+    const smallest = Math.min(CLOSE_EARLY_PX + 1, ...snapPx);
+    return Math.max(SETTLE_TOLERANCE, smallest - 1);
+  }
+
+  function distanceToClosed(): number {
+    return Math.abs(viewport[axis.scroll] - scrollForSnap(-1));
+  }
+
+  function onEarlyCloseScroll() {
+    const distance = distanceToClosed();
+    const toward = distance < earlyCloseDistance;
+    earlyCloseDistance = distance;
+    if (
+      !toward ||
+      distance > earlyClosePx() ||
+      dragging ||
+      throwing ||
+      cssExiting ||
+      !(phase === 'closing' || (phase === 'open' && opts.dismissible))
+    ) {
+      return;
+    }
+    const reason = pendingCloseReason ?? 'drag';
+    pendingCloseReason = null;
+    finishClose(reason);
+  }
+
+  function disarmEarlyClose() {
+    viewport.removeEventListener('scroll', onEarlyCloseScroll);
+  }
+
+  /** `touchstart`, `touchend` and `touchcancel` alike: `event.touches`
+   * holds every finger still down, wherever it landed, so no count can
+   * drift when a touched element is removed mid-touch or two fingers land
+   * in one `touchstart`. */
+  function onTouchChange(event: TouchEvent) {
+    if (event.touches.length > 0) {
+      disarmEarlyClose();
+      return;
+    }
+    earlyCloseDistance = distanceToClosed();
+    viewport.addEventListener('scroll', onEarlyCloseScroll, { passive: true });
+  }
+  viewport.addEventListener('touchstart', onTouchChange, { passive: true });
+  viewport.addEventListener('touchend', onTouchChange, { passive: true });
+  viewport.addEventListener('touchcancel', onTouchChange, { passive: true });
+  viewport.addEventListener('wheel', disarmEarlyClose, { passive: true });
+
   function onScrollEnd() {
+    disarmEarlyClose();
     if (destroyed) return;
     // A mouse drag drives the native scroll position itself (with
     // scroll-snap off): the browser still eventually fires a `scrollend`
@@ -2886,6 +2950,11 @@ export function createDrawer(
     clearTimeout(scrollEndDebounce);
     cancelAnimationFrame(throwFrame);
     cancelAnimationFrame(progressFrame);
+    disarmEarlyClose();
+    viewport.removeEventListener('touchstart', onTouchChange);
+    viewport.removeEventListener('touchend', onTouchChange);
+    viewport.removeEventListener('touchcancel', onTouchChange);
+    viewport.removeEventListener('wheel', disarmEarlyClose);
     viewport.removeEventListener('scrollend', onScrollEnd);
     viewport.removeEventListener('scroll', onScrollEndDebounce);
     viewport.removeEventListener('scroll', onScroll);

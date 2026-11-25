@@ -115,9 +115,9 @@ that `Drawer.Popup`'s own `<dialog>` does not itself list in its own
 -- `:root`, always one, whether the target sits in normal flow or
 `Drawer.Popup` renders through a portal. Wherever that resolves (Chromium,
 Safari), the whole thing runs as a native `animation`, set up by an adopted
-stylesheet rule keyed on `[data-drawer-indent]`'s own value, with no JS on
-a drag or a swipe at all: the same "no JS while scrolling" guarantee every
-other recipe here keeps. Where it does not (Firefox), `@drawerdeck/core`
+stylesheet rule keyed on `[data-drawer-indent]`'s own value, with no JS
+writing anything on a drag or a swipe: the same "no JS while scrolling"
+guarantee every other recipe here keeps. Where it does not (Firefox), `@drawerdeck/core`
 writes `--drawer-indent-progress` directly as the Viewport scrolls, the
 same split every other progress value in this engine makes.
 
