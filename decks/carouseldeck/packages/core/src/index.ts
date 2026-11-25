@@ -669,7 +669,7 @@ export function createDeck(
   const jumpOffCopies = (
     along: Axis,
     geometry: Geometry,
-    reads: Settled = liveReads
+    reads: Reads = liveReads
   ) => {
     if (geometry.length === 0) return;
     const at = along.position;
@@ -1602,8 +1602,8 @@ export function createDeck(
     cachedAxis = null;
     const along = memoizeAxis(axis());
     const reads = cachedReads();
+    for (const el of [viewport, ...boxes]) reads.copyStyle(el);
     snapPoints(along, reads);
-    for (const el of [viewport, ...boxes]) reads.warm(el);
     for (const box of boxes) reads.rect(box);
     return { along, reads };
   };
@@ -3131,19 +3131,19 @@ type Style = Pick<CSSStyleDeclaration, (typeof STYLE)[number]>;
 interface Reads {
   rect(el: Element): DOMRect;
   style(el: Element): Style;
+  /** Drops every cached rect; only a settle's own reads have it. */
+  forgetRects?(): void;
 }
 const liveReads: Reads = {
   rect: (el) => el.getBoundingClientRect(),
   style: (el) => getComputedStyle(el)
 };
-/** A settle's own reads, as `cachedReads` makes them. */
-type Settled = Reads & { forgetRects?(): void };
 /** What a settle reads from (#339). A resize's read phase takes one for the
  * write phase, with the `along` it measured; a `refresh` shares its `reads`
  * with its settle, and the settle takes its own `along`. */
 interface Snapshot {
   along?: Axis;
-  reads: Settled;
+  reads: Reads;
 }
 
 /**
@@ -3258,12 +3258,12 @@ function observeResizes(work: ResizeWork) {
 }
 function cachedReads(): Reads & {
   forgetRects(): void;
-  warm(el: Element): void;
+  copyStyle(el: Element): void;
 } {
   let rects = new Map<Element, DOMRect>();
   const styles = new Map<Element, Style>();
-  const reads = {
-    rect(el: Element) {
+  return {
+    rect(el) {
       let rect = rects.get(el);
       if (!rect) {
         rect = el.getBoundingClientRect();
@@ -3271,18 +3271,10 @@ function cachedReads(): Reads & {
       }
       return rect;
     },
-    // Each property is read off the live declaration when first asked, never
-    // before: reading one that depends on layout (`width`) forces it, which
-    // a caller midway through its own writes, as `alignCopies` is, must not
-    // have done early.
-    style(el: Element) {
+    style(el) {
       let style = styles.get(el);
       if (!style) {
-        const live = getComputedStyle(el);
-        const values: Record<string, string> = {};
-        style = new Proxy(values, {
-          get: (_, name: string) => (values[name] ??= live[name as never])
-        }) as Style;
+        style = getComputedStyle(el);
         styles.set(el, style);
       }
       return style;
@@ -3290,14 +3282,17 @@ function cachedReads(): Reads & {
     forgetRects() {
       rects = new Map();
     },
-    // Reads every property a settle uses off `el`, so a later read of any
-    // is a cached value, not a read of the live declaration.
-    warm(el: Element) {
-      const style = reads.style(el);
-      STYLE.forEach((name) => style[name]);
+    // Copies every property a settle reads off `el` into plain values, which
+    // a write of anyone's cannot make a read of force a recalc. Only for a
+    // box whose settle writes nothing it reads on (`prime`).
+    copyStyle(el) {
+      const live = getComputedStyle(el);
+      styles.set(
+        el,
+        Object.fromEntries(STYLE.map((name) => [name, live[name]])) as Style
+      );
     }
   };
-  return reads;
 }
 
 /**
