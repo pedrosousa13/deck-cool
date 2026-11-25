@@ -1,6 +1,11 @@
 import { describe, expect, onTestFinished, test } from 'vitest';
 import { render } from '@testing-library/react';
-import { COPY, createDeck, type DeckState } from '@carouseldeck/core';
+import {
+  COPY,
+  createDeck,
+  SNAP_TARGET,
+  type DeckState
+} from '@carouseldeck/core';
 import {
   addStyle,
   CENTRED,
@@ -166,6 +171,28 @@ function buildCopies() {
   return viewport;
 }
 
+/** A deck with an effect (ADR-0007): the slides sit out of flow, and a snap
+ * target per slide lays out in their stead. */
+function buildTargets() {
+  const viewport = build();
+  for (const slide of [...viewport.children] as HTMLElement[]) {
+    Object.assign(slide.style, {
+      position: 'absolute',
+      scrollSnapAlign: 'none'
+    });
+    const target = document.createElement('div');
+    Object.assign(target.style, {
+      flexShrink: '0',
+      width: `${WIDTH}px`,
+      height: '10px',
+      scrollSnapAlign: 'start'
+    });
+    target.setAttribute(SNAP_TARGET, '');
+    viewport.append(target);
+  }
+  return viewport;
+}
+
 function build() {
   const viewport = document.createElement('div');
   Object.assign(viewport.style, {
@@ -244,7 +271,11 @@ describe('decks share one resize delivery (#339)', () => {
   test('20 decks mounting read layout before any of them writes', async () => {
     const viewports: HTMLElement[] = [];
     const events = instrument(() => viewports);
-    viewports.push(...Array.from({ length: DECKS }, build));
+    viewports.push(
+      ...Array.from({ length: DECKS }, (_, i) =>
+        i % 5 === 2 ? buildTargets() : build()
+      )
+    );
     mount(viewports);
     await frame();
     await frame();
