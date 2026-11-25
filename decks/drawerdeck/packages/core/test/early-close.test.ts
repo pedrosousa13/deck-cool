@@ -225,6 +225,122 @@ describe('closing early after a swipe (#334)', () => {
     });
   });
 
+  describe('a glide that stalls within a few px of closed fires no scrollend (#332)', () => {
+    it('closes when the lift lands 20px from closed and the glide stalls at 2px', async () => {
+      const { viewport, dialog, drawer, onOpenChange } = await openAt(
+        [0.5, 1],
+        0
+      );
+      await fingerDown(fixture!);
+      await glide(viewport, [20]);
+      await liftFinger(fixture!);
+
+      await glide(viewport, [8, 2]);
+
+      await expectSettledTo(() => drawer.phase, 'closed');
+      expect(dialog.open).toBe(false);
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+      expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+    });
+
+    it('closes when the lift itself lands 3px from closed and nothing scrolls after', async () => {
+      const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+      await fingerDown(fixture!);
+      await glide(viewport, [3]);
+      await liftFinger(fixture!);
+
+      await expectSettledTo(() => drawer.phase, 'closed');
+      expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+    });
+
+    it('closes when the glide starts after the lift`s first 100ms and stalls at 2px', async () => {
+      const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+      await fingerDown(fixture!);
+      await liftFinger(fixture!);
+      await sleep(250);
+
+      await glide(viewport, [8, 2]);
+
+      await expectSettledTo(() => drawer.phase, 'closed');
+      expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+    });
+
+    it('does not close a flick back open from 3px', async () => {
+      const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+      await fingerDown(fixture!);
+      await glide(viewport, [3]);
+      await liftFinger(fixture!);
+
+      await glide(viewport, [40, 150, 300]);
+      await endGlide(viewport);
+
+      await expectSettledTo(() => drawer.phase, 'open');
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a glide that stalls outside the margin leaves nothing armed', () => {
+    it('after a keydown on the Viewport', async () => {
+      const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+      await fingerDown(fixture!);
+      await liftFinger(fixture!);
+      await glide(viewport, [300, 160]);
+
+      viewport.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown' })
+      );
+      await glide(viewport, [80, 31]);
+      await sleep(100);
+
+      expect(drawer.phase).toBe('open');
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('after a pointerdown on the Viewport (a scrollbar drag)', async () => {
+      const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+      await fingerDown(fixture!);
+      await liftFinger(fixture!);
+      await glide(viewport, [300, 160]);
+
+      viewport.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true })
+      );
+      await glide(viewport, [80, 31]);
+      await sleep(100);
+
+      expect(drawer.phase).toBe('open');
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('after a second, with no scrollend', async () => {
+      const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+      await fingerDown(fixture!);
+      await liftFinger(fixture!);
+      await glide(viewport, [300, 160]);
+      await sleep(1100);
+
+      await glide(viewport, [80, 31]);
+      await sleep(100);
+
+      expect(drawer.phase).toBe('open');
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+  });
+
+  it('disarms when the snap points change mid-glide, so a stale margin never closes', async () => {
+    const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+    await fingerDown(fixture!);
+    await liftFinger(fixture!);
+    await glide(viewport, [300, 160]);
+
+    drawer.setOptions({ snapPoints: [0.5, 1] });
+    await glide(viewport, [80, 31]);
+    await sleep(100);
+
+    expect(drawer.phase).toBe('open');
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
   it('case 5: never closes under a held finger, even 3px from closed', async () => {
     const { viewport, dialog, drawer, onOpenChange } = await openAt(
       [0.5, 1],
