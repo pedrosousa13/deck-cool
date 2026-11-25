@@ -29,7 +29,7 @@ const forwardRefs: Plugin = {
       }
     );
     const names = components.map(({ name }) => name);
-    for (const part of ['Item', 'Trigger', 'Panel']) {
+    for (const part of ['Root', 'Item', 'Trigger', 'Panel']) {
       if (!names.includes(part)) {
         throw new Error(`The React 18 build found no ${part} to wrap.`);
       }
