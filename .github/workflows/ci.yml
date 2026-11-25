@@ -61,6 +61,7 @@ jobs:
       next: ${{ steps.plan.outputs.next }}
       e2e: ${{ steps.plan.outputs.e2e }}
       drawerdeck: ${{ steps.drawerdeck.outputs.run }}
+      accordiondeck: ${{ steps.accordiondeck.outputs.run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -87,6 +88,18 @@ jobs:
           BASE: ${{ steps.plan.outputs.base }}
         run: |
           if git diff --name-only --no-renames "$BASE" | grep -qE '^(decks/drawerdeck/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|\.github/workflows/ci\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # accordiondeck's verify has no --changed logic either (#364): the same
+      # rule as drawerdeck's.
+      - id: accordiondeck
+        env:
+          BASE: ${{ steps.plan.outputs.base }}
+        run: |
+          if git diff --name-only --no-renames "$BASE" | grep -qE '^(decks/accordiondeck/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|\.github/workflows/ci\.yml$)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -145,6 +158,36 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --dir decks/drawerdeck verify
+
+  # accordiondeck's whole verify (#364): three packages, so one job covers
+  # lint, typecheck, test, test:react-18, test:react-19, build and
+  # test:packages, with no shards.
+  # Its `test` is vitest's browser mode in Chromium, Firefox and WebKit (ADR
+  # 0001): the Playwright image carouseldeck-e2e uses for all three, so their
+  # browsers and system libraries are already there.
+  accordiondeck:
+    needs: changes
+    if: needs.changes.outputs.accordiondeck == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user 1001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - run: |
+          mkdir -p "$RUNNER_TEMP/corepack"
+          corepack enable --install-directory "$RUNNER_TEMP/corepack"
+          echo "$RUNNER_TEMP/corepack" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir decks/accordiondeck verify
 
   # The packed tarballs: publint, attw and `'use client'`.
   carouseldeck-packages:
@@ -344,7 +387,7 @@ jobs:
   # The one check to require in branch protection: it passes when every job
   # passed, or was skipped because the change needs none of its gates.
   verify:
-    needs: [sites, changes, carouseldeck-checks, carouseldeck-packages, carouseldeck-next, carouseldeck-unit, carouseldeck-unit-react-18, carouseldeck-unit-react-19, carouseldeck-e2e, drawerdeck]
+    needs: [sites, changes, carouseldeck-checks, carouseldeck-packages, carouseldeck-next, carouseldeck-unit, carouseldeck-unit-react-18, carouseldeck-unit-react-19, carouseldeck-e2e, drawerdeck, accordiondeck]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

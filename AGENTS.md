@@ -60,6 +60,17 @@ same source for React 18 too (#275). All three packages, and
 before the release workflow can publish them (`decks/drawerdeck/AGENTS.md`,
 "Releasing").
 
+## accordiondeck
+
+Its source lives in `decks/accordiondeck/`. Run its commands from the repo
+root with `pnpm --dir decks/accordiondeck <script>`, and
+`pnpm --dir decks/accordiondeck verify` before landing a change to it. Its
+own ADRs are at `decks/accordiondeck/docs/adr/`, numbered on their own.
+`decks/accordiondeck/AGENTS.md` covers what's specific to working in it. It
+is set up (#364) but has no behaviour yet: `@accordiondeck/react`,
+`@accordiondeck/react-18` and `@accordiondeck/docs` are private placeholders
+at `0.0.0`. The v1 work is in the milestone accordion.deck.cool, map #360.
+
 ## Releasing a deck
 
 This section is for the decks that live in their own repos. carouseldeck lives in this repo, and its sites use it from the workspace, so it sends no dispatch and gets no bump PR (ADR 0002). It releases with Changesets, from `.changeset/` at the root, and `.github/workflows/release.yml`: a consumer-visible change to its packages needs a changeset (`pnpm changeset`), and the release runbook is `decks/carouseldeck/AGENTS.md`, "Releasing".

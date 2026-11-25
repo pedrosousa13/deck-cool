@@ -1,0 +1,12 @@
+{
+  "name": "@accordiondeck/docs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The accordiondeck docs as markdown, at the version of the code they document, for deck.cool to build the docs site from.",
+  "license": "MIT",
+  "files": [
+    "**/*.md",
+    "nav.json",
+    "assets"
+  ]
+}

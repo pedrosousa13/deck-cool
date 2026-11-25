@@ -1,0 +1,14 @@
+// The react-18 test against the built package's declarations, with React
+// 18's own types: run by `pnpm test:react-18`, after the build.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": [],
+    "paths": {
+      "@accordiondeck/react": ["./dist/index.d.ts"]
+    }
+  },
+  "include": ["test"]
+}
