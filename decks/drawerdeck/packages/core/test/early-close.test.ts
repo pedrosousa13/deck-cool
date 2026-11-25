@@ -7,6 +7,7 @@ import {
   expectSettledTo,
   fingerDown,
   glide,
+  isChromium,
   liftFinger,
   mockReducedMotion,
   mount,
@@ -57,6 +58,14 @@ async function endGlide(viewport: HTMLElement) {
   unblock = undefined;
   viewport.dispatchEvent(new Event('scrollend'));
   await sleep(50);
+}
+
+/** A finger held on the Panel: a real held touch in Chromium. WebKit cannot
+ * hold one, so its `touchstart` is hand-dispatched (the engine reads only
+ * `touches.length`), and `liftFinger`'s tap then ends it. */
+async function holdFinger(f: Fixture) {
+  await fingerDown(f);
+  if (!isChromium) f.content.dispatchEvent(touchEvent('touchstart', 1));
 }
 
 describe('closing early after a swipe (#334)', () => {
@@ -327,18 +336,111 @@ describe('closing early after a swipe (#334)', () => {
     });
   });
 
-  it('disarms when the snap points change mid-glide, so a stale margin never closes', async () => {
+  it('disarms the band when the snap points change its margin mid-glide, so a stale margin never closes', async () => {
     const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
     await fingerDown(fixture!);
     await liftFinger(fixture!);
     await glide(viewport, [300, 160]);
 
-    drawer.setOptions({ snapPoints: [0.5, 1] });
+    // A 20px snap point puts the band under 32px: 31px is no longer inside.
+    drawer.setOptions({ snapPoints: ['20px', 1] });
     await glide(viewport, [80, 31]);
-    await sleep(100);
+    await sleep(150);
 
     expect(drawer.phase).toBe('open');
     expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  describe('a re-render that passes the same snap points mid-glide', () => {
+    it('still closes the glide at 31px', async () => {
+      const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+      await fingerDown(fixture!);
+      await liftFinger(fixture!);
+      await glide(viewport, [300, 160]);
+
+      drawer.setOptions({ snapPoints: [0.5, 1] });
+      await glide(viewport, [80, 31]);
+
+      expect(drawer.phase).toBe('closed');
+      expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+    });
+
+    it('still closes a glide that then stalls at 2px', async () => {
+      const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+      await fingerDown(fixture!);
+      await liftFinger(fixture!);
+      await glide(viewport, [300, 160, 40]);
+
+      drawer.setOptions({ snapPoints: [0.5, 1] });
+      await glide(viewport, [8, 2]);
+
+      await expectSettledTo(() => drawer.phase, 'closed');
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+      expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+    });
+  });
+
+  it('closes a glide that reaches 2px more than a second after the lift, with no scrollend', async () => {
+    const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+    await fingerDown(fixture!);
+    await liftFinger(fixture!);
+    await glide(viewport, [300, 160, 40]);
+    await sleep(1100);
+
+    await glide(viewport, [8, 2]);
+
+    await expectSettledTo(() => drawer.phase, 'closed');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+  });
+
+  it('closes a glide that starts stalling just before the second is up', async () => {
+    const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+    await fingerDown(fixture!);
+    await liftFinger(fixture!);
+    await glide(viewport, [300, 160, 40]);
+    await sleep(930);
+
+    await glide(viewport, [8, 2]);
+    await sleep(300);
+
+    expect(drawer.phase).toBe('closed');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a finger held 2px from closed', () => {
+    it('does not close it however long it stays, then closes it on lift', async () => {
+      const { viewport, drawer, onOpenChange } = await openAt([0.5, 1], 0);
+      await holdFinger(fixture!);
+
+      viewport.scrollTo({ top: 2, behavior: 'instant' });
+      await sleep(400);
+      expect(drawer.phase).toBe('open');
+      expect(onOpenChange).not.toHaveBeenCalled();
+
+      await liftFinger(fixture!);
+
+      await expectSettledTo(() => drawer.phase, 'closed');
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+      expect(onOpenChange).toHaveBeenCalledWith(false, 'drag');
+    });
+
+    it('a touchstart during the wait cancels it, and the lift closes', async () => {
+      const { viewport, content, drawer, onOpenChange } = await openAt(
+        [0.5, 1],
+        0
+      );
+      viewport.scrollTo({ top: 2, behavior: 'instant' });
+      await sleep(40);
+      content.dispatchEvent(touchEvent('touchstart', 1));
+      await sleep(300);
+      expect(drawer.phase).toBe('open');
+
+      content.dispatchEvent(touchEvent('touchend', 0));
+
+      await expectSettledTo(() => drawer.phase, 'closed');
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('case 5: never closes under a held finger, even 3px from closed', async () => {
@@ -346,14 +448,13 @@ describe('closing early after a swipe (#334)', () => {
       [0.5, 1],
       0
     );
-    await fingerDown(fixture!);
+    await holdFinger(fixture!);
 
     viewport.scrollTo({ top: 3, behavior: 'instant' });
     await nextFrame();
     await nextFrame();
     await nextFrame();
-    await sleep(100);
-    // WebKit cannot hold the finger: its tap below is the whole touch.
+    await sleep(300);
     expect(drawer.phase).toBe('open');
     expect(onOpenChange).not.toHaveBeenCalled();
 

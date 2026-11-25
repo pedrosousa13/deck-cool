@@ -118,9 +118,11 @@ Safari), the whole thing runs as a native `animation`, set up by an adopted
 stylesheet rule keyed on `[data-drawer-indent]`'s own value, with no JS
 writing anything on a drag or a swipe: the same "no JS while scrolling"
 guarantee every other recipe here keeps. (The engine's own early close
-after a swipe adds one once-only scroll listener per lift and
-IntersectionObserver callbacks when the Panel crosses a margin, and
-nothing per scroll event.) Where it does not (Firefox), `@drawerdeck/core`
+after a swipe adds one once-only scroll listener per lift. It and the
+close of a Panel that stalls within 4 px of closed run in
+IntersectionObserver callbacks when the Panel crosses a margin, the stall
+close after a 100 ms wait, and nothing per scroll event.) Where it does
+not (Firefox), `@drawerdeck/core`
 writes `--drawer-indent-progress` directly as the Viewport scrolls, the
 same split every other progress value in this engine makes.
 
