@@ -681,6 +681,36 @@ not a silent pass. `pnpm --dir decks/drawerdeck/bench exec playwright test
 `pnpm --dir decks/drawerdeck verify`, the same as `smoke.spec.ts`,
 `animates.spec.ts` and `bench.spec.ts`; see this deck's own `AGENTS.md`).
 
+## Method: settle time and motion after release (#350)
+
+`settleMs` is the end of the drawer's motion minus `windowStart`
+(`settle.ts`, `src/harness.ts`). `windowStart` is `performance.now()` at the
+gesture's own first input event (`markWindowStart()`, called right before
+dispatching it). The end is `settledAt`, the `performance.now()` of the rAF
+tick whose step last crossed the harness's 0.5px noise threshold (the last
+frame in which the drawer visibly moved, already tracked as `lastChangeAt`
+for `idleFor()`). For a `dismiss` scenario, the end is the later of
+`settledAt` and `closedAt()`, the page-clock time of the library's own
+`reportOpen(false)` (rule 12), and only when the library did close. All of
+these come from the same page in the same clock, so `bench.spec.ts`
+subtracts them directly: no `Date.now()` from Node, no `settle()` fixed
+100ms wait or 400ms quiet threshold, no `waitForFunction` polling latency
+and no `CLOSE_WAIT_MS` polling. `settleMs` still includes the scripted
+gesture's own duration, the same for every deck in a scenario.
+
+`motionAfterReleaseMs` is that same end minus the gesture's own last input
+event (`touchend`, `pointerup` or `click`, from `lastInputAt()`), so the
+scripted gesture's duration is out. `null` when no input event was captured.
+Both clamp to 0 for a deck that never moves, whose last recorded movement
+predates the gesture. `aggregate.py` reports both per scenario, and
+`motionAfterReleaseMs` decides the at-a-glance winner (`in_summary`);
+`settleMs` stays in the per-scenario and per-shard tables.
+
+The old `Date.now()` measure (gesture, `settle()`, the close wait and every
+round trip) stays on raw rows as `wallSettleMs` for reference and is never
+reported: under the 100ms and 200ms busy-tick loads its polling waited
+behind the ticks, so cells landed on the same values for every deck.
+
 ## Method notes (carried forward from the original prototype)
 
 - **vaul and Base UI are headless: the quickstart examples alone do not

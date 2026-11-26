@@ -64,6 +64,7 @@ import {
   type Scenario
 } from './scenarios';
 import { makeRng, resolveSeed, shuffle } from './seed';
+import { computeSettle } from './settle';
 import {
   analyzeMotion,
   captureTrace,
@@ -108,7 +109,19 @@ function responded(raf: PassResult['raf']): boolean {
 const CLOSE_WAIT_MS = 2_000;
 
 interface PassResult {
+  /** Gesture start to the end of the drawer's motion, in the page's own
+   * clock (settle.ts): excludes `settle()`'s quiet window, polling latency
+   * and round trips. For a `dismiss` scenario the end is the later of the
+   * last moving frame and the library reporting itself closed. */
   settleMs: number;
+  /** The old `Date.now()` wall-clock measure (gesture + settle + close
+   * wait + every round trip): kept on raw rows for reference, never
+   * reported (it quantizes under a busy-tick load, #350). */
+  wallSettleMs: number;
+  /** The gesture's own last input event to the end of motion: the part of
+   * settle time the library itself controls. `null` when no qualifying
+   * input event was captured. */
+  motionAfterReleaseMs: number | null;
   opennessAfter: number;
   raf: { frames: number; maxStep: number; travel: number; reversals: number };
   loaf: { count: number; totalBlocking: number } | null;
@@ -156,9 +169,10 @@ async function runPass(
   // reports closed (`window.__bench.isOpen() === false`), not from this
   // bench's own reading of the drawer's on-screen position -- motion
   // settling (above) is necessary but not sufficient. The settle time for
-  // a `dismiss` scenario is the later of the two.
+  // a `dismiss` scenario is the later of the two, both read in the page's
+  // own clock below.
   let closed: boolean | null = null;
-  let settleMs = motionSettledMs;
+  let wallSettleMs = motionSettledMs;
   if (scenario.dismiss) {
     closed = await page.evaluate(() => window.__bench.isOpen() === false);
     if (!closed) {
@@ -176,14 +190,46 @@ async function runPass(
       }
     }
     const closedMs = Date.now() - began;
-    settleMs = closed ? Math.max(motionSettledMs, closedMs) : motionSettledMs;
+    wallSettleMs = closed ? Math.max(motionSettledMs, closedMs) : motionSettledMs;
   }
+
+  const timing = await page.evaluate(() => ({
+    windowStart: window.__bench.windowStart(),
+    settledAt: window.__bench.settledAt(),
+    lastInputAt: window.__bench.lastInputAt(),
+    closedAt: window.__bench.closedAt()
+  }));
+  if (timing.windowStart === null) {
+    // Every scenario calls markWindowStart() before settle() (scenarios.ts);
+    // null here means a scenario regressed, not a real reading.
+    throw new Error(
+      `${scenario.name}: bench-window-start missing -- markWindowStart() must run before settle()`
+    );
+  }
+  const { settleMs, motionAfterReleaseMs } = computeSettle({
+    windowStart: timing.windowStart,
+    settledAt: timing.settledAt,
+    lastInputAt: timing.lastInputAt,
+    // Only a close the library reported counts; a dismiss that never closed
+    // keeps its motion-only end, as the wall-clock measure did.
+    closedAt: closed ? timing.closedAt : null
+  });
 
   const raf = await page.evaluate(() => ({ ...window.__bench.m }));
   const loaf = await page.evaluate(() => window.__bench.loaf());
   const opennessAfter = await page.evaluate(() => window.__bench.openness());
 
-  return { settleMs, opennessAfter, raf, loaf, trace, events, closed };
+  return {
+    settleMs,
+    wallSettleMs,
+    motionAfterReleaseMs,
+    opennessAfter,
+    raf,
+    loaf,
+    trace,
+    events,
+    closed
+  };
 }
 
 for (const scenario of scenarios) {
@@ -215,6 +261,8 @@ for (const scenario of scenarios) {
             rep,
             warmup: true,
             settleMs: warmup.settleMs,
+            wallSettleMs: warmup.wallSettleMs,
+            motionAfterReleaseMs: warmup.motionAfterReleaseMs,
             opennessAfter: warmup.opennessAfter,
             responded: responded(warmup.raf),
             closed: warmup.closed,
@@ -253,6 +301,8 @@ for (const scenario of scenarios) {
             warmup: false,
             initDurationMs,
             settleMs: scored.settleMs,
+            wallSettleMs: scored.wallSettleMs,
+            motionAfterReleaseMs: scored.motionAfterReleaseMs,
             opennessAfter: scored.opennessAfter,
             responded: responded(scored.raf),
             closed: scored.closed,

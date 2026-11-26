@@ -49,65 +49,65 @@
     "claim": "tie_or_better"
   },
   {
-    "label": "Flick down closes it: settle time, no load",
+    "label": "Flick down closes it: motion after release, no load",
     "scenario": "touch-flick-dismiss",
-    "metric": "settleMs",
+    "metric": "motionAfterReleaseMs",
     "load": 0,
     "claim": "tie_or_better"
   },
   {
-    "label": "Flick down closes it: settle time, medium load (100ms busy tick)",
+    "label": "Flick down closes it: motion after release, medium load (100ms busy tick)",
     "scenario": "touch-flick-dismiss",
-    "metric": "settleMs",
+    "metric": "motionAfterReleaseMs",
     "load": 100,
     "claim": "tie_or_better"
   },
   {
-    "label": "Flick down closes it: settle time, heavy load (200ms busy tick)",
+    "label": "Flick down closes it: motion after release, heavy load (200ms busy tick)",
     "scenario": "touch-flick-dismiss",
-    "metric": "settleMs",
+    "metric": "motionAfterReleaseMs",
     "load": 200,
     "claim": "win"
   },
   {
-    "label": "Mouse throw: settle time, no load",
+    "label": "Mouse throw: motion after release, no load",
     "scenario": "mouse-drag-throw",
-    "metric": "settleMs",
+    "metric": "motionAfterReleaseMs",
     "load": 0,
     "claim": "win"
   },
   {
-    "label": "Mouse throw: settle time, medium load (100ms busy tick)",
+    "label": "Mouse throw: motion after release, medium load (100ms busy tick)",
     "scenario": "mouse-drag-throw",
-    "metric": "settleMs",
+    "metric": "motionAfterReleaseMs",
     "load": 100,
     "claim": "win"
   },
   {
-    "label": "Mouse throw: settle time, heavy load (200ms busy tick)",
+    "label": "Mouse throw: motion after release, heavy load (200ms busy tick)",
     "scenario": "mouse-drag-throw",
-    "metric": "settleMs",
+    "metric": "motionAfterReleaseMs",
     "load": 200,
     "claim": "win"
   },
   {
-    "label": "Open to half: settle time, no load",
+    "label": "Open to half: motion after release, no load",
     "scenario": "open-to-half",
-    "metric": "settleMs",
+    "metric": "motionAfterReleaseMs",
     "load": 0,
-    "claim": "tie_or_better"
+    "claim": "win"
   },
   {
-    "label": "Open to half: settle time, medium load (100ms busy tick)",
+    "label": "Open to half: motion after release, medium load (100ms busy tick)",
     "scenario": "open-to-half",
-    "metric": "settleMs",
+    "metric": "motionAfterReleaseMs",
     "load": 100,
-    "claim": "tie_or_better"
+    "claim": "win"
   },
   {
-    "label": "Open to half: settle time, heavy load (200ms busy tick)",
+    "label": "Open to half: motion after release, heavy load (200ms busy tick)",
     "scenario": "open-to-half",
-    "metric": "settleMs",
+    "metric": "motionAfterReleaseMs",
     "load": 200,
     "claim": "tie_or_better"
   }

@@ -53,6 +53,25 @@ export interface DrawerBenchProbe {
    * (or it hits its own timeout), pairing with the `markWindowStart()` that
    * opened the gesture. */
   markWindowEnd(): void;
+  /** `performance.now()` at this gesture's `markWindowStart()` call, in the
+   * same clock as `settledAt()`, `lastInputAt()` and `closedAt()`.
+   * `bench.spec.ts` subtracts these directly instead of timing the gesture
+   * from Node with `Date.now()`, which also counts `settle()`'s own quiet
+   * window and polling round trips (#350). `null` before the first call. */
+  windowStart(): number | null;
+  /** `performance.now()` of the rAF tick whose step last crossed `tick()`'s
+   * own 0.5px noise threshold: the last frame in which the drawer visibly
+   * moved. */
+  settledAt(): number;
+  /** `performance.now()` (`event.timeStamp`) of the most recent touchend,
+   * pointerup or click: the gesture's own last input event. `null` before
+   * any such event. */
+  lastInputAt(): number | null;
+  /** `performance.now()` of the last `reportOpen(false)` since the drawer
+   * was last reported open: when the library itself said it closed
+   * (fairness rule 12). `null` while the library reports open, or before it
+   * ever did. */
+  closedAt(): number | null;
   /** Whether the drawer's own library currently reports itself open
    * (fairness rule 12, #311): the value `reportOpen()` was last called
    * with, never a read of `openness()`/the DOM. A dismiss only counts once
@@ -107,6 +126,9 @@ export function attachHarness(opts: { panelSelector: string }): void {
   let last = openness();
   let lastStep = 0;
   let lastChangeAt = performance.now();
+  let windowStartAt: number | null = null;
+  let lastInputEventAt: number | null = null;
+  let closedAtMs: number | null = null;
   let raf: number;
 
   function tick() {
@@ -128,6 +150,21 @@ export function attachHarness(opts: { panelSelector: string }): void {
     raf = requestAnimationFrame(tick);
   }
   raf = requestAnimationFrame(tick);
+
+  // The gesture's own last input event, in the same clock as lastChangeAt:
+  // the warm-up pass runs with no CDP trace session to read an input mark
+  // back out of, so settle.ts needs this page-side timestamp directly.
+  // Capture phase, so an adapter's own `stopPropagation` never hides one of
+  // these from the probe.
+  for (const type of ['touchend', 'pointerup', 'click'] as const) {
+    window.addEventListener(
+      type,
+      (e) => {
+        lastInputEventAt = e.timeStamp;
+      },
+      { capture: true, passive: true }
+    );
+  }
 
   // Jank: a main-thread busy loop, at most once per ~250ms, while armed --
   // the same mechanism carouseldeck's harness uses, so every load level
@@ -171,6 +208,13 @@ export function attachHarness(opts: { panelSelector: string }): void {
       m.travel = 0;
       m.reversals = 0;
       lastStep = 0;
+      // A pass's timestamps start empty: `bench.spec.ts` resets after
+      // `setup` (whose own click fires pointerup/click) and before the
+      // gesture, so nothing from setup or an earlier pass can be read as
+      // this gesture's input, window start or close.
+      windowStartAt = null;
+      lastInputEventAt = null;
+      closedAtMs = null;
       loafCount = 0;
       loafBlocking = 0;
     },
@@ -189,10 +233,21 @@ export function attachHarness(opts: { panelSelector: string }): void {
       const [entry] = performance.getEntriesByName('bench-init', 'measure');
       return entry ? entry.duration : null;
     },
-    markWindowStart: () => performance.mark('bench-window-start'),
+    markWindowStart: () => {
+      windowStartAt = performance.now();
+      performance.mark('bench-window-start');
+    },
     markWindowEnd: () => performance.mark('bench-window-end'),
+    windowStart: () => windowStartAt,
+    settledAt: () => lastChangeAt,
+    lastInputAt: () => lastInputEventAt,
+    closedAt: () => closedAtMs,
     isOpen: () => openState,
     reportOpen: (open) => {
+      // Only the open -> closed transition counts: an adapter that reports
+      // `false` again on a later render must not push the time back.
+      if (open) closedAtMs = null;
+      else if (openState) closedAtMs = performance.now();
       openState = open;
     }
   };

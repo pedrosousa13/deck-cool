@@ -155,14 +155,23 @@ if __name__ == '__main__':
     print('\n### touch-flick-dismiss: settle time (ms)\n')
     print(table(rows, 'touch-flick-dismiss', lambda r: r['settleMs']))
 
+    print('\n### touch-flick-dismiss: motion after release (ms)\n')
+    print(table(rows, 'touch-flick-dismiss', lambda r: r.get('motionAfterReleaseMs')))
+
     print('\n### touch-flick-dismiss: ended closed (opennessAfter px)\n')
     print(table(rows, 'touch-flick-dismiss', lambda r: r['opennessAfter']))
 
     print('\n### mouse-drag-throw: settle time (ms)\n')
     print(table(rows, 'mouse-drag-throw', lambda r: r['settleMs']))
 
+    print('\n### mouse-drag-throw: motion after release (ms)\n')
+    print(table(rows, 'mouse-drag-throw', lambda r: r.get('motionAfterReleaseMs')))
+
     print('\n### open-to-half: settle time (ms)\n')
     print(table(rows, 'open-to-half', lambda r: r['settleMs']))
+
+    print('\n### open-to-half: motion after release (ms)\n')
+    print(table(rows, 'open-to-half', lambda r: r.get('motionAfterReleaseMs')))
 
     print('\n### touch-drag-half-full-back: LoAF total blocking (ms) / count\n')
     print(table(rows, 'touch-drag-half-full-back', lambda r: r['loaf']['totalBlocking'] if r['loaf'] else None, 1))

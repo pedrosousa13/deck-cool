@@ -4,32 +4,32 @@ label: Compare
 description: "How drawerdeck compares with vaul, Base UI's Drawer and React Aria's Sheet today: native scrolling against pointer-driven JavaScript, a feature table sourced from each project's own docs, and the first fair, CI-run bench numbers with their caveats."
 ---
 
-**Verdict today:** this CI run has drawerdeck winning or tying every row at every load. It wins bundle size, dropped frames under medium and heavy load, flick-dismiss settle time under heavy load, and the mouse throw at every load; it ties longest stall and open-to-half at every load, and flick-dismiss settle time at no load and medium load. See "Who closes on a flick" below for which rivals report closing at all.
+**Verdict today:** in this CI run drawerdeck wins or ties every bench row at every load. It wins bundle size, dropped frames under medium and heavy load, flick-dismiss motion after release under heavy load, the mouse throw at every load, and open-to-half under no load and medium load; it ties longest stall at every load, dropped frames at no load, open-to-half under heavy load, and flick-dismiss motion after release at no load and medium load. See "Who closes on a flick" below for which rivals report closing at all.
 
 ## At a glance
 
-| Question                                                             | drawerdeck                                                                   | vaul                      | Base UI Drawer | React Aria Sheet                                                                                                         | Winner                                |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
-| Bundle size (min+gzip, React external)                               | 8.99 KB                                                                      | 22.58 KB                  | 30.92 KB       | 30.69 KB                                                                                                                 | **drawerdeck**                        |
-| Dropped frames while dragging, no load                               | 0.0%                                                                         | 1.7%                      | 0.0%           | 0.0%                                                                                                                     | Tie                                   |
-| Dropped frames while dragging, medium load (100ms busy tick)         | 0.0%                                                                         | 25.6%                     | 16.6%          | 29.3%                                                                                                                    | **drawerdeck**                        |
-| Dropped frames while dragging, heavy load (200ms busy tick)          | 0.0%                                                                         | 55.3%                     | 47.9%          | 54.1%                                                                                                                    | **drawerdeck**                        |
-| Longest stall while dragging, no load                                | 34.0 ms                                                                      | 166.9 ms                  | 55.1 ms        | 34.1 ms                                                                                                                  | Tie                                   |
-| Longest stall while dragging, medium load (100ms busy tick)          | 126.6 ms                                                                     | 151.2 ms                  | 144.3 ms       | 128.1 ms                                                                                                                 | Tie                                   |
-| Longest stall while dragging, heavy load (200ms busy tick)           | 231.2 ms                                                                     | 244.9 ms                  | 241.6 ms       | 228.0 ms                                                                                                                 | Tie                                   |
-| Flick down closes it: settle time, no load                           | 1000.0 ms                                                                    | 1163.0 ms                 | 1138.0 ms      | did not close                                                                                                            | Tie                                   |
-| Flick down closes it: settle time, medium load (100ms busy tick)     | 1157.0 ms                                                                    | 1541.5 ms                 | did not close  | did not close                                                                                                            | Tie                                   |
-| Flick down closes it: settle time, heavy load (200ms busy tick)      | 1408.0 ms                                                                    | did not close             | did not close  | did not close                                                                                                            | **drawerdeck**                        |
-| Mouse throw: settle time, no load                                    | 867.0 ms                                                                     | 964.0 ms                  | 965.5 ms       | not supported                                                                                                            | **drawerdeck**                        |
-| Mouse throw: settle time, medium load (100ms busy tick)              | 894.5 ms                                                                     | 1295.5 ms                 | 1078.0 ms      | not supported                                                                                                            | **drawerdeck**                        |
-| Mouse throw: settle time, heavy load (200ms busy tick)               | 1149.0 ms                                                                    | 1761.5 ms                 | 1549.5 ms      | not supported                                                                                                            | **drawerdeck**                        |
-| Open to half: settle time, no load                                   | 882.0 ms                                                                     | 1024.0 ms                 | 990.5 ms       | 936.0 ms                                                                                                                 | Tie                                   |
-| Open to half: settle time, medium load (100ms busy tick)             | 934.0 ms                                                                     | 1197.0 ms                 | 1076.5 ms      | 934.0 ms                                                                                                                 | Tie                                   |
-| Open to half: settle time, heavy load (200ms busy tick)              | 1181.0 ms                                                                    | 1430.0 ms                 | 1181.0 ms      | 1178.5 ms                                                                                                                | Tie                                   |
-| Maintained?                                                          | Beta                                                                         | No, last release Dec 2024 | Yes            | Yes (Adobe)                                                                                                              | **Base UI**, **React Aria**           |
-| Features: all sides, non-modal, nesting, background indent, keyboard | All sides, modal or non-modal, nesting, background indent, keyboard handling | All                       | All            | Most (no non-modal option; only a nested sheet's own backdrop and parent scale back, not the page behind a single sheet) | **drawerdeck**, **Base UI**, **vaul** |
-| Built on native `<dialog>` and native scrolling                      | Yes                                                                          | No                        | No             | No (a scrollable overlay driven by CSS scroll-snap, not `<dialog>`)                                                      | **drawerdeck**                        |
-| React versions                                                       | 18 to 19                                                                     | 16.8 to 19                | 17 to 19       | 16.8 to 19                                                                                                               | **vaul**, **React Aria**              |
+| Question                                                                  | drawerdeck                                                                   | vaul                      | Base UI Drawer | React Aria Sheet                                                                                                         | Winner                                |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| Bundle size (min+gzip, React external)                                    | 9.35 KB                                                                      | 22.69 KB                  | 31.03 KB       | 30.78 KB                                                                                                                 | **drawerdeck**                        |
+| Dropped frames while dragging, no load                                    | 0.0%                                                                         | 1.8%                      | 0.0%           | 0.0%                                                                                                                     | Tie                                   |
+| Dropped frames while dragging, medium load (100ms busy tick)              | 0.0%                                                                         | 24.3%                     | 16.5%          | 29.5%                                                                                                                    | **drawerdeck**                        |
+| Dropped frames while dragging, heavy load (200ms busy tick)               | 0.0%                                                                         | 55.3%                     | 48.0%          | 57.2%                                                                                                                    | **drawerdeck**                        |
+| Longest stall while dragging, no load                                     | 33.8 ms                                                                      | 167.0 ms                  | 55.1 ms        | 33.7 ms                                                                                                                  | Tie                                   |
+| Longest stall while dragging, medium load (100ms busy tick)               | 119.4 ms                                                                     | 151.1 ms                  | 144.1 ms       | 126.6 ms                                                                                                                 | Tie                                   |
+| Longest stall while dragging, heavy load (200ms busy tick)                | 231.3 ms                                                                     | 241.8 ms                  | 243.2 ms       | 230.8 ms                                                                                                                 | Tie                                   |
+| Flick down closes it: motion after release, no load                       | 233.3 ms                                                                     | 382.0 ms                  | 298.8 ms       | did not close                                                                                                            | Tie                                   |
+| Flick down closes it: motion after release, medium load (100ms busy tick) | 249.8 ms                                                                     | 605.7 ms                  | did not close  | did not close                                                                                                            | Tie                                   |
+| Flick down closes it: motion after release, heavy load (200ms busy tick)  | 251.4 ms                                                                     | did not close             | did not close  | did not close                                                                                                            | **drawerdeck**                        |
+| Mouse throw: motion after release, no load                                | 223.1 ms                                                                     | 306.0 ms                  | 305.9 ms       | not supported                                                                                                            | **drawerdeck**                        |
+| Mouse throw: motion after release, medium load (100ms busy tick)          | 223.2 ms                                                                     | 454.7 ms                  | 307.0 ms       | not supported                                                                                                            | **drawerdeck**                        |
+| Mouse throw: motion after release, heavy load (200ms busy tick)           | 291.2 ms                                                                     | 482.0 ms                  | 488.4 ms       | not supported                                                                                                            | **drawerdeck**                        |
+| Open to half: motion after release, no load                               | 313.9 ms                                                                     | 447.2 ms                  | 414.0 ms       | 347.3 ms                                                                                                                 | **drawerdeck**                        |
+| Open to half: motion after release, medium load (100ms busy tick)         | 313.9 ms                                                                     | 534.4 ms                  | 413.8 ms       | 347.1 ms                                                                                                                 | **drawerdeck**                        |
+| Open to half: motion after release, heavy load (200ms busy tick)          | 381.8 ms                                                                     | 632.8 ms                  | 413.8 ms       | 380.1 ms                                                                                                                 | Tie                                   |
+| Maintained?                                                               | Beta                                                                         | No, last release Dec 2024 | Yes            | Yes (Adobe)                                                                                                              | **Base UI**, **React Aria**           |
+| Features: all sides, non-modal, nesting, background indent, keyboard      | All sides, modal or non-modal, nesting, background indent, keyboard handling | All                       | All            | Most (no non-modal option; only a nested sheet's own backdrop and parent scale back, not the page behind a single sheet) | **drawerdeck**, **Base UI**, **vaul** |
+| Built on native `<dialog>` and native scrolling                           | Yes                                                                          | No                        | No             | No (a scrollable overlay driven by CSS scroll-snap, not `<dialog>`)                                                      | **drawerdeck**                        |
+| React versions                                                            | 18 to 19                                                                     | 16.8 to 19                | 17 to 19       | 16.8 to 19                                                                                                               | **vaul**, **React Aria**              |
 
 The Winner column is drawerdeck's own verdict for each bench row (`drawerdeck_verdict` in `decks/drawerdeck/bench/aggregate.py`, #348's fix to #276): a win needs every shard to agree on drawerdeck, with a gap past the leading deck's own spread. Short of that, it's a tie only when drawerdeck's own gap to the leading deck sits inside that deck's own spread across shards, or drawerdeck won at least one shard outright (#280's revised bar) -- never a tie just because two rivals disagreed about which of them comes second. Anything short of a win or a tie is a loss, and would be named here, not folded into "Tie".
 
@@ -38,7 +38,7 @@ The Winner column is drawerdeck's own verdict for each bench row (`drawerdeck_ve
 Settle time is only half the flick-dismiss story: a fast "settle" means
 nothing if the drawer never actually reports itself closed. This is
 whether each deck's own `onOpenChange`/`isOpen` state reports closed after
-a flick-down, at each load, in this run ([#311](https://github.com/pedrosousa13/deck-cool/issues/311), [#266](https://github.com/pedrosousa13/deck-cool/issues/266) rule 12).
+a flick-down, at each load, in the run below ([#311](https://github.com/pedrosousa13/deck-cool/issues/311), [#266](https://github.com/pedrosousa13/deck-cool/issues/266) rule 12).
 
 | Deck       | No load        | Medium load (100ms busy tick) | Heavy load (200ms busy tick) |
 | ---------- | -------------- | ----------------------------- | ---------------------------- |
@@ -86,7 +86,7 @@ linked below.
 | Drag engine                            | Native CSS scroll-snap drives touch, wheel and trackpad. Mouse alone gets a JS pointer handler, because a mouse cannot drag a scroll container.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | JS pointer and touch events throughout: writes `translate3d` on every move.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | JS pointer and touch events throughout: writes `--drawer-swipe-movement-x`/`-y` CSS variables that drive a transform.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Native CSS scroll-snap and `view-timeline`, like drawerdeck's own engine, but with no mouse path: its [blog post](https://react-aria.adobe.com/blog/sheet) says "Scrolling is All You Need", so "swipe gestures run off the main thread at the native display refresh rate without any JavaScript touch handling."                                                                                                                                                                                                                                                                                                                                                                    |
 | Open and close animation               | Yes, written by the consumer. `open()` sets scroll position straight to the snap point with no scroll animation; `data-starting-style` on open and `data-ending-style` on close drive a CSS `transition` you write yourself ([`animate-the-drawer`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/packages/docs/guides/animate-the-drawer.md), 300ms on the family curve), the same attribute names as Base UI's own ([#268](https://github.com/pedrosousa13/deck-cool/issues/268)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Yes, out of the box: `Drawer.Overlay`'s and `Drawer.Content`'s own shipped CSS (`style.css`'s `[data-vaul-overlay]`/`[data-vaul-drawer]` rules) fades and slides them, as long as both are rendered.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Yes, documented: the packaged docs give `Drawer.Popup` and `Drawer.Backdrop` a `transition: transform 450ms cubic-bezier(0.32, 0.72, 0, 1)` on `[data-starting-style]`/`[data-ending-style]`, with the release duration scaled by `--drawer-swipe-strength`.                                                                                                                                                                                                                                                                                                                                                                                                                                      | No CSS entrance: `Sheet` opens with a native smooth scroll the engine drives, the same approach drawerdeck used before #268. `SheetBackdrop` needs its own `swipeAnimation` prop and `@keyframes` for its fade, or it paints nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Headless/unstyled                      | Yes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Yes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Yes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Yes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Bundle size (min+gzip, React external) | 8.99 KB: the real `@drawerdeck/react` plus `@drawerdeck/core`, built from `main` and packed, with `react`, `react-dom` and `react/jsx-runtime` external, the same as the rivals.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 22.58 KB (`vaul` 1.1.2).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 30.92 KB (`@base-ui/react` 1.9.0, the `Drawer` export).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 30.69 KB (`react-aria-components` 1.22.1, the `Sheet` subpath export: `Sheet`, `SheetTrigger`, `SheetOverlay`, `SheetBackdrop`, `SheetContent`), the whole cost of importing `Sheet`: overlays, focus management, everything else it pulls in.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Bundle size (min+gzip, React external) | 9.35 KB: the real `@drawerdeck/react` plus `@drawerdeck/core`, built from `main` and packed, with `react`, `react-dom` and `react/jsx-runtime` external, the same as the rivals.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 22.69 KB (`vaul` 1.1.2).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 31.03 KB (`@base-ui/react` 1.9.0, the `Drawer` export).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 30.78 KB (`react-aria-components` 1.22.1, the `Sheet` subpath export: `Sheet`, `SheetTrigger`, `SheetOverlay`, `SheetBackdrop`, `SheetContent`), the whole cost of importing `Sheet`: overlays, focus management, everything else it pulls in.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ## The benchmark
 
@@ -100,7 +100,11 @@ Full write-up, including all 13 fairness rules in full, at
 stall, dropped frames and settle time, from Chrome DevTools Protocol's
 trusted touch input, not simulated events, restricted to each gesture's own
 active window (so an idle pause between two drags never counts as a
-stall). Four scenarios (touch drag half to full and back, touch flick
+stall). Settle time is timed in the page's own clock, from the gesture's
+first input to the last frame that moved; motion after release runs from the
+gesture's last input to that same frame, so the scripted gesture's own
+length is out of it, and it decides the settle-time winners
+([#350](https://github.com/pedrosousa13/deck-cool/issues/350)). Four scenarios (touch drag half to full and back, touch flick
 dismiss, mouse drag throw, open to half) each run at three main-thread
 loads (none, a 100ms busy-loop tick, a 200ms tick). All four drawers render
 the same 50-row content, the same snap points (half and full, `[0.5,
@@ -109,22 +113,19 @@ drawer, a `translate3d` drawer, a CSS-variable drawer and a scroll-snap
 drawer are all read the same way.
 
 **This run:** GitHub Actions run
-[41840309608](https://github.com/pedrosousa13/deck-cool/actions/runs/41840309608)
-of `drawer-bench.yml`, on [#347](https://github.com/pedrosousa13/deck-cool/pull/347)'s
-branch at commit `7f00314`, scored against all 13 fairness rules below. It
-supersedes the earlier run
-([41798197057](https://github.com/pedrosousa13/deck-cool/actions/runs/41798197057),
-commit `329e6c1`), and is the first run scored with rule 13's
-presentation-time fix ([#345](https://github.com/pedrosousa13/deck-cool/issues/345)):
-a frame is now keyed on when its `PipelineReporter` ends, not when it
-begins, which left bundle size unchanged at 8.99 KB (only the scorer
-changed, not any deck's own code). Six parallel, dedicated `ubuntu-latest`
-shards (never a machine shared with
-other work), each running the complete interleaved bench with 5 reps per
-(scenario, load, deck) cell; every rep's own run order is reshuffled fresh,
-so no deck's reps land disproportionately on a busier or quieter stretch of
-a shard's run. Pooled across all six shards: 1440 scored rows, n=30 per
-cell (a discarded warm-up rep per page excluded).
+[45846884117](https://github.com/pedrosousa13/deck-cool/actions/runs/45846884117)
+of `drawer-bench.yml`, on [#381](https://github.com/pedrosousa13/deck-cool/pull/381)'s
+branch at commit `054fe37`, scored against all 13 fairness rules below. Every
+table on this page comes from it. Settle time is timed in the page's own
+clock ([#350](https://github.com/pedrosousa13/deck-cool/issues/350)): the old
+timer ran in the test process, so it also counted a fixed wait, a quiet
+threshold and Playwright's polling, which under the busy-tick loads waited
+behind the ticks. Six parallel, dedicated `ubuntu-latest` shards (never a
+machine shared with other work), each running the complete interleaved bench
+with 5 reps per (scenario, load, deck) cell; every rep's own run order is
+reshuffled fresh, so no deck's reps land disproportionately on a busier or
+quieter stretch of a shard's run. Pooled across all six shards: 1440 scored
+rows, n=30 per cell (a discarded warm-up rep per page excluded).
 
 **The 13 fairness rules** ([#266](https://github.com/pedrosousa13/deck-cool/issues/266),
 full text in RESULTS.md):
@@ -141,7 +142,7 @@ full text in RESULTS.md):
 10. Stalls score motion, not a scripted pause: only a gesture's own active window counts.
 11. A drawer that does not respond to a gesture cannot win it (React Aria's mouse throw, below).
 12. A dismiss counts only when the library itself reports it closed, scored separately per load. History: [#311](https://github.com/pedrosousa13/deck-cool/issues/311) found a dismiss being counted from the bench's own reading of the drawer's on-screen position, which credited React Aria's Sheet for scrolling out of view without ever reporting itself closed; fixed by driving every adapter's own open state into the harness. [#314](https://github.com/pedrosousa13/deck-cool/issues/314) then found the "did not close"/"not supported" verdict pooled across every load instead of scoring each load's own rows, which mislabeled individual load cells; fixed before this run.
-13. A frame is scored on when it is shown, not when it started, and a gesture's active window is checked against that same end ts. History: [#329](https://github.com/pedrosousa13/deck-cool/issues/329) found begin-ts scoring could misplace a stall and double-count a frame a busy main thread forks into two reporters; [#345](https://github.com/pedrosousa13/deck-cool/issues/345) fixed it, first landing in this run.
+13. A frame is scored on when it is shown, not when it started, and a gesture's active window is checked against that same end ts. History: [#329](https://github.com/pedrosousa13/deck-cool/issues/329) found begin-ts scoring could misplace a stall and double-count a frame a busy main thread forks into two reporters; [#345](https://github.com/pedrosousa13/deck-cool/issues/345) fixed it.
 
 **Versions, with release dates**
 
@@ -161,29 +162,23 @@ checkable, not reproduced on this page.
 
 | Deck       | load=0              | load=100            | load=200            |
 | ---------- | ------------------- | ------------------- | ------------------- |
-| drawerdeck | 34.0 (33.6-35.6)    | 126.6 (115.9-133.9) | 231.2 (216.2-234.5) |
-| vaul       | 166.9 (166.3-167.8) | 151.2 (148.9-183.4) | 244.9 (234.4-251.6) |
-| Base UI    | 55.1 (54.4-144.2)   | 144.3 (133.7-155.3) | 241.6 (233.7-256.5) |
-| React Aria | 34.1 (33.6-81.3)    | 128.1 (117.0-140.5) | 228.0 (217.3-240.2) |
+| drawerdeck | 33.8 (33.5-34.5)    | 119.4 (116.1-134.3) | 231.3 (216.1-234.2) |
+| vaul       | 167.0 (166.5-167.9) | 151.1 (150.4-182.7) | 241.8 (234.5-415.6) |
+| Base UI    | 55.1 (54.3-55.9)    | 144.1 (133.6-155.4) | 243.2 (233.9-404.4) |
+| React Aria | 33.7 (33.5-41.4)    | 126.6 (116.6-140.3) | 230.8 (217.3-239.1) |
 
-n=30 per cell. Overall: tie at every load (rule 7), but the shard split
-behind that tie moved at every load, not just two of them. At load=0 the
-shards split 3-3 between drawerdeck and React Aria -- "all six shards
-agreed on drawerdeck" no longer holds here, the way it did under the
-prior (begin-ts) scoring. At load=100 the same 3-3 split holds, now
-between drawerdeck and React Aria rather than drawerdeck and Base UI. At
-load=200 the shards also split 3-3, between drawerdeck and React Aria,
-where the prior run split three ways between drawerdeck, vaul and Base
-UI. Under heavy load, drawerdeck's own pooled median (231.2 ms) now reads
-closest to React Aria's (228.0 ms), both below vaul's (244.9 ms) and Base
-UI's (241.6 ms); drawerdeck's own gap to React Aria (3.2 ms) sits well
-inside React Aria's own spread (23.0 ms), so this is still a tie by
-drawerdeck's own standing (#280's revised bar), not merely because the
-shards disagreed about someone else.
+n=30 per cell. Overall: tie at every load (rule 7). At load=0 five shards
+pick React Aria and one picks drawerdeck, and the pooled medians sit 0.1 ms
+apart (33.8 ms and 33.7 ms). At load=100 and load=200 five shards pick
+drawerdeck and one picks React Aria. At load=100 drawerdeck's pooled median
+(119.4 ms) leads React Aria's (126.6 ms), but the one dissenting shard keeps
+it from a win. At load=200 React Aria's pooled median (230.8 ms) is 0.5 ms
+below drawerdeck's (231.3 ms), well inside its own spread (21.8 ms), so this
+is a tie by drawerdeck's own standing (#280's revised bar), not merely
+because the shards disagreed about someone else.
 
-This is the first table scored with rule 13's presentation-time fix
-([#345](https://github.com/pedrosousa13/deck-cool/issues/345)): every
-cell above keys a frame on when its `PipelineReporter` ends, not when it
+Every cell above is scored with rule 13's presentation-time fix
+([#345](https://github.com/pedrosousa13/deck-cool/issues/345)): it keys a frame on when its `PipelineReporter` ends, not when it
 begins, and dedupes a forked pair to the one frame it shows, scoped so
 nothing merges across a different compositor or thread. See
 [`decks/drawerdeck/bench/RESULTS.md`](https://github.com/pedrosousa13/deck-cool/blob/main/decks/drawerdeck/bench/RESULTS.md)'s
@@ -200,50 +195,63 @@ JS-driven drag.
 
 | Deck       | load=0        | load=100         | load=200         |
 | ---------- | ------------- | ---------------- | ---------------- |
-| drawerdeck | 0.0 (0.0-0.0) | 0.0 (0.0-4.7)    | 0.0 (0.0-3.8)    |
-| vaul       | 1.7 (0.0-6.7) | 25.6 (1.6-33.0)  | 55.3 (44.8-76.8) |
-| Base UI    | 0.0 (0.0-4.7) | 16.6 (0.0-26.7)  | 47.9 (39.3-72.8) |
-| React Aria | 0.0 (0.0-3.0) | 29.3 (23.1-44.7) | 54.1 (29.7-75.4) |
+| drawerdeck | 0.0 (0.0-3.0) | 0.0 (0.0-0.0)    | 0.0 (0.0-2.0)    |
+| vaul       | 1.8 (0.0-1.8) | 24.3 (11.4-33.0) | 55.3 (35.1-75.8) |
+| Base UI    | 0.0 (0.0-3.6) | 16.5 (2.3-29.2)  | 48.0 (39.6-71.4) |
+| React Aria | 0.0 (0.0-1.5) | 29.5 (16.9-46.9) | 57.2 (28.2-83.8) |
 
 n=30 per cell. Overall: tie at load=0 (all six shards agreed on drawerdeck,
 but the gap didn't clear its own spread); drawerdeck wins outright at
 load=100 and load=200, where agreement and gap both held. vaul's load=0
-median moves from 0.0% to 1.7%: a window-membership effect of rule 13's
+median moves from 0.0% to 1.8%: a window-membership effect of rule 13's
 fix, not a regression -- a frame that begins inside a gesture's active
 window but presents just after it closes no longer counts as shown inside
 it.
 
-### Touch flick dismiss: settle time (ms)
+### Touch flick dismiss: motion after release (ms)
 
-| Deck       | load=0                 | load=100               | load=200               |
-| ---------- | ---------------------- | ---------------------- | ---------------------- |
-| drawerdeck | 1000.0 (953.0-1338.0)  | 1157.0 (1120.0-1575.0) | 1408.0 (1392.0-1668.0) |
-| vaul       | 1163.0 (1101.0-1196.0) | 1541.5 (1271.0-1671.0) | did not close          |
-| Base UI    | 1138.0 (1079.0-1167.0) | did not close          | did not close          |
-| React Aria | did not close          | did not close          | did not close          |
+Run 45846884117. From the gesture's last input to the last frame that moved.
+
+| Deck       | load=0              | load=100            | load=200            |
+| ---------- | ------------------- | ------------------- | ------------------- |
+| drawerdeck | 233.3 (199.5-516.1) | 249.8 (216.4-617.1) | 251.4 (249.7-733.4) |
+| vaul       | 382.0 (380.9-382.7) | 605.7 (381.2-616.0) | did not close       |
+| Base UI    | 298.8 (297.9-299.3) | did not close       | did not close       |
+| React Aria | did not close       | did not close       | did not close       |
 
 **Did not close:** Base UI (load=100, 200), React Aria (load=0, 100, 200)
 and vaul (load=200) never reported itself closed in most of its reps at
 that load ([#311](https://github.com/pedrosousa13/deck-cool/issues/311),
 [#266](https://github.com/pedrosousa13/deck-cool/issues/266) rule 12), so
 it is excluded from this scenario's winners and ties at that load. n=30
-for the cells with a settle time. Overall: tie at load=0 and load=100;
-at load=0 one shard now picks Base UI instead of drawerdeck (five of six
-still agree on drawerdeck, so this isn't the unanimous cell it was before),
-and the gap never cleared drawerdeck's own spread either way; at load=100
-all six shards still agree on drawerdeck, but the gap still doesn't clear
-its spread. drawerdeck wins outright at load=200, where all six shards
-agreed and the gap held. See "Who closes on a flick" above for which
-rivals report closing at all.
+for the cells with a time. Overall: tie at load=0 and load=100. At load=0
+one shard picks Base UI instead of drawerdeck, and at load=100 one picks
+vaul; at both, the gap doesn't clear drawerdeck's own spread. drawerdeck
+wins outright at load=200, where all six shards agreed and the gap held.
+See "Who closes on a flick" above for which rivals report closing at all.
 
-### Mouse drag and release, upward throw: settle time (ms)
+The same scenario's settle time, which starts at the gesture's first input
+and so includes the scripted flick's own length, the same for every deck:
 
-| Deck       | load=0              | load=100               | load=200               |
-| ---------- | ------------------- | ---------------------- | ---------------------- |
-| drawerdeck | 867.0 (829.0-925.0) | 894.5 (871.0-929.0)    | 1149.0 (1136.0-1169.0) |
-| vaul       | 964.0 (926.0-998.0) | 1295.5 (1254.0-1333.0) | 1761.5 (1522.0-1777.0) |
-| Base UI    | 965.5 (915.0-997.0) | 1078.0 (1035.0-1453.0) | 1549.5 (1532.0-1791.0) |
-| React Aria | not supported       | not supported          | not supported          |
+| Deck       | load=0              | load=100            | load=200            |
+| ---------- | ------------------- | ------------------- | ------------------- |
+| drawerdeck | 438.1 (405.5-735.0) | 549.7 (533.8-825.1) | 657.2 (637.5-940.8) |
+| vaul       | 587.3 (584.7-602.4) | 910.0 (668.0-922.9) | did not close       |
+| Base UI    | 587.1 (584.6-601.1) | did not close       | did not close       |
+| React Aria | did not close       | did not close       | did not close       |
+
+The verdicts are the same: tie at load=0 and load=100, drawerdeck at load=200.
+
+### Mouse drag and release, upward throw: motion after release (ms)
+
+Run 45846884117.
+
+| Deck       | load=0              | load=100            | load=200            |
+| ---------- | ------------------- | ------------------- | ------------------- |
+| drawerdeck | 223.1 (214.7-225.2) | 223.2 (221.9-225.3) | 291.2 (240.6-325.2) |
+| vaul       | 306.0 (305.4-307.5) | 454.7 (419.9-473.7) | 482.0 (451.8-700.0) |
+| Base UI    | 305.9 (304.7-307.3) | 307.0 (304.6-470.7) | 488.4 (453.9-701.2) |
+| React Aria | not supported       | not supported       | not supported       |
 
 **Not supported:** React Aria did not respond to this gesture in most of
 its reps ([#294](https://github.com/pedrosousa13/deck-cool/issues/294),
@@ -252,34 +260,54 @@ than crowned for never moving. n=30 for the three decks that responded.
 Overall: drawerdeck wins outright at every load (every shard agreed, gap
 held each time).
 
-### Open to settled half: settle time (ms)
+Settle time for the same scenario, from the gesture's first input:
 
-| Deck       | load=0                | load=100               | load=200               |
-| ---------- | --------------------- | ---------------------- | ---------------------- |
-| drawerdeck | 882.0 (822.0-915.0)   | 934.0 (903.0-950.0)    | 1181.0 (1179.0-1187.0) |
-| vaul       | 1024.0 (978.0-1052.0) | 1197.0 (1157.0-1331.0) | 1430.0 (1427.0-1437.0) |
-| Base UI    | 990.5 (942.0-1035.0)  | 1076.5 (941.0-1081.0)  | 1181.0 (1179.0-1425.0) |
-| React Aria | 936.0 (877.0-967.0)   | 934.0 (898.0-972.0)    | 1178.5 (1174.0-1186.0) |
+| Deck       | load=0              | load=100            | load=200             |
+| ---------- | ------------------- | ------------------- | -------------------- |
+| drawerdeck | 331.3 (330.6-332.0) | 331.3 (330.7-332.0) | 398.1 (348.2-431.9)  |
+| vaul       | 414.7 (414.1-421.8) | 663.2 (625.7-682.4) | 988.5 (760.1-1024.3) |
+| Base UI    | 414.4 (413.2-415.3) | 514.4 (459.5-685.2) | 795.1 (562.0-809.1)  |
+| React Aria | not supported       | not supported       | not supported        |
 
-n=30 per cell. drawerdeck's own verdict: tie at every load. At load=0,
-all six shards agreed on drawerdeck, but the gap didn't clear its own
-spread; at load=100 the shards split between drawerdeck and React Aria,
-the same split as before, and drawerdeck's own shard wins carry the tie
-on their own. At load=200 one shard now picks Base UI instead of React
-Aria -- five of six still agree on React Aria, so this is no longer the
-unanimous cell it was, and no shard gave drawerdeck the win there either
--- but drawerdeck's own gap to React Aria (2.5 ms) sits well inside React
-Aria's own spread (12.0 ms), so it is still a tie by drawerdeck's own
-standing, not a loss.
+The verdicts are the same: drawerdeck at every load.
+
+### Open to settled half: motion after release (ms)
+
+Run 45846884117.
+
+| Deck       | load=0              | load=100            | load=200            |
+| ---------- | ------------------- | ------------------- | ------------------- |
+| drawerdeck | 313.9 (313.3-315.1) | 313.9 (311.4-315.1) | 381.8 (371.7-404.9) |
+| vaul       | 447.2 (438.9-448.5) | 534.4 (521.4-553.1) | 632.8 (622.8-653.7) |
+| Base UI    | 414.0 (413.0-415.1) | 413.8 (413.2-415.0) | 413.8 (413.0-415.1) |
+| React Aria | 347.3 (346.8-348.6) | 347.1 (338.7-348.4) | 380.1 (368.7-402.6) |
+
+n=30 per cell. drawerdeck wins outright at load=0 and load=100: all six
+shards agreed and the gap held. At load=200 it is a tie: the shards split
+3-3 between drawerdeck and React Aria, and drawerdeck's own gap to React
+Aria (1.7 ms) sits well inside React Aria's own spread.
+
+Settle time for the same scenario, from the gesture's first input:
+
+| Deck       | load=0              | load=100            | load=200            |
+| ---------- | ------------------- | ------------------- | ------------------- |
+| drawerdeck | 354.9 (350.8-366.6) | 358.4 (349.0-368.3) | 426.3 (424.9-435.6) |
+| vaul       | 487.8 (480.2-502.8) | 575.4 (573.3-584.4) | 675.8 (673.8-685.0) |
+| Base UI    | 453.6 (447.3-487.5) | 453.6 (447.0-467.7) | 458.0 (445.1-465.6) |
+| React Aria | 394.4 (382.9-400.5) | 391.2 (378.7-399.7) | 423.7 (419.5-433.9) |
+
+The verdicts are the same: drawerdeck at load=0 and load=100, a tie at
+load=200 (all six shards pick React Aria, but its lead of 2.6 ms sits inside
+its own spread).
 
 ### Cost: bundle size (min+gzip, React external)
 
 | Deck       | Size     |
 | ---------- | -------- |
-| drawerdeck | 8.99 KB  |
-| vaul       | 22.58 KB |
-| Base UI    | 30.92 KB |
-| React Aria | 30.69 KB |
+| drawerdeck | 9.35 KB  |
+| vaul       | 22.69 KB |
+| Base UI    | 31.03 KB |
+| React Aria | 30.78 KB |
 
 Overall: drawerdeck wins, by a wide margin; not a per-shard metric (the
 build is the same on every shard), so there's no agreement question here.
@@ -287,19 +315,17 @@ build is the same on every shard), so there's no agreement question here.
 ### Per-shard agreement
 
 Of the fifteen scored (scenario, load) cells above, all six shards agreed
-on a single deck in nine of them; the other six (the drag stall at every
-load, flick dismiss at load=0, and open-to-half at load=100 and load=200)
-split across more than one deck. That is three more split cells than the
-prior run, and the drag stall -- unanimous at load=0 before -- now splits
-at every load (see "Touch drag half to full to back" above). Agreement
-alone isn't enough to win, though: three of those nine unanimous cells
-(dropped frames at load=0, flick dismiss at load=100, and open-to-half at
-load=0) still report "tie," because the gap between the best and
-second-best medians never cleared the winning deck's own spread across
-shards (rule 7). The other six unanimous cells are this run's outright
-wins, all for drawerdeck, unchanged from the prior run: dropped frames at
-load=100 and load=200, flick dismiss at load=200, and the mouse throw at
-every load.
+on a single deck in nine of them; the other six split across more than one
+deck.
+
+The drag stall splits at every load (see "Touch drag half to full to back"
+above). Of the other cells, flick dismiss at load=0 and load=100 and
+open-to-half at load=200 split; the other six agree: flick dismiss at
+load=200, the mouse throw at every load, and open-to-half at load=0 and
+load=100. All of those six are outright wins for drawerdeck. Dropped frames
+are unanimous at every load: a win for drawerdeck at load=100 and load=200,
+and at load=0 a tie, because the gap between the best and second-best
+medians never cleared the winning deck's own spread across shards (rule 7).
 
 ### Where the earlier local runs went
 
@@ -314,9 +340,12 @@ fix. The CI run above is what this page now trusts.
 
 ## How this page stays honest
 
-The numbers above come from one named CI run
-([41840309608](https://github.com/pedrosousa13/deck-cool/actions/runs/41840309608),
-commit `7f00314`), not from this page's own claims. `drawer-bench.yml` runs
+Every number above comes from one named CI run, not from this page's own
+claims:
+[45846884117](https://github.com/pedrosousa13/deck-cool/actions/runs/45846884117)
+(commit `054fe37`), the final harness code, with settle timed in the page's
+own clock ([#350](https://github.com/pedrosousa13/deck-cool/issues/350)).
+`drawer-bench.yml` runs
 the bench weekly, and the numbers here are re-run before every drawerdeck
 release, against whatever `@drawerdeck/react` ships that release, not just
 drawerdeck's first beta. A loss stays on this page until a re-run says

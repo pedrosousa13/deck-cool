@@ -31,7 +31,7 @@ Verdict = namedtuple('Verdict', ['claim', 'actual', 'ok'])
 def metric_lookup():
     return {
         (scenario, metric): (pick, lower)
-        for scenario, metric, _label, lower, pick, _legacy in METRICS
+        for scenario, metric, _label, lower, pick, _legacy, _summary in METRICS
     }
 
 
