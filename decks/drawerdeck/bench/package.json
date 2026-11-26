@@ -11,7 +11,7 @@
     "bench": "playwright test -c playwright.config.ts bench.spec.ts",
     "smoke": "playwright test -c playwright.config.ts smoke.spec.ts",
     "animates": "playwright test -c playwright.config.ts animates.spec.ts",
-    "test": "node --test trace.test.ts"
+    "test": "node --test trace.test.ts settle.test.ts"
   },
   "dependencies": {
     "@drawerdeck/react": "workspace:*"

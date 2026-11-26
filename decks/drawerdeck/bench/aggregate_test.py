@@ -14,6 +14,7 @@ from aggregate import (
     did_not_close_decks,
     excluded_decks,
     not_supported,
+    render_summary,
     render_tables,
     unsupported_decks,
 )
@@ -266,6 +267,51 @@ class PerLoadScopingTest(unittest.TestCase):
         self.assertIn('1100.0', cells[0])
         self.assertEqual(cells[1], 'did not close')
         self.assertEqual(cells[2], 'did not close')
+
+
+def settle_row(deck, scenario, settle_ms, motion_ms, shard='1'):
+    return {
+        'deck': deck,
+        'scenario': scenario,
+        'load': 0,
+        'settleMs': settle_ms,
+        'motionAfterReleaseMs': motion_ms,
+        'responded': True,
+        'closed': True if scenario == 'touch-flick-dismiss' else None,
+        'shard': shard,
+    }
+
+
+class MotionAfterReleaseTest(unittest.TestCase):
+    # #350, porting carouseldeck's #349: settleMs still carries the
+    # scripted gesture's own duration, so motionAfterReleaseMs decides the
+    # at-a-glance winner and settleMs stays in the full tables only.
+    def rows(self):
+        # vaul has the lower settleMs, drawerdeck the lower motion after
+        # release: the two metrics disagree about who wins.
+        return [
+            settle_row('drawerdeck', 'mouse-drag-throw', 900, 100),
+            settle_row('drawerdeck', 'mouse-drag-throw', 910, 110),
+            settle_row('vaul', 'mouse-drag-throw', 850, 400),
+            settle_row('vaul', 'mouse-drag-throw', 860, 410),
+        ]
+
+    def test_summary_names_motion_after_release_not_settle_time(self):
+        md = render_summary(self.rows(), [])
+        self.assertIn('Mouse drag and release, upward throw: motion after release (ms)', md)
+        self.assertNotIn('upward throw: settle time (ms)', md)
+        row = next(l for l in md.splitlines() if 'upward throw: motion after release' in l and '| 0 |' in l)
+        self.assertTrue(row.rstrip().endswith('| drawerdeck |'))
+
+    def test_full_tables_show_both_metrics_for_every_settle_scenario(self):
+        md = render_tables(self.rows())
+        for label in (
+            'Touch flick dismiss',
+            'Mouse drag and release, upward throw',
+            'Open to settled half',
+        ):
+            self.assertIn(f'### {label}: settle time (ms)', md)
+            self.assertIn(f'### {label}: motion after release (ms)', md)
 
 
 if __name__ == '__main__':

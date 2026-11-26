@@ -37,7 +37,8 @@ DECKS = ['drawerdeck', 'vaul', 'baseui', 'reactaria']
 LOADS = [0, 100, 200]
 VERSIONS_PATH = os.path.join(os.path.dirname(__file__), 'versions.json')
 
-# (scenario, metric key, label, lower-is-better, extractor, legacy extractor)
+# (scenario, metric key, label, lower-is-better, extractor, legacy extractor,
+# in_summary)
 #
 # The legacy extractor (#266 rule 10) is only set for the two metrics
 # `trace.ts`'s scorer restricts to active windows: it reads the same trace,
@@ -45,6 +46,15 @@ VERSIONS_PATH = os.path.join(os.path.dirname(__file__), 'versions.json')
 # between gestures included), so `render_tables` can print it in a
 # clearly-labelled "unscoped (legacy)" column rather than swapping numbers
 # quietly. It never feeds a winner: `cell_winner` only ever sees `pick`.
+#
+# `settleMs` (gesture start to the end of motion, settle.ts) still includes
+# the scripted gesture's own duration, the same for every deck in a given
+# scenario. `motionAfterReleaseMs` (the gesture's last input event to that
+# same end) excludes it, so `in_summary` is False on every `settleMs` row:
+# `render_summary`'s at-a-glance winner uses `motionAfterReleaseMs` instead
+# (#350, porting carouseldeck's #349). Both stay in RESULTS.md's own
+# per-scenario tables and per-shard winner table, so a loss stays visible.
+# `claims_gate.py` looks metrics up by key, not through `in_summary`.
 METRICS = [
     (
         'touch-drag-half-full-back',
@@ -53,6 +63,7 @@ METRICS = [
         True,
         lambda r: r['trace']['longestStallMs'] if r.get('trace') else None,
         lambda r: r['trace']['legacy']['longestStallMs'] if r.get('trace') else None,
+        True,
     ),
     (
         'touch-drag-half-full-back',
@@ -61,6 +72,7 @@ METRICS = [
         True,
         lambda r: r['trace']['droppedPct'] if r.get('trace') else None,
         lambda r: r['trace']['legacy']['droppedPct'] if r.get('trace') else None,
+        True,
     ),
     (
         'touch-flick-dismiss',
@@ -69,6 +81,16 @@ METRICS = [
         True,
         lambda r: r['settleMs'],
         None,
+        False,
+    ),
+    (
+        'touch-flick-dismiss',
+        'motionAfterReleaseMs',
+        'Touch flick dismiss: motion after release (ms)',
+        True,
+        lambda r: r.get('motionAfterReleaseMs'),
+        None,
+        True,
     ),
     (
         'mouse-drag-throw',
@@ -77,6 +99,16 @@ METRICS = [
         True,
         lambda r: r['settleMs'],
         None,
+        False,
+    ),
+    (
+        'mouse-drag-throw',
+        'motionAfterReleaseMs',
+        'Mouse drag and release, upward throw: motion after release (ms)',
+        True,
+        lambda r: r.get('motionAfterReleaseMs'),
+        None,
+        True,
     ),
     (
         'open-to-half',
@@ -85,6 +117,16 @@ METRICS = [
         True,
         lambda r: r['settleMs'],
         None,
+        False,
+    ),
+    (
+        'open-to-half',
+        'motionAfterReleaseMs',
+        'Open to settled half: motion after release (ms)',
+        True,
+        lambda r: r.get('motionAfterReleaseMs'),
+        None,
+        True,
     ),
 ]
 
@@ -297,7 +339,7 @@ def drawerdeck_verdict(rows, scenario, load_, pick, lower_is_better, excluded):
 
 def render_tables(rows):
     lines = []
-    for scenario, _metric, label, _lower, pick, legacy_pick in METRICS:
+    for scenario, _metric, label, _lower, pick, legacy_pick, _summary in METRICS:
         lines.append(f'\n### {label}\n')
         load_cols = [f'load={load_}' for load_ in LOADS]
         if legacy_pick is not None:
@@ -378,7 +420,7 @@ def render_winner_table(rows):
         '| Scenario / metric | load | ' + ' | '.join(f'shard {s}' for s in shard_ids) + ' | Overall |',
         '| --- | --- | ' + ' | '.join('---' for _ in shard_ids) + ' | --- |',
     ]
-    for scenario, _metric, label, lower, pick, _legacy_pick in METRICS:
+    for scenario, _metric, label, lower, pick, _legacy_pick, _summary in METRICS:
         for load_ in LOADS:
             excluded = excluded_decks(rows, scenario, load_)
             overall, per_shard = cell_winner(rows, scenario, load_, pick, lower, excluded)
@@ -398,7 +440,9 @@ def render_summary(rows, bundle_rows):
     # comparison page's "At a glance" Winner column and `claims_gate.py`
     # both read, so there is one rule for what counts as a claim.
     lines = ['| Scenario / metric | load | Winner |', '| --- | --- | --- |']
-    for scenario, _metric, label, lower, pick, _legacy_pick in METRICS:
+    for scenario, _metric, label, lower, pick, _legacy_pick, in_summary in METRICS:
+        if not in_summary:
+            continue
         for load_ in LOADS:
             excluded = excluded_decks(rows, scenario, load_)
             verdict, leader = drawerdeck_verdict(rows, scenario, load_, pick, lower, excluded)
