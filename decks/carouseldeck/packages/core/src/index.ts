@@ -601,12 +601,12 @@ export function createDeck(
     // loading can bring with no resize of the viewport at all, must still
     // move the shells and the spacers -- `layoutShells` caches L across
     // scroll events, so nothing else would notice. The same
-    // `ResizeObserver` already watches the viewport; observing an element
-    // it already watches is a no-op. A slide no longer among them -- the
-    // deck has left shells mode, as `clearShells` already strips its
-    // inline styles for, or the slide itself has gone -- is unobserved
-    // here instead, so it never fires `refresh` for an engine that has
-    // moved on.
+    // `ResizeObserver` already watches the viewport; a slide this deck
+    // already observes is left alone, so a settle never re-observes it. A
+    // slide no longer among them -- the deck has left shells mode, as
+    // `clearShells` already strips its inline styles for, or the slide
+    // itself has gone -- is unobserved here instead, so it never fires
+    // `refresh` for an engine that has moved on.
     const nowObserved = placement
       ? new Set(slidesOf(viewport).slides)
       : new Set<Element>();
@@ -616,10 +616,12 @@ export function createDeck(
     for (const slide of nowObserved) resizes.observe(slide);
     observedSlides = nowObserved;
     // One snapshot for the rest of this settle (#339): each box's rect and
-    // computed style, and the viewport's own view and max, read at most
-    // once and reused by `snapPoints`, `writeGeometry`, `paint`,
-    // `focalSlide`, `resnap` and `fallbackToCopies` below, whichever box
-    // they read (a slide, a copy, or, in shells mode, a shell). `reads`
+    // `getComputedStyle` declaration, and the viewport's own view and max,
+    // each taken at most once (a primed deck's style values are copied up
+    // front; any other deck reads properties live off the declaration) and
+    // reused by `snapPoints`, `writeGeometry`, `paint`, `focalSlide`,
+    // `resnap` and `fallbackToCopies` below, whichever box they read (a
+    // slide, a copy, or, in shells mode, a shell). `reads`
     // may already hold `refresh`'s own first read of a box (`alignCopies`,
     // just below) when it called here; a scroll this same settle makes,
     // below (`jumpOffCopies`), moves every box on screen, so it forgets
@@ -3237,11 +3239,13 @@ function observeResizes(work: ResizeWork) {
   return {
     observe(el: Element) {
       const watchers = owners.get(el) ?? new Set<ResizeWork>();
+      // A deck that already owns it has its first delivery: nothing to do.
+      if (watchers.has(work)) return;
       owners.set(el, watchers.add(work));
       // The browser sends no first notification for an element it already
-      // observes, so one a deck already watches is observed afresh: every
-      // owner gets one, the ones watching already a relayout that finds
-      // nothing moved.
+      // observes, so one another deck watches is observed afresh when a deck
+      // joins: every owner gets one, the ones watching already a relayout
+      // that finds nothing moved.
       if (watchers.size > 1) observer.unobserve(el);
       observer.observe(el);
     },

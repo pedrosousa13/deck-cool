@@ -1,4 +1,4 @@
-import { describe, expect, onTestFinished, test } from 'vitest';
+import { describe, expect, onTestFinished, test, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import {
   COPY,
@@ -373,6 +373,71 @@ describe('decks share one resize delivery (#339)', () => {
     await frame();
     await frame();
     expect(settled).toBeGreaterThan(0);
+  });
+
+  test('a deck that already owns an element does not observe it afresh', async () => {
+    // A shells deck settles on every refresh and observes each slide again.
+    // For a slide another deck also owns, that must not unobserve and observe
+    // it: that would hand both decks a delivery, and a relayout, per settle.
+    addStyle(CENTRED);
+    placementPath('js');
+    const { container, unmount } = render(
+      <TestDeck loop viewportClassName="centred" />
+    );
+    const viewport = viewportOf(container).cloneNode(true) as HTMLElement;
+    unmount();
+    document.body.append(viewport);
+    const outer = createDeck(viewport, {
+      index: 2,
+      loop: true,
+      onChange: () => {}
+    });
+    const slide = viewport.querySelector<HTMLElement>(
+      '[data-carouseldeck-slide]'
+    )!;
+    const inner = createDeck(slide, { index: 0, onChange: () => {} });
+    onTestFinished(() => {
+      inner.destroy();
+      outer.destroy();
+      viewport.remove();
+    });
+    await frame();
+    await frame();
+    const observed: Element[] = [];
+    const original = ResizeObserver.prototype.observe;
+    ResizeObserver.prototype.observe = function (this, target, options) {
+      observed.push(target);
+      return original.call(this, target, options);
+    };
+    onTestFinished(() => {
+      ResizeObserver.prototype.observe = original;
+    });
+    for (let i = 0; i < 3; i++) outer.refresh();
+    await frame();
+    await frame();
+    expect(observed).not.toContain(slide);
+  });
+
+  test('a deck that starts watching an element another already watches leaves the first deck as it was', async () => {
+    // Guard: the first deck gets a delivery out of it, a relayout that finds
+    // nothing moved, so it publishes nothing and keeps its place.
+    const viewport = build();
+    const changes: DeckState[] = [];
+    const [first] = mount([viewport], {
+      onChange: (_, state) => changes.push(state)
+    });
+    first.scrollTo(2);
+    // The scroll is smooth: wait for it to settle and be published.
+    await vi.waitFor(() => expect(changes.length).toBeGreaterThan(0));
+    await frame();
+    const left = viewport.scrollLeft;
+    const published = changes.length;
+    const second = createDeck(viewport, { index: 2, onChange: () => {} });
+    onTestFinished(() => second.destroy());
+    await frame();
+    await frame();
+    expect(changes.length).toBe(published);
+    expect(viewport.scrollLeft).toBe(left);
   });
 
   test('a deck leaving shells mode reads no slide still placed by them', async () => {
