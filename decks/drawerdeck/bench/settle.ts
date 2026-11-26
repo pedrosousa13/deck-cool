@@ -36,7 +36,11 @@ export function computeSettle(t: SettleTiming): SettleResult {
     t.closedAt === null ? t.settledAt : Math.max(t.settledAt, t.closedAt);
   return {
     settleMs: Math.max(0, endedAt - t.windowStart),
+    // An input before the window opened (a setup click left over from an
+    // earlier step) is not this gesture's input.
     motionAfterReleaseMs:
-      t.lastInputAt === null ? null : Math.max(0, endedAt - t.lastInputAt)
+      t.lastInputAt === null || t.lastInputAt < t.windowStart
+        ? null
+        : Math.max(0, endedAt - t.lastInputAt)
   };
 }

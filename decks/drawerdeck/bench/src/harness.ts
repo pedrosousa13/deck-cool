@@ -208,6 +208,13 @@ export function attachHarness(opts: { panelSelector: string }): void {
       m.travel = 0;
       m.reversals = 0;
       lastStep = 0;
+      // A pass's timestamps start empty: `bench.spec.ts` resets after
+      // `setup` (whose own click fires pointerup/click) and before the
+      // gesture, so nothing from setup or an earlier pass can be read as
+      // this gesture's input, window start or close.
+      windowStartAt = null;
+      lastInputEventAt = null;
+      closedAtMs = null;
       loafCount = 0;
       loafBlocking = 0;
     },

@@ -46,7 +46,7 @@ test('both metrics clamp to 0 for a deck that never moved after the gesture star
   const result = computeSettle({
     windowStart: 1000,
     settledAt: 50,
-    lastInputAt: 900,
+    lastInputAt: 1100,
     closedAt: null
   });
 
@@ -76,4 +76,16 @@ test('a close reported before the last moving frame does not shorten the settle'
 
   assert.strictEqual(result.settleMs, 1200);
   assert.strictEqual(result.motionAfterReleaseMs, 100);
+});
+
+test('an input event before the gesture window is no input at all', () => {
+  const result = computeSettle({
+    windowStart: 500,
+    settledAt: 1300,
+    lastInputAt: 200,
+    closedAt: null
+  });
+
+  assert.strictEqual(result.motionAfterReleaseMs, null);
+  assert.strictEqual(result.settleMs, 800);
 });
