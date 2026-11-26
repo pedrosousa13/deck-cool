@@ -235,11 +235,15 @@ export function createDeck(
 
   // Progress and in-view, written at most once a frame while scrolling.
   let frame = 0;
-  const paint = (along = axis()) => {
+  const paint = (along = axis(), reads: Reads = liveReads) => {
     cancelAnimationFrame(frame);
     frame = 0;
-    writeProgress(viewport, along, align, (slide, i) =>
-      slotOf(slide, i, along)
+    writeProgress(
+      viewport,
+      along,
+      align,
+      (slide, i) => slotOf(slide, i, along),
+      reads
     );
   };
 
@@ -441,8 +445,11 @@ export function createDeck(
   // placers' own keyframes to the fresh geometry. A passthrough on the JS
   // path.
   const measureShells = (along: Axis): Placement | null => {
-    const max = along.max();
     const { sets, stacked, slides } = slidesOf(viewport);
+    // Read before the writes below, and only where they follow: a deck
+    // outside shells mode writes nothing here, so it reads nothing either
+    // (#339) -- `layoutShells` answers null for it.
+    const max = sets === 2 ? along.max() : 0;
     // An axis change leaves `placedAt`'s own offset along the old axis
     // (ADR-0013, #154): forgotten here, before `layoutShells` reads it
     // below, so it is never subtracted along the new one.
@@ -558,11 +565,17 @@ export function createDeck(
   // -- and a deck whose `loop` prop has since turned off reads as one that
   // never looped, not as whatever it last happened to render.
   let loopOn = options.loop ?? false;
-  const snapPoints = (along: Axis): Geometry =>
-    measureSnapPoints(viewport, along, placement, loopOn);
+  const snapPoints = (along: Axis, reads: Reads = liveReads): Geometry =>
+    measureSnapPoints(viewport, along, placement, loopOn, reads);
 
-  const settle = () => {
+  // Where the last settle left the viewport, read before it wrote anything
+  // (#339), for `refresh`'s `relaidAt`: null while a settle runs, and left
+  // so by one that rests off a snap point (`resnap`), whose own scroll the
+  // viewport must be read after.
+  let settledAt: number | null = null;
+  const settle = (snapshot?: Snapshot) => {
     everSettled = true;
+    settledAt = null;
     refreshOwed = false;
     shifted = null;
     userInput = false;
@@ -571,7 +584,7 @@ export function createDeck(
     const kind = kindOf(viewport);
     shape = [kind, slidesOf(viewport).first].join();
     placeOwed = null;
-    const along = axis();
+    const raw = axis();
     // `placement` still holds whichever shell geometry the engine last
     // measured, from this same settle's own last run or a `refresh` in
     // between -- compared against the fresh one below, this tells apart a
@@ -579,19 +592,21 @@ export function createDeck(
     // no change at all. A settle can find L already moved with no
     // `refresh` in between: a late `scrollend`, after a resize's CSS lands
     // but before its `ResizeObserver` entry fires, is not rare in WebKit.
-    const { previous, endRelayout } = beginShellsRelayout(along, () =>
-      measureShells(along)
+    // Shells' own re-measure reads `raw`, never the cache below: its own
+    // write (a spacer's size) moves what it is about to read next.
+    const { previous, endRelayout } = beginShellsRelayout(raw, () =>
+      measureShells(raw)
     );
     // Shells mode only (ADR-0013): a real slide's own resize, as content
     // loading can bring with no resize of the viewport at all, must still
     // move the shells and the spacers -- `layoutShells` caches L across
     // scroll events, so nothing else would notice. The same
-    // `ResizeObserver` already watches the viewport; observing an element
-    // it already watches is a no-op. A slide no longer among them -- the
-    // deck has left shells mode, as `clearShells` already strips its
-    // inline styles for, or the slide itself has gone -- is unobserved
-    // here instead, so it never fires `refresh` for an engine that has
-    // moved on.
+    // `ResizeObserver` already watches the viewport; a slide this deck
+    // already observes is left alone, so a settle never re-observes it. A
+    // slide no longer among them -- the deck has left shells mode, as
+    // `clearShells` already strips its inline styles for, or the slide
+    // itself has gone -- is unobserved here instead, so it never fires
+    // `refresh` for an engine that has moved on.
     const nowObserved = placement
       ? new Set(slidesOf(viewport).slides)
       : new Set<Element>();
@@ -600,30 +615,47 @@ export function createDeck(
     }
     for (const slide of nowObserved) resizes.observe(slide);
     observedSlides = nowObserved;
+    // One snapshot for the rest of this settle (#339): each box's rect and
+    // `getComputedStyle` declaration, and the viewport's own view and max,
+    // each taken at most once (a primed deck's style values are copied up
+    // front; any other deck reads properties live off the declaration) and
+    // reused by `snapPoints`, `writeGeometry`, `paint`, `focalSlide`,
+    // `resnap` and `fallbackToCopies` below, whichever box they read (a
+    // slide, a copy, or, in shells mode, a shell). `reads`
+    // may already hold `refresh`'s own first read of a box (`alignCopies`,
+    // just below) when it called here; a scroll this same settle makes,
+    // below (`jumpOffCopies`), moves every box on screen, so it forgets
+    // the cached rects itself, right after, so nothing after it reads one
+    // that is now stale.
+    const along = snapshot?.along ?? memoizeAxis(raw);
+    const reads = snapshot?.reads ?? cachedReads();
     try {
-      alignCopies(viewport);
-      if (previous && placement) compensateShift(previous, along);
-      const geometry = snapPoints(along);
+      alignCopies(viewport, reads);
+      if (previous && placement) compensateShift(previous, raw);
+      const geometry = snapPoints(along, reads);
       known = geometry;
       knownKind = kind;
-      jumpOffCopies(along, geometry);
+      jumpOffCopies(along, geometry, reads);
       placeOrPin(along);
       // Its own settle reports where the deck comes to rest.
-      if (resnap(along, geometry)) return;
+      if (resnap(along, geometry, reads)) return;
       const { points, slides } = geometry;
       const index = indexAt(geometry, along.position);
       const slide = slides.indexOf(index);
       const run = slidesOf(viewport);
       align =
-        slide === -1 ? 'start' : along.snapAlign(run.boxes[run.first + slide]);
-      writeGeometry(viewport, along, run);
-      paint(along);
+        slide === -1
+          ? 'start'
+          : along.snapAlign(run.boxes[run.first + slide], reads);
+      settledAt = along.position;
+      writeGeometry(viewport, along, run, reads);
+      paint(along, reads);
       publish({
         index,
         count: points.length,
         slide,
-        focal: slide === -1 ? -1 : focalSlide(viewport, along, align),
-        copies: fallbackToCopies(viewport, along, placement, geometry),
+        focal: slide === -1 ? -1 : focalSlide(viewport, along, align, reads),
+        copies: fallbackToCopies(viewport, along, placement, geometry, reads),
         slideCount: run.slides.length
       });
     } finally {
@@ -636,11 +668,15 @@ export function createDeck(
   // which shows (ADR-0006). The copy's rest is measured, as the browser
   // rests it: WebKit can rest a copy a pixel or two off its slide's rest
   // plus a set's length.
-  const jumpOffCopies = (along: Axis, geometry: Geometry) => {
+  const jumpOffCopies = (
+    along: Axis,
+    geometry: Geometry,
+    reads: Reads = liveReads
+  ) => {
     if (geometry.length === 0) return;
     const at = along.position;
     const { slides, boxes, first } = slidesOf(viewport);
-    const restOf = snapRest(viewport, along, false);
+    const restOf = snapRest(viewport, along, false, reads);
     const near = (box: Element) => {
       const rest = restOf(box);
       return rest !== null && Math.abs(rest - at) <= 1;
@@ -653,6 +689,9 @@ export function createDeck(
     if (point !== -1) {
       jumping = true;
       along.scrollTo(geometry.points[point], 'instant');
+      // The scroll moves every box on screen: a rect cached before it is
+      // stale for whatever this same settle still has to read (#339).
+      reads.forgetRects?.();
     }
   };
 
@@ -817,10 +856,10 @@ export function createDeck(
   // `resnap` below and to tell quiet a scroll clamped there, with no
   // `scrollend` or `scrollsnapchange` of its own to confirm it, has nowhere
   // left to be cut short from.
-  const restsOnSnapPoint = (along: Axis) => {
+  const restsOnSnapPoint = (along: Axis, reads: Reads = liveReads) => {
     const at = along.position;
-    const restOf = snapRest(viewport, along);
-    const copyRestOf = snapRest(viewport, along, false);
+    const restOf = snapRest(viewport, along, true, reads);
+    const copyRestOf = snapRest(viewport, along, false, reads);
     const { slides, boxes, first } = slidesOf(viewport);
     return boxes.some((box, i) => {
       const own = i >= first && i < first + slides.length;
@@ -829,7 +868,11 @@ export function createDeck(
     });
   };
 
-  const resnap = (along: Axis, geometry: Geometry) => {
+  const resnap = (
+    along: Axis,
+    geometry: Geometry,
+    reads: Reads = liveReads
+  ) => {
     const at = along.position;
     const count = geometry.points.length;
     if (count === 0) return false;
@@ -844,7 +887,7 @@ export function createDeck(
     // is no rest: the browser rests it at the end, but the deck could not
     // jump off it, as its slide a set back would rest on no snap point
     // (#48). So a deck there re-snaps to one within the scroll range.
-    if (restsOnSnapPoint(along)) {
+    if (restsOnSnapPoint(along, reads)) {
       resnapFrom = null;
       taken = null;
       confirm = null;
@@ -853,7 +896,7 @@ export function createDeck(
     if (
       !hasScrollEnd ||
       drag !== 'idle' ||
-      !getComputedStyle(viewport).scrollSnapType.includes('mandatory') ||
+      !reads.style(viewport).scrollSnapType.includes('mandatory') ||
       (resnapFrom !== null && Math.abs(at - resnapFrom) < 1)
     ) {
       confirm = null;
@@ -1465,12 +1508,16 @@ export function createDeck(
     resume();
   };
 
-  const refresh = () => {
+  // `ahead` is a resize's own reads (#339), taken by `prime` before any
+  // deck wrote: every box the settle below reads is already in it. Without
+  // it, `refresh` reads as it goes.
+  const relayout = (ahead?: Snapshot) => {
     followViewport(0);
     // A resize, a slide added or removed, loop or an effect changing: any
     // of them can land here with the writing direction having changed too
-    // (ADR-0003), so the cached Axis (above) is dropped and read afresh.
-    cachedAxis = null;
+    // (ADR-0003), so the cached Axis (above) is dropped and read afresh
+    // (`prime` already did, for a primed one).
+    if (!ahead) cachedAxis = null;
     const along = axis();
     // Shells mode, leaving it or staying (ADR-0013): `placement` still
     // holds the geometry from before this layout, measured the same way
@@ -1490,8 +1537,11 @@ export function createDeck(
       clearShells(slidesOf(viewport).slides, placedAt);
       if (timelines) forgetPlaced();
     }
+    // Shared with `settle` below (#339), so a box `alignCopies` reads here
+    // is not read again there.
+    const snapshot = ahead ?? { reads: cachedReads() };
     try {
-      alignCopies(viewport);
+      alignCopies(viewport, snapshot.reads);
       if (previous && placement) compensateShift(previous, along);
       // Loop's copies or an effect's snap targets came or went, as when
       // `loop` or an effect changes on a mounted deck: the snap points
@@ -1502,11 +1552,13 @@ export function createDeck(
       const next = shapeOf(viewport);
       if (next !== shape) {
         shape = next;
-        if (keepPlace()) return;
+        if (keepPlace(snapshot)) return;
       }
       if (!scrolling && !move && drag !== 'dragging' && !inputPending()) {
-        settle();
-        relaidAt = axis().position;
+        settle(snapshot);
+        // Where the settle read it before writing, unless its own scroll
+        // moved it: then read now, after that write, on purpose.
+        relaidAt = settledAt ?? axis().position;
         awaitQuiet();
       } else {
         paint();
@@ -1520,6 +1572,42 @@ export function createDeck(
     } finally {
       endRelayout();
     }
+  };
+
+  const refresh = () => relayout();
+
+  // What a resize's settle reads, read ahead of every deck's writes (#339):
+  // the axis, with its view, max and position, every box's rect and style,
+  // and so the snap points. Only for a deck whose settle would read nothing
+  // after a write of its own -- no shells (their re-measure reads right
+  // after its own spacer writes, and a deck still holding `placement` may
+  // be leaving them, its relayout stripping what they wrote onto the
+  // slides) and no copies (`alignCopies` may write one
+  // before `snapPoints` reads it) -- and that would settle at all, as
+  // `relayout` decides, which includes no pointer held down, whose own
+  // paint reads live; any other deck reads as it goes, in its own write
+  // phase, after every primed deck's.
+  const prime = (): Snapshot | null => {
+    const { first, sets, boxes } = slidesOf(viewport);
+    if (
+      first > 0 ||
+      sets > 0 ||
+      placement ||
+      scrolling ||
+      move ||
+      drag === 'dragging' ||
+      pressed.size > 0 ||
+      inputPending()
+    ) {
+      return null;
+    }
+    cachedAxis = null;
+    const along = memoizeAxis(axis());
+    const reads = cachedReads();
+    for (const el of [viewport, ...boxes]) reads.copyStyle(el);
+    snapPoints(along, reads);
+    for (const box of boxes) reads.rect(box);
+    return { along, reads };
   };
 
   // Before the engine's own first measurement -- a natural-rest mount
@@ -1592,12 +1680,19 @@ export function createDeck(
 
   // Rests the viewport, instantly, on snap point `index`, clamped, and
   // settles.
-  const restOn = (index: number) => {
-    const along = axis();
-    const { points } = snapPoints(along);
+  // `snapshot` is a resize's own, where `refresh` read every box before any
+  // deck wrote (#339): used as is by the settle, which a scroll made here
+  // first leaves stale, so its rects are dropped and read afresh -- a read
+  // after a write, on purpose.
+  const restOn = (index: number, snapshot?: Snapshot) => {
+    const along = snapshot?.along ?? axis();
+    const { points } = snapPoints(along, snapshot?.reads);
     const to = points[clamp(index, points.length)] ?? 0;
-    if (Math.abs(along.position - to) >= 1) along.scrollTo(to, 'instant');
-    settle();
+    if (Math.abs(along.position - to) >= 1) {
+      along.scrollTo(to, 'instant');
+      snapshot?.reads.forgetRects?.();
+    }
+    settle(snapshot);
   };
 
   // A deck that starts resting where the browser already rests a plain
@@ -1639,7 +1734,19 @@ export function createDeck(
   // every real slide with it too (ADR-0013): that first settle
   // runs synchronously, within this very constructor, outside the
   // natural-rest case above.
-  const resizes = new ResizeObserver(refresh);
+  let readAhead: Snapshot | null = null;
+  const resizes = observeResizes({
+    root: viewport,
+    read: (nested) => {
+      readAhead = nested ? null : prime();
+      return readAhead !== null;
+    },
+    write: () => {
+      const ahead = readAhead;
+      readAhead = null;
+      relayout(ahead ?? undefined);
+    }
+  });
   resizes.observe(viewport);
   const beforeStart = naturalRest ? 0 : axis().position;
   // Shells mode only (ADR-0013): whether a buffer set's shell could even be
@@ -1692,7 +1799,7 @@ export function createDeck(
   // fewer snap points, the deck rests on the last, and reports it. Returns
   // whether the deck has kept its place, or will once the pointer lets go
   // or the scroll ends, so nothing settles before then.
-  const keepPlace = () => {
+  const keepPlace = (snapshot?: Snapshot) => {
     if (drag === 'dragging') return false;
     if (move) {
       relaidOut = true;
@@ -1709,7 +1816,7 @@ export function createDeck(
       // and forget it is still coming (#208), so this still waits, the
       // same way it already does below with no press at all.
       if (!everSettled && !inputPending()) {
-        settle();
+        settle(snapshot);
         return true;
       }
       placeOwed = state.index;
@@ -1727,7 +1834,7 @@ export function createDeck(
     if (everSettled) {
       // A later layout change, once the deck has settled at least once,
       // rests back on its own current index, as ever.
-      restOn(state.index);
+      restOn(state.index, snapshot);
       return true;
     }
     // Still the deck's still-pending first-ever settle (#333): nothing
@@ -1737,7 +1844,7 @@ export function createDeck(
     // never forced back to the natural-rest index the constructor skipped
     // measuring for.
     if (inputPending()) return false;
-    settle();
+    settle(snapshot);
     return true;
   };
 
@@ -2358,7 +2465,7 @@ const shapeOf = (viewport: HTMLElement) =>
  * `scroll-margin` is copied onto the shells too, since shells have none of
  * their own. Written only where it differs, so a settle lays out once.
  */
-function alignCopies(viewport: HTMLElement) {
+function alignCopies(viewport: HTMLElement, reads: Reads = liveReads) {
   const { slides, run, first, sets, stacked } = slidesOf(viewport);
   const shells = sets === 2;
   // Stacked mode (ADR-0013): the real slides keep the alignment the effect
@@ -2371,9 +2478,9 @@ function alignCopies(viewport: HTMLElement) {
   if (shells) for (const slide of own) slide.style.scrollSnapAlign = '';
   // The whole value, both axes, not the axis's: a copy or shell must snap
   // as its slide does on either axis, so it is copied as it is, not read.
-  const aligns = slides.map((slide) => getComputedStyle(slide).scrollSnapAlign);
+  const aligns = slides.map((slide) => reads.style(slide).scrollSnapAlign);
   const margins = shells
-    ? slides.map((slide) => getComputedStyle(slide).scrollMargin)
+    ? slides.map((slide) => reads.style(slide).scrollMargin)
     : [];
   if (shells) {
     for (const slide of own) {
@@ -2422,10 +2529,7 @@ interface Placement {
  * rest. `width`/`height` is the content box under the default `box-sizing`,
  * so its padding and border are added back; `border-box` counts them
  * already. */
-function borderBoxSize(
-  style: CSSStyleDeclaration,
-  dimension: 'width' | 'height'
-): number {
+function borderBoxSize(style: Style, dimension: 'width' | 'height'): number {
   const base = parseFloat(style[dimension]) || 0;
   if (style.boxSizing === 'border-box') return base;
   const sides =
@@ -2628,17 +2732,21 @@ function layoutShells(
  * on the way out, and copies and a plain deck never write one). Where
  * `placement`, shells mode's own measurement, already read it this way,
  * `snapPoints` uses that instead. 0 with no slides. */
-function runLength(viewport: HTMLElement, along: Axis): number {
+function runLength(
+  viewport: HTMLElement,
+  along: Axis,
+  reads: Reads = liveReads
+): number {
   const { slides } = slidesOf(viewport);
   const n = slides.length;
   if (n === 0) return 0;
-  const gap = along.gap(getComputedStyle(viewport));
-  const styles = slides.map((slide) => getComputedStyle(slide));
+  const gap = along.gap(reads.style(viewport));
+  const styles = slides.map((slide) => reads.style(slide));
   const sizes = styles.map((style) =>
     borderBoxSize(style, along.vertical ? 'height' : 'width')
   );
   const starts = slides.map((slide, i) => {
-    const [start, end] = along.span(slide.getBoundingClientRect());
+    const [start, end] = along.span(reads.rect(slide));
     return (start + end) / 2 - sizes[i] / 2;
   });
   const [marginStart0] = along.insets(styles[0], 'margin', 0);
@@ -2665,7 +2773,8 @@ function fallbackToCopies(
   viewport: HTMLElement,
   along: Axis,
   placement: Placement | null,
-  geometry: Geometry
+  geometry: Geometry,
+  reads: Reads = liveReads
 ): boolean {
   if (geometry.sets === 0) return false;
   const { slides, sets, stacked } = slidesOf(viewport);
@@ -2674,7 +2783,7 @@ function fallbackToCopies(
   if (length === 0) return false;
   const widest = slides.reduce((max, slide) => {
     const size = borderBoxSize(
-      getComputedStyle(slide),
+      reads.style(slide),
       along.vertical ? 'height' : 'width'
     );
     return Math.max(max, size);
@@ -2814,22 +2923,27 @@ interface Geometry {
  * snapport, the scrollport less its scroll padding, and clamped to the
  * scroll range unless `clamped` is false.
  */
-function snapRest(viewport: HTMLElement, axis: Axis, clamped = true) {
+function snapRest(
+  viewport: HTMLElement,
+  axis: Axis,
+  clamped = true,
+  reads: Reads = liveReads
+) {
   const max = axis.max();
   const position = axis.position;
   const view = axis.view();
   const [padStart, padEnd] = axis.insets(
-    getComputedStyle(viewport),
+    reads.style(viewport),
     'scrollPadding',
     view[1] - view[0]
   );
   const snapport: Span = [view[0] + padStart, view[1] - padEnd];
   return (box: Element): number | null => {
-    const align = axis.snapAlign(box);
+    const align = axis.snapAlign(box, reads);
     if (align === 'none') return null;
-    const [start, end] = axis.span(box.getBoundingClientRect());
+    const [start, end] = axis.span(reads.rect(box));
     const [marginStart, marginEnd] = axis.insets(
-      getComputedStyle(box),
+      reads.style(box),
       'scrollMargin',
       0
     );
@@ -2870,10 +2984,11 @@ function measureSnapPoints(
   viewport: HTMLElement,
   axis: Axis,
   placement: Placement | null,
-  loopOn: boolean
+  loopOn: boolean,
+  reads: Reads = liveReads
 ): Geometry {
   const view = axis.view();
-  const restOf = snapRest(viewport, axis);
+  const restOf = snapRest(viewport, axis, true, reads);
   const { slides, boxes, first, sets, targeted } = slidesOf(viewport);
   const own = boxes.slice(first, first + slides.length);
   const positions = own.map(restOf);
@@ -2888,7 +3003,8 @@ function measureSnapPoints(
     targeted,
     boxes,
     first,
-    slides
+    slides,
+    reads
   );
   // A set no longer than the viewport would bring a copy into view beside
   // its own slide: nothing to loop, as with any deck whose slides all fit.
@@ -2923,17 +3039,18 @@ function loopLength(
   targeted: boolean,
   boxes: Element[],
   first: number,
-  slides: Element[]
+  slides: Element[],
+  reads: Reads = liveReads
 ): number {
   if (targeted) {
     if (first === 0 || boxes.length <= first + slides.length) return 0;
     return (
-      axis.span(boxes[first + slides.length].getBoundingClientRect())[0] -
-      axis.span(boxes[first].getBoundingClientRect())[0]
+      axis.span(reads.rect(boxes[first + slides.length]))[0] -
+      axis.span(reads.rect(boxes[first]))[0]
     );
   }
   if (!loopOn) return 0;
-  return placement ? placement.length : runLength(viewport, axis);
+  return placement ? placement.length : runLength(viewport, axis, reads);
 }
 
 /**
@@ -2967,6 +3084,221 @@ function pageOwner(
  * the way the deck runs. */
 type Span = [start: number, end: number];
 
+/** The computed style a settle reads, and nothing else. */
+const STYLE = [
+  'width',
+  'height',
+  'boxSizing',
+  'columnGap',
+  'rowGap',
+  'scrollSnapAlign',
+  'scrollSnapType',
+  'scrollMargin',
+  'marginTop',
+  'marginRight',
+  'marginBottom',
+  'marginLeft',
+  'paddingTop',
+  'paddingRight',
+  'paddingBottom',
+  'paddingLeft',
+  'borderTopWidth',
+  'borderRightWidth',
+  'borderBottomWidth',
+  'borderLeftWidth',
+  'scrollMarginTop',
+  'scrollMarginRight',
+  'scrollMarginBottom',
+  'scrollMarginLeft',
+  'scrollPaddingTop',
+  'scrollPaddingRight',
+  'scrollPaddingBottom',
+  'scrollPaddingLeft'
+] as const;
+type Style = Pick<CSSStyleDeclaration, (typeof STYLE)[number]>;
+
+/**
+ * One settle's own snapshot of layout (#339): `measureSnapPoints`,
+ * `writeGeometry`, `writeProgress`, `focalSlide` and `resnap` each used to
+ * read a box's rect or computed style afresh, several times over for the
+ * same box. `rect` and `style` cache the first read of each, as values: a
+ * computed style's declaration is live, and reading a property off it after
+ * a write forces a style recalc, the cost one resize delivery batches away
+ * (`observeResizes`). A rect is a snapshot too, so a scroll this same settle
+ * makes (`jumpOffCopies`) must drop every cached one before anything reads
+ * on. `liveReads` is the default for every call site outside a settle -- a
+ * press, a step, a scroll's own `arrived` check -- each of which already
+ * reads only the one box its own moment needs.
+ */
+interface Reads {
+  rect(el: Element): DOMRect;
+  style(el: Element): Style;
+  /** Drops every cached rect; only a settle's own reads have it. */
+  forgetRects?(): void;
+}
+const liveReads: Reads = {
+  rect: (el) => el.getBoundingClientRect(),
+  style: (el) => getComputedStyle(el)
+};
+/** What a settle reads from (#339). A resize's read phase takes one for the
+ * write phase, with the `along` it measured; a `refresh` shares its `reads`
+ * with its settle, and the settle takes its own `along`. */
+interface Snapshot {
+  along?: Axis;
+  reads: Reads;
+}
+
+/**
+ * A deck's two halves of one resize (#339): `read` takes every layout read
+ * the deck's relayout needs, and answers whether it did; `write` relays out,
+ * from them if it did. A deck that took none -- one `prime` cannot read for,
+ * or one `nested` inside another deck, whose boxes the outer deck's own write
+ * may move without resizing them -- reads live in `write`.
+ */
+interface ResizeWork {
+  root: Element;
+  read(nested: boolean): boolean;
+  write(): void;
+}
+const resizeSchedulers = new WeakMap<
+  Document,
+  {
+    observer: ResizeObserver;
+    owners: Map<Element, Set<ResizeWork>>;
+    decks: Set<ResizeWork>;
+  }
+>();
+/**
+ * One `ResizeObserver` per document, shared by every deck on it (#339). Each
+ * deck's own observer used to fire one after another, so one deck's writes
+ * (custom properties, scroll) dirtied style before the next deck read
+ * layout: a forced style recalc per deck. Here one delivery runs every
+ * affected deck's `read`, then every one's `write`: first the decks that read
+ * ahead, which read nothing now, then the rest, which read live, an outer
+ * deck before the deck inside it. A deck observes through the returned object
+ * as it would through a `ResizeObserver`, and several may observe one
+ * element; the shared observer disconnects with its last deck.
+ */
+function observeResizes(work: ResizeWork) {
+  const doc = work.root.ownerDocument;
+  let shared = resizeSchedulers.get(doc);
+  if (!shared) {
+    const owners = new Map<Element, Set<ResizeWork>>();
+    const decks = new Set<ResizeWork>();
+    // `reportError` is what an observer callback's own throw comes to: one
+    // deck's must not stop the others'.
+    const each = (
+      list: Iterable<ResizeWork>,
+      step: (d: ResizeWork) => void
+    ) => {
+      for (const deck of list) {
+        // A deck destroyed since the delivery began has nothing left to do.
+        if (!decks.has(deck)) continue;
+        try {
+          step(deck);
+        } catch (error) {
+          reportError(error);
+        }
+      }
+    };
+    const observer = new ResizeObserver((entries) => {
+      const due = new Set<ResizeWork>();
+      for (const { target } of entries) {
+        for (const deck of owners.get(target) ?? []) due.add(deck);
+      }
+      const ahead = new Set<ResizeWork>();
+      each(due, (deck) => {
+        const nested = [...decks].some(
+          (other) => other.root !== deck.root && other.root.contains(deck.root)
+        );
+        if (deck.read(nested)) ahead.add(deck);
+      });
+      const live = [...due]
+        .filter((deck) => !ahead.has(deck))
+        .sort((a, b) =>
+          a.root.compareDocumentPosition(b.root) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+            ? -1
+            : 1
+        );
+      each([...ahead, ...live], (deck) => deck.write());
+    });
+    shared = { observer, owners, decks };
+    resizeSchedulers.set(doc, shared);
+  }
+  const { observer, owners, decks } = shared;
+  decks.add(work);
+  const forget = (el: Element) => {
+    const watchers = owners.get(el);
+    watchers?.delete(work);
+    if (watchers?.size === 0) {
+      owners.delete(el);
+      observer.unobserve(el);
+    }
+  };
+  return {
+    observe(el: Element) {
+      const watchers = owners.get(el) ?? new Set<ResizeWork>();
+      // A deck that already owns it has its first delivery: nothing to do.
+      if (watchers.has(work)) return;
+      owners.set(el, watchers.add(work));
+      // The browser sends no first notification for an element it already
+      // observes, so one another deck watches is observed afresh when a deck
+      // joins: every owner gets one, the ones watching already a relayout
+      // that finds nothing moved.
+      if (watchers.size > 1) observer.unobserve(el);
+      observer.observe(el);
+    },
+    unobserve: forget,
+    disconnect() {
+      for (const el of owners.keys()) forget(el);
+      decks.delete(work);
+      if (decks.size === 0) {
+        observer.disconnect();
+        resizeSchedulers.delete(doc);
+      }
+    }
+  };
+}
+function cachedReads(): Reads & {
+  forgetRects(): void;
+  copyStyle(el: Element): void;
+} {
+  let rects = new Map<Element, DOMRect>();
+  const styles = new Map<Element, Style>();
+  return {
+    rect(el) {
+      let rect = rects.get(el);
+      if (!rect) {
+        rect = el.getBoundingClientRect();
+        rects.set(el, rect);
+      }
+      return rect;
+    },
+    style(el) {
+      let style = styles.get(el);
+      if (!style) {
+        style = getComputedStyle(el);
+        styles.set(el, style);
+      }
+      return style;
+    },
+    forgetRects() {
+      rects = new Map();
+    },
+    // Copies every property a settle reads off `el` into plain values, which
+    // a write of anyone's cannot make a read of force a recalc. Only for a
+    // box whose settle writes nothing it reads on (`prime`).
+    copyStyle(el) {
+      const live = getComputedStyle(el);
+      styles.set(
+        el,
+        Object.fromEntries(STYLE.map((name) => [name, live[name]])) as Style
+      );
+    }
+  };
+}
+
 /**
  * The deck's axis, as the viewport lays it out now. Every scroll position and
  * measurement the engine uses runs along it from the deck's start, so the
@@ -2987,13 +3319,14 @@ interface Axis {
   /** Where the viewport's scrollport spans along the axis. */
   view(): Span;
   /** A slide's `scroll-snap-align` along the axis: of its block and inline
-   * values, the block for a vertical deck, the inline for a horizontal one. */
-  snapAlign(slide: Element): string;
+   * values, the block for a vertical deck, the inline for a horizontal one.
+   * `reads` is a settle's own cache (#339); live where a caller has none. */
+  snapAlign(slide: Element, reads?: Reads): string;
   /** A box's `scrollPadding`, `scrollMargin` or plain `margin` at the
    * axis's start and end, in pixels; a percentage is of `size`, and `auto`
    * is none. */
   insets(
-    style: CSSStyleDeclaration,
+    style: Style,
     property: 'scrollPadding' | 'scrollMargin' | 'margin',
     size: number
   ): Span;
@@ -3002,7 +3335,7 @@ interface Axis {
   vertical: boolean;
   /** The viewport's `columnGap` (horizontal) or `rowGap` (vertical), in
    * pixels; `normal` is 0. */
-  gap(style: CSSStyleDeclaration): number;
+  gap(style: Style): number;
   /** 1 for horizontal LTR or vertical, -1 for horizontal RTL: the
    * physical direction a logical (along-the-axis) distance runs in.
    * `place` (ADR-0013) multiplies a logical translate by it to get the
@@ -3050,8 +3383,8 @@ function axisOf(viewport: HTMLElement, vertical: boolean): Axis {
         bottom: top + viewport.clientHeight
       });
     },
-    snapAlign(slide) {
-      const values = getComputedStyle(slide).scrollSnapAlign.split(' ');
+    snapAlign(slide, reads = liveReads) {
+      const values = reads.style(slide).scrollSnapAlign.split(' ');
       return (vertical ? values[0] : values.pop()) ?? 'none';
     },
     insets(style, property, size) {
@@ -3075,15 +3408,48 @@ function axisOf(viewport: HTMLElement, vertical: boolean): Axis {
   };
 }
 
+/**
+ * `along`, with `view()`, `max()` and `position` cached for as long as this
+ * lives (#339): none changes from anything a settle itself writes outside
+ * shells mode -- shells' own re-measure (`measureShells`, `compensateShift`)
+ * reads the raw axis instead, exactly because its own write can move them.
+ * Only a scroll through this axis (`scrollTo`, or setting `position`) drops
+ * the cached `position`, so a scroll this same settle makes
+ * (`jumpOffCopies`) is read where it lands.
+ */
+function memoizeAxis(along: Axis): Axis {
+  let view: Span | null = null;
+  let max: number | null = null;
+  let position: number | null = null;
+  return Object.create(along, {
+    view: { value: () => (view ??= along.view()) },
+    max: { value: () => (max ??= along.max()) },
+    position: {
+      get: () => (position ??= along.position),
+      set: (to: number) => {
+        position = null;
+        along.position = to;
+      }
+    },
+    scrollTo: {
+      value: (to: number, behavior: ScrollBehavior) => {
+        position = null;
+        along.scrollTo(to, behavior);
+      }
+    }
+  }) as Axis;
+}
+
 /** How far the viewport would scroll to put `slide` at the alignment point
  * for `align`, unclamped: 0 when it is there now. `view` is the axis's. */
 function alignOffset(
   axis: Axis,
   view: Span,
   slide: Element,
-  align: string
+  align: string,
+  reads: Reads = liveReads
 ): number {
-  return spanOffset(axis.span(slide.getBoundingClientRect()), view, align);
+  return spanOffset(axis.span(reads.rect(slide)), view, align);
 }
 
 /** `alignOffset` for a slide spanning `[start, end]` along the axis. */
@@ -3097,13 +3463,18 @@ function spanOffset([start, end]: Span, view: Span, align: string): number {
 
 /** The slide nearest the alignment point for `align`, by its measured box;
  * with loop, the slide a copy there copies. */
-function focalSlide(viewport: HTMLElement, axis: Axis, align: string): number {
+function focalSlide(
+  viewport: HTMLElement,
+  axis: Axis,
+  align: string,
+  reads: Reads = liveReads
+): number {
   const view = axis.view();
   const { slides, boxes, first } = slidesOf(viewport);
   let best = -1;
   let distance = Infinity;
   boxes.forEach((slide, i) => {
-    const d = Math.abs(alignOffset(axis, view, slide, align));
+    const d = Math.abs(alignOffset(axis, view, slide, align, reads));
     if (d < distance) {
       best = i;
       distance = d;
@@ -3140,16 +3511,17 @@ function focalSlide(viewport: HTMLElement, axis: Axis, align: string): number {
  */
 function measureGeometry(
   run: ReturnType<typeof slidesOf>,
-  along: Axis
+  along: Axis,
+  reads: Reads = liveReads
 ): { step: number; view: number } | null {
   const { slides, boxes, first } = run;
   const n = slides.length;
   if (n < 2) return null;
   const own = boxes.slice(first, first + n);
   const sizeDim = along.vertical ? 'height' : 'width';
-  const sizes = own.map((box) => borderBoxSize(getComputedStyle(box), sizeDim));
+  const sizes = own.map((box) => borderBoxSize(reads.style(box), sizeDim));
   const starts = own.map((box, i) => {
-    const [start, end] = along.span(box.getBoundingClientRect());
+    const [start, end] = along.span(reads.rect(box));
     return (start + end) / 2 - sizes[i] / 2;
   });
   const step = (starts[n - 1] - starts[0]) / (n - 1);
@@ -3168,9 +3540,10 @@ function measureGeometry(
 function writeGeometry(
   viewport: HTMLElement,
   along: Axis,
-  run: ReturnType<typeof slidesOf>
+  run: ReturnType<typeof slidesOf>,
+  reads: Reads = liveReads
 ) {
-  const geometry = measureGeometry(run, along);
+  const geometry = measureGeometry(run, along, reads);
   const write = (name: string, value: number | undefined) => {
     const next =
       value === undefined
@@ -3195,14 +3568,15 @@ function writeProgress(
   viewport: HTMLElement,
   axis: Axis,
   align: string,
-  slotOf: (slide: Element, i: number) => number
+  slotOf: (slide: Element, i: number) => number,
+  reads: Reads = liveReads
 ) {
   const view = axis.view();
   // With loop, the copies too, each by its own place in the run: a copy in
   // view moves on as the slides do, and lands where its slide is after a
   // jump.
   const { slides: own, run, boxes, first, sets, stacked } = slidesOf(viewport);
-  const spans = boxes.map((box) => axis.span(box.getBoundingClientRect()));
+  const spans = boxes.map((box) => axis.span(reads.rect(box)));
   const focal = focalPosition(
     spans.map((span) => spanOffset(span, view, align)),
     spans
