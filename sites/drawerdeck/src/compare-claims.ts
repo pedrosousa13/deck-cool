@@ -55,9 +55,10 @@ const LOAD_SUFFIX: Record<string, string> = {
 const CELL_LABEL_PREFIX: Record<string, string> = {
   "touch-drag-half-full-back:droppedPct": "Dropped frames while dragging",
   "touch-drag-half-full-back:longestStallMs": "Longest stall while dragging",
-  "touch-flick-dismiss:settleMs": "Flick down closes it: settle time",
-  "mouse-drag-throw:settleMs": "Mouse throw: settle time",
-  "open-to-half:settleMs": "Open to half: settle time",
+  "touch-flick-dismiss:motionAfterReleaseMs":
+    "Flick down closes it: motion after release",
+  "mouse-drag-throw:motionAfterReleaseMs": "Mouse throw: motion after release",
+  "open-to-half:motionAfterReleaseMs": "Open to half: motion after release",
 };
 
 /** The label a claims.json entry's own (scenario, metric, load) implies,
